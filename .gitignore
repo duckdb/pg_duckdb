@@ -1,0 +1,16 @@
+.clangd
+.depend
+
+.vscode
+.ccls
+compile_commands.json
+
+build/
+
+*.a
+*.so
+*.o
+*.bc
+*.dylib
+
+results
