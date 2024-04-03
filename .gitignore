@@ -5,8 +5,6 @@
 .ccls
 compile_commands.json
 
-build/
-
 *.a
 *.so
 *.o
@@ -14,3 +12,5 @@ build/
 *.dylib
 
 results
+regression.diffs
+regression.out
