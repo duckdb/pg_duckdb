@@ -140,7 +140,7 @@ PostgresScanGlobalState::PostgresScanGlobalState() {
 unique_ptr<GlobalTableFunctionState>
 PostgresScanFunction::PostgresInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<PostgresScanFunctionData>();
-	auto &relation = bind_data.relation;
+	(void)bind_data;
 	// FIXME: we'll call 'parallelscan_initialize' here to initialize a parallel scan
 	return make_uniq<PostgresScanGlobalState>();
 }
@@ -307,8 +307,6 @@ FindMatchingRelation(List *tables, const string &to_find) {
 unique_ptr<TableRef>
 PostgresReplacementScan(ClientContext &context, const string &table_name, ReplacementScanData *data) {
 	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
-	// Use 'QueryDesc *desc' to query the postgres table
-	// We will return a custom table function scan with parameters (likely passing a pointer as parameter)
 
 	auto tables = scan_data.desc->plannedstmt->rtable;
 	auto table = FindMatchingRelation(tables, table_name);
@@ -320,6 +318,11 @@ PostgresReplacementScan(ClientContext &context, const string &table_name, Replac
 	// Then inside the table function we can scan tuples from the postgres table and convert them into duckdb vectors.
 	auto table_function = make_uniq<TableFunctionRef>();
 	vector<unique_ptr<ParsedExpression>> children;
+
+	// This is done so they are received as named parameters to the function
+	// just so we don't have to use indices to refer to them later
+	// see PostgresBind for this
+
 	// table = POINTER(table)
 	children.push_back(
 	    make_uniq<ComparisonExpression>(ExpressionType::COMPARE_EQUAL, make_uniq<ColumnRefExpression>("table"),
