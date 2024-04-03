@@ -27,71 +27,8 @@ extern "C" {
 static ExecutorRun_hook_type PrevExecutorRunHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
-static bool
-quack_check_tables(List *rtable) {
-	ListCell *lc;
-	TupleDesc tupleDesc;
-	int numCols;
-
-	foreach (lc, rtable) {
-		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
-		Relation rel = NULL;
-
-		if (!table->relid)
-			return false;
-
-		rel = RelationIdGetRelation(table->relid);
-
-		// GET TYPE / NAME INFO
-
-		/* Get the tuple descriptor */
-		tupleDesc = RelationGetDescr(rel);
-		if (!tupleDesc) {
-			elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", table->relid);
-			RelationClose(rel);
-			return false;
-		}
-
-		/* Get the number of columns */
-		numCols = tupleDesc->natts;
-
-		/* Loop through each column */
-		for (idx_t i = 0; i < numCols; i++) {
-			Form_pg_attribute attr = &tupleDesc->attrs[i];
-			Oid typeOid = attr->atttypid;
-			/* Get the type tuple */
-			HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typeOid));
-			if (!HeapTupleIsValid(typeTuple)) {
-				elog(ERROR, "cache lookup failed for type %u", typeOid);
-				return false;
-			}
-			Form_pg_type typeStruct = (Form_pg_type)GETSTRUCT(typeTuple);
-			char *typeName = format_type_with_typemod(typeOid, typeStruct->typmodin);
-			ReleaseSysCache(typeTuple);
-			char *colName = NameStr(attr->attname);
-
-			/* Log column name and type */
-			elog(INFO, "Column name: %s, Type: %s", colName, typeName);
-
-			/* Free memory */
-			pfree(typeName);
-		}
-
-		// END
-
-		if (rel->rd_amhandler != 0 && GetTableAmRoutine(rel->rd_amhandler) != quack_get_table_am_routine()) {
-			RelationClose(rel);
-			return false;
-		}
-		RelationClose(rel);
-	}
-
-	return true;
-}
-
 static void
 quack_executor_run(QueryDesc *queryDesc, ScanDirection direction, uint64 count, bool execute_once) {
-	// if (queryDesc->operation == CMD_SELECT && quack_check_tables(queryDesc->plannedstmt->rtable)) {
 	if (queryDesc->operation == CMD_SELECT) {
 		duckdb::QuackExecuteSelect(queryDesc, direction, count);
 		return;
