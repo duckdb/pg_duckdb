@@ -142,7 +142,12 @@ add_subdirectory("src")
 # Library
 
 set(LIBRARY_OUTPUT_PATH lib)
+
 add_library(${PROJECT_LIB_NAME} MODULE ${PROJECT_OBJECTS})
+
+set_target_properties(${PROJECT_LIB_NAME} PROPERTIES
+    INSTALL_RPATH "${PostgreSQL_LIBRARY_DIRS}"
+)
 
 message(STATUS "PROJECT_LIB_NAME ${PROJECT_LIB_NAME}")
 
