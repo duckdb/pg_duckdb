@@ -27,7 +27,8 @@ extern "C" {
 static ExecutorRun_hook_type PrevExecutorRunHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
-static bool quack_check_tables(List *rtable) {
+static bool
+quack_check_tables(List *rtable) {
 	ListCell *lc;
 	TupleDesc tupleDesc;
 	int numCols;
@@ -88,7 +89,8 @@ static bool quack_check_tables(List *rtable) {
 	return true;
 }
 
-static void quack_executor_run(QueryDesc *queryDesc, ScanDirection direction, uint64 count, bool execute_once) {
+static void
+quack_executor_run(QueryDesc *queryDesc, ScanDirection direction, uint64 count, bool execute_once) {
 	// if (queryDesc->operation == CMD_SELECT && quack_check_tables(queryDesc->plannedstmt->rtable)) {
 	if (queryDesc->operation == CMD_SELECT) {
 		duckdb::QuackExecuteSelect(queryDesc, direction, count);
@@ -100,10 +102,10 @@ static void quack_executor_run(QueryDesc *queryDesc, ScanDirection direction, ui
 	}
 }
 
-static void quack_process_utility(PlannedStmt *pstmt, const char *queryString, bool readOnlyTree,
-                                  ProcessUtilityContext context, ParamListInfo params,
-                                  struct QueryEnvironment *queryEnv, DestReceiver *dest,
-                                  QueryCompletion *completionTag) {
+static void
+quack_process_utility(PlannedStmt *pstmt, const char *queryString, bool readOnlyTree, ProcessUtilityContext context,
+                      ParamListInfo params, struct QueryEnvironment *queryEnv, DestReceiver *dest,
+                      QueryCompletion *completionTag) {
 
 	Node *parsetree = pstmt->utilityStmt;
 
@@ -136,7 +138,8 @@ static void quack_process_utility(PlannedStmt *pstmt, const char *queryString, b
 	PrevProcessUtilityHook(pstmt, queryString, false, context, params, queryEnv, dest, completionTag);
 }
 
-void quack_init_hooks(void) {
+void
+quack_init_hooks(void) {
 	PrevExecutorRunHook = ExecutorRun_hook ? ExecutorRun_hook : standard_ExecutorRun;
 	ExecutorRun_hook = quack_executor_run;
 
@@ -147,7 +150,8 @@ void quack_init_hooks(void) {
 
 namespace duckdb {
 
-static void QuackExecuteSelect(QueryDesc *query_desc, ScanDirection direction, uint64_t count) {
+static void
+QuackExecuteSelect(QueryDesc *query_desc, ScanDirection direction, uint64_t count) {
 	auto db = quack_open_database(MyDatabaseId, false);
 	db->instance->config.replacement_scans.emplace_back(
 	    PostgresReplacementScan, make_uniq_base<ReplacementScanData, PostgresReplacementScanData>(query_desc));

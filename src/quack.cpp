@@ -22,7 +22,8 @@ char *quack_data_dir = NULL;
 
 static bool quack_check_data_directory(const char *dataDirectory);
 
-static void quack_data_directory_assign_hook(const char *newval, void *extra) {
+static void
+quack_data_directory_assign_hook(const char *newval, void *extra) {
 	if (!quack_check_data_directory(newval)) {
 		if (mkdir(newval, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
 			int error = errno;
@@ -32,7 +33,8 @@ static void quack_data_directory_assign_hook(const char *newval, void *extra) {
 	};
 }
 
-void _PG_init(void) {
+void
+_PG_init(void) {
 	StringInfo quack_default_data_dir = makeStringInfo();
 	appendStringInfo(quack_default_data_dir, "%s/quack/", DataDir);
 
@@ -45,7 +47,8 @@ void _PG_init(void) {
 	quack_init_hooks();
 }
 
-bool quack_check_data_directory(const char *dataDirectory) {
+bool
+quack_check_data_directory(const char *dataDirectory) {
 	struct stat info;
 
 	if (lstat(dataDirectory, &info) != 0) {

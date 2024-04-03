@@ -21,12 +21,14 @@ extern "C" {
 #include "utils/snapmgr.h"
 #include "utils/relmapper.h"
 
-static const TupleTableSlotOps *quack_slot_callbacks(Relation rel) {
+static const TupleTableSlotOps *
+quack_slot_callbacks(Relation rel) {
 	return &TTSOpsVirtual;
 }
 
-static TableScanDesc quack_begin_scan(Relation rel, Snapshot snapshot, int nkeys, struct ScanKeyData *key,
-                                      ParallelTableScanDesc parallel_scan, uint32 flags) {
+static TableScanDesc
+quack_begin_scan(Relation rel, Snapshot snapshot, int nkeys, struct ScanKeyData *key,
+                 ParallelTableScanDesc parallel_scan, uint32 flags) {
 	TableScanDesc scan = (TableScanDesc)palloc0(sizeof(TableScanDesc));
 
 	scan->rs_rd = rel;
@@ -39,69 +41,85 @@ static TableScanDesc quack_begin_scan(Relation rel, Snapshot snapshot, int nkeys
 	return scan;
 }
 
-static void quack_end_scan(TableScanDesc scan) {
+static void
+quack_end_scan(TableScanDesc scan) {
 }
 
-static void quack_rescan(TableScanDesc scan, struct ScanKeyData *key, bool set_params, bool allow_strat,
-                         bool allow_sync, bool allow_pagemode) {
+static void
+quack_rescan(TableScanDesc scan, struct ScanKeyData *key, bool set_params, bool allow_strat, bool allow_sync,
+             bool allow_pagemode) {
 	ereport(ERROR, (errmsg("quack_scan_rescan is not implemented")));
 }
 
-static bool quack_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *slot) {
+static bool
+quack_getnextslot(TableScanDesc scan, ScanDirection direction, TupleTableSlot *slot) {
 	return false;
 }
 
-static Size quack_parallelscan_estimate(Relation rel) {
+static Size
+quack_parallelscan_estimate(Relation rel) {
 	elog(ERROR, "quack_parallelscan_estimate not implemented");
 }
 
-static Size quack_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan) {
+static Size
+quack_parallelscan_initialize(Relation rel, ParallelTableScanDesc pscan) {
 	elog(ERROR, "quack_parallelscan_initialize not implemented");
 }
 
-static void quack_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan) {
+static void
+quack_parallelscan_reinitialize(Relation rel, ParallelTableScanDesc pscan) {
 	elog(ERROR, "quack_parallelscan_reinitialize not implemented");
 }
 
-static IndexFetchTableData *quack_index_fetch_begin(Relation rel) {
+static IndexFetchTableData *
+quack_index_fetch_begin(Relation rel) {
 	elog(ERROR, "quack_index_fetch_begin not implemented");
 }
 
-static void quack_index_fetch_reset(IndexFetchTableData *sscan) {
+static void
+quack_index_fetch_reset(IndexFetchTableData *sscan) {
 	elog(ERROR, "quack_index_fetch_reset not implemented");
 }
 
-static void quack_index_fetch_end(IndexFetchTableData *sscan) {
+static void
+quack_index_fetch_end(IndexFetchTableData *sscan) {
 	elog(ERROR, "quack_index_fetch_end not implemented");
 }
 
-static bool quack_index_fetch_tuple(struct IndexFetchTableData *sscan, ItemPointer tid, Snapshot snapshot,
-                                    TupleTableSlot *slot, bool *call_again, bool *all_dead) {
+static bool
+quack_index_fetch_tuple(struct IndexFetchTableData *sscan, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot,
+                        bool *call_again, bool *all_dead) {
 	elog(ERROR, "quack_index_fetch_tuple not implemented");
 }
 
-static bool quack_fetch_row_version(Relation relation, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot) {
+static bool
+quack_fetch_row_version(Relation relation, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot) {
 	elog(ERROR, "quack_fetch_row_version not implemented");
 }
 
-static void quack_get_latest_tid(TableScanDesc sscan, ItemPointer tid) {
+static void
+quack_get_latest_tid(TableScanDesc sscan, ItemPointer tid) {
 	elog(ERROR, "quack_get_latest_tid not implemented");
 }
 
-static bool quack_tuple_tid_valid(TableScanDesc scan, ItemPointer tid) {
+static bool
+quack_tuple_tid_valid(TableScanDesc scan, ItemPointer tid) {
 	elog(ERROR, "quack_tuple_tid_valid not implemented");
 }
 
-static bool quack_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot, Snapshot snapshot) {
+static bool
+quack_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot, Snapshot snapshot) {
 	elog(ERROR, "quack_tuple_satisfies_snapshot not implemented");
 }
 
-static TransactionId quack_index_delete_tuples(Relation rel, TM_IndexDeleteOp *delstate) {
+static TransactionId
+quack_index_delete_tuples(Relation rel, TM_IndexDeleteOp *delstate) {
 	elog(ERROR, "quack_index_delete_tuples not implemented");
 }
 
-static void quack_tuple_insert(Relation rel, TupleTableSlot *slot, CommandId cid, int options,
-                               struct BulkInsertStateData *bistate) {
+static void
+quack_tuple_insert(Relation rel, TupleTableSlot *slot, CommandId cid, int options,
+                   struct BulkInsertStateData *bistate) {
 	duckdb::QuackWriteState *write_state = quack_init_write_state(rel, MyDatabaseId, GetCurrentSubTransactionId());
 
 	slot_getallattrs(slot);
@@ -120,17 +138,20 @@ static void quack_tuple_insert(Relation rel, TupleTableSlot *slot, CommandId cid
 	pgstat_count_heap_insert(rel, 1);
 }
 
-static void quack_tuple_insert_speculative(Relation rel, TupleTableSlot *slot, CommandId cid, int options,
-                                           struct BulkInsertStateData *bistate, uint32 specToken) {
+static void
+quack_tuple_insert_speculative(Relation rel, TupleTableSlot *slot, CommandId cid, int options,
+                               struct BulkInsertStateData *bistate, uint32 specToken) {
 	ereport(ERROR, (errmsg("quack_tuple_insert_speculative is not implemented")));
 }
 
-static void quack_tuple_complete_speculative(Relation rel, TupleTableSlot *slot, uint32 specToken, bool succeeded) {
+static void
+quack_tuple_complete_speculative(Relation rel, TupleTableSlot *slot, uint32 specToken, bool succeeded) {
 	ereport(ERROR, (errmsg("quack_tuple_complete_speculative is not implemented")));
 }
 
-static void quack_multi_insert(Relation rel, TupleTableSlot **slots, int ntuples, CommandId cid, int options,
-                               struct BulkInsertStateData *bistate) {
+static void
+quack_multi_insert(Relation rel, TupleTableSlot **slots, int ntuples, CommandId cid, int options,
+                   struct BulkInsertStateData *bistate) {
 	duckdb::QuackWriteState *write_state = quack_init_write_state(rel, MyDatabaseId, GetCurrentSubTransactionId());
 
 	for (int n = 0; n < ntuples; n++) {
@@ -153,27 +174,32 @@ static void quack_multi_insert(Relation rel, TupleTableSlot **slots, int ntuples
 	pgstat_count_heap_insert(rel, ntuples);
 }
 
-static TM_Result quack_tuple_delete(Relation rel, ItemPointer tip, CommandId cid, Snapshot snapshot,
-                                    Snapshot crosscheck, bool wait, TM_FailureData *tmfd, bool changingPart) {
+static TM_Result
+quack_tuple_delete(Relation rel, ItemPointer tip, CommandId cid, Snapshot snapshot, Snapshot crosscheck, bool wait,
+                   TM_FailureData *tmfd, bool changingPart) {
 	ereport(ERROR, (errmsg("quack_tuple_delete is not implemented")));
 }
 
-static TM_Result quack_tuple_update(Relation rel, ItemPointer otid, TupleTableSlot *slot, CommandId cid,
-                                    Snapshot snapshot, Snapshot crosscheck, bool wait, TM_FailureData *tmfd,
-                                    LockTupleMode *lockmode, TU_UpdateIndexes *update_indexes) {
+static TM_Result
+quack_tuple_update(Relation rel, ItemPointer otid, TupleTableSlot *slot, CommandId cid, Snapshot snapshot,
+                   Snapshot crosscheck, bool wait, TM_FailureData *tmfd, LockTupleMode *lockmode,
+                   TU_UpdateIndexes *update_indexes) {
 	ereport(ERROR, (errmsg("quack_tuple_update is not implemented")));
 }
 
-static TM_Result quack_tuple_lock(Relation rel, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot, CommandId cid,
-                                  LockTupleMode mode, LockWaitPolicy wait_policy, uint8 flags, TM_FailureData *tmfd) {
+static TM_Result
+quack_tuple_lock(Relation rel, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot, CommandId cid,
+                 LockTupleMode mode, LockWaitPolicy wait_policy, uint8 flags, TM_FailureData *tmfd) {
 	ereport(ERROR, (errmsg("quack_tuple_lock is not implemented")));
 }
 
-static void quack_finish_bulk_insert(Relation rel, int options) {
+static void
+quack_finish_bulk_insert(Relation rel, int options) {
 }
 
-static void quack_relation_set_new_filenode(Relation rel, const RelFileNumber newrnode, char persistence,
-                                            TransactionId *freezeXid, MultiXactId *minmulti) {
+static void
+quack_relation_set_new_filenode(Relation rel, const RelFileNumber newrnode, char persistence, TransactionId *freezeXid,
+                                MultiXactId *minmulti) {
 
 	if (persistence == RELPERSISTENCE_UNLOGGED) {
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Unlogged columnar tables are not supported")));
@@ -190,62 +216,72 @@ static void quack_relation_set_new_filenode(Relation rel, const RelFileNumber ne
 	}
 }
 
-static void quack_relation_nontransactional_truncate(Relation rel) {
+static void
+quack_relation_nontransactional_truncate(Relation rel) {
 	elog(ERROR, "quack_relation_nontransactional_truncate not implemented");
 }
 
-static void quack_relation_copy_data(Relation rel, const RelFileLocator *newrlocator) {
+static void
+quack_relation_copy_data(Relation rel, const RelFileLocator *newrlocator) {
 	elog(ERROR, "quack_relation_copy_data not implemented");
 }
 
-static void quack_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap, Relation OldIndex, bool use_sort,
-                                            TransactionId OldestXmin, TransactionId *xid_cutoff,
-                                            MultiXactId *multi_cutoff, double *num_tuples, double *tups_vacuumed,
-                                            double *tups_recently_dead) {
+static void
+quack_relation_copy_for_cluster(Relation OldHeap, Relation NewHeap, Relation OldIndex, bool use_sort,
+                                TransactionId OldestXmin, TransactionId *xid_cutoff, MultiXactId *multi_cutoff,
+                                double *num_tuples, double *tups_vacuumed, double *tups_recently_dead) {
 	elog(ERROR, "quack_relation_copy_for_cluster not implemented");
 }
 
-static void quack_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy) {
+static void
+quack_vacuum_rel(Relation rel, VacuumParams *params, BufferAccessStrategy bstrategy) {
 }
 
-static bool quack_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno, BufferAccessStrategy bstrategy) {
+static bool
+quack_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno, BufferAccessStrategy bstrategy) {
 	elog(ERROR, "quack_scan_analyze_next_block not implemented");
 }
 
-static bool quack_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin, double *liverows,
-                                          double *deadrows, TupleTableSlot *slot) {
+static bool
+quack_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin, double *liverows, double *deadrows,
+                              TupleTableSlot *slot) {
 	elog(ERROR, "quack_scan_analyze_next_tuple not implemented");
 }
 
-static double quack_index_build_range_scan(Relation columnarRelation, Relation indexRelation, IndexInfo *indexInfo,
-                                           bool allow_sync, bool anyvisible, bool progress, BlockNumber start_blockno,
-                                           BlockNumber numblocks, IndexBuildCallback callback, void *callback_state,
-                                           TableScanDesc scan) {
+static double
+quack_index_build_range_scan(Relation columnarRelation, Relation indexRelation, IndexInfo *indexInfo, bool allow_sync,
+                             bool anyvisible, bool progress, BlockNumber start_blockno, BlockNumber numblocks,
+                             IndexBuildCallback callback, void *callback_state, TableScanDesc scan) {
 	elog(ERROR, "quack_index_build_range_scan not implemented");
 }
 
-static void quack_index_validate_scan(Relation columnarRelation, Relation indexRelation, IndexInfo *indexInfo,
-                                      Snapshot snapshot, ValidateIndexState *validateIndexState) {
+static void
+quack_index_validate_scan(Relation columnarRelation, Relation indexRelation, IndexInfo *indexInfo, Snapshot snapshot,
+                          ValidateIndexState *validateIndexState) {
 	elog(ERROR, "quack_index_validate_scan not implemented");
 }
 
-static bool quack_relation_needs_toast_table(Relation rel) {
+static bool
+quack_relation_needs_toast_table(Relation rel) {
 	return false;
 }
 
-static uint64 quack_relation_size(Relation rel, ForkNumber forkNumber) {
+static uint64
+quack_relation_size(Relation rel, ForkNumber forkNumber) {
 	return 4096 * BLCKSZ;
 }
 
-static void quack_estimate_rel_size(Relation rel, int32 *attr_widths, BlockNumber *pages, double *tuples,
-                                    double *allvisfrac) {
+static void
+quack_estimate_rel_size(Relation rel, int32 *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
 }
 
-static bool quack_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate) {
+static bool
+quack_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate) {
 	elog(ERROR, "quack_scan_sample_next_block not implemented");
 }
 
-static bool quack_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate, TupleTableSlot *slot) {
+static bool
+quack_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate, TupleTableSlot *slot) {
 	elog(ERROR, "quack_scan_sample_next_tuple not implemented");
 }
 
@@ -308,7 +344,8 @@ static const TableAmRoutine quack_am_methods = {.type = T_TableAmRoutine,
  */
 static object_access_hook_type PrevObjectAccessHook = NULL;
 
-static void TableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg) {
+static void
+TableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid objectId, int subId, void *arg) {
 	if (PrevObjectAccessHook) {
 		PrevObjectAccessHook(access, classId, objectId, subId, arg);
 	}
@@ -324,7 +361,8 @@ static void TableAMObjectAccessHook(ObjectAccessType access, Oid classId, Oid ob
 	}
 }
 
-static void QuackXactCallback(XactEvent event, void *arg) {
+static void
+QuackXactCallback(XactEvent event, void *arg) {
 	switch (event) {
 	case XACT_EVENT_COMMIT:
 	case XACT_EVENT_PARALLEL_COMMIT:
@@ -347,17 +385,20 @@ static void QuackXactCallback(XactEvent event, void *arg) {
 	}
 }
 
-void quack_init_tableam() {
+void
+quack_init_tableam() {
 	RegisterXactCallback(QuackXactCallback, NULL);
 	object_access_hook = TableAMObjectAccessHook;
 }
 
-const TableAmRoutine *quack_get_table_am_routine(void) {
+const TableAmRoutine *
+quack_get_table_am_routine(void) {
 	return &quack_am_methods;
 }
 
 PG_FUNCTION_INFO_V1(quack_am_handler);
-Datum quack_am_handler(PG_FUNCTION_ARGS) {
+Datum
+quack_am_handler(PG_FUNCTION_ARGS) {
 	PG_RETURN_POINTER(&quack_am_methods);
 }
 }

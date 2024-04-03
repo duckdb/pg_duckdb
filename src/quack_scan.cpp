@@ -36,11 +36,13 @@ PostgresRelation::~PostgresRelation() {
 	}
 }
 
-Relation PostgresRelation::GetRelation() {
+Relation
+PostgresRelation::GetRelation() {
 	return rel;
 }
 
-bool PostgresRelation::IsValid() const {
+bool
+PostgresRelation::IsValid() const {
 	return RelationIsValid(rel);
 }
 
@@ -67,7 +69,8 @@ PostgresScanFunctionData::PostgresScanFunctionData(PostgresRelation &&relation, 
 PostgresScanFunctionData::~PostgresScanFunctionData() {
 }
 
-static LogicalType PostgresToDuck(Oid type) {
+static LogicalType
+PostgresToDuck(Oid type) {
 	switch (type) {
 	case BOOLOID:
 		return LogicalTypeId::BOOLEAN;
@@ -92,8 +95,9 @@ static LogicalType PostgresToDuck(Oid type) {
 	}
 }
 
-unique_ptr<FunctionData> PostgresScanFunction::PostgresBind(ClientContext &context, TableFunctionBindInput &input,
-                                                            vector<LogicalType> &return_types, vector<string> &names) {
+unique_ptr<FunctionData>
+PostgresScanFunction::PostgresBind(ClientContext &context, TableFunctionBindInput &input,
+                                   vector<LogicalType> &return_types, vector<string> &names) {
 	auto table = (reinterpret_cast<RangeTblEntry *>(input.named_parameters["table"].GetPointer()));
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
@@ -133,8 +137,8 @@ unique_ptr<FunctionData> PostgresScanFunction::PostgresBind(ClientContext &conte
 PostgresScanGlobalState::PostgresScanGlobalState() {
 }
 
-unique_ptr<GlobalTableFunctionState> PostgresScanFunction::PostgresInitGlobal(ClientContext &context,
-                                                                              TableFunctionInitInput &input) {
+unique_ptr<GlobalTableFunctionState>
+PostgresScanFunction::PostgresInitGlobal(ClientContext &context, TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->Cast<PostgresScanFunctionData>();
 	auto &relation = bind_data.relation;
 	// FIXME: we'll call 'parallelscan_initialize' here to initialize a parallel scan
@@ -156,9 +160,9 @@ PostgresScanLocalState::~PostgresScanLocalState() {
 	tableam->scan_end(scanDesc);
 }
 
-unique_ptr<LocalTableFunctionState> PostgresScanFunction::PostgresInitLocal(ExecutionContext &context,
-                                                                            TableFunctionInitInput &input,
-                                                                            GlobalTableFunctionState *gstate) {
+unique_ptr<LocalTableFunctionState>
+PostgresScanFunction::PostgresInitLocal(ExecutionContext &context, TableFunctionInitInput &input,
+                                        GlobalTableFunctionState *gstate) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresScanFunctionData>();
 	auto &relation = bind_data.relation;
 	auto snapshot = bind_data.snapshot;
@@ -166,12 +170,14 @@ unique_ptr<LocalTableFunctionState> PostgresScanFunction::PostgresInitLocal(Exec
 }
 
 template <class T>
-static void Append(Vector &result, T value, idx_t offset) {
+static void
+Append(Vector &result, T value, idx_t offset) {
 	auto data = FlatVector::GetData<T>(result);
 	data[offset] = value;
 }
 
-static void AppendString(Vector &result, Datum value, idx_t offset) {
+static void
+AppendString(Vector &result, Datum value, idx_t offset) {
 	const char *text = VARDATA_ANY(value);
 	int len = VARSIZE_ANY_EXHDR(value);
 	string_t str(text, len);
@@ -181,7 +187,8 @@ static void AppendString(Vector &result, Datum value, idx_t offset) {
 }
 
 // The table scan function
-static void ConvertDatumToDuckDB(Datum value, Vector &result, idx_t offset) {
+static void
+ConvertDatumToDuckDB(Datum value, Vector &result, idx_t offset) {
 	constexpr int32_t QUACK_DUCK_DATE_OFFSET = 10957;
 	constexpr int64_t QUACK_DUCK_TIMESTAMP_OFFSET = INT64CONST(10957) * USECS_PER_DAY;
 
@@ -216,7 +223,8 @@ static void ConvertDatumToDuckDB(Datum value, Vector &result, idx_t offset) {
 	}
 }
 
-static void InsertTupleIntoChunk(DataChunk &output, TupleDesc tuple, TupleTableSlot *slot, idx_t offset) {
+static void
+InsertTupleIntoChunk(DataChunk &output, TupleDesc tuple, TupleTableSlot *slot, idx_t offset) {
 	for (int i = 0; i < tuple->natts; i++) {
 		auto &result = output.data[i];
 		Datum value = slot_getattr(slot, i + 1, &slot->tts_isnull[i]);
@@ -229,7 +237,8 @@ static void InsertTupleIntoChunk(DataChunk &output, TupleDesc tuple, TupleTableS
 	}
 }
 
-void PostgresScanFunction::PostgresFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
+void
+PostgresScanFunction::PostgresFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output) {
 	auto &data = data_p.bind_data->CastNoConst<PostgresScanFunctionData>();
 	auto &lstate = data_p.local_state->Cast<PostgresScanLocalState>();
 	auto &gstate = data_p.global_state->Cast<PostgresScanGlobalState>();
@@ -265,7 +274,8 @@ PostgresReplacementScanData::PostgresReplacementScanData(QueryDesc *desc) : desc
 PostgresReplacementScanData::~PostgresReplacementScanData() {
 }
 
-static RangeTblEntry *FindMatchingRelation(List *tables, const string &to_find) {
+static RangeTblEntry *
+FindMatchingRelation(List *tables, const string &to_find) {
 	ListCell *lc;
 	foreach (lc, tables) {
 		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
@@ -294,8 +304,8 @@ static RangeTblEntry *FindMatchingRelation(List *tables, const string &to_find) 
 	return nullptr;
 }
 
-unique_ptr<TableRef> PostgresReplacementScan(ClientContext &context, const string &table_name,
-                                             ReplacementScanData *data) {
+unique_ptr<TableRef>
+PostgresReplacementScan(ClientContext &context, const string &table_name, ReplacementScanData *data) {
 	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
 	// Use 'QueryDesc *desc' to query the postgres table
 	// We will return a custom table function scan with parameters (likely passing a pointer as parameter)

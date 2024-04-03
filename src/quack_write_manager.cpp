@@ -25,12 +25,14 @@ typedef struct QuackWriteStateMapEntry {
 
 static MemoryContextCallback cleanup_callback;
 
-static void cleanup_write_state_map(void *arg) {
+static void
+cleanup_write_state_map(void *arg) {
 	quack_write_state_map = NULL;
 	quack_write_state_context = NULL;
 }
 
-void quack_flush_write_state(SubTransactionId currentSubXid, SubTransactionId parentSubXid, bool commit) {
+void
+quack_flush_write_state(SubTransactionId currentSubXid, SubTransactionId parentSubXid, bool commit) {
 	HASH_SEQ_STATUS status;
 	QuackWriteStateMapEntry *entry;
 
@@ -62,7 +64,8 @@ void quack_flush_write_state(SubTransactionId currentSubXid, SubTransactionId pa
 }
 }
 
-duckdb::QuackWriteState *quack_init_write_state(Relation relation, Oid databaseOid, SubTransactionId currentSubXid) {
+duckdb::QuackWriteState *
+quack_init_write_state(Relation relation, Oid databaseOid, SubTransactionId currentSubXid) {
 	bool found;
 	QuackWriteStateMapEntry *hash_entry = NULL;
 	SubXidWriteState *stack_entry = NULL;

@@ -14,13 +14,15 @@ extern "C" {
 #define QUACK_DUCK_DATE_OFFSET      10957
 #define QUACK_DUCK_TIMESTAMP_OFFSET INT64CONST(10957) * USECS_PER_DAY
 
-static StringInfo quack_database_path(Oid databaseOid) {
+static StringInfo
+quack_database_path(Oid databaseOid) {
 	StringInfo str = makeStringInfo();
 	appendStringInfo(str, "%s/%u.duckdb", quack_data_dir, databaseOid);
 	return str;
 }
 
-const char *quack_duckdb_type(Oid columnOid) {
+const char *
+quack_duckdb_type(Oid columnOid) {
 	switch (columnOid) {
 	case BOOLOID:
 		return "BOOLEAN";
@@ -49,7 +51,8 @@ const char *quack_duckdb_type(Oid columnOid) {
 
 namespace duckdb {
 
-void quack_translate_value(TupleTableSlot *slot, Value &value, idx_t col) {
+void
+quack_translate_value(TupleTableSlot *slot, Value &value, idx_t col) {
 	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
 
 	switch (oid) {
@@ -106,7 +109,8 @@ void quack_translate_value(TupleTableSlot *slot, Value &value, idx_t col) {
 	}
 }
 
-void quack_execute_query(const char *query) {
+void
+quack_execute_query(const char *query) {
 	auto db = quack_open_database(MyDatabaseId, true);
 	Connection connection(*db);
 
@@ -115,12 +119,14 @@ void quack_execute_query(const char *query) {
 	// FIME: res.HasError() ??
 }
 
-unique_ptr<Appender> quack_create_appender(Connection &connection, const char *tableName) {
+unique_ptr<Appender>
+quack_create_appender(Connection &connection, const char *tableName) {
 	// FIXME: try-catch ?
 	return make_uniq<Appender>(connection, "", std::string(tableName));
 }
 
-void quack_append_value(Appender &appender, Oid columnOid, Datum value) {
+void
+quack_append_value(Appender &appender, Oid columnOid, Datum value) {
 	switch (columnOid) {
 	case BOOLOID:
 		appender.Append<bool>(value);
@@ -161,7 +167,8 @@ void quack_append_value(Appender &appender, Oid columnOid, Datum value) {
 	}
 }
 
-unique_ptr<DuckDB> quack_open_database(Oid databaseOid, bool preserveInsertOrder) {
+unique_ptr<DuckDB>
+quack_open_database(Oid databaseOid, bool preserveInsertOrder) {
 	/* Set lock for relation until transaction ends */
 	DirectFunctionCall1(pg_advisory_xact_lock_int8, Int64GetDatum((int64)databaseOid));
 
@@ -174,7 +181,8 @@ unique_ptr<DuckDB> quack_open_database(Oid databaseOid, bool preserveInsertOrder
 	return make_uniq<DuckDB>(database_path->data, &config);
 }
 
-unique_ptr<Connection> quack_open_connection(DuckDB database) {
+unique_ptr<Connection>
+quack_open_connection(DuckDB database) {
 	// FIXME try-catch ?
 	return make_uniq<Connection>(database);
 }
