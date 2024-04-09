@@ -12,6 +12,8 @@ SRCS = src/quack_heap_scan.cpp \
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
+REGRESS = create_extension
+
 PG_CONFIG ?= pg_config
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
