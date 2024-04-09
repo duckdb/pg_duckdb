@@ -1,12 +1,13 @@
 #pragma once
 
 #include "duckdb.hpp"
-#include "postgres.h"
-#include "miscadmin.h"
 
 extern "C" {
+#include "postgres.h"
+#include "miscadmin.h"
 #include "executor/executor.h"
-} // extern "C"
+#include "access/relscan.h"
+}
 
 // Postgres Relation
 
@@ -27,11 +28,11 @@ private:
 	Relation rel = nullptr;
 };
 
-namespace duckdb {
+namespace quack {
 
 // Local State
 
-struct PostgresScanLocalState : public LocalTableFunctionState {
+struct PostgresScanLocalState : public duckdb::LocalTableFunctionState {
 public:
 	PostgresScanLocalState(PostgresRelation &relation, Snapshot snapshot);
 	~PostgresScanLocalState() override;
@@ -44,15 +45,14 @@ public:
 
 // Global State
 
-struct PostgresScanGlobalState : public GlobalTableFunctionState {
+struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 	explicit PostgresScanGlobalState();
-
 	std::mutex lock;
 };
 
 // Bind Data
 
-struct PostgresScanFunctionData : public TableFunctionData {
+struct PostgresScanFunctionData : public duckdb::TableFunctionData {
 public:
 	PostgresScanFunctionData(PostgresRelation &&relation, Snapshot snapshot);
 	~PostgresScanFunctionData() override;
@@ -64,22 +64,26 @@ public:
 
 // ------- Table Function -------
 
-struct PostgresScanFunction : public TableFunction {
+struct PostgresScanFunction : public duckdb::TableFunction {
 public:
 	PostgresScanFunction();
 
 public:
-	static unique_ptr<FunctionData> PostgresBind(ClientContext &context, TableFunctionBindInput &input,
-	                                             vector<LogicalType> &return_types, vector<string> &names);
-	static unique_ptr<GlobalTableFunctionState> PostgresInitGlobal(ClientContext &context,
-	                                                               TableFunctionInitInput &input);
-	static unique_ptr<LocalTableFunctionState>
-	PostgresInitLocal(ExecutionContext &context, TableFunctionInitInput &input, GlobalTableFunctionState *gstate);
+	static duckdb::unique_ptr<duckdb::FunctionData> PostgresBind(duckdb::ClientContext &context,
+	                                                             duckdb::TableFunctionBindInput &input,
+	                                                             duckdb::vector<duckdb::LogicalType> &return_types,
+	                                                             duckdb::vector<duckdb::string> &names);
+	static duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
+	PostgresInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input);
+	static duckdb::unique_ptr<duckdb::LocalTableFunctionState>
+	PostgresInitLocal(duckdb::ExecutionContext &context, duckdb::TableFunctionInitInput &input,
+	                  duckdb::GlobalTableFunctionState *gstate);
 	// static idx_t PostgresMaxThreads(ClientContext &context, const FunctionData *bind_data_p);
 	// static bool PostgresParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	// LocalTableFunctionState *lstate, GlobalTableFunctionState *gstate); static double PostgresProgress(ClientContext
 	// &context, const FunctionData *bind_data_p, const GlobalTableFunctionState *gstate);
-	static void PostgresFunc(ClientContext &context, TableFunctionInput &data_p, DataChunk &output);
+	static void PostgresFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data_p,
+	                         duckdb::DataChunk &output);
 	// static unique_ptr<NodeStatistics> PostgresCardinality(ClientContext &context, const FunctionData *bind_data);
 	// static idx_t PostgresGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	// LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state); static void
@@ -87,9 +91,7 @@ public:
 	// &function);
 };
 
-// ------- Replacement Scan -------
-
-struct PostgresReplacementScanData : public ReplacementScanData {
+struct PostgresReplacementScanData : public duckdb::ReplacementScanData {
 public:
 	PostgresReplacementScanData(QueryDesc *desc);
 	~PostgresReplacementScanData() override;
@@ -98,7 +100,8 @@ public:
 	QueryDesc *desc;
 };
 
-unique_ptr<TableRef> PostgresReplacementScan(ClientContext &context, const string &table_name,
-                                             ReplacementScanData *data);
+duckdb::unique_ptr<duckdb::TableRef> PostgresReplacementScan(duckdb::ClientContext &context,
+                                                             const duckdb::string &table_name,
+                                                             duckdb::ReplacementScanData *data);
 
-} // namespace duckdb
+} // namespace quack
