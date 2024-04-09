@@ -1,7 +1,7 @@
-
-
+extern "C" {
 #include "postgres.h"
 #include "commands/extension.h"
+}
 
 #include "quack/quack.h"
 #include "quack/quack_select.h"
