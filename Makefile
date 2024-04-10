@@ -18,8 +18,16 @@ PG_CONFIG ?= pg_config
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG_LIB := $(shell $(PG_CONFIG) --pkglibdir)
-PG_CPPFLAGS := -Iinclude -Ithird_party/duckdb/src/include -std=c++17
-SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -L$(PG_LIB) -lduckdb -Lthird_party/build/src -lc++
+
+DEBUG_FLAGS = -g -O0
+override PG_CPPFLAGS += $(DEBUG_FLAGS) -Iinclude -Ithird_party/duckdb/src/include -std=c++17
+
+SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/debug/src -lstdc++
+
+COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
+
+%.bc : %.cpp
+	$(COMPILE.cc.bc) $(SHLIB_LINK) $(PG_CPPFLAGS) -I$(INCLUDE_SERVER) -o $@ $<
 
 # determine the name of the duckdb library that is built
 UNAME_S := $(shell uname -s)
@@ -34,20 +42,16 @@ all: duckdb $(OBJS)
 
 include $(PGXS)
 
-duckdb: third_party/duckdb third_party/build/src/$(DUCKDB_LIB)
+duckdb: third_party/duckdb third_party/duckdb/build/debug/src/$(DUCKDB_LIB)
 
 third_party/duckdb:
 	git submodule update --init --recursive
 
-third_party/build/src/$(DUCKDB_LIB):
-	cd third_party && \
-	mkdir build && \
-	cd build && \
-	cmake ../duckdb && \
-	make
+third_party/duckdb/build/debug/src/$(DUCKDB_LIB):
+	$(MAKE) -C third_party/duckdb debug
 
 install_duckdb:
-	$(install_bin) -m 755 third_party/build/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
+	$(install_bin) -m 755 third_party/duckdb/build/debug/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
 
 
 install: install_duckdb
