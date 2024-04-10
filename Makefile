@@ -19,8 +19,8 @@ PG_CONFIG ?= pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG_LIB := $(shell $(PG_CONFIG) --pkglibdir)
 
-DEBUG_FLAGS = -g -O0
-override PG_CPPFLAGS += $(DEBUG_FLAGS) -Iinclude -Ithird_party/duckdb/src/include -std=c++17
+DEBUG_FLAGS = -g -O0 -fsanitize=address
+override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -std=c++17
 
 SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/debug/src -lstdc++
 
@@ -48,7 +48,7 @@ third_party/duckdb:
 	git submodule update --init --recursive
 
 third_party/duckdb/build/debug/src/$(DUCKDB_LIB):
-	$(MAKE) -C third_party/duckdb debug
+	$(MAKE) -C third_party/duckdb debug DISABLE_SANITIZER=1
 
 install_duckdb:
 	$(install_bin) -m 755 third_party/duckdb/build/debug/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)

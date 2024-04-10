@@ -13,6 +13,7 @@ PG_MODULE_MAGIC;
 
 void
 _PG_init(void) {
+	elog(INFO, "quack extension initialized");
 	quack_init_guc();
 	quack_init_hooks();
 }
