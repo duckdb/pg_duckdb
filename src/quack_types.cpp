@@ -144,8 +144,110 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		                        offset);
 		break;
 	default:
-		elog(ERROR, "Unsupported quack type: %hhu", result.GetType().id());
+		elog(ERROR, "Unsupported quack type: %d", static_cast<int>(result.GetType().id()));
 		break;
+	}
+}
+
+typedef struct HeapTuplePageReadState {
+	bool m_slow = 0;
+	int m_nvalid = 0;
+	uint32 m_offset = 0;
+} HeapTuplePageReadState;
+
+static Datum
+HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePageReadState &heapTupleReadState,
+                             int natts, bool *isNull) {
+
+	HeapTupleHeader tup = tuple->t_data;
+	bool hasnulls = HeapTupleHasNulls(tuple);
+	int attnum;
+	char *tp;
+	uint32 off;
+	bits8 *bp = tup->t_bits;
+	bool slow = false;
+	Datum value = (Datum)0;
+
+	/* We can only fetch as many attributes as the tuple has. */
+	natts = Min(HeapTupleHeaderGetNatts(tuple->t_data), natts);
+
+	attnum = heapTupleReadState.m_nvalid;
+	if (attnum == 0) {
+		/* Start from the first attribute */
+		off = 0;
+		heapTupleReadState.m_slow = false;
+	} else {
+		/* Restore state from previous execution */
+		off = heapTupleReadState.m_offset;
+		slow = heapTupleReadState.m_slow;
+	}
+
+	tp = (char *)tup + tup->t_hoff;
+
+	for (; attnum < natts; attnum++) {
+		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, attnum);
+
+		if (hasnulls && att_isnull(attnum, bp)) {
+			value = (Datum)0;
+			*isNull = true;
+			slow = true; /* can't use attcacheoff anymore */
+			continue;
+		}
+
+		*isNull = false;
+
+		if (!slow && thisatt->attcacheoff >= 0) {
+			off = thisatt->attcacheoff;
+		} else if (thisatt->attlen == -1) {
+
+			if (!slow && off == att_align_nominal(off, thisatt->attalign)) {
+				thisatt->attcacheoff = off;
+			} else {
+				off = att_align_pointer(off, thisatt->attalign, -1, tp + off);
+				slow = true;
+			}
+		} else {
+			off = att_align_nominal(off, thisatt->attalign);
+
+			if (!slow) {
+				thisatt->attcacheoff = off;
+			}
+		}
+
+		value = fetchatt(thisatt, tp + off);
+
+		off = att_addlength_pointer(off, thisatt->attlen, tp + off);
+
+		if (thisatt->attlen <= 0) {
+			slow = true;
+		}
+	}
+
+	heapTupleReadState.m_nvalid = attnum;
+	heapTupleReadState.m_offset = off;
+
+	if (slow) {
+		heapTupleReadState.m_slow = true;
+	} else {
+		heapTupleReadState.m_slow = false;
+	}
+
+	return value;
+}
+
+void
+InsertTupleIntoChunk(duckdb::DataChunk &output, TupleDesc tupleDesc, HeapTupleData *slot, idx_t offset) {
+	HeapTuplePageReadState heapTupleReadState = {};
+	for (int i = 0; i < tupleDesc->natts; i++) {
+		auto &result = output.data[i];
+		bool isNull = false;
+		Datum value = HeapTupleFetchNextDatumValue(tupleDesc, slot, heapTupleReadState, i + 1, &isNull);
+		if (isNull) {
+			auto &array_mask = duckdb::FlatVector::Validity(result);
+			array_mask.SetInvalid(offset);
+		} else {
+			ConvertPostgresToDuckValue(value, result, offset);
+		}
 	}
 }
 

@@ -18,12 +18,14 @@ extern "C" {
 
 #include "quack/quack_heap_scan.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_memory_allocator.hpp"
 
 namespace quack {
 
 static duckdb::unique_ptr<duckdb::DuckDB>
 quack_open_database() {
 	duckdb::DBConfig config;
+	//config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
 	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 }
 
@@ -33,19 +35,20 @@ extern "C" bool
 quack_execute_select(QueryDesc *query_desc, ScanDirection direction, uint64_t count) {
 	auto db = quack::quack_open_database();
 
+	/* Add heap tables */
 	db->instance->config.replacement_scans.emplace_back(
-	    quack::PostgresReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, quack::PostgresReplacementScanData>(query_desc));
+	    quack::PostgresHeapReplacementScan,
+	    duckdb::make_uniq_base<duckdb::ReplacementScanData, quack::PostgresHeapReplacementScanData>(query_desc));
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
 	// Add the postgres_scan inserted by the replacement scan
 	auto &context = *connection->context;
-	quack::PostgresScanFunction scan_fun;
-	duckdb::CreateTableFunctionInfo scan_info_info(scan_fun);
+	quack::PostgresHeapScanFunction heap_scan_fun;
+	duckdb::CreateTableFunctionInfo heap_scan_info(heap_scan_fun);
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
-	catalog.CreateTableFunction(context, &scan_info_info);
+	catalog.CreateTableFunction(context, &heap_scan_info);
 	context.transaction.Commit();
 
 	idx_t column_count;
@@ -101,7 +104,6 @@ quack_execute_select(QueryDesc *query_desc, ScanDirection direction, uint64_t co
 			}
 		}
 	}
-
 	dest->rShutdown(dest);
 	return true;
 }

@@ -7,86 +7,76 @@
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 
-extern "C" {
-#include "postgres.h"
-
-#include "miscadmin.h"
-
-#include "access/tableam.h"
-#include "executor/executor.h"
-#include "parser/parse_type.h"
-#include "tcop/utility.h"
-#include "catalog/pg_type.h"
-#include "utils/syscache.h"
-#include "utils/builtins.h"
-}
-
 #include "quack/quack_heap_scan.hpp"
 #include "quack/quack_types.hpp"
 
-// Postgres Relation
-
-PostgresRelation::PostgresRelation(RangeTblEntry *table) : rel(RelationIdGetRelation(table->relid)) {
-}
-
-PostgresRelation::~PostgresRelation() {
-	if (IsValid()) {
-		RelationClose(rel);
-	}
-}
-
-Relation
-PostgresRelation::GetRelation() {
-	return rel;
-}
-
-bool
-PostgresRelation::IsValid() const {
-	return RelationIsValid(rel);
-}
-
-PostgresRelation::PostgresRelation(PostgresRelation &&other) : rel(other.rel) {
-	other.rel = nullptr;
-}
-
 namespace quack {
 
-// ------- Table Function -------
+//
+// PostgresHeapScanFunctionData
+//
 
-PostgresScanFunction::PostgresScanFunction()
-    : TableFunction("quack_postgres_scan", {}, PostgresFunc, PostgresBind, PostgresInitGlobal, PostgresInitLocal) {
+PostgresHeapScanFunctionData::PostgresHeapScanFunctionData(PostgresHeapSeqScan &&relation, Snapshot snapshot)
+    : m_relation(std::move(relation)) {
+	m_relation.SetSnapshot(snapshot);
+}
+
+PostgresHeapScanFunctionData::~PostgresHeapScanFunctionData() {
+}
+
+//
+// PostgresHeapScanGlobalState
+//
+
+PostgresHeapScanGlobalState::PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation) {
+	relation.InitParallelScanState();
+	elog(DEBUG3, "-- (DuckDB/PostgresHeapScanGlobalState) Running %lu threads -- ", MaxThreads());
+}
+
+PostgresHeapScanGlobalState::~PostgresHeapScanGlobalState() {
+}
+
+//
+// PostgresHeapScanLocalState
+//
+
+PostgresHeapScanLocalState::PostgresHeapScanLocalState(PostgresHeapSeqScan &relation) : m_rel(relation) {
+	m_thread_seq_scan_info.m_tuple.t_tableOid = RelationGetRelid(relation.GetRelation());
+	m_thread_seq_scan_info.m_tuple_desc = RelationGetDescr(relation.GetRelation());
+}
+
+PostgresHeapScanLocalState::~PostgresHeapScanLocalState() {
+	m_thread_seq_scan_info.EndScan();
+}
+
+//
+// PostgresHeapScanFunction
+//
+
+PostgresHeapScanFunction::PostgresHeapScanFunction()
+    : TableFunction("postgres_heap_scan", {}, PostgresHeapScanFunc, PostgresHeapBind, PostgresHeapInitGlobal,
+                    PostgresHeapInitLocal) {
 	named_parameters["table"] = duckdb::LogicalType::POINTER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
-}
-
-// Bind Data
-
-PostgresScanFunctionData::PostgresScanFunctionData(PostgresRelation &&relation, Snapshot snapshot)
-    : relation(std::move(relation)), snapshot(snapshot) {
-}
-
-PostgresScanFunctionData::~PostgresScanFunctionData() {
+	// projection_pushdown = true;
 }
 
 duckdb::unique_ptr<duckdb::FunctionData>
-PostgresScanFunction::PostgresBind(duckdb::ClientContext &context, duckdb::TableFunctionBindInput &input,
-                                   duckdb::vector<duckdb::LogicalType> &return_types,
-                                   duckdb::vector<duckdb::string> &names) {
+PostgresHeapScanFunction::PostgresHeapBind(duckdb::ClientContext &context, duckdb::TableFunctionBindInput &input,
+                                           duckdb::vector<duckdb::LogicalType> &return_types,
+                                           duckdb::vector<duckdb::string> &names) {
 	auto table = (reinterpret_cast<RangeTblEntry *>(input.named_parameters["table"].GetPointer()));
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
-	D_ASSERT(table->relid);
-	auto rel = PostgresRelation(table);
-
+	auto rel = PostgresHeapSeqScan(table);
 	auto tupleDesc = RelationGetDescr(rel.GetRelation());
+
 	if (!tupleDesc) {
 		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", table->relid);
 		return nullptr;
 	}
 
-	int column_count = tupleDesc->natts;
-
-	for (idx_t i = 0; i < column_count; i++) {
+	for (int i = 0; i < tupleDesc->natts; i++) {
 		Form_pg_attribute attr = &tupleDesc->attrs[i];
 		Oid type_oid = attr->atttypid;
 		auto col_name = duckdb::string(NameStr(attr->attname));
@@ -94,95 +84,57 @@ PostgresScanFunction::PostgresBind(duckdb::ClientContext &context, duckdb::Table
 		return_types.push_back(duck_type);
 		names.push_back(col_name);
 		/* Log column name and type */
-		elog(INFO, "Column name: %s, Type: %s", col_name.c_str(), duck_type.ToString().c_str());
+		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
+		     duck_type.ToString().c_str());
 	}
-	return duckdb::make_uniq<PostgresScanFunctionData>(std::move(rel), snapshot);
-}
-
-// Global State
-
-PostgresScanGlobalState::PostgresScanGlobalState() {
+	return duckdb::make_uniq<PostgresHeapScanFunctionData>(std::move(rel), snapshot);
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
-PostgresScanFunction::PostgresInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input) {
-	return duckdb::make_uniq<PostgresScanGlobalState>();
-}
-
-// Local State
-
-PostgresScanLocalState::PostgresScanLocalState(PostgresRelation &relation, Snapshot snapshot) {
-	auto rel = relation.GetRelation();
-	tableam = rel->rd_tableam;
-
-	// Initialize the scan state
-	uint32 flags = SO_TYPE_SEQSCAN | SO_ALLOW_STRAT | SO_ALLOW_SYNC | SO_ALLOW_PAGEMODE;
-	scanDesc = rel->rd_tableam->scan_begin(rel, snapshot, 0, NULL, NULL, flags);
-}
-PostgresScanLocalState::~PostgresScanLocalState() {
-	// Close the scan state
-	tableam->scan_end(scanDesc);
+PostgresHeapScanFunction::PostgresHeapInitGlobal(duckdb::ClientContext &context,
+                                                 duckdb::TableFunctionInitInput &input) {
+	auto &bind_data = input.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
+	return duckdb::make_uniq<PostgresHeapScanGlobalState>(bind_data.m_relation);
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
-PostgresScanFunction::PostgresInitLocal(duckdb::ExecutionContext &context, duckdb::TableFunctionInitInput &input,
-                                        duckdb::GlobalTableFunctionState *gstate) {
-	auto &bind_data = input.bind_data->CastNoConst<PostgresScanFunctionData>();
-	auto &relation = bind_data.relation;
-	auto snapshot = bind_data.snapshot;
-	return duckdb::make_uniq<PostgresScanLocalState>(relation, snapshot);
-}
-
-static void
-InsertTupleIntoChunk(duckdb::DataChunk &output, TupleDesc tuple, TupleTableSlot *slot, idx_t offset) {
-	for (int i = 0; i < tuple->natts; i++) {
-		auto &result = output.data[i];
-		Datum value = slot_getattr(slot, i + 1, &slot->tts_isnull[i]);
-		if (slot->tts_isnull[i]) {
-			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(offset);
-		} else {
-			ConvertPostgresToDuckValue(value, result, offset);
-		}
-	}
+PostgresHeapScanFunction::PostgresHeapInitLocal(duckdb::ExecutionContext &context,
+                                                duckdb::TableFunctionInitInput &input,
+                                                duckdb::GlobalTableFunctionState *gstate) {
+	auto &bind_data = input.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
+	return duckdb::make_uniq<PostgresHeapScanLocalState>(bind_data.m_relation);
 }
 
 void
-PostgresScanFunction::PostgresFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data_p,
-                                   duckdb::DataChunk &output) {
-	auto &data = data_p.bind_data->CastNoConst<PostgresScanFunctionData>();
-	auto &lstate = data_p.local_state->Cast<PostgresScanLocalState>();
+PostgresHeapScanFunction::PostgresHeapScanFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data_p,
+                                               duckdb::DataChunk &output) {
+	auto &bind_data = data_p.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
+	auto &l_data = data_p.local_state->Cast<PostgresHeapScanLocalState>();
 
-	auto &relation = data.relation;
-	auto &exhausted_scan = lstate.exhausted_scan;
+	auto &relation = bind_data.m_relation;
+	auto &exhausted_scan = l_data.m_exhausted_scan;
 
-	auto rel = relation.GetRelation();
+	l_data.m_thread_seq_scan_info.m_output_vector_size = 0;
 
-	TupleDesc tupleDesc = RelationGetDescr(rel);
-	auto scanDesc = lstate.scanDesc;
-
-	auto slot = table_slot_create(rel, NULL);
-	idx_t count = 0;
-	for (; count < STANDARD_VECTOR_SIZE && !exhausted_scan; count++) {
-		auto has_tuple = rel->rd_tableam->scan_getnextslot(scanDesc, ForwardScanDirection, slot);
-		if (!has_tuple) {
-			exhausted_scan = true;
-			break;
-		}
-		// Received a tuple, insert it into the DataChunk
-		InsertTupleIntoChunk(output, tupleDesc, slot, count);
+	/* We have exhausted seq scan of heap table so we can return */
+	if (exhausted_scan) {
+		output.SetCardinality(0);
+		return;
 	}
-	ExecDropSingleTupleTableSlot(slot);
-	output.SetCardinality(count);
+
+	auto has_tuple = relation.ReadPageTuples(output, l_data.m_thread_seq_scan_info);
+
+	if (!has_tuple || l_data.m_thread_seq_scan_info.m_block_number == InvalidBlockNumber) {
+		exhausted_scan = true;
+	}
 }
 
-PostgresReplacementScanData::PostgresReplacementScanData(QueryDesc *desc) : desc(desc) {
-}
-PostgresReplacementScanData::~PostgresReplacementScanData() {
-}
+//
+// PostgresHeapReplacementScan
+//
 
 static RangeTblEntry *
-FindMatchingRelation(List *tables, const duckdb::string &to_find) {
+FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
 	ListCell *lc;
 	foreach (lc, tables) {
 		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
@@ -194,11 +146,12 @@ FindMatchingRelation(List *tables, const duckdb::string &to_find) {
 				return nullptr;
 			}
 
-			char *relName = RelationGetRelationName(rel);
-			auto table_name = std::string(relName);
+			char *rel_name = RelationGetRelationName(rel);
+			auto table_name = std::string(rel_name);
 			if (duckdb::StringUtil::CIEquals(table_name, to_find)) {
-				if (!rel->rd_amhandler) {
-					// This doesn't have an access method handler, we cant read from this
+				/* Allow only heap tables */
+				if (!rel->rd_amhandler || (GetTableAmRoutine(rel->rd_amhandler) != GetHeapamTableAmRoutine())) {
+					/* This doesn't have an access method handler, we cant read from this */
 					RelationClose(rel);
 					return nullptr;
 				}
@@ -211,7 +164,8 @@ FindMatchingRelation(List *tables, const duckdb::string &to_find) {
 	return nullptr;
 }
 
-static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> CreateFunctionArguments(RangeTblEntry *table, Snapshot snapshot) {
+static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>
+CreateFunctionArguments(RangeTblEntry *table, Snapshot snapshot) {
 	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
 	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("table"),
@@ -219,29 +173,27 @@ static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> CreateFuncti
 
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
 	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(
-	        duckdb::Value::POINTER(duckdb::CastPointerToValue(snapshot)))));
+	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(snapshot)))));
 	return children;
 }
 
 duckdb::unique_ptr<duckdb::TableRef>
-PostgresReplacementScan(duckdb::ClientContext &context, const duckdb::string &table_name,
-                        duckdb::ReplacementScanData *data) {
+PostgresHeapReplacementScan(duckdb::ClientContext &context, const duckdb::string &table_name,
+                            duckdb::ReplacementScanData *data) {
 
-	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
+	auto &scan_data = reinterpret_cast<PostgresHeapReplacementScanData &>(*data);
 
-	auto tables = scan_data.desc->plannedstmt->rtable;
-	auto table = FindMatchingRelation(tables, table_name);
+	/* Check name against query rtable list and verify that it is heap table */
+	auto table = FindMatchingHeapRelation(scan_data.desc->plannedstmt->rtable, table_name);
 
 	if (!table) {
-		elog(WARNING, "Failed to find table %s in replacement scan lookup", table_name.c_str());
 		return nullptr;
 	}
 
 	// Create POINTER values from the 'table' and 'snapshot' variables
 	auto children = CreateFunctionArguments(table, scan_data.desc->estate->es_snapshot);
 	auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
-	table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>("quack_postgres_scan", std::move(children));
+	table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>("postgres_heap_scan", std::move(children));
 
 	return std::move(table_function);
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 // quack.c
+extern int quack_max_threads_per_query;
 extern "C" void _PG_init(void);
 
 // quack_hooks.c

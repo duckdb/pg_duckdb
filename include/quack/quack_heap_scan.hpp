@@ -9,99 +9,86 @@ extern "C" {
 #include "access/relscan.h"
 }
 
+#include "quack/quack.h"
+#include "quack/quack_heap_seq_scan.hpp"
+
 // Postgres Relation
 
-class PostgresRelation {
-public:
-	PostgresRelation(RangeTblEntry *table);
-	~PostgresRelation();
-	PostgresRelation(const PostgresRelation &other) = delete;
-	PostgresRelation &operator=(const PostgresRelation &other) = delete;
-	PostgresRelation &operator=(PostgresRelation &&other) = delete;
-	PostgresRelation(PostgresRelation &&other);
-
-public:
-	Relation GetRelation();
-	bool IsValid() const;
-
-private:
-	Relation rel = nullptr;
-};
 
 namespace quack {
 
-// Local State
-
-struct PostgresScanLocalState : public duckdb::LocalTableFunctionState {
+struct PostgresHeapScanLocalState : public duckdb::LocalTableFunctionState {
 public:
-	PostgresScanLocalState(PostgresRelation &relation, Snapshot snapshot);
-	~PostgresScanLocalState() override;
+	PostgresHeapScanLocalState(PostgresHeapSeqScan &relation);
+	~PostgresHeapScanLocalState() override;
 
 public:
-	TableScanDesc scanDesc = nullptr;
-	const struct TableAmRoutine *tableam;
-	bool exhausted_scan = false;
+	PostgresHeapSeqScan & m_rel;
+	PostgresHeapSeqScanThreadInfo m_thread_seq_scan_info;
+	bool m_exhausted_scan = false;
 };
 
 // Global State
 
-struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
-	explicit PostgresScanGlobalState();
-	std::mutex lock;
+struct PostgresHeapScanGlobalState : public duckdb::GlobalTableFunctionState {
+	explicit PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation);
+	~PostgresHeapScanGlobalState();
+	idx_t
+	MaxThreads() const override {
+		return quack_max_threads_per_query;
+	}
 };
 
-// Bind Data
-
-struct PostgresScanFunctionData : public duckdb::TableFunctionData {
+struct PostgresHeapScanFunctionData : public duckdb::TableFunctionData {
 public:
-	PostgresScanFunctionData(PostgresRelation &&relation, Snapshot snapshot);
-	~PostgresScanFunctionData() override;
+	PostgresHeapScanFunctionData(PostgresHeapSeqScan &&relation, Snapshot Snapshot);
+	~PostgresHeapScanFunctionData() override;
 
 public:
-	PostgresRelation relation;
-	Snapshot snapshot;
+	PostgresHeapSeqScan m_relation;
 };
 
-// ------- Table Function -------
-
-struct PostgresScanFunction : public duckdb::TableFunction {
+struct PostgresHeapScanFunction : public duckdb::TableFunction {
 public:
-	PostgresScanFunction();
+	PostgresHeapScanFunction();
 
 public:
-	static duckdb::unique_ptr<duckdb::FunctionData> PostgresBind(duckdb::ClientContext &context,
-	                                                             duckdb::TableFunctionBindInput &input,
-	                                                             duckdb::vector<duckdb::LogicalType> &return_types,
-	                                                             duckdb::vector<duckdb::string> &names);
+	static duckdb::unique_ptr<duckdb::FunctionData> PostgresHeapBind(duckdb::ClientContext &context,
+	                                                                 duckdb::TableFunctionBindInput &input,
+	                                                                 duckdb::vector<duckdb::LogicalType> &return_types,
+	                                                                 duckdb::vector<duckdb::string> &names);
 	static duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
-	PostgresInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input);
+	PostgresHeapInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input);
 	static duckdb::unique_ptr<duckdb::LocalTableFunctionState>
-	PostgresInitLocal(duckdb::ExecutionContext &context, duckdb::TableFunctionInitInput &input,
-	                  duckdb::GlobalTableFunctionState *gstate);
+	PostgresHeapInitLocal(duckdb::ExecutionContext &context, duckdb::TableFunctionInitInput &input,
+	                      duckdb::GlobalTableFunctionState *gstate);
 	// static idx_t PostgresMaxThreads(ClientContext &context, const FunctionData *bind_data_p);
 	// static bool PostgresParallelStateNext(ClientContext &context, const FunctionData *bind_data_p,
 	// LocalTableFunctionState *lstate, GlobalTableFunctionState *gstate); static double PostgresProgress(ClientContext
 	// &context, const FunctionData *bind_data_p, const GlobalTableFunctionState *gstate);
-	static void PostgresFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data_p,
-	                         duckdb::DataChunk &output);
+	static void PostgresHeapScanFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data_p,
+	                             duckdb::DataChunk &output);
 	// static unique_ptr<NodeStatistics> PostgresCardinality(ClientContext &context, const FunctionData *bind_data);
 	// static idx_t PostgresGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	// LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state); static void
 	// PostgresSerialize(Serializer &serializer, const optional_ptr<FunctionData> bind_data, const TableFunction
 	// &function);
+public:
+	static void InsertTupleIntoChunk(duckdb::DataChunk &output, TupleDesc tuple, TupleTableSlot *slot, idx_t offset);
 };
 
-struct PostgresReplacementScanData : public duckdb::ReplacementScanData {
+struct PostgresHeapReplacementScanData : public duckdb::ReplacementScanData {
 public:
-	PostgresReplacementScanData(QueryDesc *desc);
-	~PostgresReplacementScanData() override;
+	PostgresHeapReplacementScanData(QueryDesc *desc) : desc(desc) {
+	}
+	~PostgresHeapReplacementScanData() override {};
 
 public:
 	QueryDesc *desc;
 };
 
-duckdb::unique_ptr<duckdb::TableRef> PostgresReplacementScan(duckdb::ClientContext &context,
-                                                             const duckdb::string &table_name,
-                                                             duckdb::ReplacementScanData *data);
+duckdb::unique_ptr<duckdb::TableRef> PostgresHeapReplacementScan(duckdb::ClientContext &context,
+                                                                 const duckdb::string &table_name,
+                                                                 duckdb::ReplacementScanData *data);
 
 } // namespace quack
