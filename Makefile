@@ -1,4 +1,4 @@
-.PHONY: duckdb install_duckdb
+.PHONY: duckdb install_duckdb clean_duckdb lintcheck
 
 MODULE_big = quack
 EXTENSION = quack
@@ -18,6 +18,8 @@ PG_CONFIG ?= pg_config
 
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG_LIB := $(shell $(PG_CONFIG) --pkglibdir)
+INCLUDEDIR := ${shell $(PG_CONFIG) --includedir}
+INCLUDEDIR_SERVER := ${shell $(PG_CONFIG) --includedir-server}
 
 DEBUG_FLAGS = -g -O0 -fsanitize=address
 override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -std=c++17
@@ -53,5 +55,17 @@ third_party/duckdb/build/debug/src/$(DUCKDB_LIB):
 install_duckdb:
 	$(install_bin) -m 755 third_party/duckdb/build/debug/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
 
+clean_duckdb:
+	rm -rf third_party/duckdb/build
 
 install: install_duckdb
+clean: clean_duckdb
+
+lintcheck:
+	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
+
+.depend:
+	$(RM) -f .depend
+	$(foreach SRC,$(SRCS),$(CXX) $(CPPFLAGS) -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -MM -MT $(SRC:.cpp=.o) $(SRC) >> .depend;)
+
+include .depend
