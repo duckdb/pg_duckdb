@@ -46,8 +46,6 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		SET_VARSIZE(result, varchar_len + VARHDRSZ);
 		memcpy(VARDATA(result), varchar, varchar_len);
 		slot->tts_values[col] = PointerGetDatum(result);
-		// FIXME: this doesn't need to be freed, the string_t is owned by the chunk right?
-		// duckdb_free(varchar);
 		break;
 	}
 	case DATEOID: {
