@@ -96,12 +96,6 @@ PostgresScanFunction::PostgresBind(duckdb::ClientContext &context, duckdb::Table
 		/* Log column name and type */
 		elog(INFO, "Column name: %s, Type: %s", col_name.c_str(), duck_type.ToString().c_str());
 	}
-
-	// FIXME: check this in the replacement scan
-	D_ASSERT(rel.GetRelation()->rd_amhandler != 0);
-	// These are the methods we need to interact with the table
-	auto access_method_handler = GetTableAmRoutine(rel.GetRelation()->rd_amhandler);
-
 	return duckdb::make_uniq<PostgresScanFunctionData>(std::move(rel), snapshot);
 }
 
@@ -112,9 +106,6 @@ PostgresScanGlobalState::PostgresScanGlobalState() {
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresScanFunction::PostgresInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input) {
-	auto &bind_data = input.bind_data->Cast<PostgresScanFunctionData>();
-	(void)bind_data;
-	// FIXME: we'll call 'parallelscan_initialize' here to initialize a parallel scan
 	return duckdb::make_uniq<PostgresScanGlobalState>();
 }
 
@@ -161,10 +152,8 @@ PostgresScanFunction::PostgresFunc(duckdb::ClientContext &context, duckdb::Table
                                    duckdb::DataChunk &output) {
 	auto &data = data_p.bind_data->CastNoConst<PostgresScanFunctionData>();
 	auto &lstate = data_p.local_state->Cast<PostgresScanLocalState>();
-	auto &gstate = data_p.global_state->Cast<PostgresScanGlobalState>();
 
 	auto &relation = data.relation;
-	auto snapshot = data.snapshot;
 	auto &exhausted_scan = lstate.exhausted_scan;
 
 	auto rel = relation.GetRelation();
@@ -186,7 +175,6 @@ PostgresScanFunction::PostgresFunc(duckdb::ClientContext &context, duckdb::Table
 	ExecDropSingleTupleTableSlot(slot);
 	output.SetCardinality(count);
 }
-
 
 PostgresReplacementScanData::PostgresReplacementScanData(QueryDesc *desc) : desc(desc) {
 }
@@ -223,6 +211,19 @@ FindMatchingRelation(List *tables, const duckdb::string &to_find) {
 	return nullptr;
 }
 
+static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> CreateFunctionArguments(RangeTblEntry *table, Snapshot snapshot) {
+	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
+	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
+	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("table"),
+	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(table)))));
+
+	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
+	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
+	    duckdb::make_uniq<duckdb::ConstantExpression>(
+	        duckdb::Value::POINTER(duckdb::CastPointerToValue(snapshot)))));
+	return children;
+}
+
 duckdb::unique_ptr<duckdb::TableRef>
 PostgresReplacementScan(duckdb::ClientContext &context, const duckdb::string &table_name,
                         duckdb::ReplacementScanData *data) {
@@ -237,19 +238,9 @@ PostgresReplacementScan(duckdb::ClientContext &context, const duckdb::string &ta
 		return nullptr;
 	}
 
-	// Then inside the table function we can scan tuples from the postgres table and convert them into duckdb vectors.
+	// Create POINTER values from the 'table' and 'snapshot' variables
+	auto children = CreateFunctionArguments(table, scan_data.desc->estate->es_snapshot);
 	auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
-	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("table"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(table)))));
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(
-	        duckdb::Value::POINTER(duckdb::CastPointerToValue(scan_data.desc->estate->es_snapshot)))));
-
 	table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>("quack_postgres_scan", std::move(children));
 
 	return std::move(table_function);
