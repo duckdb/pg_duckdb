@@ -6,6 +6,8 @@ extern "C" {
 
 #include "quack/quack.h"
 
+#include "quack/scanner.hpp"
+
 static void quack_init_guc(void);
 
 extern "C" {
@@ -22,5 +24,6 @@ _PG_init(void) {
 /* clang-format off */
 static void
 quack_init_guc(void) {
+	load_scanner("heap");
 
 }
