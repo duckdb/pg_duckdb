@@ -1,1 +1,10 @@
 CREATE EXTENSION quack;
+CREATE TABLE tbl(a varchar);
+INSERT INTO tbl VALUES ('test');
+SELECT * FROM tbl;
+INFO:  Column name: a, Type: VARCHAR
+  a   
+------
+ test
+(1 row)
+
