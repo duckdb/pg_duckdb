@@ -56,9 +56,9 @@ all: duckdb $(OBJS)
 
 include $(PGXS)
 
-duckdb: third_party/duckdb third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB)
+duckdb: third_party/duckdb/Makefile third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB)
 
-third_party/duckdb:
+third_party/duckdb/Makefile:
 	git submodule update --init --recursive
 
 third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB):
