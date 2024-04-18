@@ -1,6 +1,8 @@
 #pragma once
 
-void _PG_init(void);
+// quack.c
+extern int quack_max_threads_per_query;
+extern "C" void _PG_init(void);
 
-// quack_internal.cpp
-const char * quack_duckdb_version();
+// quack_hooks.c
+extern void quack_init_hooks(void);
