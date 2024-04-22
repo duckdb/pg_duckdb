@@ -14,7 +14,6 @@ extern "C" {
 
 // Postgres Relation
 
-
 namespace quack {
 
 struct PostgresHeapScanLocalState : public duckdb::LocalTableFunctionState {
@@ -23,7 +22,7 @@ public:
 	~PostgresHeapScanLocalState() override;
 
 public:
-	PostgresHeapSeqScan & m_rel;
+	PostgresHeapSeqScan &m_rel;
 	PostgresHeapSeqScanThreadInfo m_thread_seq_scan_info;
 	bool m_exhausted_scan = false;
 };
@@ -31,7 +30,7 @@ public:
 // Global State
 
 struct PostgresHeapScanGlobalState : public duckdb::GlobalTableFunctionState {
-	explicit PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation);
+	explicit PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation, duckdb::TableFunctionInitInput &input);
 	~PostgresHeapScanGlobalState();
 	idx_t
 	MaxThreads() const override {
@@ -67,7 +66,7 @@ public:
 	// LocalTableFunctionState *lstate, GlobalTableFunctionState *gstate); static double PostgresProgress(ClientContext
 	// &context, const FunctionData *bind_data_p, const GlobalTableFunctionState *gstate);
 	static void PostgresHeapScanFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data_p,
-	                             duckdb::DataChunk &output);
+	                                 duckdb::DataChunk &output);
 	// static unique_ptr<NodeStatistics> PostgresCardinality(ClientContext &context, const FunctionData *bind_data);
 	// static idx_t PostgresGetBatchIndex(ClientContext &context, const FunctionData *bind_data_p,
 	// LocalTableFunctionState *local_state, GlobalTableFunctionState *global_state); static void

@@ -25,7 +25,7 @@ namespace quack {
 static duckdb::unique_ptr<duckdb::DuckDB>
 quack_open_database() {
 	duckdb::DBConfig config;
-	//config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
+	// config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
 	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 }
 
@@ -59,7 +59,10 @@ quack_execute_select(QueryDesc *query_desc, ScanDirection direction, uint64_t co
 	TupleTableSlot *slot = NULL;
 
 	// FIXME: try-catch ?
-	auto res = connection->Query(query_desc->sourceText);
+
+	duckdb::unique_ptr<duckdb::MaterializedQueryResult> res = nullptr;
+
+	res = connection->Query(query_desc->sourceText);
 	if (res->HasError()) {
 		return false;
 	}

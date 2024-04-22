@@ -28,9 +28,10 @@ PostgresHeapScanFunctionData::~PostgresHeapScanFunctionData() {
 // PostgresHeapScanGlobalState
 //
 
-PostgresHeapScanGlobalState::PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation) {
-	relation.InitParallelScanState();
+PostgresHeapScanGlobalState::PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation,
+                                                         duckdb::TableFunctionInitInput &input) {
 	elog(DEBUG3, "-- (DuckDB/PostgresHeapScanGlobalState) Running %lu threads -- ", MaxThreads());
+	relation.InitParallelScanState(input.column_ids, input.projection_ids, input.filters.get());
 }
 
 PostgresHeapScanGlobalState::~PostgresHeapScanGlobalState() {
@@ -58,7 +59,9 @@ PostgresHeapScanFunction::PostgresHeapScanFunction()
                     PostgresHeapInitLocal) {
 	named_parameters["table"] = duckdb::LogicalType::POINTER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
-	// projection_pushdown = true;
+	projection_pushdown = true;
+	// filter_pushdown = true;
+	// filter_prune = true;
 }
 
 duckdb::unique_ptr<duckdb::FunctionData>
@@ -94,7 +97,7 @@ duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresHeapScanFunction::PostgresHeapInitGlobal(duckdb::ClientContext &context,
                                                  duckdb::TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
-	return duckdb::make_uniq<PostgresHeapScanGlobalState>(bind_data.m_relation);
+	return duckdb::make_uniq<PostgresHeapScanGlobalState>(bind_data.m_relation, input);
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
@@ -154,9 +157,10 @@ FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
 					/* This doesn't have an access method handler, we cant read from this */
 					RelationClose(rel);
 					return nullptr;
+				} else {
+					RelationClose(rel);
+					return table;
 				}
-				RelationClose(rel);
-				return table;
 			}
 			RelationClose(rel);
 		}

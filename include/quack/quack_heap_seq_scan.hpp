@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include <mutex>
+#include <atomic>
 
 namespace quack {
 
@@ -31,18 +32,23 @@ public:
 	HeapTupleData m_tuple;
 };
 
+class PostgresHeapSeqParallelScanState {
+public:
+	PostgresHeapSeqParallelScanState()
+	    : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber), m_total_row_count(0) {
+	}
+	BlockNumber AssignNextBlockNumber();
+	std::mutex m_lock;
+	BlockNumber m_nblocks;
+	BlockNumber m_last_assigned_block_number;
+	duckdb::map<duckdb::column_t, duckdb::idx_t> m_columns;
+	duckdb::vector<duckdb::idx_t> m_projections;
+	duckdb::TableFilterSet *m_filters = nullptr;
+	std::atomic<std::uint32_t> m_total_row_count;
+};
+
 class PostgresHeapSeqScan {
 private:
-	class ParallelScanState {
-	public:
-		ParallelScanState() : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber) {
-		}
-		BlockNumber AssignNextBlockNumber();
-		std::mutex m_lock;
-		BlockNumber m_nblocks;
-		BlockNumber m_last_assigned_block_number;
-	};
-
 public:
 	PostgresHeapSeqScan(RangeTblEntry *table);
 	~PostgresHeapSeqScan();
@@ -52,7 +58,8 @@ public:
 	PostgresHeapSeqScan(PostgresHeapSeqScan &&other);
 
 public:
-	void InitParallelScanState();
+	void InitParallelScanState(const duckdb::vector<duckdb::column_t> &columns,
+	                           const duckdb::vector<duckdb::idx_t> &projections, duckdb::TableFilterSet *filters);
 	void
 	SetSnapshot(Snapshot snapshot) {
 		m_snapshot = snapshot;
@@ -70,7 +77,7 @@ private:
 private:
 	Relation m_rel = nullptr;
 	Snapshot m_snapshot = nullptr;
-	ParallelScanState m_parallel_scan_state;
+	PostgresHeapSeqParallelScanState m_parallel_scan_state;
 };
 
 } // namespace quack

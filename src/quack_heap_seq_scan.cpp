@@ -55,8 +55,16 @@ PostgresHeapSeqScan::PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanIn
 }
 
 void
-PostgresHeapSeqScan::InitParallelScanState() {
+PostgresHeapSeqScan::InitParallelScanState(const duckdb::vector<duckdb::column_t> &columns,
+                                           const duckdb::vector<duckdb::idx_t> &projections,
+                                           duckdb::TableFilterSet *filters) {
 	m_parallel_scan_state.m_nblocks = RelationGetNumberOfBlocks(m_rel);
+	/* We need ordered columns ids for tuple fetch */
+	for(duckdb::idx_t i = 0; i < columns.size(); i++) {
+		m_parallel_scan_state.m_columns[columns[i]] = i;
+	}
+	m_parallel_scan_state.m_projections = projections;
+	m_parallel_scan_state.m_filters = filters;
 }
 
 bool
@@ -113,9 +121,7 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 			}
 
 			pgstat_count_heap_getnext(m_rel);
-
-			InsertTupleIntoChunk(output, threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
-			                     threadScanInfo.m_output_vector_size);
+			InsertTupleIntoChunk(output, threadScanInfo, m_parallel_scan_state);
 		}
 
 		/* No more items on current page */
@@ -150,7 +156,7 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 }
 
 BlockNumber
-PostgresHeapSeqScan::ParallelScanState::AssignNextBlockNumber() {
+PostgresHeapSeqParallelScanState::AssignNextBlockNumber() {
 	m_lock.lock();
 	BlockNumber block_number = InvalidBlockNumber;
 	if (m_last_assigned_block_number == InvalidBlockNumber) {

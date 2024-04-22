@@ -4,8 +4,9 @@ MODULE_big = quack
 EXTENSION = quack
 DATA = quack.control $(wildcard quack--*.sql)
 
-SRCS = src/quack_heap_seq_scan.cpp \
+SRCS = src/quack_detoast.cpp \
 	   src/quack_heap_scan.cpp \
+	   src/quack_heap_seq_scan.cpp \
 	   src/quack_hooks.cpp \
 	   src/quack_select.cpp \
 	   src/quack_types.cpp \
