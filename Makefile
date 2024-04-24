@@ -1,4 +1,4 @@
-.PHONY: duckdb install_duckdb clean_duckdb lintcheck
+.PHONY: duckdb install_duckdb clean_duckdb lintcheck .depend
 
 MODULE_big = quack
 EXTENSION = quack
