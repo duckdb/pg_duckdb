@@ -2,6 +2,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "pg_config.h"
 #include "varatt.h"
 
 #ifdef USE_LZ4
@@ -48,7 +49,6 @@ _pglz_decompress_datum(const struct varlena *value) {
 struct varlena *
 _lz4_decompress_datum(const struct varlena *value) {
 #ifndef USE_LZ4
-	NO_LZ4_SUPPORT();
 	return NULL; /* keep compiler quiet */
 #else
 	int32 rawsize;
@@ -69,7 +69,9 @@ _lz4_decompress_datum(const struct varlena *value) {
 
 static struct varlena *
 _toast_decompress_datum(struct varlena *attr) {
-	switch (TOAST_COMPRESS_METHOD(attr)) {
+	ToastCompressionId cmid;
+	cmid = (ToastCompressionId)TOAST_COMPRESS_METHOD(attr);
+	switch (cmid) {
 	case TOAST_PGLZ_COMPRESSION_ID:
 		return _pglz_decompress_datum(attr);
 	case TOAST_LZ4_COMPRESSION_ID:

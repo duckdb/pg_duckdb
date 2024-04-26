@@ -6,6 +6,7 @@ extern "C" {
 #include "postgres.h"
 #include "access/tableam.h"
 #include "access/heapam.h"
+#include "storage/bufmgr.h"
 }
 
 #include <mutex>
@@ -33,18 +34,29 @@ public:
 };
 
 class PostgresHeapSeqParallelScanState {
+private:
+	static int const k_max_prefetch_block_number = 32;
+
 public:
 	PostgresHeapSeqParallelScanState()
-	    : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber), m_total_row_count(0) {
+	    : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber), m_total_row_count(0),
+	      m_last_prefetch_block(0), m_strategy(nullptr) {
+	}
+	~PostgresHeapSeqParallelScanState() {
+		if (m_strategy)
+			pfree(m_strategy);
 	}
 	BlockNumber AssignNextBlockNumber();
+	void PrefetchNextRelationPages(Relation rel);
 	std::mutex m_lock;
 	BlockNumber m_nblocks;
 	BlockNumber m_last_assigned_block_number;
 	duckdb::map<duckdb::column_t, duckdb::idx_t> m_columns;
-	duckdb::vector<duckdb::idx_t> m_projections;
+	duckdb::map<duckdb::idx_t, duckdb::column_t> m_projections;
 	duckdb::TableFilterSet *m_filters = nullptr;
 	std::atomic<std::uint32_t> m_total_row_count;
+	BlockNumber m_last_prefetch_block;
+	BufferAccessStrategy m_strategy;
 };
 
 class PostgresHeapSeqScan {

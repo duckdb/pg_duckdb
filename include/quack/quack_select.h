@@ -2,7 +2,6 @@
 
 extern "C" {
 #include "postgres.h"
-
 #include "executor/executor.h"
 }
 

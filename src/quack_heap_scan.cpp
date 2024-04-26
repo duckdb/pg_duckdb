@@ -60,8 +60,8 @@ PostgresHeapScanFunction::PostgresHeapScanFunction()
 	named_parameters["table"] = duckdb::LogicalType::POINTER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
 	projection_pushdown = true;
-	// filter_pushdown = true;
-	// filter_prune = true;
+	filter_pushdown = true;
+	filter_prune = true;
 }
 
 duckdb::unique_ptr<duckdb::FunctionData>

@@ -40,6 +40,7 @@ PostgresHeapSeqScan::IsValid() const {
 }
 
 TupleDesc
+
 PostgresHeapSeqScan::GetTupleDesc() {
 	return RelationGetDescr(m_rel);
 }
@@ -60,10 +61,13 @@ PostgresHeapSeqScan::InitParallelScanState(const duckdb::vector<duckdb::column_t
                                            duckdb::TableFilterSet *filters) {
 	m_parallel_scan_state.m_nblocks = RelationGetNumberOfBlocks(m_rel);
 	/* We need ordered columns ids for tuple fetch */
-	for(duckdb::idx_t i = 0; i < columns.size(); i++) {
+	for (duckdb::idx_t i = 0; i < columns.size(); i++) {
 		m_parallel_scan_state.m_columns[columns[i]] = i;
 	}
-	m_parallel_scan_state.m_projections = projections;
+	for (duckdb::idx_t i = 0; i < columns.size(); i++) {
+		m_parallel_scan_state.m_projections[projections[i]] = columns[i];
+	}
+	//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
 	m_parallel_scan_state.m_filters = filters;
 }
 
@@ -90,17 +94,16 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 			m_parallel_scan_state.m_lock.lock();
 			block = threadScanInfo.m_block_number;
 			threadScanInfo.m_buffer =
-			    ReadBufferExtended(m_rel, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
+			    ReadBufferExtended(m_rel, MAIN_FORKNUM, block, RBM_NORMAL, m_parallel_scan_state.m_strategy);
 			LockBuffer(threadScanInfo.m_buffer, BUFFER_LOCK_SHARE);
+			//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
 			m_parallel_scan_state.m_lock.unlock();
-
 			page = PreparePageRead(threadScanInfo);
 			threadScanInfo.m_read_next_page = false;
 		}
 
 		for (; threadScanInfo.m_page_tuples_left > 0 && threadScanInfo.m_output_vector_size < STANDARD_VECTOR_SIZE;
-		     threadScanInfo.m_page_tuples_left--, threadScanInfo.m_current_tuple_index++,
-		     threadScanInfo.m_output_vector_size++) {
+		     threadScanInfo.m_page_tuples_left--, threadScanInfo.m_current_tuple_index++) {
 			bool visible = true;
 			ItemId lpp = PageGetItemId(page, threadScanInfo.m_current_tuple_index);
 
@@ -166,6 +169,24 @@ PostgresHeapSeqParallelScanState::AssignNextBlockNumber() {
 	}
 	m_lock.unlock();
 	return block_number;
+}
+
+void
+PostgresHeapSeqParallelScanState::PrefetchNextRelationPages(Relation rel) {
+
+	BlockNumber last_batch_prefetch_block_num = m_last_prefetch_block + k_max_prefetch_block_number > m_nblocks
+	                                                ? m_nblocks
+	                                                : m_last_prefetch_block + k_max_prefetch_block_number;
+
+	if (m_last_assigned_block_number != InvalidBlockNumber &&
+	    (m_last_prefetch_block - m_last_assigned_block_number) > 8)
+		return;
+
+
+	for (BlockNumber i = m_last_prefetch_block; i < last_batch_prefetch_block_num; i++) {
+		PrefetchBuffer(rel, MAIN_FORKNUM, m_last_prefetch_block);
+		m_last_prefetch_block++;
+	}
 }
 
 PostgresHeapSeqScanThreadInfo::PostgresHeapSeqScanThreadInfo()

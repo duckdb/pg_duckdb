@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include "quack/quack.h"
+#include "quack/quack_filter.hpp"
 #include "quack/quack_heap_seq_scan.hpp"
 #include "quack/quack_detoast.hpp"
 
@@ -119,7 +120,6 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset) {
 
 void
 ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
-
 	switch (result.GetType().id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		Append<bool>(result, DatumGetBool(value), offset);
@@ -242,26 +242,45 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * parallelScanState.m_columns.size());
 	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * parallelScanState.m_columns.size());
 
+	bool validTuple = true;
+
 	for (auto const &[columnIdx, valueIdx] : parallelScanState.m_columns) {
 		values[valueIdx] = HeapTupleFetchNextColumnDatum(threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
 		                                                 heapTupleReadState, columnIdx + 1, &nulls[valueIdx]);
-		auto &result = output.data[valueIdx];
-		if (nulls[valueIdx]) {
+		if (parallelScanState.m_filters &&
+		    (parallelScanState.m_filters->filters.find(columnIdx) != parallelScanState.m_filters->filters.end())) {
+			auto &filter = parallelScanState.m_filters->filters[valueIdx];
+			validTuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
+			                              threadScanInfo.m_tuple_desc->attrs[columnIdx].atttypid);
+		}
+
+		if (!validTuple) {
+			break;
+		}
+	}
+
+	for (idx_t idx = 0; validTuple && idx < parallelScanState.m_projections.size(); idx++) {
+		auto &result = output.data[idx];
+		if (nulls[idx]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(threadScanInfo.m_output_vector_size);
 		} else {
-			if (threadScanInfo.m_tuple_desc->attrs[columnIdx].attlen == -1) {
+			if (threadScanInfo.m_tuple_desc->attrs[parallelScanState.m_projections[idx]].attlen == -1) {
 				bool shouldFree = false;
-				values[valueIdx] =
-				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[valueIdx]), parallelScanState.m_lock, &shouldFree);
-				ConvertPostgresToDuckValue(values[valueIdx] , result, threadScanInfo.m_output_vector_size);
+				values[idx] = DetoastPostgresDatum(reinterpret_cast<varlena *>(values[idx]), parallelScanState.m_lock,
+				                                   &shouldFree);
+				ConvertPostgresToDuckValue(values[idx], result, threadScanInfo.m_output_vector_size);
 				if (shouldFree) {
-					duckdb_free(reinterpret_cast<void*>(values[valueIdx]));
+					duckdb_free(reinterpret_cast<void *>(values[idx]));
 				}
 			} else {
-				ConvertPostgresToDuckValue(values[valueIdx], result, threadScanInfo.m_output_vector_size);
+				ConvertPostgresToDuckValue(values[idx], result, threadScanInfo.m_output_vector_size);
 			}
 		}
+	}
+
+	if (validTuple) {
+		threadScanInfo.m_output_vector_size++;
 	}
 
 	parallelScanState.m_total_row_count++;

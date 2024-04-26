@@ -25,7 +25,9 @@ namespace quack {
 static duckdb::unique_ptr<duckdb::DuckDB>
 quack_open_database() {
 	duckdb::DBConfig config;
-	// config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
+	//config.SetOption("memory_limit", "2GB");
+	//config.SetOption("threads", "8");
+	//config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
 	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 }
 
