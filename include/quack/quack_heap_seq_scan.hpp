@@ -39,7 +39,7 @@ private:
 
 public:
 	PostgresHeapSeqParallelScanState()
-	    : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber), m_count_tuple_only(false),
+	    : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber), m_count_tuples_only(false),
 	      m_total_row_count(0), m_last_prefetch_block(0), m_strategy(nullptr) {
 	}
 	~PostgresHeapSeqParallelScanState() {
@@ -51,9 +51,9 @@ public:
 	std::mutex m_lock;
 	BlockNumber m_nblocks;
 	BlockNumber m_last_assigned_block_number;
-	bool m_count_tuple_only;
-	duckdb::map<duckdb::column_t, duckdb::idx_t> m_columns;
-	duckdb::map<duckdb::idx_t, duckdb::column_t> m_projections;
+	bool m_count_tuples_only;
+	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_columns;
+	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_projections;
 	duckdb::TableFilterSet *m_filters = nullptr;
 	std::atomic<std::uint32_t> m_total_row_count;
 	BlockNumber m_last_prefetch_block;
@@ -71,8 +71,7 @@ public:
 	PostgresHeapSeqScan(PostgresHeapSeqScan &&other);
 
 public:
-	void InitParallelScanState(const duckdb::vector<duckdb::column_t> &columns,
-	                           const duckdb::vector<duckdb::idx_t> &projections, duckdb::TableFilterSet *filters);
+	void InitParallelScanState( duckdb::TableFunctionInitInput &input);
 	void
 	SetSnapshot(Snapshot snapshot) {
 		m_snapshot = snapshot;

@@ -239,7 +239,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
                      PostgresHeapSeqParallelScanState &parallelScanState) {
 	HeapTupleReadState heapTupleReadState = {};
 
-	if (parallelScanState.m_count_tuple_only) {
+	if (parallelScanState.m_count_tuples_only) {
 		threadScanInfo.m_output_vector_size++;
 		return;
 	}
@@ -253,7 +253,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 		values[valueIdx] = HeapTupleFetchNextColumnDatum(threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
 		                                                 heapTupleReadState, columnIdx + 1, &nulls[valueIdx]);
 		if (parallelScanState.m_filters &&
-		    (parallelScanState.m_filters->filters.find(columnIdx) != parallelScanState.m_filters->filters.end())) {
+		    (parallelScanState.m_filters->filters.find(valueIdx) != parallelScanState.m_filters->filters.end())) {
 			auto &filter = parallelScanState.m_filters->filters[valueIdx];
 			validTuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
 			                              threadScanInfo.m_tuple_desc->attrs[columnIdx].atttypid);

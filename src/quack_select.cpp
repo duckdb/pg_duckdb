@@ -78,7 +78,6 @@ quack_execute_select(QueryDesc *query_desc, ScanDirection direction, uint64_t co
 	column_count = res->ColumnCount();
 
 	while (true) {
-
 		auto chunk = res->Fetch();
 
 		if (!chunk || chunk->size() == 0) {

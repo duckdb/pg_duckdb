@@ -31,7 +31,7 @@ PostgresHeapScanFunctionData::~PostgresHeapScanFunctionData() {
 PostgresHeapScanGlobalState::PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation,
                                                          duckdb::TableFunctionInitInput &input) {
 	elog(DEBUG3, "-- (DuckDB/PostgresHeapScanGlobalState) Running %lu threads -- ", MaxThreads());
-	relation.InitParallelScanState(input.column_ids, input.projection_ids, input.filters.get());
+	relation.InitParallelScanState(input);
 }
 
 PostgresHeapScanGlobalState::~PostgresHeapScanGlobalState() {

@@ -56,27 +56,33 @@ PostgresHeapSeqScan::PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanIn
 }
 
 void
-PostgresHeapSeqScan::InitParallelScanState(const duckdb::vector<duckdb::column_t> &columns,
-                                           const duckdb::vector<duckdb::idx_t> &projections,
-                                           duckdb::TableFilterSet *filters) {
+PostgresHeapSeqScan::InitParallelScanState( duckdb::TableFunctionInitInput &input) {
 	m_parallel_scan_state.m_nblocks = RelationGetNumberOfBlocks(m_rel);
 
-	if (columns.size() == 1 && columns[0] == UINT64_MAX) {
-		m_parallel_scan_state.m_count_tuple_only = true;
+	/* SELECT COUNT(*) FROM */
+	if (input.column_ids.size() == 1 && input.column_ids[0] == UINT64_MAX) {
+		m_parallel_scan_state.m_count_tuples_only = true;
 		return;
 	}
 
 	/* We need ordered columns ids for tuple fetch */
-	for (duckdb::idx_t i = 0; i < columns.size(); i++) {
-		m_parallel_scan_state.m_columns[columns[i]] = i;
+	for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
+		m_parallel_scan_state.m_columns[input.column_ids[i]] = i;
 	}
 
-	for (duckdb::idx_t i = 0; i < columns.size(); i++) {
-		m_parallel_scan_state.m_projections[projections[i]] = columns[i];
+	if (input.CanRemoveFilterColumns()) {
+		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
+			m_parallel_scan_state.m_projections[input.projection_ids[i]] = input.column_ids[i];
+		}
+	} else {
+		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
+			m_parallel_scan_state.m_projections[i] = input.column_ids[i];
+		}
 	}
+
 
 	//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
-	m_parallel_scan_state.m_filters = filters;
+	m_parallel_scan_state.m_filters = input.filters.get();
 }
 
 bool
