@@ -60,13 +60,21 @@ PostgresHeapSeqScan::InitParallelScanState(const duckdb::vector<duckdb::column_t
                                            const duckdb::vector<duckdb::idx_t> &projections,
                                            duckdb::TableFilterSet *filters) {
 	m_parallel_scan_state.m_nblocks = RelationGetNumberOfBlocks(m_rel);
+
+	if (columns.size() == 1 && columns[0] == UINT64_MAX) {
+		m_parallel_scan_state.m_count_tuple_only = true;
+		return;
+	}
+
 	/* We need ordered columns ids for tuple fetch */
 	for (duckdb::idx_t i = 0; i < columns.size(); i++) {
 		m_parallel_scan_state.m_columns[columns[i]] = i;
 	}
+
 	for (duckdb::idx_t i = 0; i < columns.size(); i++) {
 		m_parallel_scan_state.m_projections[projections[i]] = columns[i];
 	}
+
 	//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
 	m_parallel_scan_state.m_filters = filters;
 }
