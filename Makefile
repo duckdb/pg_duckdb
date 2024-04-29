@@ -14,7 +14,8 @@ SRCS = src/quack_heap_seq_scan.cpp \
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
-REGRESS = basic
+REGRESS =	basic \
+			type_support
 
 PG_CONFIG ?= pg_config
 
