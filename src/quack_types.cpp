@@ -2,12 +2,16 @@
 
 extern "C" {
 #include "postgres.h"
+#include "fmgr.h"
 #include "miscadmin.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
 }
 
 #include "quack/quack.h"
+#include "quack/quack_filter.hpp"
+#include "quack/quack_heap_seq_scan.hpp"
+#include "quack/quack_detoast.hpp"
 
 namespace quack {
 
@@ -116,7 +120,6 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset) {
 
 void
 ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
-
 	switch (result.GetType().id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		Append<bool>(result, DatumGetBool(value), offset);
@@ -149,15 +152,15 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	}
 }
 
-typedef struct HeapTuplePageReadState {
+typedef struct HeapTupleReadState {
 	bool m_slow = 0;
-	int m_nvalid = 0;
-	uint32 m_offset = 0;
-} HeapTuplePageReadState;
+	int m_last_tuple_att = 0;
+	uint32 m_page_tuple_offset = 0;
+} HeapTupleReadState;
 
 static Datum
-HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePageReadState &heapTupleReadState,
-                             int natts, bool *isNull) {
+HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heapTupleReadState, int attNum,
+                              bool *isNull) {
 
 	HeapTupleHeader tup = tuple->t_data;
 	bool hasnulls = HeapTupleHasNulls(tuple);
@@ -168,23 +171,21 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 	bool slow = false;
 	Datum value = (Datum)0;
 
-	/* We can only fetch as many attributes as the tuple has. */
-	natts = Min(HeapTupleHeaderGetNatts(tuple->t_data), natts);
+	attnum = heapTupleReadState.m_last_tuple_att;
 
-	attnum = heapTupleReadState.m_nvalid;
 	if (attnum == 0) {
 		/* Start from the first attribute */
 		off = 0;
 		heapTupleReadState.m_slow = false;
 	} else {
 		/* Restore state from previous execution */
-		off = heapTupleReadState.m_offset;
+		off = heapTupleReadState.m_page_tuple_offset;
 		slow = heapTupleReadState.m_slow;
 	}
 
 	tp = (char *)tup + tup->t_hoff;
 
-	for (; attnum < natts; attnum++) {
+	for (; attnum < attNum; attnum++) {
 		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, attnum);
 
 		if (hasnulls && att_isnull(attnum, bp)) {
@@ -199,7 +200,6 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 		if (!slow && thisatt->attcacheoff >= 0) {
 			off = thisatt->attcacheoff;
 		} else if (thisatt->attlen == -1) {
-
 			if (!slow && off == att_align_nominal(off, thisatt->attalign)) {
 				thisatt->attcacheoff = off;
 			} else {
@@ -208,7 +208,6 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 			}
 		} else {
 			off = att_align_nominal(off, thisatt->attalign);
-
 			if (!slow) {
 				thisatt->attcacheoff = off;
 			}
@@ -223,8 +222,8 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 		}
 	}
 
-	heapTupleReadState.m_nvalid = attnum;
-	heapTupleReadState.m_offset = off;
+	heapTupleReadState.m_last_tuple_att = attNum;
+	heapTupleReadState.m_page_tuple_offset = off;
 
 	if (slow) {
 		heapTupleReadState.m_slow = true;
@@ -236,19 +235,64 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 }
 
 void
-InsertTupleIntoChunk(duckdb::DataChunk &output, TupleDesc tupleDesc, HeapTupleData *slot, idx_t offset) {
-	HeapTuplePageReadState heapTupleReadState = {};
-	for (int i = 0; i < tupleDesc->natts; i++) {
-		auto &result = output.data[i];
-		bool isNull = false;
-		Datum value = HeapTupleFetchNextDatumValue(tupleDesc, slot, heapTupleReadState, i + 1, &isNull);
-		if (isNull) {
-			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(offset);
-		} else {
-			ConvertPostgresToDuckValue(value, result, offset);
+InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &threadScanInfo,
+                     PostgresHeapSeqParallelScanState &parallelScanState) {
+	HeapTupleReadState heapTupleReadState = {};
+
+	if (parallelScanState.m_count_tuples_only) {
+		threadScanInfo.m_output_vector_size++;
+		return;
+	}
+
+	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
+	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * parallelScanState.m_columns.size());
+	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * parallelScanState.m_columns.size());
+
+	bool validTuple = true;
+
+	for (auto const &[columnIdx, valueIdx] : parallelScanState.m_columns) {
+		values[valueIdx] = HeapTupleFetchNextColumnDatum(threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
+		                                                 heapTupleReadState, columnIdx + 1, &nulls[valueIdx]);
+		if (parallelScanState.m_filters &&
+		    (parallelScanState.m_filters->filters.find(valueIdx) != parallelScanState.m_filters->filters.end())) {
+			auto &filter = parallelScanState.m_filters->filters[valueIdx];
+			validTuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
+			                              threadScanInfo.m_tuple_desc->attrs[columnIdx].atttypid);
+		}
+
+		if (!validTuple) {
+			break;
 		}
 	}
+
+	for (idx_t idx = 0; validTuple && idx < parallelScanState.m_projections.size(); idx++) {
+		auto &result = output.data[idx];
+		if (nulls[idx]) {
+			auto &array_mask = duckdb::FlatVector::Validity(result);
+			array_mask.SetInvalid(threadScanInfo.m_output_vector_size);
+		} else {
+			if (threadScanInfo.m_tuple_desc->attrs[parallelScanState.m_projections[idx]].attlen == -1) {
+				bool shouldFree = false;
+				values[idx] = DetoastPostgresDatum(reinterpret_cast<varlena *>(values[idx]), parallelScanState.m_lock,
+				                                   &shouldFree);
+				ConvertPostgresToDuckValue(values[idx], result, threadScanInfo.m_output_vector_size);
+				if (shouldFree) {
+					duckdb_free(reinterpret_cast<void *>(values[idx]));
+				}
+			} else {
+				ConvertPostgresToDuckValue(values[idx], result, threadScanInfo.m_output_vector_size);
+			}
+		}
+	}
+
+	if (validTuple) {
+		threadScanInfo.m_output_vector_size++;
+	}
+
+	parallelScanState.m_total_row_count++;
+
+	duckdb_free(values);
+	duckdb_free(nulls);
 }
 
 } // namespace quack

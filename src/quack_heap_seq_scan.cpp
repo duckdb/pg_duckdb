@@ -40,6 +40,7 @@ PostgresHeapSeqScan::IsValid() const {
 }
 
 TupleDesc
+
 PostgresHeapSeqScan::GetTupleDesc() {
 	return RelationGetDescr(m_rel);
 }
@@ -55,8 +56,33 @@ PostgresHeapSeqScan::PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanIn
 }
 
 void
-PostgresHeapSeqScan::InitParallelScanState() {
+PostgresHeapSeqScan::InitParallelScanState( duckdb::TableFunctionInitInput &input) {
 	m_parallel_scan_state.m_nblocks = RelationGetNumberOfBlocks(m_rel);
+
+	/* SELECT COUNT(*) FROM */
+	if (input.column_ids.size() == 1 && input.column_ids[0] == UINT64_MAX) {
+		m_parallel_scan_state.m_count_tuples_only = true;
+		return;
+	}
+
+	/* We need ordered columns ids for tuple fetch */
+	for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
+		m_parallel_scan_state.m_columns[input.column_ids[i]] = i;
+	}
+
+	if (input.CanRemoveFilterColumns()) {
+		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
+			m_parallel_scan_state.m_projections[input.projection_ids[i]] = input.column_ids[i];
+		}
+	} else {
+		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
+			m_parallel_scan_state.m_projections[i] = input.column_ids[i];
+		}
+	}
+
+
+	//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
+	m_parallel_scan_state.m_filters = input.filters.get();
 }
 
 bool
@@ -82,17 +108,16 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 			m_parallel_scan_state.m_lock.lock();
 			block = threadScanInfo.m_block_number;
 			threadScanInfo.m_buffer =
-			    ReadBufferExtended(m_rel, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
+			    ReadBufferExtended(m_rel, MAIN_FORKNUM, block, RBM_NORMAL, m_parallel_scan_state.m_strategy);
 			LockBuffer(threadScanInfo.m_buffer, BUFFER_LOCK_SHARE);
+			//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
 			m_parallel_scan_state.m_lock.unlock();
-
 			page = PreparePageRead(threadScanInfo);
 			threadScanInfo.m_read_next_page = false;
 		}
 
 		for (; threadScanInfo.m_page_tuples_left > 0 && threadScanInfo.m_output_vector_size < STANDARD_VECTOR_SIZE;
-		     threadScanInfo.m_page_tuples_left--, threadScanInfo.m_current_tuple_index++,
-		     threadScanInfo.m_output_vector_size++) {
+		     threadScanInfo.m_page_tuples_left--, threadScanInfo.m_current_tuple_index++) {
 			bool visible = true;
 			ItemId lpp = PageGetItemId(page, threadScanInfo.m_current_tuple_index);
 
@@ -113,9 +138,7 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 			}
 
 			pgstat_count_heap_getnext(m_rel);
-
-			InsertTupleIntoChunk(output, threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
-			                     threadScanInfo.m_output_vector_size);
+			InsertTupleIntoChunk(output, threadScanInfo, m_parallel_scan_state);
 		}
 
 		/* No more items on current page */
@@ -150,7 +173,7 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 }
 
 BlockNumber
-PostgresHeapSeqScan::ParallelScanState::AssignNextBlockNumber() {
+PostgresHeapSeqParallelScanState::AssignNextBlockNumber() {
 	m_lock.lock();
 	BlockNumber block_number = InvalidBlockNumber;
 	if (m_last_assigned_block_number == InvalidBlockNumber) {
@@ -160,6 +183,24 @@ PostgresHeapSeqScan::ParallelScanState::AssignNextBlockNumber() {
 	}
 	m_lock.unlock();
 	return block_number;
+}
+
+void
+PostgresHeapSeqParallelScanState::PrefetchNextRelationPages(Relation rel) {
+
+	BlockNumber last_batch_prefetch_block_num = m_last_prefetch_block + k_max_prefetch_block_number > m_nblocks
+	                                                ? m_nblocks
+	                                                : m_last_prefetch_block + k_max_prefetch_block_number;
+
+	if (m_last_assigned_block_number != InvalidBlockNumber &&
+	    (m_last_prefetch_block - m_last_assigned_block_number) > 8)
+		return;
+
+
+	for (BlockNumber i = m_last_prefetch_block; i < last_batch_prefetch_block_num; i++) {
+		PrefetchBuffer(rel, MAIN_FORKNUM, m_last_prefetch_block);
+		m_last_prefetch_block++;
+	}
 }
 
 PostgresHeapSeqScanThreadInfo::PostgresHeapSeqScanThreadInfo()

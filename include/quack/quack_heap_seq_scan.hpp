@@ -6,9 +6,11 @@ extern "C" {
 #include "postgres.h"
 #include "access/tableam.h"
 #include "access/heapam.h"
+#include "storage/bufmgr.h"
 }
 
 #include <mutex>
+#include <atomic>
 
 namespace quack {
 
@@ -31,18 +33,35 @@ public:
 	HeapTupleData m_tuple;
 };
 
+class PostgresHeapSeqParallelScanState {
+private:
+	static int const k_max_prefetch_block_number = 32;
+
+public:
+	PostgresHeapSeqParallelScanState()
+	    : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber), m_count_tuples_only(false),
+	      m_total_row_count(0), m_last_prefetch_block(0), m_strategy(nullptr) {
+	}
+	~PostgresHeapSeqParallelScanState() {
+		if (m_strategy)
+			pfree(m_strategy);
+	}
+	BlockNumber AssignNextBlockNumber();
+	void PrefetchNextRelationPages(Relation rel);
+	std::mutex m_lock;
+	BlockNumber m_nblocks;
+	BlockNumber m_last_assigned_block_number;
+	bool m_count_tuples_only;
+	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_columns;
+	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_projections;
+	duckdb::TableFilterSet *m_filters = nullptr;
+	std::atomic<std::uint32_t> m_total_row_count;
+	BlockNumber m_last_prefetch_block;
+	BufferAccessStrategy m_strategy;
+};
+
 class PostgresHeapSeqScan {
 private:
-	class ParallelScanState {
-	public:
-		ParallelScanState() : m_nblocks(InvalidBlockNumber), m_last_assigned_block_number(InvalidBlockNumber) {
-		}
-		BlockNumber AssignNextBlockNumber();
-		std::mutex m_lock;
-		BlockNumber m_nblocks;
-		BlockNumber m_last_assigned_block_number;
-	};
-
 public:
 	PostgresHeapSeqScan(RangeTblEntry *table);
 	~PostgresHeapSeqScan();
@@ -52,7 +71,7 @@ public:
 	PostgresHeapSeqScan(PostgresHeapSeqScan &&other);
 
 public:
-	void InitParallelScanState();
+	void InitParallelScanState( duckdb::TableFunctionInitInput &input);
 	void
 	SetSnapshot(Snapshot snapshot) {
 		m_snapshot = snapshot;
@@ -70,7 +89,7 @@ private:
 private:
 	Relation m_rel = nullptr;
 	Snapshot m_snapshot = nullptr;
-	ParallelScanState m_parallel_scan_state;
+	PostgresHeapSeqParallelScanState m_parallel_scan_state;
 };
 
 } // namespace quack

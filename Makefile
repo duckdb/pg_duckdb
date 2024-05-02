@@ -4,8 +4,10 @@ MODULE_big = quack
 EXTENSION = quack
 DATA = quack.control $(wildcard quack--*.sql)
 
-SRCS = src/quack_heap_seq_scan.cpp \
+SRCS = src/quack_detoast.cpp \
+	   src/quack_filter.cpp \
 	   src/quack_heap_scan.cpp \
+	   src/quack_heap_seq_scan.cpp \
 	   src/quack_hooks.cpp \
 	   src/quack_select.cpp \
 	   src/quack_types.cpp \
@@ -34,7 +36,7 @@ else
 	QUACK_BUILD_DUCKDB = release
 endif
 
-override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -std=c++17 ${QUACK_BUILD_CXX_FLAGS}
+override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -std=c++17 -Wno-sign-compare ${QUACK_BUILD_CXX_FLAGS}
 
 SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src -lstdc++
 
