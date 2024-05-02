@@ -244,6 +244,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 		return;
 	}
 
+	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
 	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * parallelScanState.m_columns.size());
 	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * parallelScanState.m_columns.size());
 
