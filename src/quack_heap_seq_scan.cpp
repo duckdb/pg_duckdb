@@ -16,7 +16,7 @@ extern "C" {
 namespace quack {
 
 PostgresHeapSeqScan::PostgresHeapSeqScan(RangeTblEntry *table)
-    : m_rel(RelationIdGetRelation(table->relid)), m_snapshot(nullptr) {
+    : m_tableEntry(table), m_rel(nullptr), m_snapshot(nullptr) {
 }
 
 PostgresHeapSeqScan::~PostgresHeapSeqScan() {
@@ -25,13 +25,26 @@ PostgresHeapSeqScan::~PostgresHeapSeqScan() {
 	}
 }
 
-PostgresHeapSeqScan::PostgresHeapSeqScan(PostgresHeapSeqScan &&other) : m_rel(other.m_rel) {
-	other.m_rel = nullptr;
+PostgresHeapSeqScan::PostgresHeapSeqScan(PostgresHeapSeqScan &&other)
+    : m_tableEntry(other.m_tableEntry), m_rel(nullptr) {
+	other.CloseRelation();
+	other.m_tableEntry = nullptr;
 }
 
 Relation
 PostgresHeapSeqScan::GetRelation() {
+	if (m_tableEntry && m_rel == nullptr) {
+		m_rel = RelationIdGetRelation(m_tableEntry->relid);
+	}
 	return m_rel;
+}
+
+void
+PostgresHeapSeqScan::CloseRelation() {
+	if (IsValid()) {
+		RelationClose(m_rel);
+	}
+	m_rel = nullptr;
 }
 
 bool
@@ -56,7 +69,8 @@ PostgresHeapSeqScan::PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanIn
 }
 
 void
-PostgresHeapSeqScan::InitParallelScanState( duckdb::TableFunctionInitInput &input) {
+PostgresHeapSeqScan::InitParallelScanState(duckdb::TableFunctionInitInput &input) {
+	(void) GetRelation();
 	m_parallel_scan_state.m_nblocks = RelationGetNumberOfBlocks(m_rel);
 
 	/* SELECT COUNT(*) FROM */
@@ -80,8 +94,7 @@ PostgresHeapSeqScan::InitParallelScanState( duckdb::TableFunctionInitInput &inpu
 		}
 	}
 
-
-	//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
+	// m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
 	m_parallel_scan_state.m_filters = input.filters.get();
 }
 
@@ -110,7 +123,7 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 			threadScanInfo.m_buffer =
 			    ReadBufferExtended(m_rel, MAIN_FORKNUM, block, RBM_NORMAL, m_parallel_scan_state.m_strategy);
 			LockBuffer(threadScanInfo.m_buffer, BUFFER_LOCK_SHARE);
-			//m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
+			// m_parallel_scan_state.PrefetchNextRelationPages(m_rel);
 			m_parallel_scan_state.m_lock.unlock();
 			page = PreparePageRead(threadScanInfo);
 			threadScanInfo.m_read_next_page = false;
@@ -195,7 +208,6 @@ PostgresHeapSeqParallelScanState::PrefetchNextRelationPages(Relation rel) {
 	if (m_last_assigned_block_number != InvalidBlockNumber &&
 	    (m_last_prefetch_block - m_last_assigned_block_number) > 8)
 		return;
-
 
 	for (BlockNumber i = m_last_prefetch_block; i < last_batch_prefetch_block_num; i++) {
 		PrefetchBuffer(rel, MAIN_FORKNUM, m_last_prefetch_block);

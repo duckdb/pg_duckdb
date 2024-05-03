@@ -71,7 +71,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default:
-		elog(ERROR, "Unsuported quack type: %d", oid);
+		elog(ERROR, "(DuckDB/ConvertDuckToPostgresValue) Unsuported quack type: %d", oid);
 	}
 }
 
@@ -97,7 +97,33 @@ ConvertPostgresToDuckColumnType(Oid type) {
 	case TIMESTAMPOID:
 		return duckdb::LogicalTypeId::TIMESTAMP;
 	default:
-		elog(ERROR, "Unsupported quack type: %d", type);
+		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
+	}
+}
+
+Oid
+GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
+	switch (type) {
+	case duckdb::LogicalTypeId::BOOLEAN:
+		return BOOLOID;
+	case duckdb::LogicalTypeId::TINYINT:
+		return CHAROID;
+	case duckdb::LogicalTypeId::SMALLINT:
+		return INT2OID;
+	case duckdb::LogicalTypeId::INTEGER:
+		return INT4OID;
+	case duckdb::LogicalTypeId::BIGINT:
+		return INT8OID;
+	case duckdb::LogicalTypeId::VARCHAR:
+		return VARCHAROID;
+	case duckdb::LogicalTypeId::DATE:
+		return DATEOID;
+	case duckdb::LogicalTypeId::TIMESTAMP:
+		return TIMESTAMPOID;
+	case duckdb::LogicalTypeId::DOUBLE:
+		return FLOAT8OID;
+	default:
+		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %d",  static_cast<int>(type));
 	}
 }
 

@@ -79,6 +79,7 @@ public:
 
 public:
 	Relation GetRelation();
+	void CloseRelation();
 	TupleDesc GetTupleDesc();
 	bool ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &threadScanInfo);
 	bool IsValid() const;
@@ -87,6 +88,7 @@ private:
 	Page PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanInfo);
 
 private:
+	RangeTblEntry * m_tableEntry = nullptr;
 	Relation m_rel = nullptr;
 	Snapshot m_snapshot = nullptr;
 	PostgresHeapSeqParallelScanState m_parallel_scan_state;

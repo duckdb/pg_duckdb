@@ -7,5 +7,7 @@ extern "C" {
 }
 
 namespace quack {
+
 bool ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool isNull, Oid typeOid);
+
 } // namespace quack
