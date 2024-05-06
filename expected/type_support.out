@@ -87,6 +87,7 @@ SELECT * FROM timestamp_tbl;
  Mon May 15 12:30:45 2023
 (3 rows)
 
+DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
 DROP TABLE big;
