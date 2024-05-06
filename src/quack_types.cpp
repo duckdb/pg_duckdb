@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -71,8 +72,26 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 }
 
+static inline int
+numeric_typmod_precision(int32 typmod)
+{
+	return ((typmod - VARHDRSZ) >> 16) & 0xffff;
+}
+
+static inline int
+numeric_typmod_scale(int32 typmod)
+{
+	return (((typmod - VARHDRSZ) & 0x7ff) ^ 1024) - 1024;
+}
+
+struct NumericAsDouble : public duckdb::ExtraTypeInfo {
+// Dummy struct to indicate at conversion that the source is a Numeric
+public:
+	NumericAsDouble() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {}
+};
+
 duckdb::LogicalType
-ConvertPostgresToDuckColumnType(Oid type) {
+ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 	switch (type) {
 	case BOOLOID:
 		return duckdb::LogicalTypeId::BOOLEAN;
@@ -92,8 +111,19 @@ ConvertPostgresToDuckColumnType(Oid type) {
 		return duckdb::LogicalTypeId::DATE;
 	case TIMESTAMPOID:
 		return duckdb::LogicalTypeId::TIMESTAMP;
+	case FLOAT8OID:
+		return duckdb::LogicalTypeId::DOUBLE;
+	case NUMERICOID: {
+		if (typmod == -1) {
+			auto extra_type_info = duckdb::make_shared<NumericAsDouble>();
+			return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
+		}
+		auto precision = numeric_typmod_precision(typmod);
+		auto scale = numeric_typmod_scale(typmod);
+		return duckdb::LogicalType::DECIMAL(precision, scale);
+	}
 	default:
-		elog(ERROR, "Unsupported quack type: %d", type);
+		elog(ERROR, "Unsupported quack (Postgres) type: %d", type);
 	}
 }
 
@@ -116,8 +146,8 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset) {
 
 void
 ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
-
-	switch (result.GetType().id()) {
+	auto &type = result.GetType();
+	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		Append<bool>(result, DatumGetBool(value), offset);
 		break;
@@ -143,8 +173,18 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		Append<duckdb::dtime_t>(result, duckdb::dtime_t(static_cast<int64_t>(value + QUACK_DUCK_TIMESTAMP_OFFSET)),
 		                        offset);
 		break;
+	case duckdb::LogicalTypeId::DOUBLE: {
+		auto aux_info = type.GetAuxInfoShrPtr();
+		if (aux_info && dynamic_cast<NumericAsDouble *>(aux_info.get())) {
+			elog(ERROR, "NUMERIC AS DOUBLE");
+		}
+		Append<double>(result, DatumGetFloat8(value), offset);
+		break;
+	}
+	case duckdb::LogicalTypeId::DECIMAL:
+		elog(ERROR, "DECIMAL TYPE");
 	default:
-		elog(ERROR, "Unsupported quack type: %d", static_cast<int>(result.GetType().id()));
+		elog(ERROR, "Unsupported quack (DuckDB) type: %d", static_cast<int>(result.GetType().id()));
 		break;
 	}
 }
