@@ -18,6 +18,12 @@ namespace quack {
 constexpr int32_t QUACK_DUCK_DATE_OFFSET = 10957;
 constexpr int64_t QUACK_DUCK_TIMESTAMP_OFFSET = INT64CONST(10957) * USECS_PER_DAY;
 
+static void ConvertDouble(TupleTableSlot *slot, double value, idx_t col) {
+	slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT8OID;
+	slot->tts_tupleDescriptor->attrs[col].attbyval = true;
+	memcpy(&slot->tts_values[col], (char *)&value, sizeof(double));
+}
+
 void
 ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
 	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
@@ -63,12 +69,15 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case FLOAT8OID: {
 		double result_double = value.GetValue<double>();
-		slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT8OID;
-		slot->tts_tupleDescriptor->attrs[col].attbyval = true;
-		memcpy(&slot->tts_values[col], (char *)&result_double, sizeof(double));
+		ConvertDouble(slot, result_double, col);
 		break;
 	}
 	case NUMERICOID: {
+		if (value.type().id() == duckdb::LogicalTypeId::DOUBLE) {
+			auto result_double = value.GetValue<double>();
+			ConvertDouble(slot, result_double, col);
+			break;
+		}
 		elog(ERROR, "Unsupported quack (Postgres) type: %d", oid);
 		break;
 	}
