@@ -6,8 +6,10 @@ extern "C" {
 #include "miscadmin.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
+#include "utils/numeric.h"
 }
 
+#include "quack/types/decimal.hpp"
 #include "quack/quack.h"
 
 namespace quack {
@@ -59,16 +61,20 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = timestamp.micros - QUACK_DUCK_TIMESTAMP_OFFSET;
 		break;
 	}
-	case FLOAT8OID:
-	case NUMERICOID: {
+	case FLOAT8OID: {
 		double result_double = value.GetValue<double>();
 		slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT8OID;
 		slot->tts_tupleDescriptor->attrs[col].attbyval = true;
 		memcpy(&slot->tts_values[col], (char *)&result_double, sizeof(double));
 		break;
 	}
+	case NUMERICOID: {
+		elog(ERROR, "Unsupported quack (Postgres) type: %d", oid);
+		break;
+	}
 	default:
-		elog(ERROR, "Unsuported quack type: %d", oid);
+		elog(ERROR, "Unsupported quack (Postgres) type: %d", oid);
+		break;
 	}
 }
 
@@ -83,12 +89,6 @@ numeric_typmod_scale(int32 typmod)
 {
 	return (((typmod - VARHDRSZ) & 0x7ff) ^ 1024) - 1024;
 }
-
-struct NumericAsDouble : public duckdb::ExtraTypeInfo {
-// Dummy struct to indicate at conversion that the source is a Numeric
-public:
-	NumericAsDouble() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {}
-};
 
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
@@ -114,12 +114,12 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 	case FLOAT8OID:
 		return duckdb::LogicalTypeId::DOUBLE;
 	case NUMERICOID: {
-		if (typmod == -1) {
+		auto precision = numeric_typmod_precision(typmod);
+		auto scale = numeric_typmod_scale(typmod);
+		if (typmod == -1 || precision < 0 || scale < 0 || precision > 38) {
 			auto extra_type_info = duckdb::make_shared<NumericAsDouble>();
 			return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
 		}
-		auto precision = numeric_typmod_precision(typmod);
-		auto scale = numeric_typmod_scale(typmod);
 		return duckdb::LogicalType::DECIMAL(precision, scale);
 	}
 	default:
@@ -142,6 +142,71 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset) {
 
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
 	data[offset] = duckdb::StringVector::AddString(result, str);
+}
+
+static bool NumericIsNegative(const NumericVar &numeric) {
+	return numeric.sign == NUMERIC_NEG;
+}
+
+template <class T, class OP = DecimalConversionInteger>
+T ConvertDecimal(const NumericVar &numeric) {
+	auto scale_POWER = OP::GetPowerOfTen(numeric.dscale);
+
+	if (numeric.ndigits == 0) {
+		return 0;
+	}
+	T integral_part = 0, fractional_part = 0;
+
+	if (numeric.weight >= 0) {
+		idx_t digit_index = 0;
+		integral_part = numeric.digits[digit_index++];
+		for (; digit_index <= numeric.weight; digit_index++) {
+			integral_part *= NBASE;
+			if (digit_index < numeric.ndigits) {
+				integral_part += numeric.digits[digit_index];
+			}
+		}
+		integral_part *= scale_POWER;
+	}
+
+	// we need to find out how large the fractional part is in terms of powers
+	// of ten this depends on how many times we multiplied with NBASE
+	// if that is different from scale, we need to divide the extra part away
+	// again
+	// similarly, if trailing zeroes have been suppressed, we have not been multiplying t
+	// the fractional part with NBASE often enough. If so, add additional powers
+	if (numeric.ndigits > numeric.weight + 1) {
+		auto fractional_power = (numeric.ndigits - numeric.weight - 1) * DEC_DIGITS;
+		auto fractional_power_correction = fractional_power - numeric.dscale;
+		D_ASSERT(fractional_power_correction < 20);
+		fractional_part = 0;
+		for (int32_t i = duckdb::MaxValue<int32_t>(0, numeric.weight + 1); i < numeric.ndigits; i++) {
+			if (i + 1 < numeric.ndigits) {
+				// more digits remain - no need to compensate yet
+				fractional_part *= NBASE;
+				fractional_part += numeric.digits[i];
+			} else {
+				// last digit, compensate
+				T final_base = NBASE;
+				T final_digit = numeric.digits[i];
+				if (fractional_power_correction >= 0) {
+					T compensation = OP::GetPowerOfTen(fractional_power_correction);
+					final_base /= compensation;
+					final_digit /= compensation;
+				} else {
+					T compensation = OP::GetPowerOfTen(-fractional_power_correction);
+					final_base *= compensation;
+					final_digit *= compensation;
+				}
+				fractional_part *= final_base;
+				fractional_part += final_digit;
+			}
+		}
+	}
+
+	// finally
+	auto base_res = OP::Finalize(numeric, integral_part + fractional_part);
+	return (NumericIsNegative(numeric) ? -base_res : base_res);
 }
 
 void
@@ -176,9 +241,14 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	case duckdb::LogicalTypeId::DOUBLE: {
 		auto aux_info = type.GetAuxInfoShrPtr();
 		if (aux_info && dynamic_cast<NumericAsDouble *>(aux_info.get())) {
-			elog(ERROR, "NUMERIC AS DOUBLE");
+			// This NUMERIC could not be converted to a DECIMAL, convert it as DOUBLE instead
+			auto numeric = DatumGetNumeric(value);
+			auto numeric_var = FromNumeric(numeric);
+			auto double_val = ConvertDecimal<double, DecimalConversionDouble>(numeric_var);
+			Append<double>(result, double_val, offset);
+		} else {
+			Append<double>(result, DatumGetFloat8(value), offset);
 		}
-		Append<double>(result, DatumGetFloat8(value), offset);
 		break;
 	}
 	case duckdb::LogicalTypeId::DECIMAL:
