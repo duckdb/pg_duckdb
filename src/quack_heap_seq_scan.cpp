@@ -86,7 +86,7 @@ PostgresHeapSeqScan::InitParallelScanState(duckdb::TableFunctionInitInput &input
 
 	if (input.CanRemoveFilterColumns()) {
 		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
-			m_parallel_scan_state.m_projections[input.projection_ids[i]] = input.column_ids[i];
+			m_parallel_scan_state.m_projections[i] = input.column_ids[input.projection_ids[i]];
 		}
 	} else {
 		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
