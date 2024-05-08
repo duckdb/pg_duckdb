@@ -52,8 +52,9 @@ Quack_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) {
 static TupleTableSlot *
 Quack_ExecCustomScan(CustomScanState *node) {
 	QuackScanState *quackScanState = (QuackScanState *)node;
-
 	TupleTableSlot *slot = quackScanState->css.ss.ss_ScanTupleSlot;
+	MemoryContext oldContext;
+	
 
 	if (!quackScanState->is_executed) {
 		quackScanState->queryResult = quackScanState->preparedStatement->Execute();
@@ -66,12 +67,17 @@ Quack_ExecCustomScan(CustomScanState *node) {
 		quackScanState->currentRow = 0;
 		quackScanState->fetch_next = false;
 		if (!quackScanState->currentDataChunk || quackScanState->currentDataChunk->size() == 0) {
+			MemoryContextReset(quackScanState->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
 			ExecClearTuple(slot);
 			return slot;
 		}
 	}
 
+	MemoryContextReset(quackScanState->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
 	ExecClearTuple(slot);
+
+	/* MemoryContext used for allocation */
+	oldContext = MemoryContextSwitchTo(quackScanState->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
 
 	for (idx_t col = 0; col < quackScanState->columnCount; col++) {
 		auto value = quackScanState->currentDataChunk->GetValue(col, quackScanState->currentRow);
@@ -82,6 +88,8 @@ Quack_ExecCustomScan(CustomScanState *node) {
 			quack::ConvertDuckToPostgresValue(slot, value, col);
 		}
 	}
+
+	MemoryContextSwitchTo(oldContext);
 
 	quackScanState->currentRow++;
 	if (quackScanState->currentRow >= quackScanState->currentDataChunk->size()) {

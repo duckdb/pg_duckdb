@@ -47,6 +47,11 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid typeOid) {
 		return TemplatedFilterOperation<int32_t, OP>(dateDatum, constant);
 		break;
 	}
+	case TIMESTAMPOID: {
+		Datum timeStampDatum = static_cast<int64_t>(value + quack::QUACK_DUCK_TIMESTAMP_OFFSET);
+		return TemplatedFilterOperation<int64_t, OP>(timeStampDatum, constant);
+		break;
+	}
 	default:
 		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported quack type: %d", typeOid);
 	}

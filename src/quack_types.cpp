@@ -111,6 +111,8 @@ GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
 		return INT4OID;
 	case duckdb::LogicalTypeId::BIGINT:
 		return INT8OID;
+	case duckdb::LogicalTypeId::HUGEINT:
+		return NUMERICOID;
 	case duckdb::LogicalTypeId::VARCHAR:
 		return VARCHAROID;
 	case duckdb::LogicalTypeId::DATE:
