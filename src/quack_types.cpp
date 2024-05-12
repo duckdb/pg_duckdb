@@ -78,7 +78,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 			ConvertDouble(slot, result_double, col);
 			break;
 		}
-		elog(ERROR, "Unsupported quack (Postgres) type: %d", oid);
+		elog(ERROR, "Unsupported NUMERIC type: %d", oid);
 		break;
 	}
 	default:
