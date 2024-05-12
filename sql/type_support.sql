@@ -57,6 +57,16 @@ INSERT INTO float8_tbl SELECT CAST(a AS FLOAT8) FROM (VALUES
 ) t(a);
 SELECT * FROM float8_tbl;
 
+-- NUMERIC as DOUBLE
+CREATE TABLE numeric_as_double(a NUMERIC);
+INSERT INTO numeric_as_double SELECT a FROM (VALUES
+	(0.234234234),
+	(NULL),
+	(458234502034234234234.000012)
+) t(a);
+select pg_typeof(a) from numeric_as_double;
+SELECT * FROM numeric_as_double;
+
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
@@ -66,3 +76,4 @@ DROP TABLE date_tbl;
 DROP TABLE timestamp_tbl;
 DROP TABLE float4_tbl;
 DROP TABLE float8_tbl;
+DROP TABLE numeric_as_double;
