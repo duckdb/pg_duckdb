@@ -87,6 +87,36 @@ SELECT * FROM timestamp_tbl;
  Mon May 15 12:30:45 2023
 (3 rows)
 
+-- FLOAT4
+CREATE TABLE float4_tbl(a FLOAT4);
+INSERT INTO float4_tbl SELECT CAST(a AS FLOAT4) FROM (VALUES
+	(0.234234234::FLOAT4),
+	(NULL),
+	(458234502034234234234.000012::FLOAT4)
+) t(a);
+SELECT * FROM float4_tbl;
+      a       
+--------------
+   0.23423423
+             
+ 4.582345e+20
+(3 rows)
+
+-- FLOAT8
+CREATE TABLE float8_tbl(a FLOAT8);
+INSERT INTO float8_tbl SELECT CAST(a AS FLOAT8) FROM (VALUES
+	(0.234234234::FLOAT8),
+	(NULL),
+	(458234502034234234234.000012::FLOAT8)
+) t(a);
+SELECT * FROM float8_tbl;
+           a           
+-----------------------
+           0.234234234
+                      
+ 4.582345020342342e+20
+(3 rows)
+
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
@@ -94,3 +124,5 @@ DROP TABLE big;
 DROP TABLE varchar_tbl;
 DROP TABLE date_tbl;
 DROP TABLE timestamp_tbl;
+DROP TABLE float4_tbl;
+DROP TABLE float8_tbl;
