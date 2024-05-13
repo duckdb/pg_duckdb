@@ -47,6 +47,7 @@ void
 Quack_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) {
 	QuackScanState *quackScanState = (QuackScanState *)cscanstate;
 	quackScanState->css.ss.ps.ps_ResultTupleDesc = quackScanState->css.ss.ss_ScanTupleSlot->tts_tupleDescriptor;
+	HOLD_CANCEL_INTERRUPTS();
 }
 
 static TupleTableSlot *
@@ -54,7 +55,6 @@ Quack_ExecCustomScan(CustomScanState *node) {
 	QuackScanState *quackScanState = (QuackScanState *)node;
 	TupleTableSlot *slot = quackScanState->css.ss.ss_ScanTupleSlot;
 	MemoryContext oldContext;
-	
 
 	if (!quackScanState->is_executed) {
 		quackScanState->queryResult = quackScanState->preparedStatement->Execute();
@@ -107,6 +107,7 @@ Quack_EndCustomScan(CustomScanState *node) {
 	quackScanState->queryResult.reset();
 	delete quackScanState->preparedStatement;
 	delete quackScanState->duckdb;
+	RESUME_CANCEL_INTERRUPTS();
 }
 
 void
