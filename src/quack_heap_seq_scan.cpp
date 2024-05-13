@@ -14,7 +14,6 @@ extern "C" {
 #include <thread>
 
 namespace quack {
-
 PostgresHeapSeqScan::PostgresHeapSeqScan(RangeTblEntry *table)
     : m_tableEntry(table), m_rel(nullptr), m_snapshot(nullptr) {
 }

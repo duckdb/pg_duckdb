@@ -20,6 +20,12 @@ is_catalog_table(List *tables) {
 	ListCell *lc;
 	foreach (lc, tables) {
 		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
+		if (table->rtekind == RTE_SUBQUERY) {
+			/* Check Subquery rtable list if any table is from PG catalog */
+			if (is_catalog_table(table->subquery->rtable)) {
+				return true;
+			};
+		}
 		if (table->relid) {
 			auto rel = RelationIdGetRelation(table->relid);
 			auto namespaceOid = RelationGetNamespace(rel);

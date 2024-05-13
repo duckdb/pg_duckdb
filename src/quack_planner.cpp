@@ -16,13 +16,13 @@ extern "C" {
 
 namespace quack {
 
-static duckdb::DuckDB *
+static duckdb::unique_ptr<duckdb::DuckDB>
 quack_open_database() {
 	duckdb::DBConfig config;
 	// config.SetOption("memory_limit", "2GB");
 	// config.SetOption("threads", "8");
 	// config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
-	return new duckdb::DuckDB(nullptr, &config);
+	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 }
 
 } // namespace quack
@@ -82,7 +82,7 @@ quack_create_plan(Query *parse, const char *query) {
 		}
 	}
 
-	quackNode->custom_private = list_make2(db, preparedQuery.release());
+	quackNode->custom_private = list_make2(db.release(), preparedQuery.release());
 	quackNode->methods = &quack_scan_scan_methods;
 
 	return (Plan *)quackNode;
