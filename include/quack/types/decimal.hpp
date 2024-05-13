@@ -101,6 +101,10 @@
 	(num)->choice.n_short.n_data : (num)->choice.n_long.n_data)
 #define NUMERIC_NDIGITS(num) \
 	((VARSIZE(num) - NUMERIC_HEADER_SIZE(num)) / sizeof(NumericDigit))
+#define NUMERIC_CAN_BE_SHORT(scale,weight) \
+	((scale) <= NUMERIC_SHORT_DSCALE_MAX && \
+	(weight) <= NUMERIC_SHORT_WEIGHT_MAX && \
+	(weight) >= NUMERIC_SHORT_WEIGHT_MIN)
 
 #include "duckdb.hpp"
 
@@ -172,6 +176,113 @@ NumericVar FromNumeric(Numeric num)
 	dest.digits = NUMERIC_DIGITS(num);
 	dest.buf = NULL;			/* digits array is not palloc'd */
 	return dest;
+}
+
+/*
+ * make_result_opt_error() -
+ *
+ *	Create the packed db numeric format in palloc()'d memory from
+ *	a variable.  This will handle NaN and Infinity cases.
+ *
+ *	If "have_error" isn't NULL, on overflow *have_error is set to true and
+ *	NULL is returned.  This is helpful when caller needs to handle errors.
+ */
+Numeric CreateNumeric(const NumericVar &var, bool *have_error)
+{
+	Numeric		result;
+	NumericDigit *digits = var.digits;
+	int			weight = var.weight;
+	int			sign = var.sign;
+	int			n;
+	Size		len;
+
+	if (have_error)
+		*have_error = false;
+
+	if ((sign & NUMERIC_SIGN_MASK) == NUMERIC_SPECIAL)
+	{
+		/*
+		 * Verify valid special value.  This could be just an Assert, perhaps,
+		 * but it seems worthwhile to expend a few cycles to ensure that we
+		 * never write any nonzero reserved bits to disk.
+		 */
+		if (!(sign == NUMERIC_NAN ||
+			  sign == NUMERIC_PINF ||
+			  sign == NUMERIC_NINF))
+			elog(ERROR, "invalid numeric sign value 0x%x", sign);
+
+		result = (Numeric) palloc(NUMERIC_HDRSZ_SHORT);
+
+		SET_VARSIZE(result, NUMERIC_HDRSZ_SHORT);
+		result->choice.n_header = sign;
+		/* the header word is all we need */
+		return result;
+	}
+
+	n = var.ndigits;
+
+	/* truncate leading zeroes */
+	while (n > 0 && *digits == 0)
+	{
+		digits++;
+		weight--;
+		n--;
+	}
+	/* truncate trailing zeroes */
+	while (n > 0 && digits[n - 1] == 0)
+		n--;
+
+	/* If zero result, force to weight=0 and positive sign */
+	if (n == 0)
+	{
+		weight = 0;
+		sign = NUMERIC_POS;
+	}
+
+	/* Build the result */
+	if (NUMERIC_CAN_BE_SHORT(var.dscale, weight))
+	{
+		len = NUMERIC_HDRSZ_SHORT + n * sizeof(NumericDigit);
+		result = (Numeric) palloc(len);
+		SET_VARSIZE(result, len);
+		result->choice.n_short.n_header =
+			(sign == NUMERIC_NEG ? (NUMERIC_SHORT | NUMERIC_SHORT_SIGN_MASK)
+			 : NUMERIC_SHORT)
+			| (var.dscale << NUMERIC_SHORT_DSCALE_SHIFT)
+			| (weight < 0 ? NUMERIC_SHORT_WEIGHT_SIGN_MASK : 0)
+			| (weight & NUMERIC_SHORT_WEIGHT_MASK);
+	}
+	else
+	{
+		len = NUMERIC_HDRSZ + n * sizeof(NumericDigit);
+		result = (Numeric) palloc(len);
+		SET_VARSIZE(result, len);
+		result->choice.n_long.n_sign_dscale =
+			sign | (var.dscale & NUMERIC_DSCALE_MASK);
+		result->choice.n_long.n_weight = weight;
+	}
+
+	Assert(NUMERIC_NDIGITS(result) == n);
+	if (n > 0)
+		memcpy(NUMERIC_DIGITS(result), digits, n * sizeof(NumericDigit));
+
+	/* Check for overflow of int16 fields */
+	if (NUMERIC_WEIGHT(result) != weight ||
+		NUMERIC_DSCALE(result) != var.dscale)
+	{
+		if (have_error)
+		{
+			*have_error = true;
+			return NULL;
+		}
+		else
+		{
+			ereport(ERROR,
+					(errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+					 errmsg("value overflows numeric format")));
+		}
+	}
+	return result;
 }
 
 struct DecimalConversionInteger {
