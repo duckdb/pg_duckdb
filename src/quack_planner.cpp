@@ -13,6 +13,7 @@ extern "C" {
 #include "quack/quack_node.hpp"
 #include "quack/quack_planner.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_utils.hpp"
 
 namespace quack {
 
@@ -46,6 +47,16 @@ quack_create_plan(Query *parse, const char *query) {
 	context.transaction.BeginTransaction();
 	catalog.CreateTableFunction(context, &heap_scan_info);
 	context.transaction.Commit();
+
+	if (strlen(quack_secret) != 0) {
+		std::vector<std::string> quackSecret = quack::tokenizeString(quack_secret, '#');
+		StringInfo s3SecretKey = makeStringInfo();
+		appendStringInfoString(s3SecretKey, "CREATE SECRET s3Secret ");
+		appendStringInfo(s3SecretKey, "(TYPE S3, KEY_ID '%s', SECRET '%s', REGION '%s');", quackSecret[1].c_str(),
+		                 quackSecret[2].c_str(), quackSecret[3].c_str());
+		context.Query(s3SecretKey->data, false);
+		pfree(s3SecretKey->data);
+	}
 
 	auto preparedQuery = context.Prepare(query);
 
