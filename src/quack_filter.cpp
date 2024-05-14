@@ -6,6 +6,9 @@ extern "C" {
 #include "catalog/pg_type.h"
 }
 
+#include "quack/quack_filter.hpp"
+#include "quack/quack_types.hpp"
+
 namespace quack {
 
 template <class T, class OP>
@@ -33,8 +36,24 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid typeOid) {
 	case INT8OID:
 		return TemplatedFilterOperation<int64_t, OP>(value, constant);
 		break;
+	case FLOAT4OID:
+		return TemplatedFilterOperation<float, OP>(value, constant);
+		break;
+	case FLOAT8OID:
+		return TemplatedFilterOperation<double, OP>(value, constant);
+		break;
+	case DATEOID: {
+		Datum dateDatum = static_cast<int32_t>(value + quack::QUACK_DUCK_DATE_OFFSET);
+		return TemplatedFilterOperation<int32_t, OP>(dateDatum, constant);
+		break;
+	}
+	case TIMESTAMPOID: {
+		Datum timeStampDatum = static_cast<int64_t>(value + quack::QUACK_DUCK_TIMESTAMP_OFFSET);
+		return TemplatedFilterOperation<int64_t, OP>(timeStampDatum, constant);
+		break;
+	}
 	default:
-		elog(ERROR, "Unsupported quack type: %d", typeOid);
+		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported quack type: %d", typeOid);
 	}
 }
 

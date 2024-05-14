@@ -1,10 +1,10 @@
 extern "C" {
 #include "postgres.h"
-
 #include "utils/guc.h"
 }
 
 #include "quack/quack.h"
+#include "quack/quack_node.hpp"
 
 static void quack_init_guc(void);
 
@@ -17,6 +17,7 @@ void
 _PG_init(void) {
 	quack_init_guc();
 	quack_init_hooks();
+	quack_init_node();
 }
 }
 

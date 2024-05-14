@@ -12,12 +12,9 @@ extern "C" {
 #include "quack/quack_filter.hpp"
 #include "quack/quack_heap_seq_scan.hpp"
 #include "quack/quack_detoast.hpp"
+#include "quack/quack_types.hpp"
 
 namespace quack {
-
-// DuckDB has date starting from 1/1/1970 while PG starts from 1/1/2000
-constexpr int32_t QUACK_DUCK_DATE_OFFSET = 10957;
-constexpr int64_t QUACK_DUCK_TIMESTAMP_OFFSET = INT64CONST(10957) * USECS_PER_DAY;
 
 void
 ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
@@ -54,12 +51,12 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case DATEOID: {
 		duckdb::date_t date = value.GetValue<duckdb::date_t>();
-		slot->tts_values[col] = date.days - QUACK_DUCK_DATE_OFFSET;
+		slot->tts_values[col] = date.days - quack::QUACK_DUCK_DATE_OFFSET;
 		break;
 	}
 	case TIMESTAMPOID: {
 		duckdb::dtime_t timestamp = value.GetValue<duckdb::dtime_t>();
-		slot->tts_values[col] = timestamp.micros - QUACK_DUCK_TIMESTAMP_OFFSET;
+		slot->tts_values[col] = timestamp.micros - quack::QUACK_DUCK_TIMESTAMP_OFFSET;
 		break;
 	}
 	case FLOAT8OID:
@@ -71,7 +68,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default:
-		elog(ERROR, "Unsuported quack type: %d", oid);
+		elog(ERROR, "(DuckDB/ConvertDuckToPostgresValue) Unsuported quack type: %d", oid);
 	}
 }
 
@@ -97,7 +94,35 @@ ConvertPostgresToDuckColumnType(Oid type) {
 	case TIMESTAMPOID:
 		return duckdb::LogicalTypeId::TIMESTAMP;
 	default:
-		elog(ERROR, "Unsupported quack type: %d", type);
+		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
+	}
+}
+
+Oid
+GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
+	switch (type) {
+	case duckdb::LogicalTypeId::BOOLEAN:
+		return BOOLOID;
+	case duckdb::LogicalTypeId::TINYINT:
+		return CHAROID;
+	case duckdb::LogicalTypeId::SMALLINT:
+		return INT2OID;
+	case duckdb::LogicalTypeId::INTEGER:
+		return INT4OID;
+	case duckdb::LogicalTypeId::BIGINT:
+		return INT8OID;
+	case duckdb::LogicalTypeId::HUGEINT:
+		return NUMERICOID;
+	case duckdb::LogicalTypeId::VARCHAR:
+		return VARCHAROID;
+	case duckdb::LogicalTypeId::DATE:
+		return DATEOID;
+	case duckdb::LogicalTypeId::TIMESTAMP:
+		return TIMESTAMPOID;
+	case duckdb::LogicalTypeId::DOUBLE:
+		return FLOAT8OID;
+	default:
+		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %d", static_cast<int>(type));
 	}
 }
 
@@ -147,7 +172,8 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		                        offset);
 		break;
 	default:
-		elog(ERROR, "Unsupported quack type: %d", static_cast<int>(result.GetType().id()));
+		elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %d",
+		     static_cast<int>(result.GetType().id()));
 		break;
 	}
 }
@@ -271,16 +297,18 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(threadScanInfo.m_output_vector_size);
 		} else {
+			idx_t projectionColumnIdx = parallelScanState.m_columns[parallelScanState.m_projections[idx]];
 			if (threadScanInfo.m_tuple_desc->attrs[parallelScanState.m_projections[idx]].attlen == -1) {
 				bool shouldFree = false;
-				values[idx] = DetoastPostgresDatum(reinterpret_cast<varlena *>(values[idx]), parallelScanState.m_lock,
-				                                   &shouldFree);
-				ConvertPostgresToDuckValue(values[idx], result, threadScanInfo.m_output_vector_size);
+				values[projectionColumnIdx] =
+				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]),
+				                         parallelScanState.m_lock, &shouldFree);
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
 				if (shouldFree) {
-					duckdb_free(reinterpret_cast<void *>(values[idx]));
+					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));
 				}
 			} else {
-				ConvertPostgresToDuckValue(values[idx], result, threadScanInfo.m_output_vector_size);
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
 			}
 		}
 	}
