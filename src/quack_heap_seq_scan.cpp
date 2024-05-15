@@ -69,7 +69,7 @@ PostgresHeapSeqScan::PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanIn
 
 void
 PostgresHeapSeqScan::InitParallelScanState(duckdb::TableFunctionInitInput &input) {
-	(void) GetRelation();
+	(void)GetRelation();
 	m_parallel_scan_state.m_nblocks = RelationGetNumberOfBlocks(m_rel);
 
 	/* SELECT COUNT(*) FROM */
@@ -111,7 +111,9 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 		threadScanInfo.m_read_next_page = true;
 	} else {
 		block = threadScanInfo.m_block_number;
-		page = BufferGetPage(threadScanInfo.m_buffer);
+		if (block != InvalidBlockNumber) {
+			page = BufferGetPage(threadScanInfo.m_buffer);
+		}
 	}
 
 	while (block != InvalidBlockNumber) {
@@ -159,7 +161,12 @@ PostgresHeapSeqScan::ReadPageTuples(duckdb::DataChunk &output, PostgresHeapSeqSc
 			UnlockReleaseBuffer(threadScanInfo.m_buffer);
 			m_parallel_scan_state.m_lock.unlock();
 			threadScanInfo.m_read_next_page = true;
-			block = threadScanInfo.m_block_number = m_parallel_scan_state.AssignNextBlockNumber();
+			/* Handle cancel request */
+			if (QueryCancelPending) {
+				block = threadScanInfo.m_block_number = InvalidBlockNumber;
+			} else {
+				block = threadScanInfo.m_block_number = m_parallel_scan_state.AssignNextBlockNumber();
+			}
 		}
 
 		/* We have collected STANDARD_VECTOR_SIZE */
