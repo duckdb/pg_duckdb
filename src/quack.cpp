@@ -9,6 +9,7 @@ extern "C" {
 
 static void quack_init_guc(void);
 
+bool quack_execution = true;
 int quack_max_threads_per_query = 1;
 char *quack_secret = nullptr;
 
@@ -50,6 +51,16 @@ quack_cloud_secret_check_hooks(char **newval, void **extra, GucSource source) {
 static void
 quack_init_guc(void) {
 
+    DefineCustomBoolVariable("quack.execution",
+                             gettext_noop("Is DuckDB query execution enabled."),
+                             NULL,
+                             &quack_execution,
+                             true,
+                             PGC_USERSET,
+                             0,
+                             NULL, 
+                             NULL, 
+                             NULL);
     DefineCustomIntVariable("quack.max_threads_per_query",
                             gettext_noop("DuckDB max no. threads per query."),
                             NULL,
