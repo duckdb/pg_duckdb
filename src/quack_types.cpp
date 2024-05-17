@@ -139,7 +139,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	case FLOAT4OID: {
-		double result_float = value.GetValue<float>();
+		auto result_float = value.GetValue<float>();
 		slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT4OID;
 		slot->tts_tupleDescriptor->attrs[col].attbyval = true;
 		memcpy(&slot->tts_values[col], (char *)&result_float, sizeof(float));

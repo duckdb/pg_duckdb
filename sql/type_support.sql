@@ -45,7 +45,6 @@ INSERT INTO timestamp_tbl SELECT CAST(a AS TIMESTAMP) FROM (VALUES
 ) t(a);
 SELECT * FROM timestamp_tbl;
 
--- FIXME: currently broken
 -- FLOAT4
 CREATE TABLE float4_tbl(a FLOAT4);
 INSERT INTO float4_tbl SELECT CAST(a AS FLOAT4) FROM (VALUES
