@@ -28,9 +28,10 @@ PostgresHeapScanFunctionData::~PostgresHeapScanFunctionData() {
 // PostgresHeapScanGlobalState
 //
 
-PostgresHeapScanGlobalState::PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation) {
-	relation.InitParallelScanState();
+PostgresHeapScanGlobalState::PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation,
+                                                         duckdb::TableFunctionInitInput &input) {
 	elog(DEBUG3, "-- (DuckDB/PostgresHeapScanGlobalState) Running %llu threads -- ", MaxThreads());
+	relation.InitParallelScanState(input);
 }
 
 PostgresHeapScanGlobalState::~PostgresHeapScanGlobalState() {
@@ -58,7 +59,9 @@ PostgresHeapScanFunction::PostgresHeapScanFunction()
                     PostgresHeapInitLocal) {
 	named_parameters["table"] = duckdb::LogicalType::POINTER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
-	// projection_pushdown = true;
+	projection_pushdown = true;
+	filter_pushdown = true;
+	filter_prune = true;
 }
 
 duckdb::unique_ptr<duckdb::FunctionData>
@@ -95,7 +98,7 @@ duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresHeapScanFunction::PostgresHeapInitGlobal(duckdb::ClientContext &context,
                                                  duckdb::TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
-	return duckdb::make_uniq<PostgresHeapScanGlobalState>(bind_data.m_relation);
+	return duckdb::make_uniq<PostgresHeapScanGlobalState>(bind_data.m_relation, input);
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
@@ -155,9 +158,10 @@ FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
 					/* This doesn't have an access method handler, we cant read from this */
 					RelationClose(rel);
 					return nullptr;
+				} else {
+					RelationClose(rel);
+					return table;
 				}
-				RelationClose(rel);
-				return table;
 			}
 			RelationClose(rel);
 		}
@@ -185,14 +189,14 @@ PostgresHeapReplacementScan(duckdb::ClientContext &context, const duckdb::string
 	auto &scan_data = reinterpret_cast<PostgresHeapReplacementScanData &>(*data);
 
 	/* Check name against query rtable list and verify that it is heap table */
-	auto table = FindMatchingHeapRelation(scan_data.desc->plannedstmt->rtable, table_name);
+	auto table = FindMatchingHeapRelation(scan_data.m_parse->rtable, table_name);
 
 	if (!table) {
 		return nullptr;
 	}
 
 	// Create POINTER values from the 'table' and 'snapshot' variables
-	auto children = CreateFunctionArguments(table, scan_data.desc->estate->es_snapshot);
+	auto children = CreateFunctionArguments(table, GetActiveSnapshot());
 	auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 	table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>("postgres_heap_scan", std::move(children));
 

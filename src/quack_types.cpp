@@ -3,6 +3,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "fmgr.h"
 #include "miscadmin.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
@@ -11,12 +12,12 @@ extern "C" {
 
 #include "quack/types/decimal.hpp"
 #include "quack/quack.h"
+#include "quack/quack_filter.hpp"
+#include "quack/quack_heap_seq_scan.hpp"
+#include "quack/quack_detoast.hpp"
+#include "quack/quack_types.hpp"
 
 namespace quack {
-
-// DuckDB has date starting from 1/1/1970 while PG starts from 1/1/2000
-constexpr int32_t QUACK_DUCK_DATE_OFFSET = 10957;
-constexpr int64_t QUACK_DUCK_TIMESTAMP_OFFSET = INT64CONST(10957) * USECS_PER_DAY;
 
 static void ConvertDouble(TupleTableSlot *slot, double value, idx_t col) {
 	slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT8OID;
@@ -129,12 +130,12 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case DATEOID: {
 		duckdb::date_t date = value.GetValue<duckdb::date_t>();
-		slot->tts_values[col] = date.days - QUACK_DUCK_DATE_OFFSET;
+		slot->tts_values[col] = date.days - quack::QUACK_DUCK_DATE_OFFSET;
 		break;
 	}
 	case TIMESTAMPOID: {
 		duckdb::dtime_t timestamp = value.GetValue<duckdb::dtime_t>();
-		slot->tts_values[col] = timestamp.micros - QUACK_DUCK_TIMESTAMP_OFFSET;
+		slot->tts_values[col] = timestamp.micros - quack::QUACK_DUCK_TIMESTAMP_OFFSET;
 		break;
 	}
 	case FLOAT4OID: {
@@ -191,8 +192,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default:
-		elog(ERROR, "Unsupported quack (Postgres) type: %d", oid);
-		break;
+		elog(ERROR, "(DuckDB/ConvertDuckToPostgresValue) Unsuported quack type: %d", oid);
 	}
 }
 
@@ -243,7 +243,40 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 		return duckdb::LogicalType::DECIMAL(precision, scale);
 	}
 	default:
-		elog(ERROR, "Unsupported quack (Postgres) type: %d", type);
+		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
+	}
+}
+
+Oid
+GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
+	switch (type) {
+	case duckdb::LogicalTypeId::BOOLEAN:
+		return BOOLOID;
+	case duckdb::LogicalTypeId::TINYINT:
+		return CHAROID;
+	case duckdb::LogicalTypeId::SMALLINT:
+		return INT2OID;
+	case duckdb::LogicalTypeId::INTEGER:
+		return INT4OID;
+	case duckdb::LogicalTypeId::BIGINT:
+		return INT8OID;
+	case duckdb::LogicalTypeId::HUGEINT:
+		return NUMERICOID;
+	case duckdb::LogicalTypeId::VARCHAR:
+		return VARCHAROID;
+	case duckdb::LogicalTypeId::DATE:
+		return DATEOID;
+	case duckdb::LogicalTypeId::TIMESTAMP:
+		return TIMESTAMPOID;
+	case duckdb::LogicalTypeId::FLOAT:
+		return FLOAT4OID;
+	case duckdb::LogicalTypeId::DOUBLE:
+		return FLOAT8OID;
+	case duckdb::LogicalTypeId::DECIMAL: {
+		return NUMERICOID;
+	}
+	default:
+		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %d", static_cast<int>(type));
 	}
 }
 
@@ -404,20 +437,21 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	}
 	default:
-		elog(ERROR, "Unsupported quack (DuckDB) type: %d", static_cast<int>(result.GetType().id()));
+		elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %d",
+		     static_cast<int>(result.GetType().id()));
 		break;
 	}
 }
 
-typedef struct HeapTuplePageReadState {
+typedef struct HeapTupleReadState {
 	bool m_slow = 0;
-	int m_nvalid = 0;
-	uint32 m_offset = 0;
-} HeapTuplePageReadState;
+	int m_last_tuple_att = 0;
+	uint32 m_page_tuple_offset = 0;
+} HeapTupleReadState;
 
 static Datum
-HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePageReadState &heapTupleReadState,
-                             int natts, bool *isNull) {
+HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heapTupleReadState, int attNum,
+                              bool *isNull) {
 
 	HeapTupleHeader tup = tuple->t_data;
 	bool hasnulls = HeapTupleHasNulls(tuple);
@@ -428,23 +462,21 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 	bool slow = false;
 	Datum value = (Datum)0;
 
-	/* We can only fetch as many attributes as the tuple has. */
-	natts = Min(HeapTupleHeaderGetNatts(tuple->t_data), natts);
+	attnum = heapTupleReadState.m_last_tuple_att;
 
-	attnum = heapTupleReadState.m_nvalid;
 	if (attnum == 0) {
 		/* Start from the first attribute */
 		off = 0;
 		heapTupleReadState.m_slow = false;
 	} else {
 		/* Restore state from previous execution */
-		off = heapTupleReadState.m_offset;
+		off = heapTupleReadState.m_page_tuple_offset;
 		slow = heapTupleReadState.m_slow;
 	}
 
 	tp = (char *)tup + tup->t_hoff;
 
-	for (; attnum < natts; attnum++) {
+	for (; attnum < attNum; attnum++) {
 		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, attnum);
 
 		if (hasnulls && att_isnull(attnum, bp)) {
@@ -459,7 +491,6 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 		if (!slow && thisatt->attcacheoff >= 0) {
 			off = thisatt->attcacheoff;
 		} else if (thisatt->attlen == -1) {
-
 			if (!slow && off == att_align_nominal(off, thisatt->attalign)) {
 				thisatt->attcacheoff = off;
 			} else {
@@ -468,7 +499,6 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 			}
 		} else {
 			off = att_align_nominal(off, thisatt->attalign);
-
 			if (!slow) {
 				thisatt->attcacheoff = off;
 			}
@@ -483,8 +513,8 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 		}
 	}
 
-	heapTupleReadState.m_nvalid = attnum;
-	heapTupleReadState.m_offset = off;
+	heapTupleReadState.m_last_tuple_att = attNum;
+	heapTupleReadState.m_page_tuple_offset = off;
 
 	if (slow) {
 		heapTupleReadState.m_slow = true;
@@ -496,19 +526,66 @@ HeapTupleFetchNextDatumValue(TupleDesc tupleDesc, HeapTuple tuple, HeapTuplePage
 }
 
 void
-InsertTupleIntoChunk(duckdb::DataChunk &output, TupleDesc tupleDesc, HeapTupleData *slot, idx_t offset) {
-	HeapTuplePageReadState heapTupleReadState = {};
-	for (int i = 0; i < tupleDesc->natts; i++) {
-		auto &result = output.data[i];
-		bool isNull = false;
-		Datum value = HeapTupleFetchNextDatumValue(tupleDesc, slot, heapTupleReadState, i + 1, &isNull);
-		if (isNull) {
-			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(offset);
-		} else {
-			ConvertPostgresToDuckValue(value, result, offset);
+InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &threadScanInfo,
+                     PostgresHeapSeqParallelScanState &parallelScanState) {
+	HeapTupleReadState heapTupleReadState = {};
+
+	if (parallelScanState.m_count_tuples_only) {
+		threadScanInfo.m_output_vector_size++;
+		return;
+	}
+
+	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
+	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * parallelScanState.m_columns.size());
+	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * parallelScanState.m_columns.size());
+
+	bool validTuple = true;
+
+	for (auto const &[columnIdx, valueIdx] : parallelScanState.m_columns) {
+		values[valueIdx] = HeapTupleFetchNextColumnDatum(threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
+		                                                 heapTupleReadState, columnIdx + 1, &nulls[valueIdx]);
+		if (parallelScanState.m_filters &&
+		    (parallelScanState.m_filters->filters.find(valueIdx) != parallelScanState.m_filters->filters.end())) {
+			auto &filter = parallelScanState.m_filters->filters[valueIdx];
+			validTuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
+			                              threadScanInfo.m_tuple_desc->attrs[columnIdx].atttypid);
+		}
+
+		if (!validTuple) {
+			break;
 		}
 	}
+
+	for (idx_t idx = 0; validTuple && idx < parallelScanState.m_projections.size(); idx++) {
+		auto &result = output.data[idx];
+		if (nulls[idx]) {
+			auto &array_mask = duckdb::FlatVector::Validity(result);
+			array_mask.SetInvalid(threadScanInfo.m_output_vector_size);
+		} else {
+			idx_t projectionColumnIdx = parallelScanState.m_columns[parallelScanState.m_projections[idx]];
+			if (threadScanInfo.m_tuple_desc->attrs[parallelScanState.m_projections[idx]].attlen == -1) {
+				bool shouldFree = false;
+				values[projectionColumnIdx] =
+				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]),
+				                         parallelScanState.m_lock, &shouldFree);
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
+				if (shouldFree) {
+					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));
+				}
+			} else {
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
+			}
+		}
+	}
+
+	if (validTuple) {
+		threadScanInfo.m_output_vector_size++;
+	}
+
+	parallelScanState.m_total_row_count++;
+
+	duckdb_free(values);
+	duckdb_free(nulls);
 }
 
 } // namespace quack
