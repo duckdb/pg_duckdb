@@ -5,8 +5,6 @@
 #include <sstream>
 
 #include <cstdio>
-#include <cstdarg>
-#include <cstring>
 
 namespace quack {
 
