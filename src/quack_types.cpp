@@ -134,8 +134,8 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	case TIMESTAMPOID: {
-		duckdb::dtime_t timestamp = value.GetValue<duckdb::dtime_t>();
-		slot->tts_values[col] = timestamp.micros - quack::QUACK_DUCK_TIMESTAMP_OFFSET;
+		duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
+		slot->tts_values[col] = timestamp.value - quack::QUACK_DUCK_TIMESTAMP_OFFSET;
 		break;
 	}
 	case FLOAT4OID: {
@@ -388,7 +388,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		Append<duckdb::date_t>(result, duckdb::date_t(static_cast<int32_t>(value + QUACK_DUCK_DATE_OFFSET)), offset);
 		break;
 	case duckdb::LogicalTypeId::TIMESTAMP:
-		Append<duckdb::dtime_t>(result, duckdb::dtime_t(static_cast<int64_t>(value + QUACK_DUCK_TIMESTAMP_OFFSET)),
+		Append<duckdb::timestamp_t>(result, duckdb::timestamp_t(static_cast<int64_t>(value + QUACK_DUCK_TIMESTAMP_OFFSET)),
 		                        offset);
 		break;
 	case duckdb::LogicalTypeId::FLOAT: {
