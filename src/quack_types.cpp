@@ -10,6 +10,8 @@ extern "C" {
 #include "executor/tuptable.h"
 #include "utils/numeric.h"
 #include "utils/uuid.h"
+#include "utils/array.h"
+#include "utils/lsyscache.h"
 }
 
 #include "quack/types/decimal.hpp"
@@ -212,6 +214,40 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = datum;
 		break;
 	}
+	case INT4ARRAYOID: {
+		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
+		auto child_type = duckdb::ListType::GetChildType(value.type());
+		auto child_id = child_type.id();
+		D_ASSERT(child_id == duckdb::LogicalTypeId::INTEGER);
+		(void)child_id;
+
+		auto values = duckdb::ListValue::GetChildren(value);
+		int count = values.size();
+
+		// Allocate memory for Datum array and nulls array
+		auto datums = (Datum *) palloc(count * sizeof(Datum));
+		auto nulls = (bool *) palloc(count * sizeof(bool));
+
+		// Fill the Datum and nulls arrays
+		for (idx_t i = 0; i < count; i++) {
+			auto &child_val = values[i];
+			nulls[i] = child_val.IsNull();
+			if (!nulls[i]) {
+				datums[i] = Int32GetDatum(values[i].GetValue<int32_t>());
+			}
+		}
+
+		// Create the array
+		int lower_bound = 1;
+		auto arr = construct_md_array(datums, nulls, 1, &count, &lower_bound, INT4OID, 4, true, 'i');
+
+		// Free allocated memory
+		pfree(datums);
+		pfree(nulls);
+
+		slot->tts_values[col] = PointerGetDatum(arr);
+		break;
+	}
 	default:
 		elog(ERROR, "(DuckDB/ConvertDuckToPostgresValue) Unsuported quack type: %d", oid);
 	}
@@ -267,6 +303,8 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
 		return duckdb::LogicalType::JSON();
+	case INT4ARRAYOID:
+		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::INTEGER);
 	default:
 		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
 	}
@@ -307,6 +345,16 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 	}
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDOID;
+	case duckdb::LogicalTypeId::LIST: {
+		auto child_type = duckdb::ListType::GetChildType(type);
+		auto child_type_id = child_type.id();
+		switch (child_type_id) {
+			case duckdb::LogicalTypeId::INTEGER:
+				return INT4ARRAYOID;
+			default:
+				elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
+		}
+	}
 	default: {
 		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
 		break;
@@ -483,8 +531,57 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		Append(result, duckdb_uuid, offset);
 		break;
 	}
+	case duckdb::LogicalTypeId::LIST: {
+		auto &child = duckdb::ListVector::GetEntry(result);
+		auto child_type = child.GetType();
+		auto child_id = child_type.id();
+
+		ArrayType *array;
+
+		int nelems;
+		Datum *elems;
+		bool *nulls;
+
+		// Convert Datum to ArrayType
+		array = DatumGetArrayTypeP(value);
+
+		int16 typlen;
+		bool typbyval;
+		char typalign;
+		get_typlenbyvalalign(ARR_ELEMTYPE(array), &typlen, &typbyval, &typalign);
+
+		// Deconstruct the array into Datum elements
+		deconstruct_array(array, ARR_ELEMTYPE(array), typlen, typbyval, typalign, &elems, &nulls, &nelems);
+
+		auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(result);
+		list_data[offset] = duckdb::list_entry_t(
+			0, //FIXME: keep track of the total offset into the child Vector
+			nelems
+		);
+
+		duckdb::ListVector::Reserve(result, nelems);
+		duckdb::ListVector::SetListSize(result, nelems);
+
+		switch (child_id) {
+			case duckdb::LogicalType::INTEGER: {
+				auto child_offset = 0; // FIXME: get the offset at which we are writing into the child Vector
+				for (int i = 0; i < nelems; i++) {
+					if (nulls[i]) {
+						auto &array_mask = duckdb::FlatVector::Validity(child);
+						array_mask.SetInvalid(i);
+						continue;
+					}
+					ConvertPostgresToDuckValue(elems[i], child, child_offset + i);
+				}
+				break;
+			}
+			default:
+				elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %s", result.GetType().ToString().c_str());
+		}
+		break;
+	}
 	default:
-		elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %s", duckdb::EnumUtil::ToChars(result.GetType().id()));
+		elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %s", result.GetType().ToString().c_str());
 		break;
 	}
 }
