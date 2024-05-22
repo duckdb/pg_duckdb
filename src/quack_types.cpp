@@ -119,6 +119,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	case BPCHAROID:
 	case TEXTOID:
+	case JSONOID:
 	case VARCHAROID: {
 		auto str = value.GetValue<duckdb::string>();
 		auto varchar = str.c_str();
@@ -264,14 +265,17 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 	}
 	case UUIDOID:
 		return duckdb::LogicalTypeId::UUID;
+	case JSONOID:
+		return duckdb::LogicalType::JSON();
 	default:
 		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
 	}
 }
 
 Oid
-GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
-	switch (type) {
+GetPostgresDuckDBType(duckdb::LogicalType type) {
+	auto id = type.id();
+	switch (id) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
 	case duckdb::LogicalTypeId::TINYINT:
@@ -284,8 +288,12 @@ GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
 		return INT8OID;
 	case duckdb::LogicalTypeId::HUGEINT:
 		return NUMERICOID;
-	case duckdb::LogicalTypeId::VARCHAR:
+	case duckdb::LogicalTypeId::VARCHAR: {
+		if (type.IsJSONType()) {
+			return JSONOID;
+		}
 		return VARCHAROID;
+	}
 	case duckdb::LogicalTypeId::DATE:
 		return DATEOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
@@ -299,8 +307,10 @@ GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
 	}
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDOID;
-	default:
-		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %d", static_cast<int>(type));
+	default: {
+		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
+		break;
+	}
 	}
 }
 
@@ -405,9 +415,11 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	case duckdb::LogicalTypeId::BIGINT:
 		Append<int64_t>(result, DatumGetInt64(value), offset);
 		break;
-	case duckdb::LogicalTypeId::VARCHAR:
+	case duckdb::LogicalTypeId::VARCHAR: {
+		// NOTE: This also handles JSON
 		AppendString(result, value, offset);
 		break;
+	}
 	case duckdb::LogicalTypeId::DATE:
 		Append<duckdb::date_t>(result, duckdb::date_t(static_cast<int32_t>(value + QUACK_DUCK_DATE_OFFSET)), offset);
 		break;

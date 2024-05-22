@@ -66,7 +66,14 @@ third_party/duckdb/Makefile:
 	git submodule update --init --recursive
 
 third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB):
-	$(MAKE) -C third_party/duckdb $(QUACK_BUILD_DUCKDB) DISABLE_SANITIZER=1 ENABLE_UBSAN=0 BUILD_UNITTESTS=OFF BUILD_HTTPFS=1 CMAKE_EXPORT_COMPILE_COMMANDS=1
+	$(MAKE) -C third_party/duckdb \
+	$(QUACK_BUILD_DUCKDB) \
+	DISABLE_SANITIZER=1 \
+	ENABLE_UBSAN=0 \
+	BUILD_UNITTESTS=OFF \
+	BUILD_HTTPFS=1 \
+	BUILD_JSON=1 \
+	CMAKE_EXPORT_COMPILE_COMMANDS=1
 
 install_duckdb:
 	$(install_bin) -m 755 third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)

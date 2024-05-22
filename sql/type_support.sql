@@ -117,6 +117,16 @@ INSERT INTO uuid_tbl SELECT CAST(a as UUID) FROM (VALUES
 ) t(a);
 SELECT * FROM uuid_tbl;
 
+-- JSON
+CREATE TABLE json_tbl(a JSON);
+INSERT INTO json_tbl SELECT CAST(a as JSON) FROM (VALUES
+    ('{"key1": "value1", "key2": "value2"}'),
+    ('["item1", "item2", "item3"]'),
+    (NULL),
+    ('{}')
+) t(a);
+SELECT * FROM json_tbl;
+
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
@@ -132,3 +142,4 @@ DROP TABLE integer_numeric;
 DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
+DROP TABLE json_tbl;

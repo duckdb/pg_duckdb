@@ -71,7 +71,7 @@ quack_create_plan(Query *parse, const char *query) {
 
 	for (auto i = 0; i < preparedResultTypes.size(); i++) {
 		auto &column = preparedResultTypes[i];
-		Oid postgresColumnOid = quack::GetPostgresDuckDBType(column.id());
+		Oid postgresColumnOid = quack::GetPostgresDuckDBType(column);
 
 		if (OidIsValid(postgresColumnOid)) {
 			HeapTuple tp;
