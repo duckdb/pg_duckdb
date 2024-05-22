@@ -1,5 +1,6 @@
 #include "duckdb.hpp"
 #include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -8,6 +9,7 @@ extern "C" {
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
 #include "utils/numeric.h"
+#include "utils/uuid.h"
 }
 
 #include "quack/types/decimal.hpp"
@@ -191,6 +193,24 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = datum;
 		break;
 	}
+	case UUIDOID: {
+		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::UUID);
+		D_ASSERT(value.type().InternalType() == duckdb::PhysicalType::INT128);
+		auto duckdb_uuid = value.GetValue<hugeint_t>();
+		pg_uuid_t *postgres_uuid = (pg_uuid_t *) palloc(sizeof(pg_uuid_t));
+
+		duckdb_uuid.upper ^= (uint64_t(1) << 63);
+		// Convert duckdb_uuid to bytes and store in postgres_uuid.data
+		uint8_t *uuid_bytes = (uint8_t *)&duckdb_uuid;
+
+		for (int i = 0; i < UUID_LEN; ++i) {
+			postgres_uuid->data[i] = uuid_bytes[UUID_LEN - 1 - i];
+		}
+
+		auto datum = UUIDPGetDatum(postgres_uuid);
+		slot->tts_values[col] = datum;
+		break;
+	}
 	default:
 		elog(ERROR, "(DuckDB/ConvertDuckToPostgresValue) Unsuported quack type: %d", oid);
 	}
@@ -242,6 +262,8 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 		}
 		return duckdb::LogicalType::DECIMAL(precision, scale);
 	}
+	case UUIDOID:
+		return duckdb::LogicalTypeId::UUID;
 	default:
 		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
 	}
@@ -275,6 +297,8 @@ GetPostgresDuckDBType(duckdb::LogicalTypeId type) {
 	case duckdb::LogicalTypeId::DECIMAL: {
 		return NUMERICOID;
 	}
+	case duckdb::LogicalTypeId::UUID:
+		return UUIDOID;
 	default:
 		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %d", static_cast<int>(type));
 	}
@@ -436,9 +460,19 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		}
 		break;
 	}
+	case duckdb::LogicalTypeId::UUID: {
+		auto uuid = DatumGetPointer(value);
+		hugeint_t duckdb_uuid;
+		D_ASSERT(UUID_LEN == sizeof(hugeint_t));
+		for (idx_t i = 0; i < UUID_LEN; i++) {
+			((uint8_t*)&duckdb_uuid)[UUID_LEN-1-i] = ((uint8_t*)uuid)[i];
+		}
+		duckdb_uuid.upper ^= (uint64_t(1) << 63);
+		Append(result, duckdb_uuid, offset);
+		break;
+	}
 	default:
-		elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %d",
-		     static_cast<int>(result.GetType().id()));
+		elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %s", duckdb::EnumUtil::ToChars(result.GetType().id()));
 		break;
 	}
 }

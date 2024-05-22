@@ -108,6 +108,15 @@ INSERT INTO hugeint_numeric SELECT a FROM (VALUES
 ) t(a);
 SELECT * FROM hugeint_numeric;
 
+-- UUID
+CREATE TABLE uuid_tbl(a UUID);
+INSERT INTO uuid_tbl SELECT CAST(a as UUID) FROM (VALUES
+	('80bf0be9-89be-4ef8-bc58-fc7d691c5544'),
+	(NULL),
+	('00000000-0000-0000-0000-000000000000')
+) t(a);
+SELECT * FROM uuid_tbl;
+
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
@@ -122,3 +131,4 @@ DROP TABLE smallint_numeric;
 DROP TABLE integer_numeric;
 DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
+DROP TABLE uuid_tbl;
