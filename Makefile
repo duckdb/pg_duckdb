@@ -4,7 +4,9 @@ MODULE_big = quack
 EXTENSION = quack
 DATA = quack.control $(wildcard quack--*.sql)
 
-SRCS = src/quack_detoast.cpp \
+SRCS = src/utility/copy.cpp \
+	   src/quack_detoast.cpp \
+	   src/quack_duckdb_connection.cpp \
 	   src/quack_filter.cpp \
 	   src/quack_heap_scan.cpp \
 	   src/quack_heap_seq_scan.cpp \
@@ -17,8 +19,7 @@ SRCS = src/quack_detoast.cpp \
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
-REGRESS =	basic \
-			type_support
+REGRESS = $(subst .sql,,$(subst sql/,,$(wildcard sql/*.sql)))
 
 PG_CONFIG ?= pg_config
 

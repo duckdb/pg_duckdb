@@ -14,6 +14,8 @@ extern "C" {
 
 namespace quack {
 
+struct PostgresTableInformation;
+
 class PostgresHeapSeqScanThreadInfo {
 public:
 	PostgresHeapSeqScanThreadInfo();
@@ -88,7 +90,7 @@ private:
 	Page PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanInfo);
 
 private:
-	RangeTblEntry * m_tableEntry = nullptr;
+	RangeTblEntry * m_table = nullptr;
 	Relation m_rel = nullptr;
 	Snapshot m_snapshot = nullptr;
 	PostgresHeapSeqParallelScanState m_parallel_scan_state;
