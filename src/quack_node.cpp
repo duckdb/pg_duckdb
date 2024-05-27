@@ -13,7 +13,7 @@ static CustomExecMethods quack_scan_exec_methods;
 
 typedef struct QuackScanState {
 	CustomScanState css; /* must be first field */
-	duckdb::DuckDB *duckdb;
+	duckdb::Connection *duckdbConnection;
 	duckdb::PreparedStatement *preparedStatement;
 	bool is_executed;
 	bool fetch_next;
@@ -35,7 +35,7 @@ static Node *
 Quack_CreateCustomScanState(CustomScan *cscan) {
 	QuackScanState *quackScanState = (QuackScanState *)newNode(sizeof(QuackScanState), T_CustomScanState);
 	CustomScanState *customScanState = &quackScanState->css;
-	quackScanState->duckdb = (duckdb::DuckDB *)linitial(cscan->custom_private);
+	quackScanState->duckdbConnection = (duckdb::Connection *)linitial(cscan->custom_private);
 	quackScanState->preparedStatement = (duckdb::PreparedStatement *)lsecond(cscan->custom_private);
 	quackScanState->is_executed = false;
 	quackScanState->fetch_next = true;
@@ -106,7 +106,7 @@ Quack_EndCustomScan(CustomScanState *node) {
 	QuackScanState *quackScanState = (QuackScanState *)node;
 	quackScanState->queryResult.reset();
 	delete quackScanState->preparedStatement;
-	delete quackScanState->duckdb;
+	delete quackScanState->duckdbConnection;
 	RESUME_CANCEL_INTERRUPTS();
 }
 

@@ -143,12 +143,10 @@ FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
 		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
 		if (table->relid) {
 			auto rel = RelationIdGetRelation(table->relid);
-
 			if (!RelationIsValid(rel)) {
 				elog(ERROR, "Relation with OID %u is not valid", table->relid);
 				return nullptr;
 			}
-
 			char *rel_name = RelationGetRelationName(rel);
 			auto table_name = std::string(rel_name);
 			if (duckdb::StringUtil::CIEquals(table_name, to_find)) {
@@ -187,8 +185,8 @@ PostgresHeapReplacementScan(duckdb::ClientContext &context, const duckdb::string
 
 	auto &scan_data = reinterpret_cast<PostgresHeapReplacementScanData &>(*data);
 
-	/* Check name against query rtable list and verify that it is heap table */
-	auto table = FindMatchingHeapRelation(scan_data.m_parse->rtable, table_name);
+	/* Check name against query table list and verify that it is heap table */
+	auto table = FindMatchingHeapRelation(scan_data.m_tables, table_name);
 
 	if (!table) {
 		return nullptr;
