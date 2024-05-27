@@ -11,6 +11,7 @@ extern "C" {
 #include "utils/numeric.h"
 #include "utils/uuid.h"
 #include "utils/array.h"
+#include "fmgr.h"
 #include "utils/lsyscache.h"
 }
 
@@ -22,6 +23,19 @@ extern "C" {
 #include "quack/quack_types.hpp"
 
 namespace quack {
+
+struct CharArray {
+public:
+	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
+		return construct_md_array(datums, nulls, 1, count, lower_bound, CHAROID, 1, true, 'c');
+	}
+	static duckdb::LogicalTypeId ExpectedType() {
+		return duckdb::LogicalTypeId::TINYINT;
+	}
+	static Datum ConvertToPostgres(const duckdb::Value &val) {
+		return Datum(val.GetValue<int8_t>());
+	}
+};
 
 struct BoolArray {
 public:
@@ -146,7 +160,6 @@ static void ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &valu
 		nulls[i] = child_val.IsNull();
 		if (!nulls[i]) {
 			datums[i] = OP::ConvertToPostgres(values[i]);
-			datums[i] = Int32GetDatum(values[i].GetValue<int32_t>());
 		}
 	}
 
@@ -276,6 +289,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = datum;
 		break;
 	}
+	case BPCHARARRAYOID:
+	case CHARARRAYOID: {
+		ConvertDuckToPostgresArray<CharArray>(slot, value, col);
+		break;
+	}
 	case BOOLARRAYOID: {
 		ConvertDuckToPostgresArray<BoolArray>(slot, value, col);
 		break;
@@ -339,6 +357,13 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
 		return duckdb::LogicalType::JSON();
+	case BPCHARARRAYOID: {
+		auto extra_type_info = duckdb::make_shared<IsBpChar>();
+		auto child_type = duckdb::LogicalType(duckdb::LogicalTypeId::TINYINT, std::move(extra_type_info));
+		return duckdb::LogicalType::LIST(std::move(child_type));
+	}
+	case CHARARRAYOID:
+		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::TINYINT);
 	case BOOLARRAYOID:
 		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::BOOLEAN);
 	case INT4ARRAYOID:
@@ -387,6 +412,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		auto child_type = duckdb::ListType::GetChildType(type);
 		auto child_type_id = child_type.id();
 		switch (child_type_id) {
+			case duckdb::LogicalTypeId::TINYINT:
+				return CHARARRAYOID;
 			case duckdb::LogicalTypeId::BOOLEAN:
 				return BOOLARRAYOID;
 			case duckdb::LogicalTypeId::INTEGER:
@@ -491,9 +518,22 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		Append<bool>(result, DatumGetBool(value), offset);
 		break;
-	case duckdb::LogicalTypeId::TINYINT:
-		Append<int8_t>(result, DatumGetChar(value), offset);
+	case duckdb::LogicalTypeId::TINYINT: {
+		auto aux_info = type.GetAuxInfoShrPtr();
+		if (aux_info && dynamic_cast<IsBpChar *>(aux_info.get())) {
+			auto res = DatumGetBpCharPP(value);
+			auto bpchar_length = VARSIZE_ANY_EXHDR(value);
+			auto bpchar_data = VARDATA_ANY(value);
+
+			if (bpchar_length != 1) {
+				elog(ERROR, "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %d", offset);
+			}
+			Append<int8_t>(result, bpchar_data[0], offset);
+		} else {
+			Append<int8_t>(result, DatumGetChar(value), offset);
+		}
 		break;
+	}
 	case duckdb::LogicalTypeId::SMALLINT:
 		Append<int16_t>(result, DatumGetInt16(value), offset);
 		break;
@@ -513,7 +553,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		Append<duckdb::timestamp_t>(result, duckdb::timestamp_t(static_cast<int64_t>(value + QUACK_DUCK_TIMESTAMP_OFFSET)),
-		                        offset);
+								offset);
 		break;
 	case duckdb::LogicalTypeId::FLOAT: {
 		Append<float>(result, DatumGetFloat4(value), offset);
@@ -602,6 +642,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		auto child_type = child.GetType();
 		auto child_id = child_type.id();
 		switch (child_id) {
+			case duckdb::LogicalTypeId::TINYINT:
 			case duckdb::LogicalTypeId::BOOLEAN:
 			case duckdb::LogicalTypeId::INTEGER: {
 				for (int i = 0; i < nelems; i++) {
@@ -634,7 +675,7 @@ typedef struct HeapTupleReadState {
 
 static Datum
 HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heapTupleReadState, int attNum,
-                              bool *isNull) {
+							  bool *isNull) {
 
 	HeapTupleHeader tup = tuple->t_data;
 	bool hasnulls = HeapTupleHasNulls(tuple);
@@ -710,7 +751,7 @@ HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleRea
 
 void
 InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &threadScanInfo,
-                     PostgresHeapSeqParallelScanState &parallelScanState) {
+					 PostgresHeapSeqParallelScanState &parallelScanState) {
 	HeapTupleReadState heapTupleReadState = {};
 
 	if (parallelScanState.m_count_tuples_only) {
@@ -726,12 +767,12 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 
 	for (auto const &[columnIdx, valueIdx] : parallelScanState.m_columns) {
 		values[valueIdx] = HeapTupleFetchNextColumnDatum(threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
-		                                                 heapTupleReadState, columnIdx + 1, &nulls[valueIdx]);
+														 heapTupleReadState, columnIdx + 1, &nulls[valueIdx]);
 		if (parallelScanState.m_filters &&
-		    (parallelScanState.m_filters->filters.find(valueIdx) != parallelScanState.m_filters->filters.end())) {
+			(parallelScanState.m_filters->filters.find(valueIdx) != parallelScanState.m_filters->filters.end())) {
 			auto &filter = parallelScanState.m_filters->filters[valueIdx];
 			validTuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
-			                              threadScanInfo.m_tuple_desc->attrs[columnIdx].atttypid);
+										  threadScanInfo.m_tuple_desc->attrs[columnIdx].atttypid);
 		}
 
 		if (!validTuple) {
@@ -749,8 +790,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 			if (threadScanInfo.m_tuple_desc->attrs[parallelScanState.m_projections[idx]].attlen == -1) {
 				bool shouldFree = false;
 				values[projectionColumnIdx] =
-				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]),
-				                         parallelScanState.m_lock, &shouldFree);
+					DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]),
+										 parallelScanState.m_lock, &shouldFree);
 				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
 				if (shouldFree) {
 					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));

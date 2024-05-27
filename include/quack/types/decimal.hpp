@@ -152,6 +152,12 @@ public:
 	NumericAsDouble() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {}
 };
 
+// FIXME: perhaps we want to just make a generic ExtraTypeInfo that holds the Postgres type OID
+struct IsBpChar : public duckdb::ExtraTypeInfo {
+public:
+	IsBpChar() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {}
+};
+
 using duckdb::hugeint_t;
 
 // Stolen from postgres, they hide these details in numeric.c
