@@ -19,7 +19,7 @@ SRCS = src/utility/copy.cpp \
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
-REGRESS = basic
+REGRESS = $(subst .sql,,$(subst sql/,,$(wildcard sql/*.sql)))
 
 PG_CONFIG ?= pg_config
 

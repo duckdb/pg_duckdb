@@ -5,7 +5,14 @@
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
+#include "duckdb/parser/qualified_name.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
+
+extern "C" {
+#include "postgres.h"
+#include "catalog/namespace.h"
+#include "utils/regproc.h"
+}
 
 #include "quack/quack_heap_scan.hpp"
 #include "quack/quack_types.hpp"
@@ -139,6 +146,7 @@ PostgresHeapScanFunction::PostgresHeapScanFunc(duckdb::ClientContext &context, d
 static RangeTblEntry *
 FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
 	ListCell *lc;
+
 	foreach (lc, tables) {
 		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
 		if (table->relid) {
@@ -147,22 +155,22 @@ FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
 				elog(ERROR, "Relation with OID %u is not valid", table->relid);
 				return nullptr;
 			}
-			char *rel_name = RelationGetRelationName(rel);
-			auto table_name = std::string(rel_name);
-			if (duckdb::StringUtil::CIEquals(table_name, to_find)) {
-				/* Allow only heap tables */
-				if (!rel->rd_amhandler || (GetTableAmRoutine(rel->rd_amhandler) != GetHeapamTableAmRoutine())) {
-					/* This doesn't have an access method handler, we cant read from this */
-					RelationClose(rel);
-					return nullptr;
-				} else {
-					RelationClose(rel);
-					return table;
-				}
+			/* Allow only heap tables */
+			if (!rel->rd_amhandler || (GetTableAmRoutine(rel->rd_amhandler) != GetHeapamTableAmRoutine())) {
+				/* This doesn't have an access method handler, we cant read from this */
+				RelationClose(rel);
+				return nullptr;
+			}
+			RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
+			Oid relOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, true);
+			if (table->relid == relOid) {
+				RelationClose(rel);
+				return table;
 			}
 			RelationClose(rel);
 		}
 	}
+
 	return nullptr;
 }
 
@@ -196,6 +204,7 @@ PostgresHeapReplacementScan(duckdb::ClientContext &context, const duckdb::string
 	auto children = CreateFunctionArguments(table, GetActiveSnapshot());
 	auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 	table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>("postgres_heap_scan", std::move(children));
+	table_function->alias = table->alias ? table->alias->aliasname : table_name;
 
 	return std::move(table_function);
 }
