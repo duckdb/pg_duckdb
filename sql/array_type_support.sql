@@ -5,7 +5,7 @@ create extension quack;
 CREATE TABLE int_array_1d(a INT[]);
 INSERT INTO int_array_1d SELECT CAST(a as INT[]) FROM (VALUES
     ('{1, 2, 3}'),
-    ('{4, 5, 6, 7}'),
+    ('{4, 5, NULL, 7}'),
     (NULL),
     ('{}')
 ) t(a);

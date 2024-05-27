@@ -534,7 +534,6 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	case duckdb::LogicalTypeId::LIST: {
 		auto &child = duckdb::ListVector::GetEntry(result);
 
-
 		// Convert Datum to ArrayType
 		auto array = DatumGetArrayTypeP(value);
 
@@ -565,12 +564,13 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		switch (child_id) {
 			case duckdb::LogicalType::INTEGER: {
 				for (int i = 0; i < nelems; i++) {
+					idx_t dest_idx = child_offset + i;
 					if (nulls[i]) {
 						auto &array_mask = duckdb::FlatVector::Validity(child);
-						array_mask.SetInvalid(i);
+						array_mask.SetInvalid(dest_idx);
 						continue;
 					}
-					ConvertPostgresToDuckValue(elems[i], child, child_offset + i);
+					ConvertPostgresToDuckValue(elems[i], child, dest_idx);
 				}
 				break;
 			}
