@@ -1,0 +1,12 @@
+# Generated subdirectories
+/tmp_check/
+/results/
+/log/
+
+# Regression test output
+/regression.diffs
+/regression.output
+/regression.out
+
+# core dumps
+core

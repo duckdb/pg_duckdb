@@ -25,15 +25,7 @@ jobs:
           pushd postgres
           git branch
           ./configure --prefix=$PWD/inst/  --enable-cassert --enable-debug --with-openssl
-          make -j4 install
-
-      - name: Start Postgres
-        run: |
-          pushd postgres
-          cd inst/bin
-          ./initdb -D data
-          ./pg_ctl -D data -l logfile start
-          popd
+          make -j8 install
 
       - name: Checkout pg_quack extension code
         uses: actions/checkout@v4
@@ -54,4 +46,4 @@ jobs:
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.regression-tests.outcome != 'success'
         run: |
-          cat quack/regression.diffs
+          cat quack/test/regression/regression.diffs
