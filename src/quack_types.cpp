@@ -533,38 +533,37 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	}
 	case duckdb::LogicalTypeId::LIST: {
 		auto &child = duckdb::ListVector::GetEntry(result);
-		auto child_type = child.GetType();
-		auto child_id = child_type.id();
 
-		ArrayType *array;
-
-		int nelems;
-		Datum *elems;
-		bool *nulls;
 
 		// Convert Datum to ArrayType
-		array = DatumGetArrayTypeP(value);
+		auto array = DatumGetArrayTypeP(value);
 
 		int16 typlen;
 		bool typbyval;
 		char typalign;
 		get_typlenbyvalalign(ARR_ELEMTYPE(array), &typlen, &typbyval, &typalign);
 
+		int nelems;
+		Datum *elems;
+		bool *nulls;
 		// Deconstruct the array into Datum elements
 		deconstruct_array(array, ARR_ELEMTYPE(array), typlen, typbyval, typalign, &elems, &nulls, &nelems);
 
 		auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(result);
+		auto child_offset = duckdb::ListVector::GetListSize(result);
 		list_data[offset] = duckdb::list_entry_t(
-			0, //FIXME: keep track of the total offset into the child Vector
+			child_offset,
 			nelems
 		);
 
-		duckdb::ListVector::Reserve(result, nelems);
-		duckdb::ListVector::SetListSize(result, nelems);
+		auto total_elems = child_offset + nelems;
+		duckdb::ListVector::Reserve(result, total_elems);
+		duckdb::ListVector::SetListSize(result, total_elems);
 
+		auto child_type = child.GetType();
+		auto child_id = child_type.id();
 		switch (child_id) {
 			case duckdb::LogicalType::INTEGER: {
-				auto child_offset = 0; // FIXME: get the offset at which we are writing into the child Vector
 				for (int i = 0; i < nelems; i++) {
 					if (nulls[i]) {
 						auto &array_mask = duckdb::FlatVector::Validity(child);
