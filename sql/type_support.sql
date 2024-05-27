@@ -127,16 +127,6 @@ INSERT INTO json_tbl SELECT CAST(a as JSON) FROM (VALUES
 ) t(a);
 SELECT * FROM json_tbl;
 
--- ARRAY (single dimension)
-CREATE TABLE int_array_1d(a INT[]);
-INSERT INTO int_array_1d SELECT CAST(a as INT[]) FROM (VALUES
-    ('{1, 2, 3}'),
-    ('{4, 5, 6, 7}'),
-    (NULL),
-    ('{}')
-) t(a);
-SELECT * FROM int_array_1d;
-
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
@@ -153,4 +143,3 @@ DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
 DROP TABLE json_tbl;
-DROP TABLE int_array_1d;

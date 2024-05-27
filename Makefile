@@ -18,7 +18,8 @@ SRCS = src/quack_detoast.cpp \
 OBJS = $(subst .cpp,.o, $(SRCS))
 
 REGRESS =	basic \
-			type_support
+			type_support \
+			array_type_support
 
 PG_CONFIG ?= pg_config
 
