@@ -1,4 +1,3 @@
-drop extension if exists quack;
 create extension quack;
 
 -- CHAR
