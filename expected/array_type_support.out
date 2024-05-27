@@ -17,4 +17,22 @@ SELECT * FROM int_array_1d;
  {}
 (4 rows)
 
+-- BOOL (single dimension)
+CREATE TABLE bool_array_1d(a BOOL[]);
+INSERT INTO bool_array_1d SELECT CAST(a as BOOL[]) FROM (VALUES
+    ('{true, false, true}'),
+    ('{true, true, NULL, false}'),
+    (NULL),
+    ('{}')
+) t(a);
+SELECT * FROM bool_array_1d;
+      a       
+--------------
+ {t,f,t}
+ {t,t,NULL,f}
+ 
+ {}
+(4 rows)
+
 DROP TABLE int_array_1d;
+DROP TABLE bool_array_1d;

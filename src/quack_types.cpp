@@ -23,6 +23,32 @@ extern "C" {
 
 namespace quack {
 
+struct BoolArray {
+public:
+	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
+		return construct_md_array(datums, nulls, 1, count, lower_bound, BOOLOID, sizeof(bool), true, 'c');
+	}
+	static duckdb::LogicalTypeId ExpectedType() {
+		return duckdb::LogicalTypeId::BOOLEAN;
+	}
+	static Datum ConvertToPostgres(const duckdb::Value &val) {
+		return Int32GetDatum(val.GetValue<bool>());
+	}
+};
+
+struct Int4Array {
+public:
+	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
+		return construct_md_array(datums, nulls, 1, count, lower_bound, INT4OID, sizeof(int32_t), true, 'i');
+	}
+	static duckdb::LogicalTypeId ExpectedType() {
+		return duckdb::LogicalTypeId::INTEGER;
+	}
+	static Datum ConvertToPostgres(const duckdb::Value &val) {
+		return Int32GetDatum(val.GetValue<int32_t>());
+	}
+};
+
 static void ConvertDouble(TupleTableSlot *slot, double value, idx_t col) {
 	slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT8OID;
 	slot->tts_tupleDescriptor->attrs[col].attbyval = true;
@@ -97,6 +123,42 @@ NumericVar ConvertNumeric(T value, idx_t scale) {
 	}
 
 	return result;
+}
+
+template <class OP>
+static void ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
+	auto child_type = duckdb::ListType::GetChildType(value.type());
+	auto child_id = child_type.id();
+	D_ASSERT(child_id == OP::ExpectedType());
+	(void)child_id;
+
+	auto values = duckdb::ListValue::GetChildren(value);
+	int count = values.size();
+
+	// Allocate memory for Datum array and nulls array
+	auto datums = (Datum *) palloc(count * sizeof(Datum));
+	auto nulls = (bool *) palloc(count * sizeof(bool));
+
+	// Fill the Datum and nulls arrays
+	for (idx_t i = 0; i < count; i++) {
+		auto &child_val = values[i];
+		nulls[i] = child_val.IsNull();
+		if (!nulls[i]) {
+			datums[i] = OP::ConvertToPostgres(values[i]);
+			datums[i] = Int32GetDatum(values[i].GetValue<int32_t>());
+		}
+	}
+
+	// Create the array
+	int lower_bound = 1;
+	auto arr = OP::ConstructArray(datums, nulls, &count, &lower_bound);
+
+	// Free allocated memory
+	pfree(datums);
+	pfree(nulls);
+
+	slot->tts_values[col] = PointerGetDatum(arr);
 }
 
 void
@@ -214,38 +276,12 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = datum;
 		break;
 	}
+	case BOOLARRAYOID: {
+		ConvertDuckToPostgresArray<BoolArray>(slot, value, col);
+		break;
+	}
 	case INT4ARRAYOID: {
-		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
-		auto child_type = duckdb::ListType::GetChildType(value.type());
-		auto child_id = child_type.id();
-		D_ASSERT(child_id == duckdb::LogicalTypeId::INTEGER);
-		(void)child_id;
-
-		auto values = duckdb::ListValue::GetChildren(value);
-		int count = values.size();
-
-		// Allocate memory for Datum array and nulls array
-		auto datums = (Datum *) palloc(count * sizeof(Datum));
-		auto nulls = (bool *) palloc(count * sizeof(bool));
-
-		// Fill the Datum and nulls arrays
-		for (idx_t i = 0; i < count; i++) {
-			auto &child_val = values[i];
-			nulls[i] = child_val.IsNull();
-			if (!nulls[i]) {
-				datums[i] = Int32GetDatum(values[i].GetValue<int32_t>());
-			}
-		}
-
-		// Create the array
-		int lower_bound = 1;
-		auto arr = construct_md_array(datums, nulls, 1, &count, &lower_bound, INT4OID, 4, true, 'i');
-
-		// Free allocated memory
-		pfree(datums);
-		pfree(nulls);
-
-		slot->tts_values[col] = PointerGetDatum(arr);
+		ConvertDuckToPostgresArray<Int4Array>(slot, value, col);
 		break;
 	}
 	default:
@@ -303,6 +339,8 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
 		return duckdb::LogicalType::JSON();
+	case BOOLARRAYOID:
+		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::BOOLEAN);
 	case INT4ARRAYOID:
 		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::INTEGER);
 	default:
@@ -349,6 +387,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		auto child_type = duckdb::ListType::GetChildType(type);
 		auto child_type_id = child_type.id();
 		switch (child_type_id) {
+			case duckdb::LogicalTypeId::BOOLEAN:
+				return BOOLARRAYOID;
 			case duckdb::LogicalTypeId::INTEGER:
 				return INT4ARRAYOID;
 			default:
@@ -562,7 +602,8 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		auto child_type = child.GetType();
 		auto child_id = child_type.id();
 		switch (child_id) {
-			case duckdb::LogicalType::INTEGER: {
+			case duckdb::LogicalTypeId::BOOLEAN:
+			case duckdb::LogicalTypeId::INTEGER: {
 				for (int i = 0; i < nelems; i++) {
 					idx_t dest_idx = child_offset + i;
 					if (nulls[i]) {

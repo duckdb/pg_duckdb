@@ -11,4 +11,15 @@ INSERT INTO int_array_1d SELECT CAST(a as INT[]) FROM (VALUES
 ) t(a);
 SELECT * FROM int_array_1d;
 
+-- BOOL (single dimension)
+CREATE TABLE bool_array_1d(a BOOL[]);
+INSERT INTO bool_array_1d SELECT CAST(a as BOOL[]) FROM (VALUES
+    ('{true, false, true}'),
+    ('{true, true, NULL, false}'),
+    (NULL),
+    ('{}')
+) t(a);
+SELECT * FROM bool_array_1d;
+
 DROP TABLE int_array_1d;
+DROP TABLE bool_array_1d;
