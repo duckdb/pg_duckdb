@@ -129,6 +129,6 @@ quack_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment 
 	}
 
 	auto chunk = res->Fetch();
-	*processed = chunk->GetValue(0, 0).GetValue<uint64>();
+	*processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
 	return true;
 }
