@@ -2,28 +2,67 @@
 
 quack is a PostgreSQL extension that embeds DuckDB into Postgres. :duck:
 
-Once loaded, DuckDB is used for all read queries unless disabled. In the future, more options will be available.
+## Usage
 
-## Status
+```
+CREATE EXTENSION quack;
+```
 
-This project is pre-alpha. It is not currently suitable for production.
+Once loaded, DuckDB is used to execute all SELECT queries. You can disable it by
+setting `quack.execution` to `false`.
+
+Then query as usual. You can toggle DuckDB execution using `quack.execution`:
+
+```sql
+SET quack.execution = false;
+```
+
+## Features
+
+* `SELECT` queries are optimistically executed by DuckDB; if DuckDB cannot
+  support the query for any reason, execution falls back to Postgres.
+* Able to read [data types][datatypes] that exist in both Postgres and DuckDB. The
+  following data types are supported: numeric, character, binary, date/time,
+  boolean, uuid, json, and arrays (see "Limitations").
+* Add a credential to enable DuckDB's httpfs support.
+  ```sql
+  INSERT INTO quack.secrets
+  (cloud_type, cloud_id, cloud_secret, cloud_region)
+  VALUES ('S3', 'access_key_id', 'secret_accss_key', 'us-east-1')
+  ```
+* Read parquet and csv files
+  * `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
+  * `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
+  * You can pass globs and arrays to these functions, just like in DuckDB
+* Write a query or entire table to parquet in S3
+  * `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
+  * `COPY table TO 's3://...'`
+* Join data from files in S3 with data in your Postgres heap tables, views, and materialized views.
+* Read and write Parquet in a single query:
+
+  ```sql
+  COPY (
+    SELECT count(*), name
+    FROM read_parquet('s3://bucket/file.parquet') AS (name text)
+    GROUP BY name
+    ORDER BY count DESC
+  ) TO 's3://bucket/results.parquet';
+  ```
+
+## Limitations
+
+* Only one- and two-dimensional arrays are supported. Two-dimensional arrays are limited to boolean
+  and integer types.
+* Data types are limited to the most commonly used data types. The following data types are not
+  supported: monetary, geometric, enum, network, bit string, text search, composite, range, xml.
+  These data types refer to [the Postgres datatype documentation][datatypes].
+  * Arbitrary precision `numeric` types are only supported up to a width of 38 digits
+* Types, functions, and casts defined by the user or by an extension are not supported
 
 ## Roadmap
 
-This is a high-level early roadmap, subject to change. In the near future, we will provide a more detailed roadmap
-via a Github Project.
-
-* [ ] Allow DuckDB to read from heap tables. This gives a stable reference implementation and stable
-      testing for query execution, as well as the capability to read from heap tables for joins.
-* [ ] Implement a pluggable storage API to allow DuckDB to read from a variety of Postgres
-      (or even non-Postgres) storage methods. This API will allow implementors to bypass Postgres
-      to connect data directly to DuckDB.
-* [ ] Allow quack to read from any implemented Postgres table access method.
-* [ ] Implement a columnar datastore that supports concurrent access, is MVCC-capable and ACID-compliant,
-      and can be backed by cloud storage. Connect this datastore to DuckDB for reads and Postgres
-      for writes.
-* [ ] Be able to intelligently execute queries via DuckDB or Postgres based on query plan or other
-      factors.
+Please [see the Github project](https://github.com/orgs/hydradatabase/projects/1) for upcoming planned tasks and
+features.
 
 ## Installation
 
@@ -38,12 +77,6 @@ Prerequisites:
 * Standard set of build tools for building Postgres extensions
 * [Build tools that are required to build DuckDB](https://duckdb.org/docs/dev/building/build_instructions)
 
-## Usage
 
-Currently the extension is enabled anytime it is loaded:
 
-```
-LOAD quack;
-```
-
-Then query as usual.
+[datatypes]: https://www.postgresql.org/docs/current/datatype.html
