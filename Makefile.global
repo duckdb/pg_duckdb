@@ -1,11 +1,5 @@
 PG_CONFIG ?= pg_config
 
-LZ4_LIB := $(shell /sbin/ldconfig -p | grep lz4)
-
-ifeq ($(LZ4_LIB),)
-$(error LZ4 library not installed)
-endif
-
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG_LIB := $(shell $(PG_CONFIG) --pkglibdir)
 INCLUDEDIR := ${shell $(PG_CONFIG) --includedir}
