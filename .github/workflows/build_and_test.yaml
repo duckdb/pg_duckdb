@@ -1,7 +1,8 @@
 name: pg_quack Build and Test
 on:
-  push:
-  pull_request:
+  - push
+  - pull_request
+
 jobs:
   build-and-test:
     strategy:
