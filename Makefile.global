@@ -1,9 +1,13 @@
 PG_CONFIG ?= pg_config
 
+LZ4_LIB := $(shell /sbin/ldconfig -p | grep lz4)
+
+ifeq ($(LZ4_LIB),)
+$(error LZ4 library not installed)
+endif
+
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG_LIB := $(shell $(PG_CONFIG) --pkglibdir)
-PG_LIBS := $(shell $(PG_CONFIG) --libs)
-SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src -lstdc++ $(PG_LIBS)
 INCLUDEDIR := ${shell $(PG_CONFIG) --includedir}
 INCLUDEDIR_SERVER := ${shell $(PG_CONFIG) --includedir-server}
 
