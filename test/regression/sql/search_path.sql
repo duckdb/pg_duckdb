@@ -1,5 +1,3 @@
-CREATE EXTENSION quack;
-
 CREATE TABLE t(a INT);
 INSERT INTO t SELECT g from generate_series(1,10) g;
 SELECT count(*) FROM t;
@@ -30,5 +28,3 @@ SELECT count(*) FROM public.t, other.t;
 DROP TABLE other.t;
 DROP SCHEMA other;
 RESET search_path;
-
-DROP EXTENSION quack;

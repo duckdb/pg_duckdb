@@ -1,5 +1,3 @@
-CREATE EXTENSION quack;
-
 CREATE TABLE t(a INT);
 
 INSERT INTO t SELECT g % 10 from generate_series(1,1000000) g;
@@ -18,5 +16,3 @@ SET quack.max_threads_per_query TO default;
 SET client_min_messages TO default;
 
 DROP TABLE t;
-
-DROP EXTENSION quack;
