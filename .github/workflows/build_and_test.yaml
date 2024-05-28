@@ -16,6 +16,14 @@ jobs:
       - name: Test details
         run: echo Build and test pg_quack on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
 
+      - name: Install build deps
+        run: |
+          sudo apt-get update -qq
+          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
+          sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
+            libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo5 cmake \
+            libstdc++-12-dev
+
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
@@ -28,14 +36,11 @@ jobs:
 
       - name: Checkout and build PostgreSQL code
         run: |
-          sudo apt-get update -qq
-          sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
-          sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc ccache pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo5 cmake libstdc++-12-dev
           rm -rf postgres
           git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
           pushd postgres
           git branch
-          ./configure --prefix=$PWD/inst/  --enable-cassert --enable-debug --with-openssl
+          ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl
           make -j8 install
 
       - name: Build and test pg_quack extension
