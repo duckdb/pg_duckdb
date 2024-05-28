@@ -15,6 +15,16 @@ jobs:
       - name: Test details
         run: echo Build and test pg_quack on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
 
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          create-symlink: true
+
+      - name: Checkout pg_quack extension code
+        uses: actions/checkout@v4
+        with:
+          path: quack
+
       - name: Checkout and build PostgreSQL code
         run: |
           sudo apt-get update -qq
@@ -26,11 +36,6 @@ jobs:
           git branch
           ./configure --prefix=$PWD/inst/  --enable-cassert --enable-debug --with-openssl
           make -j8 install
-
-      - name: Checkout pg_quack extension code
-        uses: actions/checkout@v4
-        with:
-          path: quack
 
       - name: Build and test pg_quack extension
         id: regression-tests
