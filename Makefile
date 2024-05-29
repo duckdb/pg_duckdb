@@ -60,7 +60,7 @@ check-regression-quack:
 clean-regression:
 	$(MAKE) -C test/regression clean-regression
 
-installcheck: check-regression-quack
+installcheck: all install check-regression-quack
 
 duckdb: third_party/duckdb/Makefile third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB)
 
