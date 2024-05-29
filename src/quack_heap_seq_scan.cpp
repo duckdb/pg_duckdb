@@ -8,6 +8,7 @@ extern "C" {
 #include "storage/bufmgr.h"
 }
 
+#include "quack/quack_heap_scan.hpp"
 #include "quack/quack_heap_seq_scan.hpp"
 #include "quack/quack_types.hpp"
 
@@ -15,7 +16,7 @@ extern "C" {
 
 namespace quack {
 PostgresHeapSeqScan::PostgresHeapSeqScan(RangeTblEntry *table)
-    : m_tableEntry(table), m_rel(nullptr), m_snapshot(nullptr) {
+    : m_table(table), m_rel(nullptr), m_snapshot(nullptr) {
 }
 
 PostgresHeapSeqScan::~PostgresHeapSeqScan() {
@@ -25,15 +26,15 @@ PostgresHeapSeqScan::~PostgresHeapSeqScan() {
 }
 
 PostgresHeapSeqScan::PostgresHeapSeqScan(PostgresHeapSeqScan &&other)
-    : m_tableEntry(other.m_tableEntry), m_rel(nullptr) {
+    : m_table(other.m_table), m_rel(nullptr) {
 	other.CloseRelation();
-	other.m_tableEntry = nullptr;
+	other.m_table = nullptr;
 }
 
 Relation
 PostgresHeapSeqScan::GetRelation() {
-	if (m_tableEntry && m_rel == nullptr) {
-		m_rel = RelationIdGetRelation(m_tableEntry->relid);
+	if (m_table && m_rel == nullptr) {
+		m_rel = RelationIdGetRelation(m_table->relid);
 	}
 	return m_rel;
 }

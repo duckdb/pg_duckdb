@@ -78,12 +78,14 @@ public:
 
 struct PostgresHeapReplacementScanData : public duckdb::ReplacementScanData {
 public:
-	PostgresHeapReplacementScanData(Query *parse, const char *query) : m_parse(parse), m_query(query) {
+	PostgresHeapReplacementScanData(List *tables, List *neededColumns, const char *query)
+	    : m_tables(tables), m_needed_columns(neededColumns), m_query(query) {
 	}
 	~PostgresHeapReplacementScanData() override {};
 
 public:
-	Query *m_parse;
+	List *m_tables;
+	List *m_needed_columns;
 	std::string m_query;
 };
 

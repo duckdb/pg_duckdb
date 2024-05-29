@@ -1,7 +1,8 @@
 name: pg_quack Build and Test
 on:
-  push:
-  pull_request:
+  - push
+  - pull_request
+
 jobs:
   build-and-test:
     strategy:
@@ -15,30 +16,32 @@ jobs:
       - name: Test details
         run: echo Build and test pg_quack on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
 
-      - name: Checkout and build PostgreSQL code
+      - name: Install build deps
         run: |
           sudo apt-get update -qq
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
-          sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev libxml2-utils xsltproc ccache pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo5 cmake libstdc++-12-dev
-          rm -rf postgres
-          git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
-          pushd postgres
-          git branch
-          ./configure --prefix=$PWD/inst/  --enable-cassert --enable-debug --with-openssl
-          make -j4 install
+          sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
+            libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo5 cmake \
+            libstdc++-12-dev
 
-      - name: Start Postgres
-        run: |
-          pushd postgres
-          cd inst/bin
-          ./initdb -D data
-          ./pg_ctl -D data -l logfile start
-          popd
+      - name: ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          create-symlink: true
 
       - name: Checkout pg_quack extension code
         uses: actions/checkout@v4
         with:
           path: quack
+
+      - name: Checkout and build PostgreSQL code
+        run: |
+          rm -rf postgres
+          git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
+          pushd postgres
+          git branch
+          ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl
+          make -j8 install
 
       - name: Build and test pg_quack extension
         id: regression-tests
@@ -54,4 +57,4 @@ jobs:
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.regression-tests.outcome != 'success'
         run: |
-          cat quack/regression.diffs
+          cat quack/test/regression/regression.diffs

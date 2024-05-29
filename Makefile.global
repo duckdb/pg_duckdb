@@ -1,0 +1,9 @@
+PG_CONFIG ?= pg_config
+
+PGXS := $(shell $(PG_CONFIG) --pgxs)
+PG_LIB := $(shell $(PG_CONFIG) --pkglibdir)
+INCLUDEDIR := ${shell $(PG_CONFIG) --includedir}
+INCLUDEDIR_SERVER := ${shell $(PG_CONFIG) --includedir-server}
+
+USE_PGXS = 1
+include $(PGXS)

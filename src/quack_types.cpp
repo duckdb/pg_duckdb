@@ -709,8 +709,7 @@ typedef struct HeapTupleReadState {
 
 static Datum
 HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heapTupleReadState, int attNum,
-							  bool *isNull) {
-
+                              bool *isNull) {
 	HeapTupleHeader tup = tuple->t_data;
 	bool hasnulls = HeapTupleHasNulls(tuple);
 	int attnum;
@@ -823,9 +822,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 			idx_t projectionColumnIdx = parallelScanState.m_columns[parallelScanState.m_projections[idx]];
 			if (threadScanInfo.m_tuple_desc->attrs[parallelScanState.m_projections[idx]].attlen == -1) {
 				bool shouldFree = false;
-				values[projectionColumnIdx] =
-					DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]),
-										 parallelScanState.m_lock, &shouldFree);
+				values[projectionColumnIdx] = DetoastPostgresDatum(
+				    reinterpret_cast<varlena *>(values[projectionColumnIdx]), parallelScanState.m_lock, &shouldFree);
 				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
 				if (shouldFree) {
 					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));
