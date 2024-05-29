@@ -464,8 +464,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		}
 	}
 	default: {
-		elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
-		break;
+		return InvalidOid;
 	}
 	}
 }
