@@ -408,7 +408,7 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 	case INT8ARRAYOID:
 		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::BIGINT);
 	default:
-		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
+		return duckdb::LogicalType::USER("UnsupportedPostgresType");
 	}
 }
 

@@ -1,5 +1,6 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/main/extension_util.hpp"
 
 #include "quack/quack_duckdb_connection.hpp"
 #include "quack/quack_heap_scan.hpp"
@@ -26,6 +27,7 @@ quack_create_duckdb_connection(List *tables, List *neededColumns, const char *qu
 	    duckdb::make_uniq_base<duckdb::ReplacementScanData, quack::PostgresHeapReplacementScanData>(
 	        tables, neededColumns, query));
 
+
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
 	// Add the postgres_scan inserted by the replacement scan
@@ -35,6 +37,8 @@ quack_create_duckdb_connection(List *tables, List *neededColumns, const char *qu
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
+	auto &instance = *db->instance;
+	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	catalog.CreateTableFunction(context, &heap_scan_info);
 	context.transaction.Commit();
 
