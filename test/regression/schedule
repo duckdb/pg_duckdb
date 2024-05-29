@@ -2,3 +2,4 @@ test: basic
 test: search_path
 test: type_support
 test: array_type_support
+test: projection_pushdown_unsupported_type
