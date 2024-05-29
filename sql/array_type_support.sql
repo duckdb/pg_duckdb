@@ -24,7 +24,7 @@ SELECT * FROM bool_array_1d;
 -- CHAR (single dimension)
 CREATE TABLE char_array_1d(a CHAR[]);
 INSERT INTO char_array_1d SELECT CAST(a as CHAR[]) FROM (VALUES
-    ('{b, b, c}'),
+    ('{a, b, c}'),
     (NULL),
     ('{t, f, Z, A}'),
     ('{}')

@@ -27,13 +27,13 @@ namespace quack {
 struct CharArray {
 public:
 	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
-		return construct_md_array(datums, nulls, 1, count, lower_bound, CHAROID, 1, true, 'c');
+			return construct_md_array(datums, nulls, 1, count, lower_bound, CHAROID, 1, true, 'c');
 	}
 	static duckdb::LogicalTypeId ExpectedType() {
-		return duckdb::LogicalTypeId::TINYINT;
+			return duckdb::LogicalTypeId::TINYINT;
 	}
 	static Datum ConvertToPostgres(const duckdb::Value &val) {
-		return Datum(val.GetValue<int8_t>());
+			return Datum(val.GetValue<int8_t>());
 	}
 };
 
@@ -46,20 +46,54 @@ public:
 		return duckdb::LogicalTypeId::BOOLEAN;
 	}
 	static Datum ConvertToPostgres(const duckdb::Value &val) {
-		return Int32GetDatum(val.GetValue<bool>());
+		return Datum(val.GetValue<bool>());
 	}
 };
 
-struct Int4Array {
+template <int32_t OID>
+struct PostgresIntegerOIDMapping {
+};
+
+template <>
+struct PostgresIntegerOIDMapping<CHAROID> {
+	static constexpr int32_t postgres_oid = CHAROID;
+	using physical_type = int8_t;
+	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::TINYINT;
+};
+
+template <>
+struct PostgresIntegerOIDMapping<INT2OID> {
+	static constexpr int32_t postgres_oid = INT2OID;
+	using physical_type = int16_t;
+	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::SMALLINT;
+};
+
+template <>
+struct PostgresIntegerOIDMapping<INT4OID> {
+	static constexpr int32_t postgres_oid = INT4OID;
+	using physical_type = int32_t;
+	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::INTEGER;
+};
+
+template <>
+struct PostgresIntegerOIDMapping<INT8OID> {
+	static constexpr int32_t postgres_oid = INT8OID;
+	using physical_type = int64_t;
+	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::BIGINT;
+};
+
+template <class MAPPING>
+struct PODArray {
+	using physical_type = typename MAPPING::physical_type;
 public:
 	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
-		return construct_md_array(datums, nulls, 1, count, lower_bound, INT4OID, sizeof(int32_t), true, 'i');
+		return construct_md_array(datums, nulls, 1, count, lower_bound, MAPPING::postgres_oid, sizeof(physical_type), true, 'i');
 	}
 	static duckdb::LogicalTypeId ExpectedType() {
-		return duckdb::LogicalTypeId::INTEGER;
+		return MAPPING::duck_type_id;
 	}
 	static Datum ConvertToPostgres(const duckdb::Value &val) {
-		return Int32GetDatum(val.GetValue<int32_t>());
+		return Int32GetDatum(val.GetValue<physical_type>());
 	}
 };
 
@@ -299,7 +333,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	case INT4ARRAYOID: {
-		ConvertDuckToPostgresArray<Int4Array>(slot, value, col);
+		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<INT4OID>>>(slot, value, col);
 		break;
 	}
 	default:

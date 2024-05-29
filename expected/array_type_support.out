@@ -43,7 +43,6 @@ INSERT INTO char_array_1d SELECT CAST(a as CHAR[]) FROM (VALUES
     ('{}')
 ) t(a);
 SELECT * FROM char_array_1d;
-ERROR:  (DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: 1014
 DROP TABLE int_array_1d;
 DROP TABLE bool_array_1d;
 DROP TABLE char_array_1d;
