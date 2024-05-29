@@ -62,6 +62,10 @@ Quack_ExecCustomScan(CustomScanState *node) {
 		quackScanState->is_executed = true;
 	}
 
+	if (quackScanState->queryResult->HasError()) {
+		elog(ERROR, "Quack execute returned an error: %s", quackScanState->queryResult->GetError().c_str());
+	}
+
 	if (quackScanState->fetch_next) {
 		quackScanState->currentDataChunk = quackScanState->queryResult->Fetch();
 		quackScanState->currentRow = 0;
