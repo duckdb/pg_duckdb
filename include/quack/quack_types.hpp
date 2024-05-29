@@ -15,8 +15,8 @@ namespace quack {
 constexpr int32_t QUACK_DUCK_DATE_OFFSET = 10957;
 constexpr int64_t QUACK_DUCK_TIMESTAMP_OFFSET = INT64CONST(10957) * USECS_PER_DAY;
 
-duckdb::LogicalType ConvertPostgresToDuckColumnType(Oid type);
-Oid GetPostgresDuckDBType(duckdb::LogicalTypeId type);
+duckdb::LogicalType ConvertPostgresToDuckColumnType(Oid type, int32_t typmod);
+Oid GetPostgresDuckDBType(duckdb::LogicalType type);
 void ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset);
 void ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col);
 void InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &threadScanInfo,
