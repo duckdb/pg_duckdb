@@ -107,6 +107,7 @@
 	(weight) >= NUMERIC_SHORT_WEIGHT_MIN)
 
 #include "duckdb.hpp"
+#include <cmath>
 
 extern "C" {
 #include "postgres.h"
