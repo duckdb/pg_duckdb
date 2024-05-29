@@ -1,81 +1,37 @@
-create extension quack;
 -- CHAR
 CREATE TABLE chr(a CHAR);
 INSERT INTO chr SELECT CAST(a AS CHAR) from (VALUES (-128), (0), (127)) t(a);
 SELECT * FROM chr;
- a 
----
- -
- 0
- 1
-(3 rows)
 
 -- SMALLINT
 CREATE TABLE small(a SMALLINT);
 INSERT INTO small SELECT CAST(a AS SMALLINT) from (VALUES (-32768), (0), (32767)) t(a);
 SELECT * FROM small;
-   a    
---------
- -32768
-      0
-  32767
-(3 rows)
 
 -- INTEGER
 CREATE TABLE intgr(a INTEGER);
 INSERT INTO intgr SELECT CAST(a AS INTEGER) from (VALUES (-2147483648), (0), (2147483647)) t(a);
 SELECT * FROM intgr;
-      a      
--------------
- -2147483648
-           0
-  2147483647
-(3 rows)
 
 -- BIGINT
 CREATE TABLE big(a BIGINT);
 INSERT INTO big SELECT CAST(a AS BIGINT) from (VALUES (-9223372036854775808), (0), (9223372036854775807)) t(a);
 SELECT * FROM big;
-          a           
-----------------------
- -9223372036854775808
-                    0
-  9223372036854775807
-(3 rows)
 
 --- BOOL
 CREATE TABLE bool_tbl(a BOOL);
 INSERT INTO bool_tbl SELECT CAST(a AS BOOL) from (VALUES (False), (NULL), (True)) t(a);
 SELECT * FROM bool_tbl;
- a 
----
- f
- 
- t
-(3 rows)
 
 --- VARCHAR
 CREATE TABLE varchar_tbl(a VARCHAR);
 INSERT INTO varchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), (NULL), ('test'), ('this is a long string')) t(a);
 SELECT * FROM varchar_tbl;
-           a           
------------------------
- 
- 
- test
- this is a long string
-(4 rows)
 
 -- DATE
 CREATE TABLE date_tbl(a DATE);
 INSERT INTO date_tbl SELECT CAST(a AS DATE) FROM (VALUES ('2022-04-29'::DATE), (NULL), ('2023-05-15'::DATE)) t(a);
 SELECT * FROM date_tbl;
-     a      
-------------
- 04-29-2022
- 
- 05-15-2023
-(3 rows)
 
 -- TIMESTAMP
 CREATE TABLE timestamp_tbl(a TIMESTAMP);
@@ -85,12 +41,6 @@ INSERT INTO timestamp_tbl SELECT CAST(a AS TIMESTAMP) FROM (VALUES
 	('2023-05-15 12:30:45'::TIMESTAMP)
 ) t(a);
 SELECT * FROM timestamp_tbl;
-            a             
---------------------------
- Fri Apr 29 10:15:30 2022
- 
- Mon May 15 12:30:45 2023
-(3 rows)
 
 -- FLOAT4
 CREATE TABLE float4_tbl(a FLOAT4);
@@ -100,12 +50,6 @@ INSERT INTO float4_tbl SELECT CAST(a AS FLOAT4) FROM (VALUES
 	(458234502034234234234.000012::FLOAT4)
 ) t(a);
 SELECT * FROM float4_tbl;
-      a       
---------------
-   0.23423423
-             
- 4.582345e+20
-(3 rows)
 
 -- FLOAT8
 CREATE TABLE float8_tbl(a FLOAT8);
@@ -115,12 +59,6 @@ INSERT INTO float8_tbl SELECT CAST(a AS FLOAT8) FROM (VALUES
 	(458234502034234234234.000012::FLOAT8)
 ) t(a);
 SELECT * FROM float8_tbl;
-           a           
------------------------
-           0.234234234
-                      
- 4.582345020342342e+20
-(3 rows)
 
 -- NUMERIC as DOUBLE
 CREATE TABLE numeric_as_double(a NUMERIC);
@@ -130,12 +68,6 @@ INSERT INTO numeric_as_double SELECT a FROM (VALUES
 	(458234502034234234234.000012)
 ) t(a);
 SELECT * FROM numeric_as_double;
-           a           
------------------------
-           0.234234234
-                      
- 4.582345020342342e+20
-(3 rows)
 
 -- NUMERIC with a physical type of SMALLINT
 CREATE TABLE smallint_numeric(a NUMERIC(4, 2));
@@ -145,14 +77,6 @@ INSERT INTO smallint_numeric SELECT a FROM (VALUES
 	(45.12)
 ) t(a);
 SELECT * FROM smallint_numeric;
-INFO:  SMALLINT
-INFO:  SMALLINT
-   a   
--------
-  0.23
-      
- 45.12
-(3 rows)
 
 -- NUMERIC with a physical type of INTEGER
 CREATE TABLE integer_numeric(a NUMERIC(9, 6));
@@ -162,14 +86,6 @@ INSERT INTO integer_numeric SELECT a FROM (VALUES
 	(45.000012::NUMERIC(9,6))
 ) t(a);
 SELECT * FROM integer_numeric;
-INFO:  INTEGER
-INFO:  INTEGER
-     a      
-------------
- 243.345035
-           
-  45.000012
-(3 rows)
 
 -- NUMERIC with a physical type of BIGINT
 CREATE TABLE bigint_numeric(a NUMERIC(18, 12));
@@ -179,14 +95,6 @@ INSERT INTO bigint_numeric SELECT a FROM (VALUES
 	(12.000000000001::NUMERIC(18,12))
 ) t(a);
 SELECT * FROM bigint_numeric;
-INFO:  BIGINT
-INFO:  BIGINT
-          a          
----------------------
- 856324.111122223333
-                    
-     12.000000000001
-(3 rows)
 
 -- NUMERIC with a physical type of HUGEINT
 CREATE TABLE hugeint_numeric(a NUMERIC(38, 24));
@@ -196,14 +104,6 @@ INSERT INTO hugeint_numeric SELECT a FROM (VALUES
 	(123456789.000000000000000000000001::NUMERIC(38,24))
 ) t(a);
 SELECT * FROM hugeint_numeric;
-INFO:  HUGEINT
-INFO:  HUGEINT
-                    a                    
------------------------------------------
- 32942348563242.111222333444555666777888
-                                        
-      123456789.000000000000000000000001
-(3 rows)
 
 -- UUID
 CREATE TABLE uuid_tbl(a UUID);
@@ -213,12 +113,6 @@ INSERT INTO uuid_tbl SELECT CAST(a as UUID) FROM (VALUES
 	('00000000-0000-0000-0000-000000000000')
 ) t(a);
 SELECT * FROM uuid_tbl;
-                  a                   
---------------------------------------
- 80bf0be9-89be-4ef8-bc58-fc7d691c5544
- 
- 00000000-0000-0000-0000-000000000000
-(3 rows)
 
 -- JSON
 CREATE TABLE json_tbl(a JSON);
@@ -229,13 +123,6 @@ INSERT INTO json_tbl SELECT CAST(a as JSON) FROM (VALUES
     ('{}')
 ) t(a);
 SELECT * FROM json_tbl;
-                  a                   
---------------------------------------
- {"key1": "value1", "key2": "value2"}
- ["item1", "item2", "item3"]
- 
- {}
-(4 rows)
 
 DROP TABLE chr;
 DROP TABLE small;

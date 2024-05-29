@@ -1,0 +1,3 @@
+test: basic
+test: search_path
+test: type_support

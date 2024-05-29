@@ -10,7 +10,3 @@ compile_commands.json
 *.o
 *.bc
 *.dylib
-
-results
-regression.diffs
-regression.out
