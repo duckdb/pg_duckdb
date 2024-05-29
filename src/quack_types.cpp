@@ -24,19 +24,6 @@ extern "C" {
 
 namespace quack {
 
-struct CharArray {
-public:
-	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
-			return construct_md_array(datums, nulls, 1, count, lower_bound, CHAROID, 1, true, 'c');
-	}
-	static duckdb::LogicalTypeId ExpectedType() {
-			return duckdb::LogicalTypeId::TINYINT;
-	}
-	static Datum ConvertToPostgres(const duckdb::Value &val) {
-			return Datum(val.GetValue<int8_t>());
-	}
-};
-
 struct BoolArray {
 public:
 	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
@@ -59,6 +46,9 @@ struct PostgresIntegerOIDMapping<CHAROID> {
 	static constexpr int32_t postgres_oid = CHAROID;
 	using physical_type = int8_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::TINYINT;
+	static Datum ToDatum(const duckdb::Value &val) {
+		return Datum(val.GetValue<physical_type>());
+	}
 };
 
 template <>
@@ -66,6 +56,9 @@ struct PostgresIntegerOIDMapping<INT2OID> {
 	static constexpr int32_t postgres_oid = INT2OID;
 	using physical_type = int16_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::SMALLINT;
+	static Datum ToDatum(const duckdb::Value &val) {
+		return Int16GetDatum(val.GetValue<physical_type>());
+	}
 };
 
 template <>
@@ -73,6 +66,9 @@ struct PostgresIntegerOIDMapping<INT4OID> {
 	static constexpr int32_t postgres_oid = INT4OID;
 	using physical_type = int32_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::INTEGER;
+	static Datum ToDatum(const duckdb::Value &val) {
+		return Int32GetDatum(val.GetValue<physical_type>());
+	}
 };
 
 template <>
@@ -80,6 +76,9 @@ struct PostgresIntegerOIDMapping<INT8OID> {
 	static constexpr int32_t postgres_oid = INT8OID;
 	using physical_type = int64_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::BIGINT;
+	static Datum ToDatum(const duckdb::Value &val) {
+		return Int64GetDatum(val.GetValue<physical_type>());
+	}
 };
 
 template <class MAPPING>
@@ -93,7 +92,7 @@ public:
 		return MAPPING::duck_type_id;
 	}
 	static Datum ConvertToPostgres(const duckdb::Value &val) {
-		return Int32GetDatum(val.GetValue<physical_type>());
+		return MAPPING::ToDatum(val);
 	}
 };
 
@@ -325,7 +324,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case BPCHARARRAYOID:
 	case CHARARRAYOID: {
-		ConvertDuckToPostgresArray<CharArray>(slot, value, col);
+		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<CHAROID>>>(slot, value, col);
 		break;
 	}
 	case BOOLARRAYOID: {
@@ -334,6 +333,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case INT4ARRAYOID: {
 		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<INT4OID>>>(slot, value, col);
+		break;
+	}
+	case INT8ARRAYOID: {
+		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<INT8OID>>>(slot, value, col);
 		break;
 	}
 	default:
@@ -402,6 +405,8 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::BOOLEAN);
 	case INT4ARRAYOID:
 		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::INTEGER);
+	case INT8ARRAYOID:
+		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::BIGINT);
 	default:
 		elog(ERROR, "(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
 	}
@@ -452,6 +457,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 				return BOOLARRAYOID;
 			case duckdb::LogicalTypeId::INTEGER:
 				return INT4ARRAYOID;
+			case duckdb::LogicalTypeId::BIGINT:
+				return INT8ARRAYOID;
 			default:
 				elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
 		}
@@ -678,6 +685,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		switch (child_id) {
 			case duckdb::LogicalTypeId::TINYINT:
 			case duckdb::LogicalTypeId::BOOLEAN:
+			case duckdb::LogicalTypeId::BIGINT:
 			case duckdb::LogicalTypeId::INTEGER: {
 				for (int i = 0; i < nelems; i++) {
 					idx_t dest_idx = child_offset + i;
