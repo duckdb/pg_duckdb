@@ -562,12 +562,11 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	case duckdb::LogicalTypeId::TINYINT: {
 		auto aux_info = type.GetAuxInfoShrPtr();
 		if (aux_info && dynamic_cast<IsBpChar *>(aux_info.get())) {
-			auto res = DatumGetBpCharPP(value);
 			auto bpchar_length = VARSIZE_ANY_EXHDR(value);
 			auto bpchar_data = VARDATA_ANY(value);
 
 			if (bpchar_length != 1) {
-				elog(ERROR, "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %d", offset);
+				elog(ERROR, "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %llu", offset);
 			}
 			Append<int8_t>(result, bpchar_data[0], offset);
 		} else {
