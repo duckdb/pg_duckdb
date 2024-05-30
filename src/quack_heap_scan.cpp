@@ -88,10 +88,8 @@ PostgresHeapScanFunction::PostgresHeapBind(duckdb::ClientContext &context, duckd
 
 	for (int i = 0; i < tupleDesc->natts; i++) {
 		Form_pg_attribute attr = &tupleDesc->attrs[i];
-		Oid type_oid = attr->atttypid;
-		auto typmod = attr->atttypmod;
 		auto col_name = duckdb::string(NameStr(attr->attname));
-		auto duck_type = ConvertPostgresToDuckColumnType(type_oid, typmod);
+		auto duck_type = ConvertPostgresToDuckColumnType(attr);
 		return_types.push_back(duck_type);
 		names.push_back(col_name);
 		/* Log column name and type */

@@ -84,6 +84,7 @@ Quack_ExecCustomScan(CustomScanState *node) {
 	oldContext = MemoryContextSwitchTo(quackScanState->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
 
 	for (idx_t col = 0; col < quackScanState->columnCount; col++) {
+		// FIXME: we should not use the Value API here, it's complicating the LIST conversion logic
 		auto value = quackScanState->currentDataChunk->GetValue(col, quackScanState->currentRow);
 		if (value.IsNull()) {
 			slot->tts_isnull[col] = true;
