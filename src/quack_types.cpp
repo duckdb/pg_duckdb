@@ -413,11 +413,6 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = datum;
 		break;
 	}
-	case BPCHARARRAYOID:
-	case CHARARRAYOID: {
-		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<CHAROID>>>(slot, value, col);
-		break;
-	}
 	case BOOLARRAYOID: {
 		ConvertDuckToPostgresArray<BoolArray>(slot, value, col);
 		break;
@@ -503,12 +498,6 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
 		return duckdb::LogicalType::JSON();
-	case BPCHARARRAYOID: {
-		auto extra_type_info = duckdb::make_shared<IsBpChar>();
-		auto child_type = duckdb::LogicalType(duckdb::LogicalTypeId::TINYINT, std::move(extra_type_info));
-		return duckdb::LogicalType::LIST(std::move(child_type));
-	}
-	case CHARARRAYOID:
 	case BOOLARRAYOID:
 	case INT4ARRAYOID:
 	case INT8ARRAYOID: {
@@ -567,8 +556,6 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		auto child_type_id = duck_type->id();
 
 		switch (child_type_id) {
-			case duckdb::LogicalTypeId::TINYINT:
-				return CHARARRAYOID;
 			case duckdb::LogicalTypeId::BOOLEAN:
 				return BOOLARRAYOID;
 			case duckdb::LogicalTypeId::INTEGER:

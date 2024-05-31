@@ -50,18 +50,7 @@ INSERT INTO bool_array_1d SELECT CAST(a as BOOL[]) FROM (VALUES
 ) t(a);
 SELECT * FROM bool_array_1d;
 
--- CHAR (single dimension)
-CREATE TABLE char_array_1d(a CHAR[]);
-INSERT INTO char_array_1d SELECT CAST(a as CHAR[]) FROM (VALUES
-    ('{a, b, c}'),
-    (NULL),
-    ('{t, f, Z, A}'),
-    ('{}')
-) t(a);
-SELECT * FROM char_array_1d;
-
 DROP TABLE int_array_1d;
 DROP TABLE int_array_2d;
 DROP TABLE bigint_array_1d;
 DROP TABLE bool_array_1d;
-DROP TABLE char_array_1d;
