@@ -2,3 +2,4 @@ test: basic
 test: search_path
 test: execution_error
 test: type_support
+test: array_type_support
