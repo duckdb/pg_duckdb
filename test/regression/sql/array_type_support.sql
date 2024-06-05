@@ -11,6 +11,25 @@ INSERT INTO int_array_1d SELECT CAST(a as INT[]) FROM (VALUES
 ) t(a);
 SELECT * FROM int_array_1d;
 
+-- INT4 (two dimensional data, single dimension type)
+CREATE TABLE int_array_2d(a INT[]);
+INSERT INTO int_array_2d VALUES
+    ('{{1, 2}, {3, 4}}'),
+    ('{{5, 6, 7}, {8, 9, 10}}'),
+    ('{{11, 12, 13}, {14, 15, 16}}'),
+    ('{{17, 18}, {19, 20}}');
+SELECT * FROM int_array_2d;
+drop table int_array_2d;
+
+-- INT4 (two dimensional data and type)
+CREATE TABLE int_array_2d(a INT[][]);
+INSERT INTO int_array_2d VALUES
+    ('{{1, 2}, {3, 4}}'),
+    ('{{5, 6, 7}, {8, 9, 10}}'),
+    ('{{11, 12, 13}, {14, 15, 16}}'),
+    ('{{17, 18}, {19, 20}}');
+SELECT * FROM int_array_2d;
+
 -- INT8 (single dimension)
 CREATE TABLE bigint_array_1d(a BIGINT[]);
 INSERT INTO bigint_array_1d SELECT CAST(a as BIGINT[]) FROM (VALUES
@@ -31,17 +50,7 @@ INSERT INTO bool_array_1d SELECT CAST(a as BOOL[]) FROM (VALUES
 ) t(a);
 SELECT * FROM bool_array_1d;
 
--- CHAR (single dimension)
-CREATE TABLE char_array_1d(a CHAR[]);
-INSERT INTO char_array_1d SELECT CAST(a as CHAR[]) FROM (VALUES
-    ('{a, b, c}'),
-    (NULL),
-    ('{t, f, Z, A}'),
-    ('{}')
-) t(a);
-SELECT * FROM char_array_1d;
-
 DROP TABLE int_array_1d;
+DROP TABLE int_array_2d;
 DROP TABLE bigint_array_1d;
 DROP TABLE bool_array_1d;
-DROP TABLE char_array_1d;

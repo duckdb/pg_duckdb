@@ -13,6 +13,7 @@ extern "C" {
 #include "utils/array.h"
 #include "fmgr.h"
 #include "utils/lsyscache.h"
+#include "utils/syscache.h"
 }
 
 #include "quack/types/decimal.hpp"
@@ -26,8 +27,8 @@ namespace quack {
 
 struct BoolArray {
 public:
-	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
-		return construct_md_array(datums, nulls, 1, count, lower_bound, BOOLOID, sizeof(bool), true, 'c');
+	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, BOOLOID, sizeof(bool), true, 'c');
 	}
 	static duckdb::LogicalTypeId ExpectedType() {
 		return duckdb::LogicalTypeId::BOOLEAN;
@@ -85,8 +86,8 @@ template <class MAPPING>
 struct PODArray {
 	using physical_type = typename MAPPING::physical_type;
 public:
-	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int *count, int *lower_bound) {
-		return construct_md_array(datums, nulls, 1, count, lower_bound, MAPPING::postgres_oid, sizeof(physical_type), true, 'i');
+	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, MAPPING::postgres_oid, sizeof(physical_type), true, 'i');
 	}
 	static duckdb::LogicalTypeId ExpectedType() {
 		return MAPPING::duck_type_id;
@@ -172,37 +173,127 @@ NumericVar ConvertNumeric(T value, idx_t scale) {
 	return result;
 }
 
+static const duckdb::LogicalType &GetChildTypeRecursive(const duckdb::LogicalType &list_type) {
+	D_ASSERT(list_type.id() == duckdb::LogicalTypeId::LIST);
+	auto &child = duckdb::ListType::GetChildType(list_type);
+	if (child.id() == duckdb::LogicalTypeId::LIST) {
+		return GetChildTypeRecursive(child);
+	}
+	return child;
+}
+
+static idx_t GetDuckDBListDimensionality(const duckdb::LogicalType &list_type, idx_t depth = 0) {
+	D_ASSERT(list_type.id() == duckdb::LogicalTypeId::LIST);
+	auto &child = duckdb::ListType::GetChildType(list_type);
+	if (child.id() == duckdb::LogicalTypeId::LIST) {
+		return GetDuckDBListDimensionality(child, depth + 1);
+	}
+	return depth + 1;
+}
+
+namespace {
+
+template <class OP>
+struct PostgresArrayAppendState {
+public:
+	PostgresArrayAppendState(idx_t number_of_dimensions) : number_of_dimensions(number_of_dimensions) {
+		dimensions = (int *) palloc(number_of_dimensions * sizeof(int));
+		lower_bounds = (int *) palloc(number_of_dimensions * sizeof(int));
+		for (idx_t i = 0; i < number_of_dimensions; i++) {
+			// Initialize everything at -1 to indicate that it isn't set yet
+			dimensions[i] = -1;
+		}
+		for (idx_t i = 0; i < number_of_dimensions; i++) {
+			// Lower bounds have no significance for us
+			lower_bounds[i] = 1;
+		}
+	}
+public:
+	void AppendValueAtDimension(const duckdb::Value &value, idx_t dimension) {
+		// FIXME: verify that the amount of values does not overflow an `int` ?
+		auto &values = duckdb::ListValue::GetChildren(value);
+		idx_t to_append = values.size();
+
+		D_ASSERT(dimension < number_of_dimensions);
+		if (dimensions[dimension] == -1) {
+			// This dimension is not set yet
+			dimensions[dimension] = to_append;
+			// FIXME: verify that the amount of expected_values does not overflow an `int` ?
+			expected_values *= to_append;
+		}
+		if (dimensions[dimension] != to_append) {
+			elog(ERROR, "Expected %d values in list at dimension %d, found %d instead", dimensions[dimension], dimension, to_append);
+		}
+
+		auto &child_type = duckdb::ListType::GetChildType(value.type());
+		if (child_type.id() == duckdb::LogicalTypeId::LIST) {
+
+			for (idx_t i = 0; i < to_append; i++) {
+				auto &child_val = values[i];
+				if (child_val.IsNull()) {
+					// Postgres arrays can not contains nulls at the array level
+					// i.e {{1,2}, NULL, {3,4}} is not supported
+					elog(ERROR, "Returned LIST contains a NULL at an intermediate dimension (not the value level), which is not supported in Postgres");
+				}
+				AppendValueAtDimension(child_val, dimension + 1);
+			}
+		} else {
+			if (!datums) {
+				// First time we get to the outer most child
+				// Because we traversed all dimensions we know how many values we have to allocate for
+				datums = (Datum *) palloc(expected_values * sizeof(Datum));
+				nulls = (bool *) palloc(expected_values * sizeof(bool));
+			}
+
+			for (idx_t i = 0; i < to_append; i++) {
+				auto &child_val = values[i];
+				nulls[count + i] = child_val.IsNull();
+				if (!nulls[count + i]) {
+					datums[count + i] = OP::ConvertToPostgres(values[i]);
+				}
+			}
+			count += to_append;
+		}
+	}
+private:
+	idx_t expected_values = 1;
+	idx_t count = 0;
+public:
+	Datum *datums = nullptr;
+	bool *nulls = nullptr;
+	int *dimensions;
+	int *lower_bounds;
+	idx_t number_of_dimensions;
+};
+
+} // namespace
+
 template <class OP>
 static void ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
-	auto child_type = duckdb::ListType::GetChildType(value.type());
+	auto &child_type = GetChildTypeRecursive(value.type());
 	auto child_id = child_type.id();
 	D_ASSERT(child_id == OP::ExpectedType());
 	(void)child_id;
 
-	auto values = duckdb::ListValue::GetChildren(value);
-	int count = values.size();
+	auto number_of_dimensions = GetDuckDBListDimensionality(value.type());
 
-	// Allocate memory for Datum array and nulls array
-	auto datums = (Datum *) palloc(count * sizeof(Datum));
-	auto nulls = (bool *) palloc(count * sizeof(bool));
-
-	// Fill the Datum and nulls arrays
-	for (idx_t i = 0; i < count; i++) {
-		auto &child_val = values[i];
-		nulls[i] = child_val.IsNull();
-		if (!nulls[i]) {
-			datums[i] = OP::ConvertToPostgres(values[i]);
-		}
-	}
+	PostgresArrayAppendState<OP> append_state(number_of_dimensions);
+	append_state.AppendValueAtDimension(value, 0);
 
 	// Create the array
-	int lower_bound = 1;
-	auto arr = OP::ConstructArray(datums, nulls, &count, &lower_bound);
+	auto datums = append_state.datums;
+	auto nulls = append_state.nulls;
+	auto dimensions = append_state.dimensions;
+	auto lower_bounds = append_state.lower_bounds;
+
+	auto arr = OP::ConstructArray(datums, nulls, number_of_dimensions, dimensions, lower_bounds);
 
 	// Free allocated memory
 	pfree(datums);
 	pfree(nulls);
+	pfree(dimensions);
+	pfree(lower_bounds);
 
 	slot->tts_values[col] = PointerGetDatum(arr);
 }
@@ -322,11 +413,6 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = datum;
 		break;
 	}
-	case BPCHARARRAYOID:
-	case CHARARRAYOID: {
-		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<CHAROID>>>(slot, value, col);
-		break;
-	}
 	case BOOLARRAYOID: {
 		ConvertDuckToPostgresArray<BoolArray>(slot, value, col);
 		break;
@@ -356,8 +442,26 @@ numeric_typmod_scale(int32 typmod)
 	return (((typmod - VARHDRSZ) & 0x7ff) ^ 1024) - 1024;
 }
 
+static duckdb::LogicalType ChildTypeFromArray(Oid array_type) {
+	switch (array_type) {
+		case CHARARRAYOID:
+			return duckdb::LogicalTypeId::TINYINT;
+		case BOOLARRAYOID:
+			return duckdb::LogicalTypeId::BOOLEAN;
+		case INT4ARRAYOID:
+			return duckdb::LogicalTypeId::INTEGER;
+		case INT8ARRAYOID:
+			return duckdb::LogicalTypeId::BIGINT;
+		default:
+			elog(ERROR, "No child type set for Postgres OID %d", array_type);
+	}
+}
+
 duckdb::LogicalType
-ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
+ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
+	auto &type = attribute->atttypid;
+	auto &typmod = attribute->atttypmod;
+	auto dimensions = attribute->attndims;
 	switch (type) {
 	case BOOLOID:
 		return duckdb::LogicalTypeId::BOOLEAN;
@@ -394,19 +498,15 @@ ConvertPostgresToDuckColumnType(Oid type, int32_t typmod) {
 		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
 		return duckdb::LogicalType::JSON();
-	case BPCHARARRAYOID: {
-		auto extra_type_info = duckdb::make_shared<IsBpChar>();
-		auto child_type = duckdb::LogicalType(duckdb::LogicalTypeId::TINYINT, std::move(extra_type_info));
-		return duckdb::LogicalType::LIST(std::move(child_type));
-	}
-	case CHARARRAYOID:
-		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::TINYINT);
 	case BOOLARRAYOID:
-		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::BOOLEAN);
 	case INT4ARRAYOID:
-		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::INTEGER);
-	case INT8ARRAYOID:
-		return duckdb::LogicalType::LIST(duckdb::LogicalTypeId::BIGINT);
+	case INT8ARRAYOID: {
+		auto duck_type = ChildTypeFromArray(type);
+		for (int i = 0; i < dimensions; i++) {
+			duck_type = duckdb::LogicalType::LIST(duck_type);
+		}
+		return duck_type;
+	}
 	default:
 		return duckdb::LogicalType::USER("UnsupportedPostgresType");
 	}
@@ -448,11 +548,14 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDOID;
 	case duckdb::LogicalTypeId::LIST: {
-		auto child_type = duckdb::ListType::GetChildType(type);
-		auto child_type_id = child_type.id();
+		const duckdb::LogicalType *duck_type = &type;
+		while (duck_type->id() == duckdb::LogicalTypeId::LIST) {
+			auto &child_type = duckdb::ListType::GetChildType(*duck_type);
+			duck_type = &child_type;
+		}
+		auto child_type_id = duck_type->id();
+
 		switch (child_type_id) {
-			case duckdb::LogicalTypeId::TINYINT:
-				return CHARARRAYOID;
 			case duckdb::LogicalTypeId::BOOLEAN:
 				return BOOLARRAYOID;
 			case duckdb::LogicalTypeId::INTEGER:
@@ -561,12 +664,11 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 	case duckdb::LogicalTypeId::TINYINT: {
 		auto aux_info = type.GetAuxInfoShrPtr();
 		if (aux_info && dynamic_cast<IsBpChar *>(aux_info.get())) {
-			auto res = DatumGetBpCharPP(value);
 			auto bpchar_length = VARSIZE_ANY_EXHDR(value);
 			auto bpchar_data = VARDATA_ANY(value);
 
 			if (bpchar_length != 1) {
-				elog(ERROR, "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %d", offset);
+				elog(ERROR, "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %llu", offset);
 			}
 			Append<int8_t>(result, bpchar_data[0], offset);
 		} else {
@@ -652,10 +754,11 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
-		auto &child = duckdb::ListVector::GetEntry(result);
-
 		// Convert Datum to ArrayType
 		auto array = DatumGetArrayTypeP(value);
+
+		auto ndims = ARR_NDIM(array);
+		int *dims = ARR_DIMS(array);
 
 		int16 typlen;
 		bool typbyval;
@@ -668,37 +771,57 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		// Deconstruct the array into Datum elements
 		deconstruct_array(array, ARR_ELEMTYPE(array), typlen, typbyval, typalign, &elems, &nulls, &nelems);
 
-		auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(result);
-		auto child_offset = duckdb::ListVector::GetListSize(result);
-		list_data[offset] = duckdb::list_entry_t(
-			child_offset,
-			nelems
-		);
-
-		auto total_elems = child_offset + nelems;
-		duckdb::ListVector::Reserve(result, total_elems);
-		duckdb::ListVector::SetListSize(result, total_elems);
-
-		auto child_type = child.GetType();
-		auto child_id = child_type.id();
-		switch (child_id) {
-			case duckdb::LogicalTypeId::TINYINT:
-			case duckdb::LogicalTypeId::BOOLEAN:
-			case duckdb::LogicalTypeId::BIGINT:
-			case duckdb::LogicalTypeId::INTEGER: {
-				for (int i = 0; i < nelems; i++) {
-					idx_t dest_idx = child_offset + i;
-					if (nulls[i]) {
-						auto &array_mask = duckdb::FlatVector::Validity(child);
-						array_mask.SetInvalid(dest_idx);
-						continue;
-					}
-					ConvertPostgresToDuckValue(elems[i], child, dest_idx);
-				}
-				break;
+		if (ndims == -1) {
+			elog(ERROR, "Array type has an ndims of -1, so it's actually not an array??");
+		}
+		// Set the list_entry_t metadata
+		duckdb::Vector *vec = &result;
+		int write_offset = offset;
+		for (int dim = 0; dim < ndims; dim++) {
+			auto previous_dimension = dim ? dims[dim - 1] : 1;
+			auto dimension = dims[dim];
+			if (vec->GetType().id() != duckdb::LogicalTypeId::LIST) {
+				// TODO: provide a more detailed description of the error
+				elog(ERROR, "Dimensionality of the schema and the data does not match");
 			}
-			default:
-				elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %s", result.GetType().ToString().c_str());
+			auto child_offset = duckdb::ListVector::GetListSize(*vec);
+			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
+			for (int entry = 0; entry < previous_dimension; entry++) {
+				list_data[write_offset + entry] = duckdb::list_entry_t(
+					// All lists in a postgres row are enforced to have the same dimension
+					// [[1,2],[2,3,4]] is not allowed, second list has 3 elements instead of 2
+					child_offset + (dimension * entry),
+					dimension
+				);
+			}
+			auto new_child_size = child_offset + (dimension * previous_dimension);
+			duckdb::ListVector::Reserve(*vec, new_child_size);
+			duckdb::ListVector::SetListSize(*vec, new_child_size);
+			write_offset = child_offset;
+			auto &child = duckdb::ListVector::GetEntry(*vec);
+			vec = &child;
+		}
+		if (ndims == 0) {
+			D_ASSERT(nelems == 0);
+			vec = &duckdb::ListVector::GetEntry(*vec);
+		}
+
+		if (vec->GetType().id() == duckdb::LogicalTypeId::LIST) {
+			// Same as before, but now the data has fewer dimensions than the schema
+			// TODO: provide a more detailed description of the error
+			elog(ERROR, "Dimensionality of the schema and the data does not match");
+		}
+
+		auto child_type = vec->GetType();
+		auto child_id = child_type.id();
+		for (int i = 0; i < nelems; i++) {
+			idx_t dest_idx = write_offset + i;
+			if (nulls[i]) {
+				auto &array_mask = duckdb::FlatVector::Validity(*vec);
+				array_mask.SetInvalid(dest_idx);
+				continue;
+			}
+			ConvertPostgresToDuckValue(elems[i], *vec, dest_idx);
 		}
 		break;
 	}
