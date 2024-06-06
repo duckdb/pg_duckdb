@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+#include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
@@ -489,7 +490,7 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		auto precision = numeric_typmod_precision(typmod);
 		auto scale = numeric_typmod_scale(typmod);
 		if (typmod == -1 || precision < 0 || scale < 0 || precision > 38) {
-			auto extra_type_info = duckdb::make_shared<NumericAsDouble>();
+			auto extra_type_info = duckdb::make_shared_ptr<NumericAsDouble>();
 			return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
 		}
 		return duckdb::LogicalType::DECIMAL(precision, scale);

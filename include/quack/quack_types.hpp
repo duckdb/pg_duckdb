@@ -1,6 +1,8 @@
 #pragma once
 
 #include "duckdb.hpp"
+#include "duckdb/common/shared_ptr.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 
 extern "C" {
 #include "postgres.h"
