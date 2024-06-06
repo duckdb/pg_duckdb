@@ -90,7 +90,7 @@ public:
 };
 
 duckdb::unique_ptr<duckdb::TableRef> PostgresHeapReplacementScan(duckdb::ClientContext &context,
-                                                                 const duckdb::string &table_name,
-                                                                 duckdb::ReplacementScanData *data);
+                                                                 duckdb::ReplacementScanInput &input,
+                                                                 duckdb::optional_ptr<duckdb::ReplacementScanData> data);
 
 } // namespace quack

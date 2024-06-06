@@ -107,6 +107,7 @@
 	(weight) >= NUMERIC_SHORT_WEIGHT_MIN)
 
 #include "duckdb.hpp"
+#include "duckdb/common/extra_type_info.hpp"
 #include <cmath>
 
 extern "C" {
