@@ -70,7 +70,7 @@ PostgresHeapScanLocalState::~PostgresHeapScanLocalState() {
 PostgresHeapScanFunction::PostgresHeapScanFunction()
 	: TableFunction("postgres_heap_scan", {}, PostgresHeapScanFunc, PostgresHeapBind, PostgresHeapInitGlobal,
 					PostgresHeapInitLocal) {
-	named_parameters["table"] = duckdb::LogicalType::POINTER;
+	named_parameters["relid"] = duckdb::LogicalType::UINTEGER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
 	projection_pushdown = true;
 	filter_pushdown = true;
@@ -81,14 +81,14 @@ duckdb::unique_ptr<duckdb::FunctionData>
 PostgresHeapScanFunction::PostgresHeapBind(duckdb::ClientContext &context, duckdb::TableFunctionBindInput &input,
 										   duckdb::vector<duckdb::LogicalType> &return_types,
 										   duckdb::vector<duckdb::string> &names) {
-	auto table = (reinterpret_cast<RangeTblEntry *>(input.named_parameters["table"].GetPointer()));
+	auto relid = input.named_parameters["relid"].GetValue<uint32_t>();
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
-	auto rel = PostgresHeapSeqScan(table);
+	auto rel = PostgresHeapSeqScan(relid);
 	auto tupleDesc = RelationGetDescr(rel.GetRelation());
 
 	if (!tupleDesc) {
-		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", table->relid);
+		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", relid);
 		return nullptr;
 	}
 
@@ -148,37 +148,22 @@ PostgresHeapScanFunction::PostgresHeapScanFunc(duckdb::ClientContext &context, d
 // PostgresHeapReplacementScan
 //
 
-static RangeTblEntry *
-FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
-	ListCell *lc;
-
-	foreach (lc, tables) {
-		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
-		if (table->relid) {
-			auto rel = RelationIdGetRelation(table->relid);
-			if (!RelationIsValid(rel)) {
-				elog(ERROR, "Relation with OID %u is not valid", table->relid);
-				return nullptr;
-			}
-			RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
-			Oid relOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, true);
-			if (table->relid == relOid) {
-				RelationClose(rel);
-				return table;
-			}
-			RelationClose(rel);
-		}
+static Oid
+FindMatchingRelation(const duckdb::string &to_find) {
+	RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
+	Oid relOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, true);
+	if (relOid != InvalidOid) {
+		return relOid;
 	}
-
-	return nullptr;
+	return InvalidOid;
 }
 
 static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>
-CreateFunctionArguments(RangeTblEntry *table, Snapshot snapshot) {
+CreateFunctionArguments(Oid relid, Snapshot snapshot) {
 	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-		duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("table"),
-		duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(table)))));
+		duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("relid"),
+		duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::UINTEGER(relid))));
 
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
 		duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
@@ -186,13 +171,13 @@ CreateFunctionArguments(RangeTblEntry *table, Snapshot snapshot) {
 	return children;
 }
 
-duckdb::unique_ptr<duckdb::TableRef> ReplaceView(RangeTblEntry *view) {
-	auto oid = ObjectIdGetDatum(view->relid);
+duckdb::unique_ptr<duckdb::TableRef> ReplaceView(Oid view) {
+	auto oid = ObjectIdGetDatum(view);
 	Datum viewdef = DirectFunctionCall1(pg_get_viewdef, oid);
 	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
 
 	if (!view_definition) {
-		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", view->relid);
+		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", view);
 	}
 
 	duckdb::Parser parser;
@@ -219,16 +204,16 @@ PostgresHeapReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementS
 	auto &scan_data = reinterpret_cast<PostgresHeapReplacementScanData &>(*data);
 
 	/* Check name against query table list and verify that it is heap table */
-	auto table = FindMatchingHeapRelation(scan_data.m_tables, table_name);
+	auto relid = FindMatchingRelation(table_name);
 
-	if (!table) {
+	if (relid == InvalidOid) {
 		return nullptr;
 	}
 
 	// Check if the Relation is a VIEW
-	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(table->relid));
+	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "Cache lookup failed for relation %u", table->relid);
+		elog(ERROR, "Cache lookup failed for relation %u", relid);
 	}
 
 	auto relForm = (Form_pg_class) GETSTRUCT(tuple);
@@ -236,11 +221,11 @@ PostgresHeapReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementS
 	// Check if the relation is a view
 	if (relForm->relkind == RELKIND_VIEW) {
 		ReleaseSysCache(tuple);
-		return ReplaceView(table);
+		return ReplaceView(relid);
 	}
 	ReleaseSysCache(tuple);
 
-	auto rel = RelationIdGetRelation(table->relid);
+	auto rel = RelationIdGetRelation(relid);
 	/* Allow only heap tables */
 	if (!rel->rd_amhandler || (GetTableAmRoutine(rel->rd_amhandler) != GetHeapamTableAmRoutine())) {
 		/* This doesn't have an access method handler, we cant read from this */
@@ -250,10 +235,9 @@ PostgresHeapReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementS
 	RelationClose(rel);
 
 	// Create POINTER values from the 'table' and 'snapshot' variables
-	auto children = CreateFunctionArguments(table, GetActiveSnapshot());
+	auto children = CreateFunctionArguments(relid, GetActiveSnapshot());
 	auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 	table_function->function = duckdb::make_uniq<duckdb::FunctionExpression>("postgres_heap_scan", std::move(children));
-	table_function->alias = table->alias ? table->alias->aliasname : table_name;
 
 	return std::move(table_function);
 }
