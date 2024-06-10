@@ -1,17 +1,23 @@
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/function/replacement_scan.hpp"
 #include "duckdb/parser/tableref/table_function_ref.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/tableref/subqueryref.hpp"
 #include "duckdb/parser/expression/function_expression.hpp"
+#include "duckdb/parser/statement/select_statement.hpp"
 #include "duckdb/parser/expression/constant_expression.hpp"
 #include "duckdb/parser/expression/comparison_expression.hpp"
 #include "duckdb/parser/expression/columnref_expression.hpp"
 #include "duckdb/parser/qualified_name.hpp"
+#include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "catalog/namespace.h"
 #include "utils/regproc.h"
+#include "utils/syscache.h"
+#include "utils/builtins.h"
 }
 
 #include "quack/quack_heap_scan.hpp"
@@ -24,7 +30,7 @@ namespace quack {
 //
 
 PostgresHeapScanFunctionData::PostgresHeapScanFunctionData(PostgresHeapSeqScan &&relation, Snapshot snapshot)
-    : m_relation(std::move(relation)) {
+	: m_relation(std::move(relation)) {
 	m_relation.SetSnapshot(snapshot);
 }
 
@@ -36,7 +42,7 @@ PostgresHeapScanFunctionData::~PostgresHeapScanFunctionData() {
 //
 
 PostgresHeapScanGlobalState::PostgresHeapScanGlobalState(PostgresHeapSeqScan &relation,
-                                                         duckdb::TableFunctionInitInput &input) {
+														 duckdb::TableFunctionInitInput &input) {
 	elog(DEBUG3, "-- (DuckDB/PostgresHeapScanGlobalState) Running %llu threads -- ", MaxThreads());
 	relation.InitParallelScanState(input);
 }
@@ -62,8 +68,8 @@ PostgresHeapScanLocalState::~PostgresHeapScanLocalState() {
 //
 
 PostgresHeapScanFunction::PostgresHeapScanFunction()
-    : TableFunction("postgres_heap_scan", {}, PostgresHeapScanFunc, PostgresHeapBind, PostgresHeapInitGlobal,
-                    PostgresHeapInitLocal) {
+	: TableFunction("postgres_heap_scan", {}, PostgresHeapScanFunc, PostgresHeapBind, PostgresHeapInitGlobal,
+					PostgresHeapInitLocal) {
 	named_parameters["table"] = duckdb::LogicalType::POINTER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
 	projection_pushdown = true;
@@ -73,8 +79,8 @@ PostgresHeapScanFunction::PostgresHeapScanFunction()
 
 duckdb::unique_ptr<duckdb::FunctionData>
 PostgresHeapScanFunction::PostgresHeapBind(duckdb::ClientContext &context, duckdb::TableFunctionBindInput &input,
-                                           duckdb::vector<duckdb::LogicalType> &return_types,
-                                           duckdb::vector<duckdb::string> &names) {
+										   duckdb::vector<duckdb::LogicalType> &return_types,
+										   duckdb::vector<duckdb::string> &names) {
 	auto table = (reinterpret_cast<RangeTblEntry *>(input.named_parameters["table"].GetPointer()));
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
@@ -94,29 +100,29 @@ PostgresHeapScanFunction::PostgresHeapBind(duckdb::ClientContext &context, duckd
 		names.push_back(col_name);
 		/* Log column name and type */
 		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
-		     duck_type.ToString().c_str());
+			 duck_type.ToString().c_str());
 	}
 	return duckdb::make_uniq<PostgresHeapScanFunctionData>(std::move(rel), snapshot);
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresHeapScanFunction::PostgresHeapInitGlobal(duckdb::ClientContext &context,
-                                                 duckdb::TableFunctionInitInput &input) {
+												 duckdb::TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
 	return duckdb::make_uniq<PostgresHeapScanGlobalState>(bind_data.m_relation, input);
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
 PostgresHeapScanFunction::PostgresHeapInitLocal(duckdb::ExecutionContext &context,
-                                                duckdb::TableFunctionInitInput &input,
-                                                duckdb::GlobalTableFunctionState *gstate) {
+												duckdb::TableFunctionInitInput &input,
+												duckdb::GlobalTableFunctionState *gstate) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
 	return duckdb::make_uniq<PostgresHeapScanLocalState>(bind_data.m_relation);
 }
 
 void
 PostgresHeapScanFunction::PostgresHeapScanFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data_p,
-                                               duckdb::DataChunk &output) {
+											   duckdb::DataChunk &output) {
 	auto &bind_data = data_p.bind_data->CastNoConst<PostgresHeapScanFunctionData>();
 	auto &l_data = data_p.local_state->Cast<PostgresHeapScanLocalState>();
 
@@ -154,12 +160,6 @@ FindMatchingHeapRelation(List *tables, const duckdb::string &to_find) {
 				elog(ERROR, "Relation with OID %u is not valid", table->relid);
 				return nullptr;
 			}
-			/* Allow only heap tables */
-			if (!rel->rd_amhandler || (GetTableAmRoutine(rel->rd_amhandler) != GetHeapamTableAmRoutine())) {
-				/* This doesn't have an access method handler, we cant read from this */
-				RelationClose(rel);
-				return nullptr;
-			}
 			RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
 			Oid relOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, true);
 			if (table->relid == relOid) {
@@ -177,18 +177,43 @@ static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>
 CreateFunctionArguments(RangeTblEntry *table, Snapshot snapshot) {
 	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("table"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(table)))));
+		duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("table"),
+		duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(table)))));
 
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(snapshot)))));
+		duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
+		duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(snapshot)))));
 	return children;
+}
+
+duckdb::unique_ptr<duckdb::TableRef> ReplaceView(RangeTblEntry *view) {
+	auto oid = ObjectIdGetDatum(view->relid);
+	Datum viewdef = DirectFunctionCall1(pg_get_viewdef, oid);
+	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
+
+	if (!view_definition) {
+		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", view->relid);
+	}
+
+	duckdb::Parser parser;
+	parser.ParseQuery(view_definition);
+	auto statements = std::move(parser.statements);
+	if (statements.size() != 1) {
+		elog(ERROR, "View definition contained more than 1 statement!");
+	}
+
+	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
+		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definition);
+	}
+
+	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
+	auto subquery = duckdb::make_uniq<duckdb::SubqueryRef>(std::move(select));
+	return std::move(subquery);
 }
 
 duckdb::unique_ptr<duckdb::TableRef>
 PostgresHeapReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
-                            duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
+							duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
 
 	auto &table_name = input.table_name;
 	auto &scan_data = reinterpret_cast<PostgresHeapReplacementScanData &>(*data);
@@ -199,6 +224,30 @@ PostgresHeapReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementS
 	if (!table) {
 		return nullptr;
 	}
+
+	// Check if the Relation is a VIEW
+	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(table->relid));
+	if (!HeapTupleIsValid(tuple)) {
+		elog(ERROR, "Cache lookup failed for relation %u", table->relid);
+	}
+
+	auto relForm = (Form_pg_class) GETSTRUCT(tuple);
+
+	// Check if the relation is a view
+	if (relForm->relkind == RELKIND_VIEW) {
+		ReleaseSysCache(tuple);
+		return ReplaceView(table);
+	}
+	ReleaseSysCache(tuple);
+
+	auto rel = RelationIdGetRelation(table->relid);
+	/* Allow only heap tables */
+	if (!rel->rd_amhandler || (GetTableAmRoutine(rel->rd_amhandler) != GetHeapamTableAmRoutine())) {
+		/* This doesn't have an access method handler, we cant read from this */
+		RelationClose(rel);
+		return nullptr;
+	}
+	RelationClose(rel);
 
 	// Create POINTER values from the 'table' and 'snapshot' variables
 	auto children = CreateFunctionArguments(table, GetActiveSnapshot());
