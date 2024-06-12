@@ -40,24 +40,25 @@ quack_create_plan(Query *parse, const char *query) {
 		auto &column = preparedResultTypes[i];
 		Oid postgresColumnOid = quack::GetPostgresDuckDBType(column);
 
-		if (OidIsValid(postgresColumnOid)) {
-			HeapTuple tp;
-			Form_pg_type typtup;
-
-			tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
-			if (!HeapTupleIsValid(tp))
-				elog(ERROR, "cache lookup failed for type %u", postgresColumnOid);
-
-			typtup = (Form_pg_type)GETSTRUCT(tp);
-
-			Var *var = makeVar(INDEX_VAR, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
-
-			quackNode->custom_scan_tlist =
-			    lappend(quackNode->custom_scan_tlist,
-			            makeTargetEntry((Expr *)var, i + 1, (char *)preparedQuery->GetNames()[i].c_str(), false));
-
-			ReleaseSysCache(tp);
+		if (!OidIsValid(postgresColumnOid)) {
+			elog(ERROR, "Could not convert DuckDB to Postgres type, likely because the postgres->duckdb conversion was not supported");
 		}
+		HeapTuple tp;
+		Form_pg_type typtup;
+
+		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
+		if (!HeapTupleIsValid(tp))
+			elog(ERROR, "cache lookup failed for type %u", postgresColumnOid);
+
+		typtup = (Form_pg_type)GETSTRUCT(tp);
+
+		Var *var = makeVar(INDEX_VAR, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
+
+		quackNode->custom_scan_tlist =
+			lappend(quackNode->custom_scan_tlist,
+					makeTargetEntry((Expr *)var, i + 1, (char *)preparedQuery->GetNames()[i].c_str(), false));
+
+		ReleaseSysCache(tp);
 	}
 
 	quackNode->custom_private = list_make2(duckdbConnection.release(), preparedQuery.release());
