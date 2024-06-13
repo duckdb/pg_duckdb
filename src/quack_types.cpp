@@ -783,8 +783,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 			auto previous_dimension = dim ? dims[dim - 1] : 1;
 			auto dimension = dims[dim];
 			if (vec->GetType().id() != duckdb::LogicalTypeId::LIST) {
-				// TODO: provide a more detailed description of the error
-				elog(ERROR, "Dimensionality of the schema and the data does not match");
+				elog(ERROR, "Dimensionality of the schema and the data does not match, data contains more dimensions than the amount of dimensions specified by the schema");
 			}
 			auto child_offset = duckdb::ListVector::GetListSize(*vec);
 			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
@@ -809,9 +808,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		}
 
 		if (vec->GetType().id() == duckdb::LogicalTypeId::LIST) {
-			// Same as before, but now the data has fewer dimensions than the schema
-			// TODO: provide a more detailed description of the error
-			elog(ERROR, "Dimensionality of the schema and the data does not match");
+			elog(ERROR, "Dimensionality of the schema and the data does not match, data contains fewer dimensions than the amount of dimensions specified by the schema");
 		}
 
 		auto child_type = vec->GetType();

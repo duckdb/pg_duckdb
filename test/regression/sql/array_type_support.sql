@@ -21,6 +21,16 @@ INSERT INTO int_array_2d VALUES
 SELECT * FROM int_array_2d;
 drop table int_array_2d;
 
+-- INT4 (single dimensional data, two dimensionsal type)
+CREATE TABLE int_array_2d(a INT[][]);
+INSERT INTO int_array_2d VALUES
+    ('{1, 2}'),
+    ('{5, 6, 7}'),
+    ('{11, 12, 13}'),
+    ('{17, 18}');
+SELECT * FROM int_array_2d;
+drop table int_array_2d;
+
 -- INT4 (two dimensional data and type)
 CREATE TABLE int_array_2d(a INT[][]);
 INSERT INTO int_array_2d VALUES
