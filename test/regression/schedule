@@ -4,3 +4,4 @@ test: execution_error
 test: type_support
 test: array_type_support
 test: views
+test: projection_pushdown_unsupported_type
