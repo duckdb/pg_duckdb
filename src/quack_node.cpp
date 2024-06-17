@@ -1,8 +1,12 @@
 
 #include "duckdb.hpp"
 
+extern "C" {
+#include "postgres.h"
+#include "miscadmin.h"
+}
+
 #include "quack/quack_node.hpp"
-#include "quack/quack_heap_scan.hpp"
 #include "quack/quack_types.hpp"
 
 /* global variables */

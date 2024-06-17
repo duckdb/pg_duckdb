@@ -9,7 +9,7 @@ extern "C" {
 #include "executor/tuptable.h"
 }
 
-#include "quack/quack_heap_seq_scan.hpp"
+#include "quack/scan/postgres_scan.hpp"
 
 namespace quack {
 
@@ -21,7 +21,7 @@ duckdb::LogicalType ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute
 Oid GetPostgresDuckDBType(duckdb::LogicalType type);
 void ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset);
 void ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col);
-void InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &threadScanInfo,
-                          PostgresHeapSeqParallelScanState &parallelScanState);
+void InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scanGlobalState,
+                          duckdb::shared_ptr<PostgresScanLocalState> scanLocalState, HeapTupleData *tuple);
 
 } // namespace quack

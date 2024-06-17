@@ -2,6 +2,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "access/table.h"
 #include "catalog/namespace.h"
 #include "commands/copy.h"
 #include "nodes/makefuncs.h"
@@ -12,13 +13,14 @@ extern "C" {
 #include "parser/parse_relation.h"
 #include "tcop/tcopprot.h"
 #include "optimizer/optimizer.h"
+#include "utils/rel.h"
 #include "utils/rls.h"
 #include "utils/lsyscache.h"
 }
 
 #include "quack/utility/copy.hpp"
-#include "quack/quack_heap_scan.hpp"
-#include "quack/quack_duckdb_connection.hpp"
+#include "quack/scan/postgres_scan.hpp"
+#include "quack/quack_duckdb.hpp"
 
 static constexpr char quackCopyS3FilenamePrefix[] = "s3://";
 
@@ -90,7 +92,7 @@ quack_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment 
 		return false;
 	}
 
-	List *tables = NIL;
+	List *rtables = NIL;
 	List *vars = NIL;
 
 	if (copyStmt->query) {
@@ -117,10 +119,10 @@ quack_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment 
 		if (!create_relation_copy_parse_state(pstate, copyStmt, &vars, pstmt->stmt_location, pstmt->stmt_len)) {
 			return false;
 		}
-		tables = pstate->p_rtable;
+		rtables = pstate->p_rtable;
 	}
 
-	auto duckdbConnection = quack::quack_create_duckdb_connection(tables, vars, queryString);
+	auto duckdbConnection = quack::quack_create_duckdb_connection(rtables, nullptr, vars, queryString);
 	auto res = duckdbConnection->context->Query(queryString, false);
 
 	if (res->HasError()) {

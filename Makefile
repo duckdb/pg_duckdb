@@ -4,12 +4,15 @@ MODULE_big = quack
 EXTENSION = quack
 DATA = quack.control $(wildcard quack--*.sql)
 
-SRCS = src/utility/copy.cpp \
+SRCS = src/scan/heap_reader.cpp \
+	   src/scan/index_scan_utils.cpp \
+	   src/scan/postgres_index_scan.cpp \
+	   src/scan/postgres_scan.cpp \
+	   src/scan/postgres_seq_scan.cpp \
+	   src/utility/copy.cpp \
 	   src/quack_detoast.cpp \
-	   src/quack_duckdb_connection.cpp \
+	   src/quack_duckdb.cpp \
 	   src/quack_filter.cpp \
-	   src/quack_heap_scan.cpp \
-	   src/quack_heap_seq_scan.cpp \
 	   src/quack_hooks.cpp \
 	   src/quack_memory_allocator.cpp \
 	   src/quack_node.cpp \

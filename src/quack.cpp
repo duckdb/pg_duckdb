@@ -73,7 +73,6 @@ quack_init_guc(void) {
                             NULL,
                             NULL,
                             NULL);
-
     DefineCustomStringVariable("quack.cloud_secret",
                                "Quack (duckdb) cloud secret GUC. Format is TYPE#ID#SECRET#REGION",
                                NULL,
