@@ -17,10 +17,10 @@ extern "C" {
 #include "utils/syscache.h"
 }
 
+#include "quack/scan/postgres_scan.hpp"
 #include "quack/types/decimal.hpp"
 #include "quack/quack.h"
 #include "quack/quack_filter.hpp"
-#include "quack/quack_heap_seq_scan.hpp"
 #include "quack/quack_detoast.hpp"
 #include "quack/quack_types.hpp"
 
@@ -28,27 +28,30 @@ namespace quack {
 
 struct BoolArray {
 public:
-	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
+	static ArrayType *
+	ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
 		return construct_md_array(datums, nulls, ndims, dims, lower_bound, BOOLOID, sizeof(bool), true, 'c');
 	}
-	static duckdb::LogicalTypeId ExpectedType() {
+	static duckdb::LogicalTypeId
+	ExpectedType() {
 		return duckdb::LogicalTypeId::BOOLEAN;
 	}
-	static Datum ConvertToPostgres(const duckdb::Value &val) {
+	static Datum
+	ConvertToPostgres(const duckdb::Value &val) {
 		return Datum(val.GetValue<bool>());
 	}
 };
 
 template <int32_t OID>
-struct PostgresIntegerOIDMapping {
-};
+struct PostgresIntegerOIDMapping {};
 
 template <>
 struct PostgresIntegerOIDMapping<CHAROID> {
 	static constexpr int32_t postgres_oid = CHAROID;
 	using physical_type = int8_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::TINYINT;
-	static Datum ToDatum(const duckdb::Value &val) {
+	static Datum
+	ToDatum(const duckdb::Value &val) {
 		return Datum(val.GetValue<physical_type>());
 	}
 };
@@ -58,7 +61,8 @@ struct PostgresIntegerOIDMapping<INT2OID> {
 	static constexpr int32_t postgres_oid = INT2OID;
 	using physical_type = int16_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::SMALLINT;
-	static Datum ToDatum(const duckdb::Value &val) {
+	static Datum
+	ToDatum(const duckdb::Value &val) {
 		return Int16GetDatum(val.GetValue<physical_type>());
 	}
 };
@@ -68,7 +72,8 @@ struct PostgresIntegerOIDMapping<INT4OID> {
 	static constexpr int32_t postgres_oid = INT4OID;
 	using physical_type = int32_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::INTEGER;
-	static Datum ToDatum(const duckdb::Value &val) {
+	static Datum
+	ToDatum(const duckdb::Value &val) {
 		return Int32GetDatum(val.GetValue<physical_type>());
 	}
 };
@@ -78,7 +83,8 @@ struct PostgresIntegerOIDMapping<INT8OID> {
 	static constexpr int32_t postgres_oid = INT8OID;
 	using physical_type = int64_t;
 	static constexpr duckdb::LogicalTypeId duck_type_id = duckdb::LogicalTypeId::BIGINT;
-	static Datum ToDatum(const duckdb::Value &val) {
+	static Datum
+	ToDatum(const duckdb::Value &val) {
 		return Int64GetDatum(val.GetValue<physical_type>());
 	}
 };
@@ -86,26 +92,33 @@ struct PostgresIntegerOIDMapping<INT8OID> {
 template <class MAPPING>
 struct PODArray {
 	using physical_type = typename MAPPING::physical_type;
+
 public:
-	static ArrayType *ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
-		return construct_md_array(datums, nulls, ndims, dims, lower_bound, MAPPING::postgres_oid, sizeof(physical_type), true, 'i');
+	static ArrayType *
+	ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, MAPPING::postgres_oid, sizeof(physical_type),
+		                          true, 'i');
 	}
-	static duckdb::LogicalTypeId ExpectedType() {
+	static duckdb::LogicalTypeId
+	ExpectedType() {
 		return MAPPING::duck_type_id;
 	}
-	static Datum ConvertToPostgres(const duckdb::Value &val) {
+	static Datum
+	ConvertToPostgres(const duckdb::Value &val) {
 		return MAPPING::ToDatum(val);
 	}
 };
 
-static void ConvertDouble(TupleTableSlot *slot, double value, idx_t col) {
+static void
+ConvertDouble(TupleTableSlot *slot, double value, idx_t col) {
 	slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT8OID;
 	slot->tts_tupleDescriptor->attrs[col].attbyval = true;
 	memcpy(&slot->tts_values[col], (char *)&value, sizeof(double));
 }
 
 template <class T, class OP = DecimalConversionInteger>
-NumericVar ConvertNumeric(T value, idx_t scale) {
+NumericVar
+ConvertNumeric(T value, idx_t scale) {
 	NumericVar result;
 	auto &sign = result.sign;
 	result.dscale = scale;
@@ -174,7 +187,8 @@ NumericVar ConvertNumeric(T value, idx_t scale) {
 	return result;
 }
 
-static const duckdb::LogicalType &GetChildTypeRecursive(const duckdb::LogicalType &list_type) {
+static const duckdb::LogicalType &
+GetChildTypeRecursive(const duckdb::LogicalType &list_type) {
 	D_ASSERT(list_type.id() == duckdb::LogicalTypeId::LIST);
 	auto &child = duckdb::ListType::GetChildType(list_type);
 	if (child.id() == duckdb::LogicalTypeId::LIST) {
@@ -183,7 +197,8 @@ static const duckdb::LogicalType &GetChildTypeRecursive(const duckdb::LogicalTyp
 	return child;
 }
 
-static idx_t GetDuckDBListDimensionality(const duckdb::LogicalType &list_type, idx_t depth = 0) {
+static idx_t
+GetDuckDBListDimensionality(const duckdb::LogicalType &list_type, idx_t depth = 0) {
 	D_ASSERT(list_type.id() == duckdb::LogicalTypeId::LIST);
 	auto &child = duckdb::ListType::GetChildType(list_type);
 	if (child.id() == duckdb::LogicalTypeId::LIST) {
@@ -198,8 +213,8 @@ template <class OP>
 struct PostgresArrayAppendState {
 public:
 	PostgresArrayAppendState(idx_t number_of_dimensions) : number_of_dimensions(number_of_dimensions) {
-		dimensions = (int *) palloc(number_of_dimensions * sizeof(int));
-		lower_bounds = (int *) palloc(number_of_dimensions * sizeof(int));
+		dimensions = (int *)palloc(number_of_dimensions * sizeof(int));
+		lower_bounds = (int *)palloc(number_of_dimensions * sizeof(int));
 		for (idx_t i = 0; i < number_of_dimensions; i++) {
 			// Initialize everything at -1 to indicate that it isn't set yet
 			dimensions[i] = -1;
@@ -209,8 +224,10 @@ public:
 			lower_bounds[i] = 1;
 		}
 	}
+
 public:
-	void AppendValueAtDimension(const duckdb::Value &value, idx_t dimension) {
+	void
+	AppendValueAtDimension(const duckdb::Value &value, idx_t dimension) {
 		// FIXME: verify that the amount of values does not overflow an `int` ?
 		auto &values = duckdb::ListValue::GetChildren(value);
 		idx_t to_append = values.size();
@@ -242,8 +259,8 @@ public:
 			if (!datums) {
 				// First time we get to the outer most child
 				// Because we traversed all dimensions we know how many values we have to allocate for
-				datums = (Datum *) palloc(expected_values * sizeof(Datum));
-				nulls = (bool *) palloc(expected_values * sizeof(bool));
+				datums = (Datum *)palloc(expected_values * sizeof(Datum));
+				nulls = (bool *)palloc(expected_values * sizeof(bool));
 			}
 
 			for (idx_t i = 0; i < to_append; i++) {
@@ -256,9 +273,11 @@ public:
 			count += to_append;
 		}
 	}
+
 private:
 	idx_t expected_values = 1;
 	idx_t count = 0;
+
 public:
 	Datum *datums = nullptr;
 	bool *nulls = nullptr;
@@ -270,7 +289,8 @@ public:
 } // namespace
 
 template <class OP>
-static void ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
+static void
+ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
 	auto &child_type = GetChildTypeRecursive(value.type());
 	auto child_id = child_type.id();
@@ -398,7 +418,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::UUID);
 		D_ASSERT(value.type().InternalType() == duckdb::PhysicalType::INT128);
 		auto duckdb_uuid = value.GetValue<hugeint_t>();
-		pg_uuid_t *postgres_uuid = (pg_uuid_t *) palloc(sizeof(pg_uuid_t));
+		pg_uuid_t *postgres_uuid = (pg_uuid_t *)palloc(sizeof(pg_uuid_t));
 
 		duckdb_uuid.upper ^= (uint64_t(1) << 63);
 		// Convert duckdb_uuid to bytes and store in postgres_uuid.data
@@ -430,18 +450,17 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 }
 
 static inline int
-numeric_typmod_precision(int32 typmod)
-{
+numeric_typmod_precision(int32 typmod) {
 	return ((typmod - VARHDRSZ) >> 16) & 0xffff;
 }
 
 static inline int
-numeric_typmod_scale(int32 typmod)
-{
+numeric_typmod_scale(int32 typmod) {
 	return (((typmod - VARHDRSZ) & 0x7ff) ^ 1024) - 1024;
 }
 
-static duckdb::LogicalType ChildTypeFromArray(Oid array_type) {
+static duckdb::LogicalType
+ChildTypeFromArray(Oid array_type) {
 	switch (array_type) {
 		case CHARARRAYOID:
 			return duckdb::LogicalTypeId::TINYINT;
@@ -541,9 +560,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		return FLOAT4OID;
 	case duckdb::LogicalTypeId::DOUBLE:
 		return FLOAT8OID;
-	case duckdb::LogicalTypeId::DECIMAL: {
+	case duckdb::LogicalTypeId::DECIMAL:
 		return NUMERICOID;
-	}
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDOID;
 	case duckdb::LogicalTypeId::LIST: {
@@ -588,12 +606,14 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset) {
 	data[offset] = duckdb::StringVector::AddString(result, str);
 }
 
-static bool NumericIsNegative(const NumericVar &numeric) {
+static bool
+NumericIsNegative(const NumericVar &numeric) {
 	return numeric.sign == NUMERIC_NEG;
 }
 
 template <class T, class OP = DecimalConversionInteger>
-T ConvertDecimal(const NumericVar &numeric) {
+T
+ConvertDecimal(const NumericVar &numeric) {
 	auto scale_POWER = OP::GetPowerOfTen(numeric.dscale);
 
 	if (numeric.ndigits == 0) {
@@ -693,8 +713,8 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		Append<duckdb::date_t>(result, duckdb::date_t(static_cast<int32_t>(value + QUACK_DUCK_DATE_OFFSET)), offset);
 		break;
 	case duckdb::LogicalTypeId::TIMESTAMP:
-		Append<duckdb::timestamp_t>(result, duckdb::timestamp_t(static_cast<int64_t>(value + QUACK_DUCK_TIMESTAMP_OFFSET)),
-								offset);
+		Append<duckdb::timestamp_t>(
+		    result, duckdb::timestamp_t(static_cast<int64_t>(value + QUACK_DUCK_TIMESTAMP_OFFSET)), offset);
 		break;
 	case duckdb::LogicalTypeId::FLOAT: {
 		Append<float>(result, DatumGetFloat4(value), offset);
@@ -746,7 +766,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		hugeint_t duckdb_uuid;
 		D_ASSERT(UUID_LEN == sizeof(hugeint_t));
 		for (idx_t i = 0; i < UUID_LEN; i++) {
-			((uint8_t*)&duckdb_uuid)[UUID_LEN-1-i] = ((uint8_t*)uuid)[i];
+			((uint8_t *)&duckdb_uuid)[UUID_LEN - 1 - i] = ((uint8_t *)uuid)[i];
 		}
 		duckdb_uuid.upper ^= (uint64_t(1) << 63);
 		Append(result, duckdb_uuid, offset);
@@ -786,11 +806,9 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
 			for (int entry = 0; entry < previous_dimension; entry++) {
 				list_data[write_offset + entry] = duckdb::list_entry_t(
-					// All lists in a postgres row are enforced to have the same dimension
-					// [[1,2],[2,3,4]] is not allowed, second list has 3 elements instead of 2
-					child_offset + (dimension * entry),
-					dimension
-				);
+				    // All lists in a postgres row are enforced to have the same dimension
+				    // [[1,2],[2,3,4]] is not allowed, second list has 3 elements instead of 2
+				    child_offset + (dimension * entry), dimension);
 			}
 			auto new_child_size = child_offset + (dimension * previous_dimension);
 			duckdb::ListVector::Reserve(*vec, new_child_size);
@@ -915,29 +933,29 @@ HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleRea
 }
 
 void
-InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &threadScanInfo,
-					 PostgresHeapSeqParallelScanState &parallelScanState) {
+InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scanGlobalState,
+                     duckdb::shared_ptr<PostgresScanLocalState> scanLocalState, HeapTupleData *tuple) {
 	HeapTupleReadState heapTupleReadState = {};
 
-	if (parallelScanState.m_count_tuples_only) {
-		threadScanInfo.m_output_vector_size++;
+	if (scanGlobalState->m_count_tuples_only) {
+		scanLocalState->m_output_vector_size++;
 		return;
 	}
 
 	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
-	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * parallelScanState.m_columns.size());
-	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * parallelScanState.m_columns.size());
+	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * scanGlobalState->m_columns.size());
+	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * scanGlobalState->m_columns.size());
 
 	bool validTuple = true;
 
-	for (auto const &[columnIdx, valueIdx] : parallelScanState.m_columns) {
-		values[valueIdx] = HeapTupleFetchNextColumnDatum(threadScanInfo.m_tuple_desc, &threadScanInfo.m_tuple,
-														 heapTupleReadState, columnIdx + 1, &nulls[valueIdx]);
-		if (parallelScanState.m_filters &&
-			(parallelScanState.m_filters->filters.find(valueIdx) != parallelScanState.m_filters->filters.end())) {
-			auto &filter = parallelScanState.m_filters->filters[valueIdx];
+	for (auto const &[columnIdx, valueIdx] : scanGlobalState->m_columns) {
+		values[valueIdx] = HeapTupleFetchNextColumnDatum(scanGlobalState->m_tuple_desc, tuple, heapTupleReadState,
+		                                                 columnIdx + 1, &nulls[valueIdx]);
+		if (scanGlobalState->m_filters &&
+		    (scanGlobalState->m_filters->filters.find(valueIdx) != scanGlobalState->m_filters->filters.end())) {
+			auto &filter = scanGlobalState->m_filters->filters[valueIdx];
 			validTuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
-										  threadScanInfo.m_tuple_desc->attrs[columnIdx].atttypid);
+			                              scanGlobalState->m_tuple_desc->attrs[columnIdx].atttypid);
 		}
 
 		if (!validTuple) {
@@ -945,34 +963,35 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 		}
 	}
 
-	for (idx_t idx = 0; validTuple && idx < parallelScanState.m_projections.size(); idx++) {
+	for (idx_t idx = 0; validTuple && idx < scanGlobalState->m_projections.size(); idx++) {
 		auto &result = output.data[idx];
 		if (nulls[idx]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(threadScanInfo.m_output_vector_size);
+			array_mask.SetInvalid(scanLocalState->m_output_vector_size);
 		} else {
-			idx_t projectionColumnIdx = parallelScanState.m_columns[parallelScanState.m_projections[idx]];
-			if (threadScanInfo.m_tuple_desc->attrs[parallelScanState.m_projections[idx]].attlen == -1) {
+			idx_t projectionColumnIdx = scanGlobalState->m_columns[scanGlobalState->m_projections[idx]];
+			if (scanGlobalState->m_tuple_desc->attrs[scanGlobalState->m_projections[idx]].attlen == -1) {
 				bool shouldFree = false;
 				values[projectionColumnIdx] = DetoastPostgresDatum(
-				    reinterpret_cast<varlena *>(values[projectionColumnIdx]), parallelScanState.m_lock, &shouldFree);
-				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
+				    reinterpret_cast<varlena *>(values[projectionColumnIdx]), scanGlobalState->m_lock, &shouldFree);
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scanLocalState->m_output_vector_size);
 				if (shouldFree) {
 					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));
 				}
 			} else {
-				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, threadScanInfo.m_output_vector_size);
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scanLocalState->m_output_vector_size);
 			}
 		}
 	}
 
 	if (validTuple) {
-		threadScanInfo.m_output_vector_size++;
+		scanLocalState->m_output_vector_size++;
 	}
-	output.SetCardinality(threadScanInfo.m_output_vector_size);
+
+	output.SetCardinality(scanLocalState->m_output_vector_size);
 	output.Verify();
 
-	parallelScanState.m_total_row_count++;
+	scanGlobalState->m_total_row_count++;
 
 	duckdb_free(values);
 	duckdb_free(nulls);
