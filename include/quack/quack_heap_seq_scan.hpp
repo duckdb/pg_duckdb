@@ -65,7 +65,7 @@ public:
 class PostgresHeapSeqScan {
 private:
 public:
-	PostgresHeapSeqScan(RangeTblEntry *table);
+	PostgresHeapSeqScan(Oid relid);
 	~PostgresHeapSeqScan();
 	PostgresHeapSeqScan(const PostgresHeapSeqScan &other) = delete;
 	PostgresHeapSeqScan &operator=(const PostgresHeapSeqScan &other) = delete;
@@ -90,7 +90,7 @@ private:
 	Page PreparePageRead(PostgresHeapSeqScanThreadInfo &threadScanInfo);
 
 private:
-	RangeTblEntry * m_table = nullptr;
+	Oid m_relid = InvalidOid;
 	Relation m_rel = nullptr;
 	Snapshot m_snapshot = nullptr;
 	PostgresHeapSeqParallelScanState m_parallel_scan_state;

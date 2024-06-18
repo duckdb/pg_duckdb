@@ -15,8 +15,8 @@ extern "C" {
 #include <thread>
 
 namespace quack {
-PostgresHeapSeqScan::PostgresHeapSeqScan(RangeTblEntry *table)
-    : m_table(table), m_rel(nullptr), m_snapshot(nullptr) {
+PostgresHeapSeqScan::PostgresHeapSeqScan(Oid relid)
+    : m_relid(relid), m_rel(nullptr), m_snapshot(nullptr) {
 }
 
 PostgresHeapSeqScan::~PostgresHeapSeqScan() {
@@ -26,15 +26,15 @@ PostgresHeapSeqScan::~PostgresHeapSeqScan() {
 }
 
 PostgresHeapSeqScan::PostgresHeapSeqScan(PostgresHeapSeqScan &&other)
-    : m_table(other.m_table), m_rel(nullptr) {
+    : m_relid(other.m_relid), m_rel(nullptr) {
 	other.CloseRelation();
-	other.m_table = nullptr;
+	other.m_relid = InvalidOid;
 }
 
 Relation
 PostgresHeapSeqScan::GetRelation() {
-	if (m_table && m_rel == nullptr) {
-		m_rel = RelationIdGetRelation(m_table->relid);
+	if (m_relid != InvalidOid && m_rel == nullptr) {
+		m_rel = RelationIdGetRelation(m_relid);
 	}
 	return m_rel;
 }

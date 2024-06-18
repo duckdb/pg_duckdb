@@ -67,3 +67,4 @@ SELECT count(*) FROM public.t, other.t;
 DROP TABLE other.t;
 DROP SCHEMA other;
 RESET search_path;
+drop table t;
