@@ -223,7 +223,7 @@ public:
 			expected_values *= to_append;
 		}
 		if (dimensions[dimension] != to_append) {
-			elog(ERROR, "Expected %d values in list at dimension %d, found %d instead", dimensions[dimension], dimension, to_append);
+			throw duckdb::InvalidInputException("Expected %d values in list at dimension %d, found %d instead", dimensions[dimension], dimension, to_append);
 		}
 
 		auto &child_type = duckdb::ListType::GetChildType(value.type());
@@ -234,7 +234,7 @@ public:
 				if (child_val.IsNull()) {
 					// Postgres arrays can not contains nulls at the array level
 					// i.e {{1,2}, NULL, {3,4}} is not supported
-					elog(ERROR, "Returned LIST contains a NULL at an intermediate dimension (not the value level), which is not supported in Postgres");
+					throw duckdb::InvalidInputException("Returned LIST contains a NULL at an intermediate dimension (not the value level), which is not supported in Postgres");
 				}
 				AppendValueAtDimension(child_val, dimension + 1);
 			}
@@ -367,27 +367,23 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		auto scale = duckdb::DecimalType::GetScale(value.type());
 		switch (physical_type) {
 			case duckdb::PhysicalType::INT16: {
-				elog(INFO, "SMALLINT");
 				numeric_var = ConvertNumeric<int16_t>(value.GetValueUnsafe<int16_t>(), scale);
 				break;
 			}
 			case duckdb::PhysicalType::INT32: {
-				elog(INFO, "INTEGER");
 				numeric_var = ConvertNumeric<int32_t>(value.GetValueUnsafe<int32_t>(), scale);
 				break;
 			}
 			case duckdb::PhysicalType::INT64: {
-				elog(INFO, "BIGINT");
 				numeric_var = ConvertNumeric<int64_t>(value.GetValueUnsafe<int64_t>(), scale);
 				break;
 			}
 			case duckdb::PhysicalType::INT128: {
-				elog(INFO, "HUGEINT");
 				numeric_var = ConvertNumeric<hugeint_t, DecimalConversionHugeint>(value.GetValueUnsafe<hugeint_t>(), scale);
 				break;
 			}
 			default: {
-				elog(ERROR, "Unrecognized physical type for DECIMAL value");
+				throw duckdb::InternalException("Unrecognized physical type for DECIMAL value");
 				break;
 			}
 		}
@@ -427,7 +423,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default:
-		elog(ERROR, "(DuckDB/ConvertDuckToPostgresValue) Unsuported quack type: %d", oid);
+		throw duckdb::NotImplementedException("(DuckDB/ConvertDuckToPostgresValue) Unsuported quack type: %d", oid);
 	}
 }
 
@@ -454,7 +450,7 @@ static duckdb::LogicalType ChildTypeFromArray(Oid array_type) {
 		case INT8ARRAYOID:
 			return duckdb::LogicalTypeId::BIGINT;
 		default:
-			elog(ERROR, "No child type set for Postgres OID %d", array_type);
+			throw duckdb::NotImplementedException("No child type set for Postgres OID %d", array_type);
 	}
 }
 
@@ -564,7 +560,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 			case duckdb::LogicalTypeId::BIGINT:
 				return INT8ARRAYOID;
 			default:
-				elog(ERROR, "(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
+				throw duckdb::InvalidInputException("(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
 		}
 	}
 	default: {
@@ -669,7 +665,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 			auto bpchar_data = VARDATA_ANY(value);
 
 			if (bpchar_length != 1) {
-				elog(ERROR, "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %llu", offset);
+				throw duckdb::InternalException("Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %llu", offset);
 			}
 			Append<int8_t>(result, bpchar_data[0], offset);
 		} else {
@@ -737,7 +733,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 				break;
 			}
 			default: {
-				elog(ERROR, "Unrecognized physical type for DECIMAL value");
+				throw duckdb::InternalException("Unrecognized physical type (%s) for DECIMAL value", duckdb::EnumUtil::ToString(physical_type));
 				break;
 			}
 		}
@@ -773,7 +769,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		deconstruct_array(array, ARR_ELEMTYPE(array), typlen, typbyval, typalign, &elems, &nulls, &nelems);
 
 		if (ndims == -1) {
-			elog(ERROR, "Array type has an ndims of -1, so it's actually not an array??");
+			throw duckdb::InternalException("Array type has an ndims of -1, so it's actually not an array??");
 		}
 		// Set the list_entry_t metadata
 		duckdb::Vector *vec = &result;
@@ -782,8 +778,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 			auto previous_dimension = dim ? dims[dim - 1] : 1;
 			auto dimension = dims[dim];
 			if (vec->GetType().id() != duckdb::LogicalTypeId::LIST) {
-				// TODO: provide a more detailed description of the error
-				elog(ERROR, "Dimensionality of the schema and the data does not match");
+				throw duckdb::InvalidInputException("Dimensionality of the schema and the data does not match, data contains more dimensions than the amount of dimensions specified by the schema");
 			}
 			auto child_offset = duckdb::ListVector::GetListSize(*vec);
 			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
@@ -804,13 +799,17 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		}
 		if (ndims == 0) {
 			D_ASSERT(nelems == 0);
+			auto child_offset = duckdb::ListVector::GetListSize(*vec);
+			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
+			list_data[write_offset] = duckdb::list_entry_t(
+				child_offset,
+				0
+			);
 			vec = &duckdb::ListVector::GetEntry(*vec);
 		}
 
 		if (vec->GetType().id() == duckdb::LogicalTypeId::LIST) {
-			// Same as before, but now the data has fewer dimensions than the schema
-			// TODO: provide a more detailed description of the error
-			elog(ERROR, "Dimensionality of the schema and the data does not match");
+			throw duckdb::InvalidInputException("Dimensionality of the schema and the data does not match, data contains fewer dimensions than the amount of dimensions specified by the schema");
 		}
 
 		auto child_type = vec->GetType();
@@ -827,7 +826,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	}
 	default:
-		elog(ERROR, "(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %s", result.GetType().ToString().c_str());
+		throw duckdb::NotImplementedException("(DuckDB/ConvertPostgresToDuckValue) Unsupported quack type: %s", result.GetType().ToString().c_str());
 		break;
 	}
 }
@@ -968,6 +967,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 	if (validTuple) {
 		threadScanInfo.m_output_vector_size++;
 	}
+	output.SetCardinality(threadScanInfo.m_output_vector_size);
+	output.Verify();
 
 	parallelScanState.m_total_row_count++;
 
