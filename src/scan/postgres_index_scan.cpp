@@ -14,6 +14,7 @@ extern "C" {
 #include "quack/scan/index_scan_utils.hpp"
 #include "quack/scan/postgres_index_scan.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_error.hpp"
 
 namespace quack {
 
@@ -93,7 +94,7 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
 	auto tupleDesc = RelationGetDescr(rel);
 
 	if (!tupleDesc) {
-		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", rel->rd_id);
+		elog_quack(ERROR, "Failed to get tuple descriptor for relation with OID %u", rel->rd_id);
 		return nullptr;
 	}
 
@@ -104,7 +105,7 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
 		return_types.push_back(duck_type);
 		names.push_back(col_name);
 		/* Log column name and type */
-		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
+		elog_quack(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
 

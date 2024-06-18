@@ -1,4 +1,5 @@
 #include "quack/scan/index_scan_utils.hpp"
+#include "quack/quack_error.hpp"
 
 namespace quack {
 
@@ -35,7 +36,7 @@ fix_indexqual_operand(Node *node, IndexOptInfo *index, int indexcol) {
 			result->varattno = indexcol + 1;
 			return (Node *)result;
 		} else
-			elog(ERROR, "index key does not match expected index column");
+			elog_quack(ERROR, "index key does not match expected index column");
 	}
 
 	/* It's an index expression, so find and cross-check the expression */
@@ -43,7 +44,7 @@ fix_indexqual_operand(Node *node, IndexOptInfo *index, int indexcol) {
 	for (pos = 0; pos < index->ncolumns; pos++) {
 		if (index->indexkeys[pos] == 0) {
 			if (indexpr_item == NULL)
-				elog(ERROR, "too few entries in indexprs list");
+				elog_quack(ERROR, "too few entries in indexprs list");
 			if (pos == indexcol) {
 				Node *indexkey;
 
@@ -55,14 +56,14 @@ fix_indexqual_operand(Node *node, IndexOptInfo *index, int indexcol) {
 					                 exprCollation((const Node *)lfirst(indexpr_item)), 0);
 					return (Node *)result;
 				} else
-					elog(ERROR, "index key does not match expected index column");
+					elog_quack(ERROR, "index key does not match expected index column");
 			}
 			indexpr_item = lnext(index->indexprs, indexpr_item);
 		}
 	}
 
 	/* Oops... */
-	elog(ERROR, "index key does not match expected index column");
+	elog_quack(ERROR, "index key does not match expected index column");
 	return NULL; /* keep compiler quiet */
 }
 
@@ -105,7 +106,7 @@ fix_indexqual_clause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node 
 		/* Replace the indexkey expression with an index Var. */
 		nt->arg = (Expr *)fix_indexqual_operand((Node *)(Node *)nt->arg, index, indexcol);
 	} else
-		elog(ERROR, "unsupported indexqual type: %d", (int)nodeTag(clause));
+		elog_quack(ERROR, "unsupported indexqual type: %d", (int)nodeTag(clause));
 
 	return clause;
 }

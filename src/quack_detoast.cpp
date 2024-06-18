@@ -18,6 +18,7 @@ extern "C" {
 }
 
 #include "quack/quack_types.hpp"
+#include "quack/quack_error.hpp"
 #include "quack/quack_detoast.hpp"
 
 /*
@@ -77,7 +78,7 @@ _toast_decompress_datum(struct varlena *attr) {
 	case TOAST_LZ4_COMPRESSION_ID:
 		return _lz4_decompress_datum(attr);
 	default:
-		elog(ERROR, "invalid compression method id %d", TOAST_COMPRESS_METHOD(attr));
+		elog_quack(ERROR, "invalid compression method id %d", TOAST_COMPRESS_METHOD(attr));
 		return NULL; /* keep compiler quiet */
 	}
 }
@@ -90,7 +91,7 @@ _toast_fetch_datum(struct varlena *attr, std::mutex &lock) {
 	int32 attrsize;
 
 	if (!VARATT_IS_EXTERNAL_ONDISK(attr))
-		elog(ERROR, "toast_fetch_datum shouldn't be called for non-ondisk datums");
+		elog_quack(ERROR, "toast_fetch_datum shouldn't be called for non-ondisk datums");
 
 	/* Must copy to access aligned fields */
 	VARATT_EXTERNAL_GET_POINTER(toast_pointer, attr);

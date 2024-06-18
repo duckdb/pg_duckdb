@@ -21,6 +21,7 @@ extern "C" {
 #include "quack/utility/copy.hpp"
 #include "quack/scan/postgres_scan.hpp"
 #include "quack/quack_duckdb.hpp"
+#include "quack/quack_error.hpp"
 
 static constexpr char quackCopyS3FilenamePrefix[] = "s3://";
 
@@ -126,7 +127,7 @@ quack_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment 
 	auto res = duckdbConnection->context->Query(queryString, false);
 
 	if (res->HasError()) {
-		elog(WARNING, "(Quack) %s", res->GetError().c_str());
+		elog_quack(WARNING, "(Quack) %s", res->GetError().c_str());
 		return false;
 	}
 

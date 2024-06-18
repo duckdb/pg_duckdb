@@ -8,6 +8,7 @@ extern "C" {
 
 #include "quack/quack_filter.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_error.hpp"
 
 namespace quack {
 
@@ -53,7 +54,7 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid typeOid) {
 		break;
 	}
 	default:
-		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported quack type: %d", typeOid);
+		elog_quack(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported quack type: %d", typeOid);
 	}
 }
 

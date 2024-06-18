@@ -2,6 +2,7 @@
 
 #include "quack/scan/postgres_seq_scan.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_error.hpp"
 
 namespace quack {
 
@@ -14,7 +15,7 @@ PostgresSeqScanGlobalState::PostgresSeqScanGlobalState(Relation relation, duckdb
       m_heap_reader_global_state(duckdb::make_shared_ptr<HeapReaderGlobalState>(relation)), m_relation(relation) {
 	m_global_state->InitGlobalState(input);
 	m_global_state->m_tuple_desc = RelationGetDescr(m_relation);
-	elog(DEBUG3, "-- (DuckDB/PostgresReplacementScanGlobalState) Running %lu threads -- ", MaxThreads());
+	elog_quack(DEBUG3, "-- (DuckDB/PostgresReplacementScanGlobalState) Running %lu threads -- ", MaxThreads());
 }
 
 PostgresSeqScanGlobalState::~PostgresSeqScanGlobalState() {
@@ -76,7 +77,7 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 	auto tupleDesc = RelationGetDescr(rel);
 
 	if (!tupleDesc) {
-		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", relid);
+		elog_quack(ERROR, "Failed to get tuple descriptor for relation with OID %u", relid);
 		RelationClose(rel);
 		return nullptr;
 	}
@@ -88,7 +89,7 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 		return_types.push_back(duck_type);
 		names.push_back(col_name);
 		/* Log column name and type */
-		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
+		elog_quack(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
 

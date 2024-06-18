@@ -13,6 +13,7 @@ extern "C" {
 #include "quack/quack_node.hpp"
 #include "quack/quack_planner.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_error.hpp"
 #include "quack/quack_utils.hpp"
 
 static PlannerInfo *
@@ -58,7 +59,7 @@ quack_create_plan(Query *query, const char *queryString, ParamListInfo boundPara
 	auto preparedQuery = context->Prepare(queryString);
 
 	if (preparedQuery->HasError()) {
-		elog(WARNING, "(Quack) %s", preparedQuery->GetError().c_str());
+		elog_quack(WARNING, "(Quack) %s", preparedQuery->GetError().c_str());
 		return nullptr;
 	}
 
@@ -71,14 +72,14 @@ quack_create_plan(Query *query, const char *queryString, ParamListInfo boundPara
 		Oid postgresColumnOid = quack::GetPostgresDuckDBType(column);
 
 		if (!OidIsValid(postgresColumnOid)) {
-			elog(ERROR, "Could not convert DuckDB to Postgres type, likely because the postgres->duckdb conversion was not supported");
+			elog_quack(ERROR, "Could not convert DuckDB to Postgres type, likely because the postgres->duckdb conversion was not supported");
 		}
 		HeapTuple tp;
 		Form_pg_type typtup;
 
 		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
 		if (!HeapTupleIsValid(tp))
-			elog(ERROR, "cache lookup failed for type %u", postgresColumnOid);
+			elog_quack(ERROR, "cache lookup failed for type %u", postgresColumnOid);
 
 		typtup = (Form_pg_type)GETSTRUCT(tp);
 

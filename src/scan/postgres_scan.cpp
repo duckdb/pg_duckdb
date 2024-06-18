@@ -26,6 +26,7 @@ extern "C" {
 
 #include "quack/scan/postgres_scan.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_error.hpp"
 
 namespace quack {
 
@@ -115,18 +116,18 @@ ReplaceView(Oid view) {
 	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
 
 	if (!view_definition) {
-		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", view);
+		elog_quack(ERROR, "Could not retrieve view definition for Relation with relid: %u", view);
 	}
 
 	duckdb::Parser parser;
 	parser.ParseQuery(view_definition);
 	auto statements = std::move(parser.statements);
 	if (statements.size() != 1) {
-		elog(ERROR, "View definition contained more than 1 statement!");
+		elog_quack(ERROR, "View definition contained more than 1 statement!");
 	}
 
 	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
-		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definition);
+		elog_quack(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definition);
 	}
 
 	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
@@ -151,7 +152,7 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	// Check if the Relation is a VIEW
 	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "Cache lookup failed for relation %u", relid);
+		elog_quack(ERROR, "Cache lookup failed for relation %u", relid);
 	}
 
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);

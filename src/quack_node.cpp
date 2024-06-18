@@ -8,6 +8,9 @@ extern "C" {
 
 #include "quack/quack_node.hpp"
 #include "quack/quack_types.hpp"
+#include "quack/quack_error.hpp"
+
+#include <mutex>
 
 /* global variables */
 CustomScanMethods quack_scan_scan_methods;
@@ -19,6 +22,7 @@ typedef struct QuackScanState {
 	CustomScanState css; /* must be first field */
 	duckdb::Connection *duckdbConnection;
 	duckdb::PreparedStatement *preparedStatement;
+	std::mutex execution_lock;
 	bool is_executed;
 	bool fetch_next;
 	duckdb::unique_ptr<duckdb::QueryResult> queryResult;
@@ -41,9 +45,11 @@ Quack_CreateCustomScanState(CustomScan *cscan) {
 	CustomScanState *customScanState = &quackScanState->css;
 	quackScanState->duckdbConnection = (duckdb::Connection *)linitial(cscan->custom_private);
 	quackScanState->preparedStatement = (duckdb::PreparedStatement *)lsecond(cscan->custom_private);
+	customScanState->methods = &quack_scan_exec_methods;
 	quackScanState->is_executed = false;
 	quackScanState->fetch_next = true;
-	customScanState->methods = &quack_scan_exec_methods;
+	std::allocator<std::mutex> allocator;
+	allocator.construct(&quackScanState->execution_lock);
 	return (Node *)customScanState;
 }
 
@@ -60,14 +66,17 @@ Quack_ExecCustomScan(CustomScanState *node) {
 	TupleTableSlot *slot = quackScanState->css.ss.ss_ScanTupleSlot;
 	MemoryContext oldContext;
 
-	if (!quackScanState->is_executed) {
-		quackScanState->queryResult = quackScanState->preparedStatement->Execute();
-		quackScanState->columnCount = quackScanState->queryResult->ColumnCount();
-		quackScanState->is_executed = true;
+	{
+		std::lock_guard<std::mutex> l(quackScanState->execution_lock);
+		if (!quackScanState->is_executed) {
+			quackScanState->queryResult = quackScanState->preparedStatement->Execute();
+			quackScanState->columnCount = quackScanState->queryResult->ColumnCount();
+			quackScanState->is_executed = true;
+		}
 	}
 
 	if (quackScanState->queryResult->HasError()) {
-		elog(ERROR, "Quack execute returned an error: %s", quackScanState->queryResult->GetError().c_str());
+		elog_quack(ERROR, "Quack execute returned an error: %s", quackScanState->queryResult->GetError().c_str());
 	}
 
 	if (quackScanState->fetch_next) {

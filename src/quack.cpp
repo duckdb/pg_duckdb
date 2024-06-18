@@ -6,6 +6,7 @@ extern "C" {
 #include "quack/quack.h"
 #include "quack/quack_node.hpp"
 #include "quack/quack_utils.hpp"
+#include "quack/quack_error.hpp"
 
 static void quack_init_guc(void);
 
@@ -35,12 +36,12 @@ quack_cloud_secret_check_hooks(char **newval, void **extra, GucSource source) {
 	}
 
 	if (tokens.size() != 4) {
-		elog(WARNING, "Incorrect quack.cloud_secret format.");
+		elog_quack(WARNING, "Incorrect quack.cloud_secret format.");
 		return false;
 	}
 
 	if (tokens[0].compare("S3")) {
-		elog(WARNING, "quack.cloud_secret supports only S3.");
+		elog_quack(WARNING, "quack.cloud_secret supports only S3.");
 		return false;
 	}
 
