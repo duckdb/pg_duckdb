@@ -78,8 +78,9 @@ quack_create_plan(Query *query, const char *queryString, ParamListInfo boundPara
 		Form_pg_type typtup;
 
 		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
-		if (!HeapTupleIsValid(tp))
+		if (!HeapTupleIsValid(tp)) {
 			elog_quack(ERROR, "cache lookup failed for type %u", postgresColumnOid);
+		}
 
 		typtup = (Form_pg_type)GETSTRUCT(tp);
 

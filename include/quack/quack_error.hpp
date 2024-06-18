@@ -19,15 +19,18 @@ extern "C" {
 };
 
 #define elog_quack(elevel, ...)  						\
-	quack::Logger::GetLock().lock(); 									\
+	do {												\
+	auto &l = quack::Logger::GetLock();					\
+	l.lock(); 											\
 	PG_TRY();											\
 	{													\
 		ereport(elevel, errmsg_internal(__VA_ARGS__)); 	\
 	}													\
-	PG_CATCH();										\
+	PG_CATCH();											\
 	{													\
-		quack::Logger::GetLock().unlock();								\
+		l.unlock();										\
 		PG_RE_THROW();									\
 	}													\
-	quack::Logger::GetLock().unlock();									\
 	PG_END_TRY();										\
+	l.unlock();											\
+	} while(0)
