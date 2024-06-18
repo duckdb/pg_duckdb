@@ -144,8 +144,6 @@ INSERT INTO smallint_numeric SELECT a FROM (VALUES
 	(45.12)
 ) t(a);
 SELECT * FROM smallint_numeric;
-INFO:  SMALLINT
-INFO:  SMALLINT
    a   
 -------
   0.23
@@ -161,8 +159,6 @@ INSERT INTO integer_numeric SELECT a FROM (VALUES
 	(45.000012::NUMERIC(9,6))
 ) t(a);
 SELECT * FROM integer_numeric;
-INFO:  INTEGER
-INFO:  INTEGER
      a      
 ------------
  243.345035
@@ -178,8 +174,6 @@ INSERT INTO bigint_numeric SELECT a FROM (VALUES
 	(12.000000000001::NUMERIC(18,12))
 ) t(a);
 SELECT * FROM bigint_numeric;
-INFO:  BIGINT
-INFO:  BIGINT
           a          
 ---------------------
  856324.111122223333
@@ -195,8 +189,6 @@ INSERT INTO hugeint_numeric SELECT a FROM (VALUES
 	(123456789.000000000000000000000001::NUMERIC(38,24))
 ) t(a);
 SELECT * FROM hugeint_numeric;
-INFO:  HUGEINT
-INFO:  HUGEINT
                     a                    
 -----------------------------------------
  32942348563242.111222333444555666777888
