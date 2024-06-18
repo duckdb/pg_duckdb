@@ -40,7 +40,7 @@ jobs:
           git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
           pushd postgres
           git branch
-          ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl
+          ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml
           make -j8 install
 
       - name: Build and test pg_quack extension

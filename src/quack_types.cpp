@@ -505,7 +505,7 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		return duck_type;
 	}
 	default:
-		throw duckdb::NotImplementedException("(DuckDB/ConvertPostgresToDuckColumnType) Unsupported quack type: %d", type);
+		return duckdb::LogicalType::USER("UnsupportedPostgresType");
 	}
 }
 
@@ -564,8 +564,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		}
 	}
 	default: {
-		throw duckdb::InvalidInputException("(DuckDB/GetPostgresDuckDBType) Unsupported quack type: %s", type.ToString().c_str());
-		break;
+		return InvalidOid;
 	}
 	}
 }
