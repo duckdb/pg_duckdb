@@ -799,6 +799,12 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		}
 		if (ndims == 0) {
 			D_ASSERT(nelems == 0);
+			auto child_offset = duckdb::ListVector::GetListSize(*vec);
+			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
+			list_data[write_offset] = duckdb::list_entry_t(
+				child_offset,
+				0
+			);
 			vec = &duckdb::ListVector::GetEntry(*vec);
 		}
 
@@ -961,6 +967,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresHeapSeqScanThreadInfo &t
 	if (validTuple) {
 		threadScanInfo.m_output_vector_size++;
 	}
+	output.SetCardinality(threadScanInfo.m_output_vector_size);
+	output.Verify();
 
 	parallelScanState.m_total_row_count++;
 

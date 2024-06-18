@@ -1,6 +1,13 @@
 drop extension if exists quack;
 create extension quack;
 
+-- INT4 (zero dimension)
+CREATE TABLE int_array_0d(a INT[]);
+INSERT INTO int_array_0d SELECT CAST(a as INT[]) FROM (VALUES
+    ('{}')
+) t(a);
+SELECT * FROM int_array_0d;
+
 -- INT4 (single dimension)
 CREATE TABLE int_array_1d(a INT[]);
 INSERT INTO int_array_1d SELECT CAST(a as INT[]) FROM (VALUES
@@ -60,6 +67,7 @@ INSERT INTO bool_array_1d SELECT CAST(a as BOOL[]) FROM (VALUES
 ) t(a);
 SELECT * FROM bool_array_1d;
 
+DROP TABLE int_array_0d;
 DROP TABLE int_array_1d;
 DROP TABLE int_array_2d;
 DROP TABLE bigint_array_1d;
