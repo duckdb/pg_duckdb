@@ -1,0 +1,43 @@
+CREATE TABLE t(a INT, b TEXT);
+INSERT INTO t SELECT g % 1000, MD5(g::TEXT) FROM generate_series(1,20000) g;
+SELECT COUNT(*) FROM t WHERE a % 100 = 0;
+ count_star() 
+--------------
+          200
+(1 row)
+
+CREATE MATERIALIZED VIEW tv AS SELECT * FROM t WHERE a % 100 = 0;
+SELECT COUNT(*) FROM tv;
+ count_star() 
+--------------
+          200
+(1 row)
+
+INSERT INTO t SELECT g % 1000, MD5(g::TEXT) FROM generate_series(1,20000) g;
+SELECT COUNT(*) FROM t WHERE a % 100 = 0;
+ count_star() 
+--------------
+          400
+(1 row)
+
+REFRESH MATERIALIZED VIEW tv;
+SELECT COUNT(*) FROM tv;
+ count_star() 
+--------------
+          400
+(1 row)
+
+SELECT COUNT(*) FROM t WHERE (a % 100 = 0) AND (a < 30);
+ count_star() 
+--------------
+           40
+(1 row)
+
+SELECT COUNT(*) FROM tv WHERE a < 30;
+ count_star() 
+--------------
+           40
+(1 row)
+
+DROP MATERIALIZED VIEW tv;
+DROP TABLE t;
