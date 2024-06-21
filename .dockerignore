@@ -1,0 +1,5 @@
+*.o
+*.so
+*.dylib
+.depend
+Dockerfile
