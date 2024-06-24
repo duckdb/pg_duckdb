@@ -2,7 +2,7 @@
 
 MODULE_big = quack
 EXTENSION = quack
-DATA = quack.control $(wildcard quack--*.sql)
+DATA = quack.control $(wildcard sql/quack--*.sql)
 
 SRCS = src/utility/copy.cpp \
 	   src/quack_detoast.cpp \
