@@ -973,7 +973,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 			if (scanGlobalState->m_tuple_desc->attrs[scanGlobalState->m_projections[idx]].attlen == -1) {
 				bool shouldFree = false;
 				values[projectionColumnIdx] = DetoastPostgresDatum(
-				    reinterpret_cast<varlena *>(values[projectionColumnIdx]), scanGlobalState->m_lock, &shouldFree);
+				    reinterpret_cast<varlena *>(values[projectionColumnIdx]), &shouldFree);
 				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scanLocalState->m_output_vector_size);
 				if (shouldFree) {
 					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));

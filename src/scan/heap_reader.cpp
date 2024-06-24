@@ -9,6 +9,7 @@ extern "C" {
 #include "utils/rel.h"
 }
 
+#include "quack/quack_process_lock.hpp"
 #include "quack/scan/heap_reader.hpp"
 #include "quack/quack_types.hpp"
 
@@ -81,11 +82,11 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 	while (block != InvalidBlockNumber) {
 		if (m_read_next_page) {
 			CHECK_FOR_INTERRUPTS();
-			m_global_state->m_lock.lock();
+			QuackProcessLock::GetLock().lock();
 			block = m_block_number;
 			m_buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
 			LockBuffer(m_buffer, BUFFER_LOCK_SHARE);
-			m_global_state->m_lock.unlock();
+			QuackProcessLock::GetLock().unlock();
 			page = PreparePageRead();
 			m_read_next_page = false;
 		}
@@ -104,8 +105,6 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 
 			if (!m_page_tuples_all_visible) {
 				visible = HeapTupleSatisfiesVisibility(&m_tuple, m_global_state->m_snapshot, m_buffer);
-				HeapCheckForSerializableConflictOut(visible, m_relation, &m_tuple, m_buffer,
-				                                    m_global_state->m_snapshot);
 				/* skip tuples not visible to this snapshot */
 				if (!visible)
 					continue;
@@ -117,9 +116,9 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 
 		/* No more items on current page */
 		if (!m_page_tuples_left) {
-			m_global_state->m_lock.lock();
+			QuackProcessLock::GetLock().lock();
 			UnlockReleaseBuffer(m_buffer);
-			m_global_state->m_lock.unlock();
+			QuackProcessLock::GetLock().unlock();
 			m_read_next_page = true;
 			/* Handle cancel request */
 			if (QueryCancelPending) {

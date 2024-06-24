@@ -22,7 +22,7 @@ public:
 	void InitGlobalState(duckdb::TableFunctionInitInput &input);
 	Snapshot m_snapshot;
 	TupleDesc m_tuple_desc;
-	std::mutex m_lock;
+	std::mutex m_lock; // Lock for one replacement scan
 	bool m_count_tuples_only;
 	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_columns;
 	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_projections;
