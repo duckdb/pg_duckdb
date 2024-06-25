@@ -21,6 +21,8 @@ extern "C" {
 #include "quack/quack_duckdb_connection.hpp"
 
 static constexpr char quackCopyS3FilenamePrefix[] = "s3://";
+static constexpr char quackCopyGCSFilenamePrefix[] = "gs://";
+static constexpr char quackCopyR2FilenamePrefix[] = "r2://";
 
 static bool
 create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List **vars, int stmt_location,
@@ -80,8 +82,10 @@ bool
 quack_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment *queryEnv, uint64 *processed) {
 	CopyStmt *copyStmt = (CopyStmt *)pstmt->utilityStmt;
 
-	/* Copy `filename` should start with S3 prefix */
-	if (duckdb::string(copyStmt->filename).rfind(quackCopyS3FilenamePrefix, 0)) {
+	/* Copy `filename` should start with S3/GS/R2 prefix */
+	if (duckdb::string(copyStmt->filename).rfind(quackCopyS3FilenamePrefix, 0) &&
+	    duckdb::string(copyStmt->filename).rfind(quackCopyGCSFilenamePrefix, 0) &&
+		duckdb::string(copyStmt->filename).rfind(quackCopyR2FilenamePrefix, 0)) {
 		return false;
 	}
 
