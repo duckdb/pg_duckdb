@@ -61,9 +61,7 @@ static void ExecuteQuery(QuackScanState *state) {
 	auto &query_result = state->queryResult;
 	auto &connection = state->duckdbConnection;
 
-	duckdb::vector<duckdb::Value> empty;
-	// NOTE: streaming results is disabled for now for simplicity
-	auto pending = prepared.PendingQuery(empty, /*streaming =*/false);
+	auto pending = prepared.PendingQuery();
 	duckdb::PendingExecutionResult execution_result;
 	do {
 		execution_result = pending->ExecuteTask();
@@ -80,7 +78,7 @@ static void ExecuteQuery(QuackScanState *state) {
 			ProcessInterrupts();
 			elog(ERROR, "Query cancelled");
 		}
-	} while (!duckdb::PendingQueryResult::IsFinished(execution_result));
+	} while (!duckdb::PendingQueryResult::IsFinishedOrBlocked(execution_result));
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
 		elog(ERROR, "Quack execute returned an error: %s", pending->GetError().c_str());
 	}
