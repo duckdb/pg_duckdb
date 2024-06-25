@@ -4,6 +4,7 @@ extern "C" {
 #include "commands/extension.h"
 #include "nodes/nodes.h"
 #include "tcop/utility.h"
+#include "tcop/pquery.h"
 #include "utils/rel.h"
 #include "optimizer/optimizer.h"
 }
@@ -44,10 +45,21 @@ is_catalog_table(List *tables) {
 	return false;
 }
 
+static bool
+is_allowed_statement() {
+	/* For `SELECT ..` ActivePortal doesn't exist */
+	if (!ActivePortal)
+		return true;
+	/* `EXPLAIN ...` should be allowed */
+	if (ActivePortal->commandTag == CMDTAG_EXPLAIN)
+		return true;
+	return false;
+}
+
 static PlannedStmt *
 quack_planner(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams) {
-	if (quack_execution && is_quack_extension_registered() && parse->rtable && !is_catalog_table(parse->rtable) &&
-	    parse->commandType == CMD_SELECT) {
+	if (quack_execution && is_allowed_statement() && is_quack_extension_registered() && parse->rtable &&
+	    !is_catalog_table(parse->rtable) && parse->commandType == CMD_SELECT) {
 		PlannedStmt *quackPlan = quack_plan_node(parse, query_string, cursorOptions, boundParams);
 		if (quackPlan) {
 			return quackPlan;
