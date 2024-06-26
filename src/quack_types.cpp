@@ -362,9 +362,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 			break;
 		}
 		NumericVar numeric_var;
-		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::DECIMAL);
+		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::DECIMAL || value.type().id() == duckdb::LogicalTypeId::HUGEINT);
 		auto physical_type = value.type().InternalType();
-		auto scale = duckdb::DecimalType::GetScale(value.type());
+		const bool is_decimal = value.type().id() == duckdb::LogicalTypeId::DECIMAL;
+		uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
+
 		switch (physical_type) {
 			case duckdb::PhysicalType::INT16: {
 				numeric_var = ConvertNumeric<int16_t>(value.GetValueUnsafe<int16_t>(), scale);
