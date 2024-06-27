@@ -30,7 +30,7 @@ else
 	QUACK_BUILD_DUCKDB = release
 endif
 
-override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -std=c++17 -Wno-sign-compare ${QUACK_BUILD_CXX_FLAGS}
+override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2 -std=c++17 -Wno-sign-compare ${QUACK_BUILD_CXX_FLAGS}
 
 SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src -lstdc++ -llz4
 
