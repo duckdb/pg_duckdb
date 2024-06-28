@@ -1,4 +1,4 @@
 [submodule "third_party/duckdb"]
 	path = third_party/duckdb
 	url = https://github.com/duckdb/duckdb.git
-	hash = d0d36d321f84091ce98e83559f8143bfb9f4a81e
+	hash = 1f98600c2cf8722a6d2f2d805bb4af5e701319fc
