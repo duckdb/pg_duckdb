@@ -16,6 +16,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/quack_hooks.cpp \
 	   src/quack_memory_allocator.cpp \
 	   src/quack_node.cpp \
+	   src/quack_options.cpp \
 	   src/quack_planner.cpp \
 	   src/quack_types.cpp \
 	   src/quack.cpp
