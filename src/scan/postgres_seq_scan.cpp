@@ -23,6 +23,14 @@ PostgresSeqScanGlobalState::PostgresSeqScanGlobalState(Relation rel, duckdb::Tab
 	elog(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 
+static constexpr int32_t block_thread_threshold = 2024;
+
+idx_t
+PostgresSeqScanGlobalState::MaxThreads() const {
+	return RelationGetNumberOfBlocks(m_rel) < block_thread_threshold ? 1 : 2;
+}
+
+
 PostgresSeqScanGlobalState::~PostgresSeqScanGlobalState() {
 }
 
@@ -34,7 +42,9 @@ PostgresSeqScanLocalState::PostgresSeqScanLocalState(Relation rel,
                                                      duckdb::shared_ptr<HeapReaderGlobalState> heap_reder_global_state,
                                                      duckdb::shared_ptr<PostgresScanGlobalState> global_state) {
 	m_local_state = duckdb::make_shared_ptr<PostgresScanLocalState>(global_state.get());
-	m_heap_table_reader = duckdb::make_uniq<HeapReader>(rel, heap_reder_global_state, global_state, m_local_state);
+	m_heap_reader_local_state = duckdb::make_shared_ptr<HeapReaderLocalState>(rel, heap_reder_global_state);
+	m_heap_table_reader = duckdb::make_uniq<HeapReader>(rel, heap_reder_global_state, m_heap_reader_local_state,
+	                                                    global_state, m_local_state);
 }
 
 PostgresSeqScanLocalState::~PostgresSeqScanLocalState() {
@@ -81,8 +91,8 @@ PostgresSeqScanFunction::PostgresSeqScanInitLocal(duckdb::ExecutionContext &cont
                                                   duckdb::TableFunctionInitInput &input,
                                                   duckdb::GlobalTableFunctionState *gstate) {
 	auto global_state = reinterpret_cast<PostgresSeqScanGlobalState *>(gstate);
-	return duckdb::make_uniq<PostgresSeqScanLocalState>(
-	    global_state->m_rel, global_state->m_heap_reader_global_state, global_state->m_global_state);
+	return duckdb::make_uniq<PostgresSeqScanLocalState>(global_state->m_rel, global_state->m_heap_reader_global_state,
+	                                                    global_state->m_global_state);
 }
 
 void
@@ -98,9 +108,9 @@ PostgresSeqScanFunction::PostgresSeqScanFunc(duckdb::ClientContext &context, duc
 		return;
 	}
 
-	auto hasTuple = local_state.m_heap_table_reader->ReadPageTuples(output);
+	auto has_tuple = local_state.m_heap_table_reader->ReadPageTuples(output);
 
-	if (!hasTuple || local_state.m_heap_table_reader->GetCurrentBlockNumber() == InvalidBlockNumber) {
+	if (!has_tuple || local_state.m_heap_table_reader->GetCurrentBuffer() == InvalidBuffer) {
 		local_state.m_local_state->m_exhausted_scan = true;
 	}
 }
