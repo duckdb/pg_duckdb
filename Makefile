@@ -4,7 +4,8 @@ MODULE_big = quack
 EXTENSION = quack
 DATA = quack.control $(wildcard sql/quack--*.sql)
 
-SRCS = src/scan/heap_reader.cpp \
+SRCS = src/scan/heap_reader_worker.cpp \
+	   src/scan/heap_reader.cpp \
 	   src/scan/index_scan_utils.cpp \
 	   src/scan/postgres_index_scan.cpp \
 	   src/scan/postgres_scan.cpp \

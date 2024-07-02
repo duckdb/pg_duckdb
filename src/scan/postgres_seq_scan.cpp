@@ -130,7 +130,7 @@ PostgresSeqScanFunction::PostgresSeqScanFunc(duckdb::ClientContext &context, duc
 
 	auto has_tuple = localState.m_heap_table_reader->ReadPageTuples(output);
 
-	if (!has_tuple || localState.m_heap_table_reader->GetCurrentBlockNumber() == InvalidBlockNumber) {
+	if (!has_tuple || localState.m_heap_table_reader->GetCurrentBuffer() == InvalidBuffer) {
 		localState.m_local_state->m_exhausted_scan = true;
 	}
 }
