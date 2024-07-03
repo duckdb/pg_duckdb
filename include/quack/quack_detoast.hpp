@@ -10,6 +10,6 @@ extern "C" {
 
 namespace quack {
 
-Datum DetoastPostgresDatum(struct varlena *value, std::mutex &lock, bool *shouldFree);
+Datum DetoastPostgresDatum(struct varlena *value, bool *shouldFree);
 
 } // namespace quack

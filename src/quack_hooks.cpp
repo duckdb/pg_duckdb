@@ -30,7 +30,7 @@ is_catalog_table(List *tables) {
 			/* Check Subquery rtable list if any table is from PG catalog */
 			if (is_catalog_table(table->subquery->rtable)) {
 				return true;
-			};
+			}
 		}
 		if (table->relid) {
 			auto rel = RelationIdGetRelation(table->relid);

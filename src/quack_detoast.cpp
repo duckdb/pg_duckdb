@@ -17,6 +17,7 @@ extern "C" {
 #include "utils/expandeddatum.h"
 }
 
+#include "quack/quack_process_lock.hpp"
 #include "quack/quack_types.hpp"
 #include "quack/quack_detoast.hpp"
 
@@ -83,7 +84,7 @@ _toast_decompress_datum(struct varlena *attr) {
 }
 
 static struct varlena *
-_toast_fetch_datum(struct varlena *attr, std::mutex &lock) {
+_toast_fetch_datum(struct varlena *attr) {
 	Relation toastrel;
 	struct varlena *result;
 	struct varatt_external toast_pointer;
@@ -108,21 +109,21 @@ _toast_fetch_datum(struct varlena *attr, std::mutex &lock) {
 	if (attrsize == 0)
 		return result;
 
-	lock.lock();
+	QuackProcessLock::GetLock().lock();
 	toastrel = table_open(toast_pointer.va_toastrelid, AccessShareLock);
 	table_relation_fetch_toast_slice(toastrel, toast_pointer.va_valueid, attrsize, 0, attrsize, result);
 	table_close(toastrel, AccessShareLock);
-	lock.unlock();
+	QuackProcessLock::GetLock().unlock();
 
 	return result;
 }
 
 Datum
-DetoastPostgresDatum(struct varlena *attr, std::mutex &lock, bool *shouldFree) {
+DetoastPostgresDatum(struct varlena *attr, bool *shouldFree) {
 	struct varlena *toastedValue = nullptr;
 	*shouldFree = true;
 	if (VARATT_IS_EXTERNAL_ONDISK(attr)) {
-		toastedValue = _toast_fetch_datum(attr, lock);
+		toastedValue = _toast_fetch_datum(attr);
 		if (VARATT_IS_COMPRESSED(toastedValue)) {
 			struct varlena *tmp = toastedValue;
 			toastedValue = _toast_decompress_datum(tmp);
@@ -132,7 +133,7 @@ DetoastPostgresDatum(struct varlena *attr, std::mutex &lock, bool *shouldFree) {
 		struct varatt_indirect redirect;
 		VARATT_EXTERNAL_GET_POINTER(redirect, attr);
 		toastedValue = (struct varlena *)redirect.pointer;
-		toastedValue = reinterpret_cast<struct varlena *>(DetoastPostgresDatum(attr, lock, shouldFree));
+		toastedValue = reinterpret_cast<struct varlena *>(DetoastPostgresDatum(attr, shouldFree));
 		if (attr == (struct varlena *)redirect.pointer) {
 			struct varlena *result;
 			result = (struct varlena *)(VARSIZE_ANY(attr));

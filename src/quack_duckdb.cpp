@@ -9,8 +9,10 @@ extern "C" {
 #include "utils/lsyscache.h"
 }
 
-#include "quack/quack_duckdb_connection.hpp"
-#include "quack/quack_heap_scan.hpp"
+#include "quack/quack_duckdb.hpp"
+#include "quack/scan/postgres_scan.hpp"
+#include "quack/scan/postgres_seq_scan.hpp"
+#include "quack/scan/postgres_index_scan.hpp"
 #include "quack/quack_utils.hpp"
 
 #include <string>
@@ -100,27 +102,32 @@ quack_open_database() {
 }
 
 duckdb::unique_ptr<duckdb::Connection>
-quack_create_duckdb_connection(List *tables, List *neededColumns, const char *query) {
+quack_create_duckdb_connection(List *rtables, PlannerInfo *plannerInfo, List *neededColumns, const char *query) {
 	auto db = quack::quack_open_database();
 
 	/* Add tables */
 	db->instance->config.replacement_scans.emplace_back(
-	    quack::PostgresHeapReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, quack::PostgresHeapReplacementScanData>(
-	        tables, neededColumns, query));
+	    quack::PostgresReplacementScan,
+	    duckdb::make_uniq_base<duckdb::ReplacementScanData, quack::PostgresReplacementScanData>(
+	        rtables, plannerInfo, neededColumns, query));
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
 	// Add the postgres_scan inserted by the replacement scan
 	auto &context = *connection->context;
-	quack::PostgresHeapScanFunction heap_scan_fun;
-	duckdb::CreateTableFunctionInfo heap_scan_info(heap_scan_fun);
+
+	quack::PostgresSeqScanFunction seq_scan_fun;
+	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);
+
+	quack::PostgresIndexScanFunction index_scan_fun;
+	duckdb::CreateTableFunctionInfo index_scan_info(index_scan_fun);
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 	auto &instance = *db->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
-	catalog.CreateTableFunction(context, &heap_scan_info);
+	catalog.CreateTableFunction(context, &seq_scan_info);
+	catalog.CreateTableFunction(context, &index_scan_info);
 	context.transaction.Commit();
 
 	auto quackSecrets = read_quack_secrets();
