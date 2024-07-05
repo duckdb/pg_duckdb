@@ -1,7 +1,16 @@
 name: pg_quack Build and Test
 on:
-  - push
-  - pull_request
+  push:
+    paths:
+      - 'src/**'
+      - 'test/**'
+      - 'include/**'
+      - 'sql/**'
+      - Makefile
+      - Makefile.global
+      - quack.control
+      - third_party/duckdb
+      - '.github/workflows/**'
 
 jobs:
   build-and-test:
