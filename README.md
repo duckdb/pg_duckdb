@@ -19,8 +19,8 @@ SET quack.execution = false;
 
 ## Features
 
-* `SELECT` queries are optimistically executed by DuckDB; if DuckDB cannot
-  support the query for any reason, execution falls back to Postgres.
+* `SELECT` queries are executed by the DuckDB engine and can directly read Postgres tables.
+* If DuckDB cannot support the query for any reason, execution falls back to Postgres.
 * Able to read [data types][datatypes] that exist in both Postgres and DuckDB. The
   following data types are supported: numeric, character, binary, date/time,
   boolean, uuid, json, and arrays (see "Limitations").
