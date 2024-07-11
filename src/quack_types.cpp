@@ -584,7 +584,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		}
 	}
 	default: {
-		return InvalidOid;
+		elog(ERROR, "Could not convert DuckDB type: %s to Postgres type", type.ToString().c_str());
 	}
 	}
 }
