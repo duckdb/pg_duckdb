@@ -1,19 +1,13 @@
 CREATE TABLE t(a INT);
 INSERT INTO t SELECT g % 10 from generate_series(1,1000000) g;
-SET client_min_messages to 'DEBUG3';
+SET client_min_messages to 'DEBUG1';
 SELECT COUNT(*) FROM t;
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresReplacementScanGlobalState) Running 1 threads -- 
  count_star() 
 --------------
       1000000
 (1 row)
 
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresReplacementScanGlobalState) Running 1 threads -- 
  a | count_star() 
 ---+--------------
  6 |       100000
@@ -24,18 +18,12 @@ DEBUG:  -- (DuckDB/PostgresReplacementScanGlobalState) Running 1 threads --
 
 SET quack.max_threads_per_query to 4;
 SELECT COUNT(*) FROM t;
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresReplacementScanGlobalState) Running 4 threads -- 
  count_star() 
 --------------
       1000000
 (1 row)
 
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresHeapBind) Column name: a, Type: INTEGER --
-DEBUG:  -- (DuckDB/PostgresReplacementScanGlobalState) Running 4 threads -- 
  a | count_star() 
 ---+--------------
  6 |       100000

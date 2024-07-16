@@ -32,6 +32,14 @@ BEGIN
 END;
 $func$;
 
+CREATE OR REPLACE FUNCTION iceberg_scan(path text)
+RETURNS SETOF record LANGUAGE 'plpgsql' AS
+$func$
+BEGIN
+   RAISE EXCEPTION 'Function `iceberg_scan(TEXT)` only works with Duckdb execution.';
+END;
+$func$;
+
 CREATE SCHEMA quack;
 SET search_path TO quack;
 
@@ -58,5 +66,13 @@ $$ LANGUAGE PLpgSQL;
 
 CREATE TRIGGER quack_secret_r2_tr BEFORE INSERT OR UPDATE ON secrets
 FOR EACH ROW EXECUTE PROCEDURE quack_secret_r2_check();
+
+CREATE TABLE extensions (
+   name TEXT NOT NULL,
+   enabled BOOL DEFAULT TRUE
+);
+
+CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
+    LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 
 RESET search_path;
