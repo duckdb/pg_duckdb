@@ -27,6 +27,12 @@ typedef struct QuackScanState {
 	duckdb::idx_t currentRow;
 } QuackScanState;
 
+static void CleanupQuackScanState(QuackScanState *state) {
+	state->queryResult.reset();
+	delete state->preparedStatement;
+	delete state->duckdbConnection;
+}
+
 /* static callbacks */
 static Node *Quack_CreateCustomScanState(CustomScan *cscan);
 static void Quack_BeginCustomScan(CustomScanState *node, EState *estate, int eflags);
@@ -54,6 +60,37 @@ Quack_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) {
 	HOLD_CANCEL_INTERRUPTS();
 }
 
+static void ExecuteQuery(QuackScanState *state) {
+	auto &prepared = *state->preparedStatement;
+	auto &query_result = state->queryResult;
+	auto &connection = state->duckdbConnection;
+
+	auto pending = prepared.PendingQuery();
+	duckdb::PendingExecutionResult execution_result;
+	do {
+		execution_result = pending->ExecuteTask();
+		if (QueryCancelPending) {
+			// Send an interrupt
+			connection->Interrupt();
+			auto &executor = duckdb::Executor::Get(*connection->context);
+			// Wait for all tasks to terminate
+			executor.CancelTasks();
+
+			// Delete the scan state
+			CleanupQuackScanState(state);
+			// Process the interrupt on the Postgres side
+			ProcessInterrupts();
+			elog(ERROR, "Query cancelled");
+		}
+	} while (!duckdb::PendingQueryResult::IsFinishedOrBlocked(execution_result));
+	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
+		elog(ERROR, "Quack execute returned an error: %s", pending->GetError().c_str());
+	}
+	query_result = pending->Execute();
+	state->columnCount = query_result->ColumnCount();
+	state->is_executed = true;
+}
+
 static TupleTableSlot *
 Quack_ExecCustomScan(CustomScanState *node) {
 	QuackScanState *quackScanState = (QuackScanState *)node;
@@ -61,13 +98,7 @@ Quack_ExecCustomScan(CustomScanState *node) {
 	MemoryContext oldContext;
 
 	if (!quackScanState->is_executed) {
-		quackScanState->queryResult = quackScanState->preparedStatement->Execute();
-		quackScanState->columnCount = quackScanState->queryResult->ColumnCount();
-		quackScanState->is_executed = true;
-	}
-
-	if (quackScanState->queryResult->HasError()) {
-		elog(ERROR, "Quack execute returned an error: %s", quackScanState->queryResult->GetError().c_str());
+		ExecuteQuery(quackScanState);
 	}
 
 	if (quackScanState->fetch_next) {
@@ -113,9 +144,7 @@ Quack_ExecCustomScan(CustomScanState *node) {
 void
 Quack_EndCustomScan(CustomScanState *node) {
 	QuackScanState *quackScanState = (QuackScanState *)node;
-	quackScanState->queryResult.reset();
-	delete quackScanState->preparedStatement;
-	delete quackScanState->duckdbConnection;
+	CleanupQuackScanState(quackScanState);
 	RESUME_CANCEL_INTERRUPTS();
 }
 
