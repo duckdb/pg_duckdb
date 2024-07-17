@@ -1084,4 +1084,67 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 	duckdb_free(nulls);
 }
 
+void
+InsertTupleValuesIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scan_global_state,
+                           duckdb::shared_ptr<PostgresScanLocalState> scan_local_state, Datum *values, bool *nulls) {
+
+	if (scan_global_state->m_count_tuples_only) {
+		scan_local_state->m_output_vector_size++;
+		return;
+	}
+
+	bool valid_tuple = true;
+
+	/* First we are fetching all required columns ordered by column id
+	 * and than we need to write this tuple into output vector. Output column id list
+	 * could be out of order so we need to match column values from ordered list.
+	 */
+
+	/* Read heap tuple with all required columns. */
+	for (auto const &[columnIdx, valueIdx] : scan_global_state->m_read_columns_ids) {
+		if (scan_global_state->m_filters &&
+		    (scan_global_state->m_filters->filters.find(valueIdx) != scan_global_state->m_filters->filters.end())) {
+			auto &filter = scan_global_state->m_filters->filters[valueIdx];
+			valid_tuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
+			                               scan_global_state->m_tuple_desc->attrs[columnIdx].atttypid);
+		}
+
+		if (!valid_tuple) {
+			break;
+		}
+	}
+
+	/* Write tuple columns in output vector. */
+	for (idx_t idx = 0; valid_tuple && idx < scan_global_state->m_output_columns_ids.size(); idx++) {
+		auto &result = output.data[idx];
+		if (nulls[idx]) {
+			auto &array_mask = duckdb::FlatVector::Validity(result);
+			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
+		} else {
+			idx_t output_column_idx =
+			    scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
+			if (scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]].attlen == -1) {
+				bool should_free = false;
+				values[output_column_idx] =
+				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[output_column_idx]), &should_free);
+				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
+				if (should_free) {
+					duckdb_free(reinterpret_cast<void *>(values[output_column_idx]));
+				}
+			} else {
+				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
+			}
+		}
+	}
+
+	if (valid_tuple) {
+		scan_local_state->m_output_vector_size++;
+		scan_global_state->m_total_row_count++;
+	}
+
+	if (!(scan_global_state->m_total_row_count % 100000)) {
+		elog(WARNING, "JOE %d", scan_global_state->m_total_row_count.load());
+	}
+}
+
 } // namespace pgduckdb

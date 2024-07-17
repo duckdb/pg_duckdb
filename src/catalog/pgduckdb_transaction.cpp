@@ -41,8 +41,10 @@ FindMatchingRelEntry(Oid relid, PlannerInfo *planner_info) {
 	int i = 1;
 	RelOptInfo *node = nullptr;
 	for (; i < planner_info->simple_rel_array_size; i++) {
-		if (planner_info->simple_rte_array[i]->rtekind == RTE_SUBQUERY && planner_info->simple_rel_array[i]) {
+		if (planner_info->simple_rte_array[i]->rtekind == RTE_SUBQUERY && planner_info->simple_rel_array[i]
+			&& planner_info->simple_rel_array[i]->subroot) {
 			node = FindMatchingRelEntry(relid, planner_info->simple_rel_array[i]->subroot);
+			//node = FindMatchingRelEntry(relid, planner_info->simple_rte_array[i]->subquery);
 			if (node) {
 				return node;
 			}
@@ -106,12 +108,20 @@ SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
 	ReleaseSysCache(tuple);
 
 	Path *node_path = nullptr;
+	RelOptInfo *node = nullptr;
 
 	if (planner_info) {
-		auto node = FindMatchingRelEntry(rel_oid, planner_info);
-		if (node) {
-			node_path = get_cheapest_fractional_path(node, 0.0);
+		node = FindMatchingRelEntry(rel_oid, planner_info);
+		ListCell *lc;
+		/* We should prefer IndexOnlyScan */
+		foreach (lc, node->pathlist) {
+			Path *p = (Path *)lfirst(lc);
+			if (p->pathtype == T_IndexOnlyScan) {
+				node_path = p;
+			}
 		}
+		if (node && (node_path == nullptr))
+			node_path = get_cheapest_fractional_path(node, 0.0);
 	}
 
 	unique_ptr<PostgresTable> table;
@@ -119,14 +129,14 @@ SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
 	info.table = entry_name;
 	Cardinality cardinality = node_path ? node_path->rows : 1;
 	if (IsIndexScan(node_path)) {
-		RangeTblEntry *rte = planner_rt_fetch(node_path->parent->relid, planner_info);
-		rel_oid = rte->relid;
-		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
+		auto is_indexonly_scan = node_path->pathtype == T_IndexOnlyScan;
+		if (!PostgresTable::PopulateIndexColumns(info, rel_oid, node_path, is_indexonly_scan)) {
 			return nullptr;
 		}
-		table = make_uniq<PostgresIndexTable>(catalog, *schema, info, cardinality, snapshot, node_path, planner_info);
+		table = make_uniq<PostgresIndexTable>(catalog, *schema, info, cardinality, snapshot, is_indexonly_scan,
+		                                      node_path, planner_info, rel_oid);
 	} else {
-		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
+		if (!PostgresTable::PopulateHeapColumns(info, rel_oid, snapshot)) {
 			return nullptr;
 		}
 		table = make_uniq<PostgresHeapTable>(catalog, *schema, info, cardinality, snapshot, rel_oid);
@@ -175,5 +185,3 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 }
 
 } // namespace duckdb
-
-// namespace duckdb
