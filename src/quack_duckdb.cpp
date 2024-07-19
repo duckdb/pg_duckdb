@@ -70,7 +70,7 @@ quack_open_database() {
 	// config.SetOption("threads", "8");
 	// config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
 	config.SetOptionByName("extension_directory", quackGetExtensionDirectory());
-	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+	return duckdb::make_uniq<duckdb::DuckDB>("test.duckdb", &config);
 }
 
 duckdb::unique_ptr<duckdb::Connection>
@@ -80,8 +80,8 @@ quack_create_duckdb_connection(List *rtables, PlannerInfo *plannerInfo, List *ne
 	/* Add tables */
 	db->instance->config.replacement_scans.emplace_back(
 	    quack::PostgresReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, quack::PostgresReplacementScanData>(
-	        rtables, plannerInfo, neededColumns, query));
+	    duckdb::make_uniq_base<duckdb::ReplacementScanData, quack::PostgresReplacementScanData>(rtables, plannerInfo,
+	                                                                                            neededColumns, query));
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 

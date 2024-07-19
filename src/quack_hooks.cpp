@@ -1,8 +1,10 @@
 extern "C" {
 #include "postgres.h"
+
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
+#include "nodes/primnodes.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
 #include "utils/rel.h"
@@ -10,7 +12,10 @@ extern "C" {
 }
 
 #include "quack/quack.h"
+#include "quack/quack_ddl.hpp"
+#include "quack/quack_pg_list.h"
 #include "quack/quack_planner.hpp"
+#include "quack/quack_table_am.hpp"
 #include "quack/utility/copy.hpp"
 
 static planner_hook_type PrevPlannerHook = NULL;
@@ -46,6 +51,35 @@ is_catalog_table(List *tables) {
 }
 
 static bool
+contains_duckdb_table(List *rte_list) {
+	foreach_node(RangeTblEntry, rte, rte_list) {
+		if (rte->rtekind == RTE_SUBQUERY) {
+			/* Check Subquery rtable list if any table is from PG catalog */
+			if (contains_duckdb_table(rte->subquery->rtable)) {
+				return true;
+			}
+		}
+		if (rte->relid) {
+			auto rel = RelationIdGetRelation(rte->relid);
+			if (is_duckdb_table_am(rel->rd_tableam)) {
+				RelationClose(rel);
+				return true;
+			}
+			RelationClose(rel);
+		}
+	}
+	return false;
+}
+
+static bool
+needs_quack_execution(Query *parse) {
+	if (parse->commandType == CMD_UTILITY) {
+		return false;
+	}
+	return contains_duckdb_table(parse->rtable);
+}
+
+static bool
 is_allowed_statement() {
 	/* For `SELECT ..` ActivePortal doesn't exist */
 	if (!ActivePortal)
@@ -58,11 +92,20 @@ is_allowed_statement() {
 
 static PlannedStmt *
 quack_planner(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams) {
-	if (quack_execution && is_allowed_statement() && is_quack_extension_registered() && parse->rtable &&
-	    !is_catalog_table(parse->rtable) && parse->commandType == CMD_SELECT) {
-		PlannedStmt *quackPlan = quack_plan_node(parse, query_string, cursorOptions, boundParams);
-		if (quackPlan) {
-			return quackPlan;
+	if (is_quack_extension_registered()) {
+		if (quack_execution && is_allowed_statement() && parse->rtable && !is_catalog_table(parse->rtable) &&
+		    parse->commandType == CMD_SELECT) {
+			PlannedStmt *quackPlan = quack_plan_node(parse, query_string, cursorOptions, boundParams);
+			if (quackPlan) {
+				return quackPlan;
+			}
+		}
+
+		if (needs_quack_execution(parse)) {
+			PlannedStmt *quackPlan = quack_plan_node(parse, query_string, cursorOptions, boundParams);
+			if (quackPlan) {
+				return quackPlan;
+			}
 		}
 	}
 
@@ -85,6 +128,10 @@ quack_utility(PlannedStmt *pstmt, const char *queryString, bool readOnlyTree, Pr
 			}
 			return;
 		}
+	}
+
+	if (is_quack_extension_registered()) {
+		quack_handle_ddl(parsetree, queryString);
 	}
 
 	if (PrevProcessUtilityHook) {

@@ -72,7 +72,34 @@ CREATE TABLE extensions (
    enabled BOOL DEFAULT TRUE
 );
 
+CREATE TABLE tables (
+    relid regclass
+);
+
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
+
+CREATE FUNCTION duckdb_am_handler(internal)
+RETURNS table_am_handler
+AS 'MODULE_PATHNAME'
+LANGUAGE C;
+
+CREATE ACCESS METHOD duckdb
+    TYPE TABLE
+    HANDLER duckdb_am_handler;
+
+CREATE FUNCTION quack_drop_table_trigger() RETURNS event_trigger
+    AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE EVENT TRIGGER quack_drop_table_trigger ON sql_drop
+    EXECUTE FUNCTION quack_drop_table_trigger();
+
+CREATE FUNCTION quack_create_table_trigger() RETURNS event_trigger
+    AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE EVENT TRIGGER quack_create_table_trigger ON ddl_command_end
+    WHEN tag IN ('CREATE TABLE', 'CREATE TABLE AS')
+    EXECUTE FUNCTION quack_create_table_trigger();
+
 
 RESET search_path;

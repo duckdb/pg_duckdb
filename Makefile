@@ -10,6 +10,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/scan/postgres_scan.cpp \
 	   src/scan/postgres_seq_scan.cpp \
 	   src/utility/copy.cpp \
+	   src/quack_ddl.cpp \
 	   src/quack_detoast.cpp \
 	   src/quack_duckdb.cpp \
 	   src/quack_filter.cpp \
@@ -18,6 +19,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/quack_node.cpp \
 	   src/quack_options.cpp \
 	   src/quack_planner.cpp \
+	   src/quack_table_am.cpp \
 	   src/quack_types.cpp \
 	   src/quack.cpp
 
