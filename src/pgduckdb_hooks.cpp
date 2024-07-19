@@ -1,8 +1,10 @@
 extern "C" {
 #include "postgres.h"
+
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
+#include "nodes/primnodes.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
 #include "utils/rel.h"
@@ -10,7 +12,9 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_table_am.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
@@ -45,6 +49,35 @@ IsCatalogTable(List *tables) {
 }
 
 static bool
+contains_duckdb_table(List *rte_list) {
+	foreach_node(RangeTblEntry, rte, rte_list) {
+		if (rte->rtekind == RTE_SUBQUERY) {
+			/* Check Subquery rtable list if any table is from PG catalog */
+			if (contains_duckdb_table(rte->subquery->rtable)) {
+				return true;
+			}
+		}
+		if (rte->relid) {
+			auto rel = RelationIdGetRelation(rte->relid);
+			if (is_duckdb_table_am(rel->rd_tableam)) {
+				RelationClose(rel);
+				return true;
+			}
+			RelationClose(rel);
+		}
+	}
+	return false;
+}
+
+static bool
+needs_duckdb_execution(Query *parse) {
+	if (parse->commandType == CMD_UTILITY) {
+		return false;
+	}
+	return contains_duckdb_table(parse->rtable);
+}
+
+static bool
 IsAllowedStatement() {
 	/* For `SELECT ..` ActivePortal doesn't exist */
 	if (!ActivePortal)
@@ -57,11 +90,20 @@ IsAllowedStatement() {
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
-	if (duckdb_execution && IsAllowedStatement() && IsDuckdbExtensionRegistered() && parse->rtable &&
-	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
-		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
-		if (duckdb_plan) {
-			return duckdb_plan;
+	if (IsDuckdbExtensionRegistered()) {
+		if (duckdb_execution && IsAllowedStatement() && parse->rtable && !IsCatalogTable(parse->rtable) &&
+		    parse->commandType == CMD_SELECT) {
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
+			if (duckdbPlan) {
+				return duckdbPlan;
+			}
+		}
+
+		if (needs_duckdb_execution(parse)) {
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
+			if (duckdbPlan) {
+				return duckdbPlan;
+			}
 		}
 	}
 
@@ -84,6 +126,10 @@ DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_t
 			}
 			return;
 		}
+	}
+
+	if (IsDuckdbExtensionRegistered()) {
+		duckdb_handle_ddl(parsetree, query_string);
 	}
 
 	if (prev_process_utility_hook) {
