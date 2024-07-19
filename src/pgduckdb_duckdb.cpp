@@ -67,7 +67,7 @@ duckdb::unique_ptr<duckdb::DuckDB>
 DuckdbOpenDatabase() {
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", GetExtensionDirectory());
-	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+	return duckdb::make_uniq<duckdb::DuckDB>("test.duckdb", &config);
 }
 
 duckdb::unique_ptr<duckdb::Connection>
