@@ -23,9 +23,9 @@ BlockNumber
 HeapReaderGlobalState::AssignNextBlockNumber(std::mutex &lock) {
 	lock.lock();
 	BlockNumber block_number = InvalidBlockNumber;
-	if (m_last_assigned_block_number == InvalidBlockNumber) {
+	if (m_nblocks > 0 && m_last_assigned_block_number == InvalidBlockNumber) {
 		block_number = m_last_assigned_block_number = 0;
-	} else if (m_last_assigned_block_number < m_nblocks - 1) {
+	} else if (m_nblocks > 0 && m_last_assigned_block_number < m_nblocks - 1) {
 		block_number = ++m_last_assigned_block_number;
 	}
 	lock.unlock();
