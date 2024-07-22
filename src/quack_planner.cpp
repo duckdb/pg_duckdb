@@ -70,9 +70,6 @@ quack_create_plan(Query *query, const char *queryString, ParamListInfo boundPara
 		auto &column = preparedResultTypes[i];
 		Oid postgresColumnOid = quack::GetPostgresDuckDBType(column);
 
-		if (!OidIsValid(postgresColumnOid)) {
-			elog(ERROR, "Could not convert DuckDB to Postgres type, likely because the postgres->duckdb conversion was not supported");
-		}
 		HeapTuple tp;
 		Form_pg_type typtup;
 
