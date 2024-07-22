@@ -32,6 +32,14 @@ SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
  9 |       100000
 (4 rows)
 
+CREATE TABLE empty(a INT);
+SELECT COUNT(*) FROM empty;
+ count_star() 
+--------------
+            0
+(1 row)
+
 SET quack.max_threads_per_query TO default;
 SET client_min_messages TO default;
 DROP TABLE t;
+DROP TABLE empty;
