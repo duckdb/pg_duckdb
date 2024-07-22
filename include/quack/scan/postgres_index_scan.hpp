@@ -17,7 +17,7 @@ namespace quack {
 // Global State
 
 struct PostgresIndexScanGlobalState : public duckdb::GlobalTableFunctionState {
-	explicit PostgresIndexScanGlobalState(IndexScanState *indexScanState, Relation relation,
+	explicit PostgresIndexScanGlobalState(IndexOptInfo *index, IndexScanState *indexScanState, bool indexonly, Relation relation,
 	                                      duckdb::TableFunctionInitInput &input);
 	~PostgresIndexScanGlobalState();
 	idx_t
@@ -27,7 +27,9 @@ struct PostgresIndexScanGlobalState : public duckdb::GlobalTableFunctionState {
 
 public:
 	duckdb::shared_ptr<PostgresScanGlobalState> m_global_state;
+	IndexOptInfo *m_index;
 	IndexScanState *m_index_scan;
+	bool m_indexonly;
 	Relation m_relation;
 };
 
@@ -35,7 +37,7 @@ public:
 
 struct PostgresIndexScanLocalState : public duckdb::LocalTableFunctionState {
 public:
-	PostgresIndexScanLocalState(IndexScanDesc indexScanDesc, Relation relation);
+	PostgresIndexScanLocalState(IndexScanDesc indexScanDesc, TupleDesc desc, Relation relation);
 	~PostgresIndexScanLocalState() override;
 
 public:
@@ -43,18 +45,20 @@ public:
 	IndexScanDesc m_index_scan_desc;
 	Relation m_relation;
 	TupleTableSlot *m_slot;
+	TupleTableSlot *m_index_only_slot;
 };
 
 // PostgresIndexScanFunctionData
 
 struct PostgresIndexScanFunctionData : public duckdb::TableFunctionData {
 public:
-	PostgresIndexScanFunctionData(uint64_t cardinality, Path *path, PlannerInfo *plannerInfo, Oid relationOid,
-	                              Snapshot Snapshot);
+	PostgresIndexScanFunctionData(uint64_t cardinality, bool indexonly, Path *path, PlannerInfo *plannerInfo,
+	                              Oid relationOid, Snapshot Snapshot);
 	~PostgresIndexScanFunctionData() override;
 
 public:
 	uint64_t m_cardinality;
+	bool m_indexonly;
 	Path *m_path;
 	PlannerInfo *m_planner_info;
 	Snapshot m_snapshot;

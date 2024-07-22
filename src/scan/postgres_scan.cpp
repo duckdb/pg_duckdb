@@ -85,12 +85,17 @@ CreateFunctionSeqScanArguments(uint64 cardinality, Oid relid, Snapshot snapshot)
 }
 
 static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>
-CreateFunctionIndexScanArguments(uint64_t cardinality, Path *path, PlannerInfo *plannerInfo, Snapshot snapshot) {
+CreateFunctionIndexScanArguments(uint64_t cardinality, bool isIndexOnlyScan, Path *path, PlannerInfo *plannerInfo,
+                                 Snapshot snapshot) {
 	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
 
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
 	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("cardinality"),
 	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::UBIGINT(cardinality))));
+
+	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
+	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("indexonly"),
+	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::BOOLEAN(isIndexOnlyScan))));
 
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
 	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("path"),
@@ -139,8 +144,7 @@ find_matching_rel_entry(Oid relid, PlannerInfo *plannerInfo) {
 	int i = 1;
 	RelOptInfo *node = nullptr;
 	for (; i < plannerInfo->simple_rel_array_size; i++) {
-		if (plannerInfo->simple_rte_array[i]->rtekind == RTE_SUBQUERY &&
-			plannerInfo->simple_rel_array[i]) {
+		if (plannerInfo->simple_rte_array[i]->rtekind == RTE_SUBQUERY && plannerInfo->simple_rel_array[i]) {
 			node = find_matching_rel_entry(relid, plannerInfo->simple_rel_array[i]->subroot);
 			if (node) {
 				return node;
@@ -188,7 +192,14 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 
 	if (scan_data.m_query_planner_info) {
 		node = find_matching_rel_entry(relid, scan_data.m_query_planner_info);
-		if (node)
+		ListCell *lc;
+		foreach(lc, node->pathlist) {
+		Path *p = (Path *) lfirst(lc);
+		if (p->pathtype == T_IndexOnlyScan) {
+			nodePath = p;
+		}
+		}
+		if (node && (nodePath == nullptr))
 			nodePath = get_cheapest_fractional_path(node, 0.0);
 	}
 
@@ -196,8 +207,9 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	Cardinality nodeCardinality = nodePath ? nodePath->rows : 1;
 
 	if ((nodePath != nullptr && (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan))) {
-		auto children = CreateFunctionIndexScanArguments(nodeCardinality, nodePath, scan_data.m_query_planner_info,
-		                                                 GetActiveSnapshot());
+		auto isIndexOnlyScan = nodePath->pathtype == T_IndexOnlyScan;
+		auto children = CreateFunctionIndexScanArguments(nodeCardinality, isIndexOnlyScan, nodePath,
+		                                                 scan_data.m_query_planner_info, GetActiveSnapshot());
 		auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 		table_function->function =
 		    duckdb::make_uniq<duckdb::FunctionExpression>("postgres_index_scan", std::move(children));
