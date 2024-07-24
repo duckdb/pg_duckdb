@@ -70,6 +70,7 @@ quack_open_database() {
 	// config.SetOption("threads", "8");
 	// config.allocator = duckdb::make_uniq<duckdb::Allocator>(QuackAllocate, QuackFree, QuackReallocate, nullptr);
 	config.SetOptionByName("extension_directory", quackGetExtensionDirectory());
+	config.SetOptionByName("allow_unsigned_extensions", true);
 	return duckdb::make_uniq<duckdb::DuckDB>("test.duckdb", &config);
 }
 
@@ -134,7 +135,8 @@ quack_create_duckdb_connection(List *rtables, PlannerInfo *plannerInfo, List *ne
 			appendStringInfo(quackExtension, "LOAD %s;", extension.name.c_str());
 			auto res = context.Query(quackExtension->data, false);
 			if (res->HasError()) {
-				elog(ERROR, "Extension `%s` could not be loaded with DuckDB", extension.name.c_str());
+				auto err = res->GetError().c_str();
+				elog(ERROR, "Extension `%s` could not be loaded with DuckDB: %s", extension.name.c_str(), err);
 			}
 		}
 		pfree(quackExtension->data);

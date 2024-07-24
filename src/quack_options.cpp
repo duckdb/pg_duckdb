@@ -9,6 +9,7 @@ extern "C" {
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
@@ -144,6 +145,37 @@ quackInstallExtension(Datum name) {
 	return true;
 }
 
+static bool
+quack_run_query(const char *query) {
+	auto db = quack::quack_open_database();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
+	auto &context = *connection->context;
+
+	auto res = context.Query("FORCE INSTALL "
+	                         "'/home/jelte/work/pg_quack_internal/third_party/demo-extension/build/release/extension/"
+	                         "demo_in_pg/demo_in_pg.duckdb_extension';",
+	                         false);
+
+	if (res->HasError()) {
+		elog(WARNING, "(quack_install_extension) %s", res->GetError().c_str());
+		return false;
+	}
+	res = context.Query("LOAD demo_in_pg", false);
+
+	if (res->HasError()) {
+		elog(WARNING, "(quack_install_extension) %s", res->GetError().c_str());
+		return false;
+	}
+	res = context.Query(query, false);
+
+	if (res->HasError()) {
+		elog(WARNING, "failed to run query: %s", res->GetError().c_str());
+		return false;
+	}
+	elog(NOTICE, "result: %s", res->ToString().c_str());
+	return true;
+}
+
 } // namespace quack
 
 extern "C" {
@@ -153,6 +185,14 @@ Datum
 install_extension(PG_FUNCTION_ARGS) {
 	Datum extensionName = PG_GETARG_DATUM(0);
 	bool result = quack::quackInstallExtension(extensionName);
+	PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(run);
+Datum
+run(PG_FUNCTION_ARGS) {
+	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	bool result = quack::quack_run_query(query);
 	PG_RETURN_BOOL(result);
 }
 
