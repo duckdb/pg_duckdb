@@ -330,15 +330,30 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	case CHAROID:
 		slot->tts_values[col] = value.GetValue<int8_t>();
 		break;
-	case INT2OID:
-		slot->tts_values[col] = value.GetValue<int16_t>();
+	case INT2OID: {
+		if (value.type().id() == duckdb::LogicalTypeId::UTINYINT) {
+			slot->tts_values[col] = static_cast<int16_t>(value.GetValue<uint8_t>());
+		} else {
+			slot->tts_values[col] = value.GetValue<int16_t>();
+		}
 		break;
-	case INT4OID:
-		slot->tts_values[col] = value.GetValue<int32_t>();
+	}
+	case INT4OID: {
+		if (value.type().id() == duckdb::LogicalTypeId::USMALLINT) {
+			slot->tts_values[col] = static_cast<int32_t>(value.GetValue<uint16_t>());
+		} else {
+			slot->tts_values[col] = value.GetValue<int32_t>();
+		}
 		break;
-	case INT8OID:
-		slot->tts_values[col] = value.GetValue<int64_t>();
+	}
+	case INT8OID: {
+		if (value.type().id() == duckdb::LogicalTypeId::UINTEGER) {
+			slot->tts_values[col] = static_cast<int64_t>(value.GetValue<uint32_t>());
+		} else {
+			slot->tts_values[col] = value.GetValue<int64_t>();
+		}
 		break;
+	}
 	case BPCHAROID:
 	case TEXTOID:
 	case JSONOID:
@@ -546,6 +561,12 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		return INT8OID;
 	case duckdb::LogicalTypeId::HUGEINT:
 		return NUMERICOID;
+	case duckdb::LogicalTypeId::UTINYINT:
+		return INT2OID;
+	case duckdb::LogicalTypeId::USMALLINT:
+		return INT4OID;
+	case duckdb::LogicalTypeId::UINTEGER:
+		return INT8OID;
 	case duckdb::LogicalTypeId::VARCHAR: {
 		if (type.IsJSONType()) {
 			return JSONOID;
