@@ -18,13 +18,13 @@ extern "C" {
 #include "utils/lsyscache.h"
 }
 
-#include "quack/utility/copy.hpp"
-#include "quack/scan/postgres_scan.hpp"
-#include "quack/quack_duckdb.hpp"
+#include "pgduckdb/utility/copy.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
 
-static constexpr char quackCopyS3FilenamePrefix[] = "s3://";
-static constexpr char quackCopyGCSFilenamePrefix[] = "gs://";
-static constexpr char quackCopyR2FilenamePrefix[] = "r2://";
+static constexpr char duckdbCopyS3FilenamePrefix[] = "s3://";
+static constexpr char duckdbCopyGCSFilenamePrefix[] = "gs://";
+static constexpr char duckdbCopyR2FilenamePrefix[] = "r2://";
 
 static bool
 create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List **vars, int stmt_location,
@@ -63,7 +63,7 @@ create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List 
 
 	if (!ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), false)) {
 		ereport(WARNING, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		                  errmsg("(Quack) Failed Permission \"%s\"", RelationGetRelationName(rel))));
+		                  errmsg("(Duckdb) Failed Permission \"%s\"", RelationGetRelationName(rel))));
 	}
 
 	table_close(rel, AccessShareLock);
@@ -73,7 +73,7 @@ create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List 
 	 */
 	if (check_enable_rls(relid, InvalidOid, false) == RLS_ENABLED) {
 		ereport(WARNING, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		                  errmsg("(Quack) RLS enabled on \"%s\"", RelationGetRelationName(rel))));
+		                  errmsg("(Duckdb) RLS enabled on \"%s\"", RelationGetRelationName(rel))));
 		return false;
 	}
 
@@ -81,13 +81,13 @@ create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List 
 }
 
 bool
-quack_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment *queryEnv, uint64 *processed) {
+duckdb_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment *queryEnv, uint64 *processed) {
 	CopyStmt *copyStmt = (CopyStmt *)pstmt->utilityStmt;
 
 	/* Copy `filename` should start with S3/GS/R2 prefix */
-	if (duckdb::string(copyStmt->filename).rfind(quackCopyS3FilenamePrefix, 0) &&
-	    duckdb::string(copyStmt->filename).rfind(quackCopyGCSFilenamePrefix, 0) &&
-		duckdb::string(copyStmt->filename).rfind(quackCopyR2FilenamePrefix, 0)) {
+	if (duckdb::string(copyStmt->filename).rfind(duckdbCopyS3FilenamePrefix, 0) &&
+	    duckdb::string(copyStmt->filename).rfind(duckdbCopyGCSFilenamePrefix, 0) &&
+		duckdb::string(copyStmt->filename).rfind(duckdbCopyR2FilenamePrefix, 0)) {
 		return false;
 	}
 
@@ -126,11 +126,11 @@ quack_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment 
 		rtables = pstate->p_rtable;
 	}
 
-	auto duckdbConnection = quack::quack_create_duckdb_connection(rtables, nullptr, vars, queryString);
+	auto duckdbConnection = pgduckdb::DuckdbCreateConnection(rtables, nullptr, vars, queryString);
 	auto res = duckdbConnection->context->Query(queryString, false);
 
 	if (res->HasError()) {
-		elog(WARNING, "(Quack) %s", res->GetError().c_str());
+		elog(WARNING, "(Duckdb) %s", res->GetError().c_str());
 		return false;
 	}
 

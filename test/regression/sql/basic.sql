@@ -7,7 +7,7 @@ SET client_min_messages to 'DEBUG1';
 SELECT COUNT(*) FROM t;
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
 
-SET quack.max_threads_per_query to 4;
+SET duckdb.max_threads_per_query to 4;
 
 SELECT COUNT(*) FROM t;
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
@@ -15,7 +15,7 @@ SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
 CREATE TABLE empty(a INT);
 SELECT COUNT(*) FROM empty;
 
-SET quack.max_threads_per_query TO default;
+SET duckdb.max_threads_per_query TO default;
 SET client_min_messages TO default;
 
 DROP TABLE t;

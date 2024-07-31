@@ -4,10 +4,10 @@ ROOT_DIR = ../..
 
 include $(ROOT_DIR)/Makefile.global
 
-check-regression-quack:
+check-regression-duckdb:
 	TEST_DIR=$(CURDIR) $(pg_regress_check) \
 	--temp-config regression.conf \
-	--load-extension=quack \
+	--load-extension=duckdb \
 	--schedule schedule 
 
 clean-regression:

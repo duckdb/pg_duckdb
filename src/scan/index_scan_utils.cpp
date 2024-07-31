@@ -1,6 +1,6 @@
-#include "quack/scan/index_scan_utils.hpp"
+#include "pgduckdb/scan/index_scan_utils.hpp"
 
-namespace quack {
+namespace pgduckdb {
 
 /*
  * fix_indexqual_operand
@@ -110,4 +110,4 @@ fix_indexqual_clause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node 
 	return clause;
 }
 
-} // namespace quack
+} // namespace pgduckdb

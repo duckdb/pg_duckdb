@@ -11,11 +11,11 @@ extern "C" {
 #include "utils/rel.h"
 }
 
-#include "quack/scan/index_scan_utils.hpp"
-#include "quack/scan/postgres_index_scan.hpp"
-#include "quack/quack_types.hpp"
+#include "pgduckdb/scan/index_scan_utils.hpp"
+#include "pgduckdb/scan/postgres_index_scan.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
-namespace quack {
+namespace pgduckdb {
 
 //
 // PostgresIndexScanGlobalState
@@ -207,4 +207,4 @@ PostgresIndexScanFunction::PostgresIndexScanCardinality(duckdb::ClientContext &c
 	return duckdb::make_uniq<duckdb::NodeStatistics>(bindData.m_cardinality, bindData.m_cardinality);
 }
 
-} // namespace quack
+} // namespace pgduckdb

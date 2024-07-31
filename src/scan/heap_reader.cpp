@@ -9,11 +9,11 @@ extern "C" {
 #include "utils/rel.h"
 }
 
-#include "quack/quack_process_lock.hpp"
-#include "quack/scan/heap_reader.hpp"
-#include "quack/quack_types.hpp"
+#include "pgduckdb/pgduckdb_process_lock.hpp"
+#include "pgduckdb/scan/heap_reader.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
-namespace quack {
+namespace pgduckdb {
 
 //
 // HeapReaderGlobalState
@@ -82,11 +82,11 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 	while (block != InvalidBlockNumber) {
 		if (m_read_next_page) {
 			CHECK_FOR_INTERRUPTS();
-			QuackProcessLock::GetLock().lock();
+			DuckdbProcessLock::GetLock().lock();
 			block = m_block_number;
 			m_buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
 			LockBuffer(m_buffer, BUFFER_LOCK_SHARE);
-			QuackProcessLock::GetLock().unlock();
+			DuckdbProcessLock::GetLock().unlock();
 			page = PreparePageRead();
 			m_read_next_page = false;
 		}
@@ -116,9 +116,9 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 
 		/* No more items on current page */
 		if (!m_page_tuples_left) {
-			QuackProcessLock::GetLock().lock();
+			DuckdbProcessLock::GetLock().lock();
 			UnlockReleaseBuffer(m_buffer);
-			QuackProcessLock::GetLock().unlock();
+			DuckdbProcessLock::GetLock().unlock();
 			m_read_next_page = true;
 			/* Handle cancel request */
 			if (QueryCancelPending) {
@@ -149,4 +149,4 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 
 	return false;
 }
-} // namespace quack
+} // namespace pgduckdb
