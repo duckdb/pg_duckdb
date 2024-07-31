@@ -1,4 +1,4 @@
-name: pg_quack Build and Test
+name: pg_duckdb Build and Test
 on:
   push:
     paths:
@@ -8,7 +8,7 @@ on:
       - 'sql/**'
       - Makefile
       - Makefile.global
-      - quack.control
+      - duckdb.control
       - third_party/duckdb
       - '.github/workflows/**'
 
@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Test details
-        run: echo Build and test pg_quack on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
+        run: echo Build and test pg_duckdb on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
 
       - name: Install build deps
         run: |
@@ -38,10 +38,10 @@ jobs:
         with:
           create-symlink: true
 
-      - name: Checkout pg_quack extension code
+      - name: Checkout pg_duckdb extension code
         uses: actions/checkout@v4
         with:
-          path: quack
+          path: duckdb
 
       - name: Checkout and build PostgreSQL code
         run: |
@@ -52,11 +52,11 @@ jobs:
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml
           make -j8 install
 
-      - name: Build and test pg_quack extension
+      - name: Build and test pg_duckdb extension
         id: regression-tests
         run: |
           export PATH="${PWD}/postgres/inst/bin:$PATH"
-          pushd quack
+          pushd duckdb
           git submodule update --init --recursive
           make
           make install
@@ -66,4 +66,4 @@ jobs:
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.regression-tests.outcome != 'success'
         run: |
-          cat quack/test/regression/regression.diffs
+          cat duckdb/test/regression/regression.diffs

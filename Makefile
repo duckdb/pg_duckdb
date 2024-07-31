@@ -1,8 +1,8 @@
-.PHONY: duckdb install-duckdb clean-duckdb lintcheck check-regression-quack clean-regression .depend
+.PHONY: duckdb install-duckdb clean-duckdb lintcheck check-regression-duckdb clean-regression .depend
 
-MODULE_big = quack
-EXTENSION = quack
-DATA = quack.control $(wildcard sql/quack--*.sql)
+MODULE_big = duckdb
+EXTENSION = duckdb
+DATA = duckdb.control $(wildcard sql/duckdb--*.sql)
 
 SRCS = src/scan/heap_reader.cpp \
 	   src/scan/index_scan_utils.cpp \
@@ -10,33 +10,33 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/scan/postgres_scan.cpp \
 	   src/scan/postgres_seq_scan.cpp \
 	   src/utility/copy.cpp \
-	   src/quack_detoast.cpp \
-	   src/quack_duckdb.cpp \
-	   src/quack_filter.cpp \
-	   src/quack_hooks.cpp \
-	   src/quack_memory_allocator.cpp \
-	   src/quack_node.cpp \
-	   src/quack_options.cpp \
-	   src/quack_planner.cpp \
-	   src/quack_types.cpp \
-	   src/quack.cpp
+	   src/pgduckdb_detoast.cpp \
+	   src/pgduckdb_duckdb.cpp \
+	   src/pgduckdb_filter.cpp \
+	   src/pgduckdb_hooks.cpp \
+	   src/pgduckdb_memory_allocator.cpp \
+	   src/pgduckdb_node.cpp \
+	   src/pgduckdb_options.cpp \
+	   src/pgduckdb_planner.cpp \
+	   src/pgduckdb_types.cpp \
+	   src/pgduckdb.cpp
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
-QUACK_BUILD_CXX_FLAGS=
-QUACK_BUILD_DUCKDB=
+DUCKDB_BUILD_CXX_FLAGS=
+DUCKDB_BUILD_TYPE=
 
-ifeq ($(QUACK_BUILD), Debug)
-	QUACK_BUILD_CXX_FLAGS = -g -O0
-	QUACK_BUILD_DUCKDB = debug
+ifeq ($(DUCKDB_BUILD), Debug)
+	DUCKDB_BUILD_CXX_FLAGS = -g -O0
+	DUCKDB_BUILD_TYPE = debug
 else
-	QUACK_BUILD_CXX_FLAGS =
-	QUACK_BUILD_DUCKDB = release
+	DUCKDB_BUILD_CXX_FLAGS =
+	DUCKDB_BUILD_TYPE = release
 endif
 
-override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2 -std=c++17 -Wno-sign-compare ${QUACK_BUILD_CXX_FLAGS}
+override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2 -std=c++17 -Wno-sign-compare ${DUCKDB_BUILD_CXX_FLAGS}
 
-SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src -lstdc++ -llz4
+SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -lstdc++ -llz4
 
 COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
 
@@ -58,22 +58,22 @@ include Makefile.global
 
 NO_INSTALLCHECK = 1
 
-check-regression-quack:
-	$(MAKE) -C test/regression check-regression-quack
+check-regression-duckdb:
+	$(MAKE) -C test/regression check-regression-duckdb
 
 clean-regression:
 	$(MAKE) -C test/regression clean-regression
 
-installcheck: all install check-regression-quack
+installcheck: all install check-regression-duckdb
 
-duckdb: third_party/duckdb/Makefile third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB)
+duckdb: third_party/duckdb/Makefile third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
 
 third_party/duckdb/Makefile:
 	git submodule update --init --recursive
 
-third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB):
+third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB):
 	$(MAKE) -C third_party/duckdb \
-	$(QUACK_BUILD_DUCKDB) \
+	$(DUCKDB_BUILD_TYPE) \
 	DISABLE_SANITIZER=1 \
 	ENABLE_UBSAN=0 \
 	BUILD_UNITTESTS=OFF \
@@ -83,10 +83,10 @@ third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB):
 	-j8
 
 install-duckdb:
-	$(install_bin) -m 755 third_party/duckdb/build/$(QUACK_BUILD_DUCKDB)/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
+	$(install_bin) -m 755 third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
 
 clean-duckdb:
-	rm -rf third_party/duckdb/build
+#rm -rf third_party/duckdb/build
 
 install: install-duckdb
 

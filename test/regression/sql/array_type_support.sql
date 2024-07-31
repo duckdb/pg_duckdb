@@ -1,6 +1,3 @@
-drop extension if exists quack;
-create extension quack;
-
 -- INT4 (zero dimension)
 CREATE TABLE int_array_0d(a INT[]);
 INSERT INTO int_array_0d SELECT CAST(a as INT[]) FROM (VALUES

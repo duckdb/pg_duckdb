@@ -1,9 +1,9 @@
 #include "duckdb.hpp"
 
-#include "quack/scan/postgres_seq_scan.hpp"
-#include "quack/quack_types.hpp"
+#include "pgduckdb/scan/postgres_seq_scan.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
-namespace quack {
+namespace pgduckdb {
 
 //
 // PostgresSeqScanGlobalState
@@ -141,4 +141,4 @@ PostgresSeqScanFunction::PostgresSeqScanCardinality(duckdb::ClientContext &conte
 	return duckdb::make_uniq<duckdb::NodeStatistics>(bindData.m_cardinality, bindData.m_cardinality);
 }
 
-} // namespace quack
+} // namespace pgduckdb

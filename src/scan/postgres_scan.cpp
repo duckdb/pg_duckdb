@@ -24,10 +24,10 @@ extern "C" {
 #include "utils/syscache.h"
 }
 
-#include "quack/scan/postgres_scan.hpp"
-#include "quack/quack_types.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
-namespace quack {
+namespace pgduckdb {
 
 void
 PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) {
@@ -139,8 +139,7 @@ find_matching_rel_entry(Oid relid, PlannerInfo *plannerInfo) {
 	int i = 1;
 	RelOptInfo *node = nullptr;
 	for (; i < plannerInfo->simple_rel_array_size; i++) {
-		if (plannerInfo->simple_rte_array[i]->rtekind == RTE_SUBQUERY &&
-			plannerInfo->simple_rel_array[i]) {
+		if (plannerInfo->simple_rte_array[i]->rtekind == RTE_SUBQUERY && plannerInfo->simple_rel_array[i]) {
 			node = find_matching_rel_entry(relid, plannerInfo->simple_rel_array[i]->subroot);
 			if (node) {
 				return node;
@@ -214,4 +213,4 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	return nullptr;
 }
 
-} // namespace quack
+} // namespace pgduckdb
