@@ -1,6 +1,8 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -8,6 +10,7 @@
 #include "pgduckdb/scan/postgres_index_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
 #include <string>
 
@@ -67,6 +70,7 @@ duckdb::unique_ptr<duckdb::DuckDB>
 DuckdbOpenDatabase() {
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", duckdbGetExtensionDirectory());
+	config.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>(GetActiveSnapshot());
 	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 }
 
@@ -75,15 +79,17 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColu
 	auto db = DuckdbOpenDatabase();
 
 	/* Add tables */
-	db->instance->config.replacement_scans.emplace_back(
-	    pgduckdb::PostgresReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, plannerInfo,
-	                                                                                     neededColumns, query));
+	//db->instance->config.replacement_scans.emplace_back(
+	//    pgduckdb::PostgresReplacementScan,
+	//    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, plannerInfo,
+	//                                                                                     neededColumns, query));
+
+	auto &config = duckdb::DBConfig::GetConfig(*db->instance);
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
-	// Add the postgres_scan inserted by the replacement scan
 	auto &context = *connection->context;
+	auto &client_data = duckdb::ClientData::Get(context);
 
 	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
 	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);
@@ -93,6 +99,9 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColu
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
+
+	// Make sure the custom postgres catalog is used
+	client_data.catalog_search_path->Set({duckdb::CatalogSearchEntry("", "pgduckdb")}, duckdb::CatalogSetPathType::SET_SCHEMA);
 	auto &instance = *db->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	catalog.CreateTableFunction(context, &seq_scan_info);

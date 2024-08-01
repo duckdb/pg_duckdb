@@ -19,12 +19,16 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/pgduckdb_options.cpp \
 	   src/pgduckdb_planner.cpp \
 	   src/pgduckdb_types.cpp \
-	   src/pgduckdb.cpp
+	   src/pgduckdb.cpp \
+	   src/catalog/pgduckdb_storage.cpp \
+	   src/catalog/pgduckdb_schema.cpp \
+	   src/catalog/pgduckdb_table.cpp \
+	   src/catalog/pgduckdb_catalog.cpp
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
-DUCKDB_BUILD_CXX_FLAGS=
-DUCKDB_BUILD_TYPE=
+DUCKDB_BUILD_CXX_FLAGS:=
+DUCKDB_BUILD_TYPE:=
 
 ifeq ($(DUCKDB_BUILD), Debug)
 	DUCKDB_BUILD_CXX_FLAGS = -g -O0
