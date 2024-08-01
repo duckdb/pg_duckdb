@@ -3,6 +3,7 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/main/client_data.hpp"
 #include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -70,7 +71,6 @@ duckdb::unique_ptr<duckdb::DuckDB>
 DuckdbOpenDatabase() {
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", duckdbGetExtensionDirectory());
-	config.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>(GetActiveSnapshot());
 	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 }
 
@@ -85,6 +85,7 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColu
 	//                                                                                     neededColumns, query));
 
 	auto &config = duckdb::DBConfig::GetConfig(*db->instance);
+	config.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>(GetActiveSnapshot());
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
@@ -98,10 +99,11 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColu
 	duckdb::CreateTableFunctionInfo index_scan_info(index_scan_fun);
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+	duckdb::ExtensionInstallInfo extension_install_info;
+	db->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
+	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
+	context.Query("USE pgduckdb", false);
 	context.transaction.BeginTransaction();
-
-	// Make sure the custom postgres catalog is used
-	client_data.catalog_search_path->Set({duckdb::CatalogSearchEntry("", "pgduckdb")}, duckdb::CatalogSetPathType::SET_SCHEMA);
 	auto &instance = *db->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	catalog.CreateTableFunction(context, &seq_scan_info);

@@ -66,17 +66,21 @@ optional_ptr<CatalogEntry> PostgresSchema::CreateType(CatalogTransaction transac
 	throw duckdb::NotImplementedException("CreateType not supported yet");
 }
 
-optional_ptr<CatalogEntry> PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const string &name) {
+optional_ptr<CatalogEntry> PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const string &entry_name) {
 	if (type != CatalogType::TABLE_ENTRY) {
 		throw duckdb::NotImplementedException("GetEntry (type: %s) not supported yet", duckdb::EnumUtil::ToString(type));
 	}
 
-	auto it = tables.find(name);
+	auto it = tables.find(entry_name);
 	if (it != tables.end()) {
 		return it->second.get();
 	}
 
-	RangeVar *table_range_var = makeRangeVarFromNameList(stringToQualifiedNameList(name.c_str(), NULL));
+	List *name_list = NIL;
+	name_list = lappend(name_list, makeString(pstrdup(name.c_str())));
+	name_list = lappend(name_list, makeString(pstrdup(entry_name.c_str())));
+
+	RangeVar *table_range_var = makeRangeVarFromNameList(name_list);
 	Oid rel_oid = RangeVarGetRelid(table_range_var, AccessShareLock, true);
 	if (rel_oid == InvalidOid) {
 		// Table could not be found

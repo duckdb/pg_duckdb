@@ -4,6 +4,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "utils/fmgroids.h"
 #include "fmgr.h"
 #include "catalog/pg_namespace.h"
 #include "utils/syscache.h"
@@ -46,30 +47,6 @@ optional_ptr<CatalogEntry> PostgresCatalog::CreateSchema(CatalogTransaction tran
 	throw duckdb::NotImplementedException("CreateSchema not supported yet");
 }
 
-static Oid LookupSchema(const string &schema_name, Snapshot snapshot) {
-	auto rel = table_open(NamespaceRelationId, AccessShareLock);
-
-	ScanKeyData key;
-    ScanKeyInit(&key,
-                Anum_pg_namespace_nspname,
-                BTEqualStrategyNumber,
-                NAMEOID,
-                CStringGetDatum(schema_name.c_str()));
-
-	auto scan = systable_beginscan(rel, NamespaceNameIndexId, true, snapshot, 1, &key);
-
-	auto tuple = systable_getnext(scan);
-	Oid nspoid = InvalidOid;
-	if (HeapTupleIsValid(tuple)) {
-		nspoid = ((Form_pg_namespace) GETSTRUCT(tuple))->oid;
-	}
-
-	systable_endscan(scan);
-	table_close(rel, AccessShareLock);
-
-	return nspoid;
-}
-
 optional_ptr<SchemaCatalogEntry> PostgresCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found, QueryErrorContext error_context) {
 	if (schema_name == DEFAULT_SCHEMA) {
 		return GetSchema(transaction, "public", if_not_found, error_context);
@@ -78,12 +55,6 @@ optional_ptr<SchemaCatalogEntry> PostgresCatalog::GetSchema(CatalogTransaction t
 	auto it = schemas.find(schema_name);
 	if (it != schemas.end()) {
 		return it->second.get();
-	}
-
-	auto oid = LookupSchema(schema_name, snapshot);
-	if (!OidIsValid(oid)) {
-		// Schema could not be found
-		return nullptr;
 	}
 
 	CreateSchemaInfo create_schema;
