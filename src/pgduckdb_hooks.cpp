@@ -75,7 +75,7 @@ duckdb_planner(Query *parse, const char *query_string, int cursorOptions, ParamL
 
 static void
 duckdb_utility(PlannedStmt *pstmt, const char *queryString, bool readOnlyTree, ProcessUtilityContext context,
-              ParamListInfo params, struct QueryEnvironment *queryEnv, DestReceiver *dest, QueryCompletion *qc) {
+               ParamListInfo params, struct QueryEnvironment *queryEnv, DestReceiver *dest, QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
 	if (duckdb_execution && is_duckdb_extension_registered() && IsA(parsetree, CopyStmt)) {
 		uint64 processed;

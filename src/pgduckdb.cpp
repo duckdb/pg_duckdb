@@ -21,7 +21,6 @@ _PG_init(void) {
 	duckdb_init_hooks();
 	duckdb_init_node();
 }
-
 }
 
 /* clang-format off */

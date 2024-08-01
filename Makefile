@@ -99,4 +99,7 @@ lintcheck:
 	$(RM) -f .depend
 	$(foreach SRC,$(SRCS),$(CXX) $(CPPFLAGS) -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -MM -MT $(SRC:.cpp=.o) $(SRC) >> .depend;)
 
+format:
+	git clang-format origin/main
+
 include .depend

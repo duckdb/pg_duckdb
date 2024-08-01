@@ -82,8 +82,8 @@ duckdb_create_plan(Query *query, const char *queryString, ParamListInfo boundPar
 		Var *var = makeVar(INDEX_VAR, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
 
 		duckdbNode->custom_scan_tlist =
-			lappend(duckdbNode->custom_scan_tlist,
-					makeTargetEntry((Expr *)var, i + 1, (char *)preparedQuery->GetNames()[i].c_str(), false));
+		    lappend(duckdbNode->custom_scan_tlist,
+		            makeTargetEntry((Expr *)var, i + 1, (char *)preparedQuery->GetNames()[i].c_str(), false));
 
 		ReleaseSysCache(tp);
 	}

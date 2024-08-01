@@ -20,7 +20,7 @@ DuckdbFree(duckdb::PrivateAllocatorData *private_data, duckdb::data_ptr_t pointe
 
 duckdb::data_ptr_t
 DuckdbReallocate(duckdb::PrivateAllocatorData *private_data, duckdb::data_ptr_t pointer, duckdb::idx_t old_size,
-                duckdb::idx_t size) {
+                 duckdb::idx_t size) {
 	return reinterpret_cast<duckdb::data_ptr_t>(repalloc(pointer, size));
 }
 
