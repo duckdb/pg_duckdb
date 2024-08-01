@@ -36,3 +36,4 @@ AllowShortLoopsOnASingleLine: false
 AlwaysBreakTemplateDeclarations: Yes
 Language: Cpp
 AccessModifierOffset: -4
+InsertNewlineAtEOF: true
