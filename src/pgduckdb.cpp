@@ -9,7 +9,7 @@ extern "C" {
 
 static void duckdb_init_guc(void);
 
-bool duckdb_execution = true;
+bool duckdb_execution = false;
 int duckdb_max_threads_per_query = 1;
 
 extern "C" {
@@ -31,7 +31,7 @@ duckdb_init_guc(void) {
                              gettext_noop("Is DuckDB query execution enabled."),
                              NULL,
                              &duckdb_execution,
-                             true,
+                             false,
                              PGC_USERSET,
                              0,
                              NULL,

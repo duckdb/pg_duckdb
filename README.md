@@ -27,7 +27,7 @@ Next, load the pg_duckdb extension:
 CREATE EXTENSION pg_duckdb;
 ```
 
-Once loaded, DuckDB is used to execute all SELECT queries in Postgres. Query as usual. You can disable DuckDB execution by setting `duckdb.execution` to `false`.
+Once loaded you can set `duckdb.execution` to `true` to run all `SELECT` queries in DuckDB.
 
 ## Features
 
