@@ -87,7 +87,7 @@ duckdb_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment
 	/* Copy `filename` should start with S3/GS/R2 prefix */
 	if (duckdb::string(copyStmt->filename).rfind(duckdbCopyS3FilenamePrefix, 0) &&
 	    duckdb::string(copyStmt->filename).rfind(duckdbCopyGCSFilenamePrefix, 0) &&
-		duckdb::string(copyStmt->filename).rfind(duckdbCopyR2FilenamePrefix, 0)) {
+	    duckdb::string(copyStmt->filename).rfind(duckdbCopyR2FilenamePrefix, 0)) {
 		return false;
 	}
 
