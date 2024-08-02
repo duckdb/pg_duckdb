@@ -18,7 +18,7 @@ static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
 
 static bool
 is_duckdb_extension_registered() {
-	return get_extension_oid("duckdb", true) != InvalidOid;
+	return get_extension_oid("pg_duckdb", true) != InvalidOid;
 }
 
 static bool

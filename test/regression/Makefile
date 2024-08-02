@@ -7,8 +7,8 @@ include $(ROOT_DIR)/Makefile.global
 check-regression-duckdb:
 	TEST_DIR=$(CURDIR) $(pg_regress_check) \
 	--temp-config regression.conf \
-	--load-extension=duckdb \
-	--schedule schedule 
+	--load-extension=pg_duckdb \
+	--schedule schedule
 
 clean-regression:
 	rm -fr $(CURDIR)/tmp_check
