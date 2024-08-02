@@ -1,3 +1,4 @@
+SET duckdb.execution = true;
 -- CHAR
 CREATE TABLE chr(a CHAR);
 INSERT INTO chr SELECT CAST(a AS CHAR) from (VALUES (-128), (0), (127)) t(a);

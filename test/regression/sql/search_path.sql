@@ -1,3 +1,4 @@
+SET duckdb.execution = true;
 CREATE TABLE t(a INT);
 INSERT INTO t SELECT g from generate_series(1,10) g;
 SELECT count(*) FROM t;

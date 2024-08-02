@@ -1,3 +1,4 @@
+SET duckdb.execution = true;
 -- XML is not supported, pushdown should avoid problems
 CREATE TABLE my_table(a TEXT, b XML, c INTEGER);
 INSERT INTO my_table (a, b, c) SELECT * from (
