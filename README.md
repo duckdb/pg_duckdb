@@ -21,10 +21,10 @@ To build and install, run:
 make install
 ```
 
-Next, load the pg_duckdb extension:
+Next, install the extension:
 
 ```sql
-CREATE EXTENSION pg_duckdb;
+CREATE EXTENSION duckdb;
 ```
 
 Once loaded, DuckDB is used to execute all SELECT queries in Postgres. Query as usual. You can disable DuckDB execution by setting `duckdb.execution` to `false`.
