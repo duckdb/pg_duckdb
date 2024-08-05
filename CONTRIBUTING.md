@@ -5,16 +5,16 @@
 This project and everyone participating in it is governed by a [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code. Please report unacceptable behavior to [quack@duckdb.org](mailto:quack@duckdb.org).
 
 
-## **Did you find a bug?**
+## Did you find a bug?
 
-* **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/duckdb/duckdb/issues).
-* If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/duckdb/duckdb/issues/new/choose). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
+* **Ensure the bug was not already reported** by searching on GitHub under [Issues](https://github.com/duckdb/pg_duckdb/issues).
+* If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/duckdb/pg_duckdb/issues/new/choose). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
 
-## **Did you write a patch that fixes a bug?**
+## Did you write a patch that fixes a bug?
 
 * Great!
 * If possible, add a unit test case to make sure the issue does not occur again.
-* Make sure you run the code formatter (`make format-fix`).
+* Make sure you run the code formatter (`make format`).
 * Open a new GitHub pull request with the patch.
 * Ensure the PR description clearly describes the problem and solution. Include the relevant issue number if applicable.
 
@@ -40,33 +40,18 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 * Submitting changes to an open pull request will move it to 'draft' state.
 * Pull requests will get a complete run on the main repo CI only when marked as 'ready for review' (via Web UI, button on bottom right).
 
-## Nightly CI
-
-* Packages creation and long running tests will be performed during a nightly run
-* On your fork you can trigger long running tests (NightlyTests.yml) for any branch following information from https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow
-
 ## Building
 
 * To build the project, run `make`.
-* To build the project for debugging, run `make debug`.
-* To build optional components, use the flags defined in the Makefile, e.g. to build the ODBC driver, run `BUILD_ODBC=1 make`.
-* For parallel builds, you can use the [Ninja](https://ninja-build.org/) build system: `GEN=ninja make`.
-  * The default number of parallel processes can lock up the system depending on the CPU-to-memory ratio. If this happens, restrict the maximum number of build processes: `CMAKE_BUILD_PARALLEL_LEVEL=4 GEN=ninja make`.
-  * Without using Ninja, build times can still be reduced by setting `CMAKE_BUILD_PARALLEL_LEVEL=$(nproc)`.
 
 ## Testing
 
-* Unit tests can be written either using the sqllogictest framework (`.test` files) or in C++ directly. We **strongly** prefer tests to be written using the sqllogictest framework. Only write tests in C++ if you absolutely need to (e.g. when testing concurrent connections or other exotic behavior).
-* Documentation for the testing framework can be found [here](https://duckdb.org/dev/testing).
+* Tests use standard regression tests for Postgres extensions. To run tests, run `make installcheck`.
 * Write many tests.
 * Test with different types, especially numerics, strings and complex nested types.
 * Try to test unexpected/incorrect usage as well, instead of only the happy path.
-* `make unit` runs the **fast** unit tests (~one minute), `make allunit` runs **all** unit tests (~one hour).
 * Make sure **all** unit tests pass before sending a PR.
-* Slower tests should be added to the **all** unit tests. You can do this by naming the test file `.test_slow` in the sqllogictests, or by adding `[.]` after the test group in the C++ tests.
-* Look at the code coverage report of your branch and attempt to cover all code paths in the fast unit tests. Attempt to trigger exceptions as well. It is acceptable to have some exceptions not triggered (e.g. out of memory exceptions or type switch exceptions), but large branches of code should always be either covered or removed.
-* DuckDB uses GitHub Actions as its continuous integration (CI) tool. You also have the option to run GitHub Actions on your forked repository. For detailed instructions, you can refer to the [GitHub documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository). Before running GitHub Actions, please ensure that you have all the Git tags from the duckdb/duckdb repository. To accomplish this, execute the following commands `git fetch <your-duckdb/duckdb-repo-remote-name> --tags` and then 
-`git push --tags` These commands will fetch all the git tags from the duckdb/duckdb repository and push them to your forked repository. This ensures that you have all the necessary tags available for your GitHub Actions workflow. 
+* pg_duckdb uses GitHub Actions as its continuous integration (CI) tool. You also have the option to run GitHub Actions on your forked repository. For detailed instructions, you can refer to the [GitHub documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository).
 
 ## Formatting
 
