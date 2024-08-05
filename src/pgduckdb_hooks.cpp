@@ -12,6 +12,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/utility/copy.hpp"
+#include "pgduckdb/vendor/pg_list.hpp"
 
 static planner_hook_type PrevPlannerHook = NULL;
 static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
@@ -23,9 +24,7 @@ is_duckdb_extension_registered() {
 
 static bool
 is_catalog_table(List *tables) {
-	ListCell *lc;
-	foreach (lc, tables) {
-		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
+	foreach_node(RangeTblEntry, table, tables) {
 		if (table->rtekind == RTE_SUBQUERY) {
 			/* Check Subquery rtable list if any table is from PG catalog */
 			if (is_catalog_table(table->subquery->rtable)) {

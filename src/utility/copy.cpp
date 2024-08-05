@@ -21,6 +21,7 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/vendor/pg_list.hpp"
 
 static constexpr char duckdbCopyS3FilenamePrefix[] = "s3://";
 static constexpr char duckdbCopyGCSFilenamePrefix[] = "gs://";
@@ -50,15 +51,14 @@ create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List 
 	tupDesc = RelationGetDescr(rel);
 	attnums = CopyGetAttnums(tupDesc, rel, stmt->attlist);
 
-	foreach (cur, attnums) {
+	foreach_int(cur, attnums) {
 		int attno;
 		Bitmapset **bms;
-		attno = lfirst_int(cur) - FirstLowInvalidHeapAttributeNumber;
+		attno = cur - FirstLowInvalidHeapAttributeNumber;
 		bms = &perminfo->selectedCols;
 		*bms = bms_add_member(*bms, attno);
-		*vars = lappend(*vars, makeVar(1, lfirst_int(cur), tupDesc->attrs[lfirst_int(cur) - 1].atttypid,
-		                               tupDesc->attrs[lfirst_int(cur) - 1].atttypmod,
-		                               tupDesc->attrs[lfirst_int(cur) - 1].attcollation, 0));
+		*vars = lappend(*vars, makeVar(1, cur, tupDesc->attrs[cur - 1].atttypid, tupDesc->attrs[cur - 1].atttypmod,
+		                               tupDesc->attrs[cur - 1].attcollation, 0));
 	}
 
 	if (!ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), false)) {

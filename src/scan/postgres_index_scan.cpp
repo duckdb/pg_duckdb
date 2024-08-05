@@ -14,6 +14,7 @@ extern "C" {
 #include "pgduckdb/scan/index_scan_utils.hpp"
 #include "pgduckdb/scan/postgres_index_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/vendor/pg_list.hpp"
 
 namespace pgduckdb {
 
@@ -129,13 +130,9 @@ PostgresIndexScanFunction::PostgresIndexScanInitGlobal(duckdb::ClientContext &co
 	List *stripped_list_clauses = NIL;
 	IndexOptInfo *index = indexPath->indexinfo;
 
-	ListCell *lc;
-	foreach (lc, indexPath->indexclauses) {
-		IndexClause *iclause = lfirst_node(IndexClause, lc);
+	foreach_node(IndexClause, iclause, indexPath->indexclauses) {
 		int indexcol = iclause->indexcol;
-		ListCell *lc2;
-		foreach (lc2, iclause->indexquals) {
-			RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc2);
+		foreach_node(RestrictInfo, rinfo, iclause->indexquals) {
 			Node *clause = (Node *)rinfo->clause;
 			clause = fix_indexqual_clause(bindData.m_planner_info, index, indexcol, clause, iclause->indexcols);
 			stripped_list_clauses = lappend(stripped_list_clauses, clause);
