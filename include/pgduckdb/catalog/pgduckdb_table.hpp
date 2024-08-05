@@ -10,32 +10,35 @@ extern "C" {
 
 namespace pgduckdb {
 
-using duckdb::optional_ptr;
-using duckdb::unique_ptr;
-using duckdb::string;
-using duckdb::CatalogType;
-using duckdb::CatalogEntry;
-using duckdb::TableCatalogEntry;
-using duckdb::SchemaCatalogEntry;
+using duckdb::BaseStatistics;
 using duckdb::Catalog;
+using duckdb::CatalogEntry;
+using duckdb::CatalogType;
 using duckdb::ClientContext;
-using duckdb::TableStorageInfo;
-using duckdb::FunctionData;
-using duckdb::TableFunction;
 using duckdb::column_t;
 using duckdb::CreateTableInfo;
-using duckdb::BaseStatistics;
+using duckdb::FunctionData;
+using duckdb::optional_ptr;
+using duckdb::SchemaCatalogEntry;
+using duckdb::string;
+using duckdb::TableCatalogEntry;
+using duckdb::TableFunction;
+using duckdb::TableStorageInfo;
+using duckdb::unique_ptr;
 
 class PostgresTable : public TableCatalogEntry {
 public:
 	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Oid oid, Snapshot snapshot);
+
 public:
 	static bool PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot);
+
 public:
 	// -- Table API --
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+
 private:
 	Oid oid;
 	Snapshot snapshot;

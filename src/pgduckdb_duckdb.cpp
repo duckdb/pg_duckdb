@@ -79,10 +79,10 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColu
 	auto db = DuckdbOpenDatabase();
 
 	/* Add tables */
-	//db->instance->config.replacement_scans.emplace_back(
-	//    pgduckdb::PostgresReplacementScan,
-	//    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, plannerInfo,
-	//                                                                                     neededColumns, query));
+	// db->instance->config.replacement_scans.emplace_back(
+	//     pgduckdb::PostgresReplacementScan,
+	//     duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, plannerInfo,
+	//                                                                                      neededColumns, query));
 
 	auto &config = duckdb::DBConfig::GetConfig(*db->instance);
 	config.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>(GetActiveSnapshot());
@@ -90,7 +90,6 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColu
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
 	auto &context = *connection->context;
-	auto &client_data = duckdb::ClientData::Get(context);
 
 	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
 	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);

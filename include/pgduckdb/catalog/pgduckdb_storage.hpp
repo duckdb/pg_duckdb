@@ -11,7 +11,9 @@ namespace pgduckdb {
 
 class PostgresStorageExtensionInfo : public duckdb::StorageExtensionInfo {
 public:
-	PostgresStorageExtensionInfo(Snapshot snapshot) : snapshot(snapshot) {}
+	PostgresStorageExtensionInfo(Snapshot snapshot) : snapshot(snapshot) {
+	}
+
 public:
 	Snapshot snapshot;
 };

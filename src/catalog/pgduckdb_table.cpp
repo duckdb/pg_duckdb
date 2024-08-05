@@ -13,9 +13,13 @@ extern "C" {
 
 namespace pgduckdb {
 
-PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Oid oid, Snapshot snapshot) : TableCatalogEntry(catalog, schema, info), oid(oid), snapshot(snapshot) {}
+PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Oid oid,
+                             Snapshot snapshot)
+    : TableCatalogEntry(catalog, schema, info), oid(oid), snapshot(snapshot) {
+}
 
-bool PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot) {
+bool
+PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot) {
 	auto rel = RelationIdGetRelation(relid);
 	auto tupleDesc = RelationGetDescr(rel);
 
@@ -39,17 +43,20 @@ bool PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot s
 	return true;
 }
 
-unique_ptr<BaseStatistics> PostgresTable::GetStatistics(ClientContext &context, column_t column_id) {
+unique_ptr<BaseStatistics>
+PostgresTable::GetStatistics(ClientContext &context, column_t column_id) {
 	throw duckdb::NotImplementedException("GetStatistics not supported yet");
 }
 
-TableFunction PostgresTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
+TableFunction
+PostgresTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
 	// TODO: add cardinality
 	bind_data = duckdb::make_uniq<PostgresSeqScanFunctionData>(0, oid, snapshot);
 	return PostgresSeqScanFunction();
 }
 
-TableStorageInfo PostgresTable::GetStorageInfo(ClientContext &context) {
+TableStorageInfo
+PostgresTable::GetStorageInfo(ClientContext &context) {
 	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
 }
 
