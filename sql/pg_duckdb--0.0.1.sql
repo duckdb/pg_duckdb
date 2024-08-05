@@ -1,4 +1,4 @@
-LOAD 'duckdb';
+LOAD 'pg_duckdb';
 
 CREATE OR REPLACE FUNCTION read_parquet(path text)
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
