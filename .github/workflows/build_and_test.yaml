@@ -13,6 +13,18 @@ on:
       - '.github/workflows/**'
 
 jobs:
+  clang-format:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout pg_duckdb extension code
+        uses: actions/checkout@v4
+      - name: Fetch main branch
+        run: git fetch --depth=1 origin +main:refs/remotes/origin/main
+      - name: Install clang-format
+        run: sudo apt-get install clang-format
+      - name: Run clang-format
+        run: git clang-format refs/remotes/origin/main --diff
   build-and-test:
     strategy:
       fail-fast: false
