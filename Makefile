@@ -10,6 +10,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/scan/postgres_scan.cpp \
 	   src/scan/postgres_seq_scan.cpp \
 	   src/utility/copy.cpp \
+	   src/pgduckdb_bgw.cpp \
 	   src/pgduckdb_detoast.cpp \
 	   src/pgduckdb_duckdb.cpp \
 	   src/pgduckdb_filter.cpp \
@@ -36,7 +37,7 @@ endif
 
 override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2 -std=c++17 -Wno-sign-compare ${DUCKDB_BUILD_CXX_FLAGS}
 
-SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -lstdc++ -llz4
+SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L/opt/homebrew/lib -lstdc++ -llz4
 
 COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
 

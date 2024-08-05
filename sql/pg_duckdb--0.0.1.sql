@@ -82,3 +82,7 @@ END
 $$;
 
 RESET search_path;
+
+CREATE OR REPLACE FUNCTION send_message(text) RETURNS void
+    AS 'pg_duckdb', 'send_message'
+    LANGUAGE C STRICT;

@@ -20,6 +20,7 @@ _PG_init(void) {
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
+    DuckdbInitBgw();
 }
 }
 
