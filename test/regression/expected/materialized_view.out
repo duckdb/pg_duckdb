@@ -1,4 +1,3 @@
-SET duckdb.execution = true;
 CREATE TABLE t(a INT, b TEXT);
 INSERT INTO t SELECT g % 1000, MD5(g::TEXT) FROM generate_series(1,20000) g;
 SELECT COUNT(*) FROM t WHERE a % 100 = 0;

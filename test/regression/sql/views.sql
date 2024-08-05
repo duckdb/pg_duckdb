@@ -1,4 +1,3 @@
-SET duckdb.execution = true;
 create table view_table(a varchar);
 insert into view_table values ('test'), ('hello');
 
