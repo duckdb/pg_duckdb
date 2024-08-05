@@ -56,10 +56,10 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	 */
 	int ret = SPI_exec(R"(
                 INSERT INTO duckdb.tables(relid)
-                SELECT objid 
-                FROM pg_catalog.pg_event_trigger_ddl_commands() cmds 
-                JOIN pg_catalog.pg_class 
-                ON cmds.objid = pg_class.oid 
+                SELECT objid
+                FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
+                JOIN pg_catalog.pg_class
+                ON cmds.objid = pg_class.oid
                 WHERE cmds.object_type = 'table'
                 AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb'))",
 	                   0);
@@ -79,12 +79,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 
 	auto db = pgduckdb::DuckdbOpenDatabase();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
-	auto &context = *connection->context;
-	auto result = context.Query(debug_query_string, false);
-	if (result->HasError()) {
-		auto err = result->GetError().c_str();
-		elog(ERROR, "could not create duckdb table: %s", err);
-	}
+	auto result = pgduckdb::RunQuery(*connection, debug_query_string);
 
 	PG_RETURN_NULL();
 }
@@ -111,14 +106,14 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	// duckdb tables.
 	// TODO: Handle schemas in a sensible way
 	int ret = SPI_exec(R"(
-                DELETE FROM duckdb.tables 
+                DELETE FROM duckdb.tables
                 USING (
-                    SELECT objid, object_name, object_identity 
-                    FROM pg_catalog.pg_event_trigger_dropped_objects() 
+                    SELECT objid, object_name, object_identity
+                    FROM pg_catalog.pg_event_trigger_dropped_objects()
                     WHERE object_type = 'table'
                 ) objs
                 WHERE relid = objid
-                RETURNING objs.object_name, objs.object_identity
+                RETURNING objs.object_identity
                 )",
 	                   0);
 
@@ -130,17 +125,13 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 
 	auto db = pgduckdb::DuckdbOpenDatabase();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
-	auto &context = *connection->context;
 
 	for (auto proc = 0; proc < SPI_processed; proc++) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
-		char *object_identity;
-		char *object_name;
 
-		object_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
-		object_identity = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
+		char *object_identity = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
 		// TODO: Do this in a transaction
-		context.Query("DROP TABLE " + std::string(object_name), false);
+		pgduckdb::RunQuery(*connection, "DROP TABLE IF EXISTS " + std::string(object_identity));
 	}
 
 	SPI_finish();
