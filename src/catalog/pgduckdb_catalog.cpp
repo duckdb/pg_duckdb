@@ -22,8 +22,8 @@ extern "C" {
 namespace pgduckdb {
 
 PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &db, const duckdb::string &connection_string,
-                                 duckdb::AccessMode access_mode, Snapshot snapshot)
-    : duckdb::Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot) {
+                                 duckdb::AccessMode access_mode, Snapshot snapshot, PlannerInfo *planner_info)
+    : duckdb::Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot), planner_info(planner_info) {
 }
 
 duckdb::unique_ptr<duckdb::Catalog>
@@ -38,7 +38,8 @@ PostgresCatalog::Attach(duckdb::StorageExtensionInfo *storage_info_p, duckdb::Cl
 	}
 	auto &storage_info = static_cast<PostgresStorageExtensionInfo &>(*storage_info_p);
 	auto snapshot = storage_info.snapshot;
-	return duckdb::make_uniq<PostgresCatalog>(db, connection_string, access_mode, snapshot);
+	auto planner_info = storage_info.planner_info;
+	return duckdb::make_uniq<PostgresCatalog>(db, connection_string, access_mode, snapshot, planner_info);
 }
 
 // ------------------ Catalog API ---------------------
@@ -72,7 +73,7 @@ PostgresCatalog::GetSchema(CatalogTransaction transaction, const string &schema_
 
 	CreateSchemaInfo create_schema;
 	create_schema.schema = schema_name;
-	schemas[schema_name] = duckdb::make_uniq<PostgresSchema>(*this, create_schema, snapshot);
+	schemas[schema_name] = duckdb::make_uniq<PostgresSchema>(*this, create_schema, snapshot, planner_info);
 	return schemas[schema_name].get();
 }
 

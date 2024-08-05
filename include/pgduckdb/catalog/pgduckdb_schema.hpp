@@ -7,6 +7,7 @@ extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
 #include "utils/snapshot.h"
+#include "nodes/pathnodes.h"
 }
 
 namespace pgduckdb {
@@ -40,7 +41,7 @@ using duckdb::unique_ptr;
 
 class PostgresSchema : public SchemaCatalogEntry {
 public:
-	PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapshot snapshot);
+	PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapshot snapshot, PlannerInfo *planner_info);
 
 public:
 	// -- Schema API --
@@ -68,6 +69,7 @@ private:
 	case_insensitive_map_t<unique_ptr<PostgresTable>> tables;
 	Snapshot snapshot;
 	Catalog &catalog;
+	PlannerInfo *planner_info;
 };
 
 } // namespace pgduckdb

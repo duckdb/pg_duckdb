@@ -134,13 +134,25 @@ ReplaceView(Oid view) {
 	return std::move(subquery);
 }
 
+static bool IsIndexScan(const Path* nodePath) {
+    if (nodePath == nullptr) {
+        return false;
+    }
+
+    if (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan) {
+        return true;
+    }
+
+    return false;
+}
+
 static RelOptInfo *
-find_matching_rel_entry(Oid relid, PlannerInfo *plannerInfo) {
+FindMatchingRelEntry(Oid relid, PlannerInfo *plannerInfo) {
 	int i = 1;
 	RelOptInfo *node = nullptr;
 	for (; i < plannerInfo->simple_rel_array_size; i++) {
 		if (plannerInfo->simple_rte_array[i]->rtekind == RTE_SUBQUERY && plannerInfo->simple_rel_array[i]) {
-			node = find_matching_rel_entry(relid, plannerInfo->simple_rel_array[i]->subroot);
+			node = FindMatchingRelEntry(relid, plannerInfo->simple_rel_array[i]->subroot);
 			if (node) {
 				return node;
 			}
@@ -183,19 +195,20 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	ReleaseSysCache(tuple);
 
 	RelOptInfo *node = nullptr;
-	Path *nodePath = nullptr;
+	Path *node_path = nullptr;
 
 	if (scan_data.m_query_planner_info) {
-		node = find_matching_rel_entry(relid, scan_data.m_query_planner_info);
-		if (node)
-			nodePath = get_cheapest_fractional_path(node, 0.0);
+		node = FindMatchingRelEntry(relid, scan_data.m_query_planner_info);
+		if (node) {
+			node_path = get_cheapest_fractional_path(node, 0.0);
+		}
 	}
 
-	/* SELECT query will have nodePath so we can return cardinality estimate of scan */
-	Cardinality nodeCardinality = nodePath ? nodePath->rows : 1;
+	/* SELECT query will have node_path so we can return cardinality estimate of scan */
+	Cardinality nodeCardinality = node_path ? node_path->rows : 1;
 
-	if ((nodePath != nullptr && (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan))) {
-		auto children = CreateFunctionIndexScanArguments(nodeCardinality, nodePath, scan_data.m_query_planner_info,
+	if (IsIndexScan(node_path)) {
+		auto children = CreateFunctionIndexScanArguments(nodeCardinality, node_path, scan_data.m_query_planner_info,
 		                                                 GetActiveSnapshot());
 		auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 		table_function->function =

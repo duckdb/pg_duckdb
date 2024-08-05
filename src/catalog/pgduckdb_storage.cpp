@@ -10,10 +10,10 @@ CreateTransactionManager(duckdb::StorageExtensionInfo *storage_info, duckdb::Att
 	return duckdb::make_uniq<duckdb::PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>());
 }
 
-PostgresStorageExtension::PostgresStorageExtension(Snapshot snapshot) {
+PostgresStorageExtension::PostgresStorageExtension(Snapshot snapshot, PlannerInfo *planner_info) {
 	attach = PostgresCatalog::Attach;
 	create_transaction_manager = CreateTransactionManager;
-	storage_info = duckdb::make_uniq<PostgresStorageExtensionInfo>(snapshot);
+	storage_info = duckdb::make_uniq<PostgresStorageExtensionInfo>(snapshot, planner_info);
 }
 
 } // namespace pgduckdb
