@@ -65,106 +65,6 @@ FindMatchingRelation(const duckdb::string &to_find) {
 	return InvalidOid;
 }
 
-static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>
-CreateFunctionSeqScanArguments(uint64 cardinality, Oid relid, Snapshot snapshot) {
-	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("cardinality"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::UBIGINT(cardinality))));
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("relid"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::UINTEGER(relid))));
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(snapshot)))));
-
-	return children;
-}
-
-static duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>>
-CreateFunctionIndexScanArguments(uint64_t cardinality, Path *path, PlannerInfo *plannerInfo, Snapshot snapshot) {
-	duckdb::vector<duckdb::unique_ptr<duckdb::ParsedExpression>> children;
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("cardinality"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::UBIGINT(cardinality))));
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("path"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(path)))));
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("plannerInfo"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(
-	        duckdb::Value::POINTER(duckdb::CastPointerToValue(plannerInfo)))));
-
-	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("snapshot"),
-	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(snapshot)))));
-
-	return children;
-}
-
-duckdb::unique_ptr<duckdb::TableRef>
-ReplaceView(Oid view) {
-	auto oid = ObjectIdGetDatum(view);
-	Datum viewdef = DirectFunctionCall1(pg_get_viewdef, oid);
-	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
-
-	if (!view_definition) {
-		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", view);
-	}
-
-	duckdb::Parser parser;
-	parser.ParseQuery(view_definition);
-	auto statements = std::move(parser.statements);
-	if (statements.size() != 1) {
-		elog(ERROR, "View definition contained more than 1 statement!");
-	}
-
-	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
-		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definition);
-	}
-
-	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
-	auto subquery = duckdb::make_uniq<duckdb::SubqueryRef>(std::move(select));
-	return std::move(subquery);
-}
-
-static bool IsIndexScan(const Path* nodePath) {
-    if (nodePath == nullptr) {
-        return false;
-    }
-
-    if (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan) {
-        return true;
-    }
-
-    return false;
-}
-
-static RelOptInfo *
-FindMatchingRelEntry(Oid relid, PlannerInfo *plannerInfo) {
-	int i = 1;
-	RelOptInfo *node = nullptr;
-	for (; i < plannerInfo->simple_rel_array_size; i++) {
-		if (plannerInfo->simple_rte_array[i]->rtekind == RTE_SUBQUERY && plannerInfo->simple_rel_array[i]) {
-			node = FindMatchingRelEntry(relid, plannerInfo->simple_rel_array[i]->subroot);
-			if (node) {
-				return node;
-			}
-		} else if (plannerInfo->simple_rte_array[i]->rtekind == RTE_RELATION) {
-			if (relid == plannerInfo->simple_rte_array[i]->relid) {
-				return plannerInfo->simple_rel_array[i];
-			}
-		};
-	}
-	return nullptr;
-}
-
 duckdb::unique_ptr<duckdb::TableRef>
 PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
                         duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
@@ -188,42 +88,34 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
 
 	// Check if the relation is a view
-	if (relForm->relkind == RELKIND_VIEW) {
+	if (relForm->relkind != RELKIND_VIEW) {
 		ReleaseSysCache(tuple);
-		return ReplaceView(relid);
+		return nullptr;
 	}
 	ReleaseSysCache(tuple);
 
-	RelOptInfo *node = nullptr;
-	Path *node_path = nullptr;
+	auto oid = ObjectIdGetDatum(relid);
+	Datum viewdef = DirectFunctionCall1(pg_get_viewdef, oid);
+	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
 
-	if (scan_data.m_query_planner_info) {
-		node = FindMatchingRelEntry(relid, scan_data.m_query_planner_info);
-		if (node) {
-			node_path = get_cheapest_fractional_path(node, 0.0);
-		}
+	if (!view_definition) {
+		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", relid);
 	}
 
-	/* SELECT query will have node_path so we can return cardinality estimate of scan */
-	Cardinality nodeCardinality = node_path ? node_path->rows : 1;
-
-	if (IsIndexScan(node_path)) {
-		auto children = CreateFunctionIndexScanArguments(nodeCardinality, node_path, scan_data.m_query_planner_info,
-		                                                 GetActiveSnapshot());
-		auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
-		table_function->function =
-		    duckdb::make_uniq<duckdb::FunctionExpression>("postgres_index_scan", std::move(children));
-		table_function->alias = table_name;
-		return std::move(table_function);
-	} else {
-		auto children = CreateFunctionSeqScanArguments(nodeCardinality, relid, GetActiveSnapshot());
-		auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
-		table_function->function =
-		    duckdb::make_uniq<duckdb::FunctionExpression>("postgres_seq_scan", std::move(children));
-		table_function->alias = table_name;
-		return std::move(table_function);
+	duckdb::Parser parser;
+	parser.ParseQuery(view_definition);
+	auto statements = std::move(parser.statements);
+	if (statements.size() != 1) {
+		elog(ERROR, "View definition contained more than 1 statement!");
 	}
-	return nullptr;
+
+	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
+		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definition);
+	}
+
+	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
+	auto subquery = duckdb::make_uniq<duckdb::SubqueryRef>(std::move(select));
+	return std::move(subquery);
 }
 
 } // namespace pgduckdb

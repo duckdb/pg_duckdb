@@ -78,11 +78,16 @@ duckdb::unique_ptr<duckdb::Connection>
 DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColumns, const char *query) {
 	auto db = DuckdbOpenDatabase();
 
-	/* Add tables */
-	// db->instance->config.replacement_scans.emplace_back(
-	//     pgduckdb::PostgresReplacementScan,
-	//     duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, plannerInfo,
-	//                                                                                      neededColumns, query));
+	// Transforms VIEWs into their creation query
+	db->instance->config.replacement_scans.emplace_back(
+		pgduckdb::PostgresReplacementScan,
+	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(
+			rtables,
+			plannerInfo,
+			neededColumns,
+			query
+		)
+	);
 
 	auto &config = duckdb::DBConfig::GetConfig(*db->instance);
 	config.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>(GetActiveSnapshot(), plannerInfo);
