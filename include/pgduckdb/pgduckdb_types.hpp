@@ -21,7 +21,7 @@ duckdb::LogicalType ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute
 Oid GetPostgresDuckDBType(duckdb::LogicalType type);
 void ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset);
 void ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col);
-void InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scanGlobalState,
-                          duckdb::shared_ptr<PostgresScanLocalState> scanLocalState, HeapTupleData *tuple);
+void InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scan_global_state,
+                          duckdb::shared_ptr<PostgresScanLocalState> scan_local_state, HeapTupleData *tuple);
 
 } // namespace pgduckdb

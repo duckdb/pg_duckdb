@@ -19,66 +19,66 @@
 namespace pgduckdb {
 
 static bool
-duckdbCheckDataDirectory(const char *dataDirectory) {
+CheckDataDirectory(const char *data_directory) {
 	struct stat info;
 
-	if (lstat(dataDirectory, &info) != 0) {
+	if (lstat(data_directory, &info) != 0) {
 		if (errno == ENOENT) {
-			elog(DEBUG2, "Directory `%s` doesn't exists.", dataDirectory);
+			elog(DEBUG2, "Directory `%s` doesn't exists.", data_directory);
 			return false;
 		} else if (errno == EACCES) {
-			elog(ERROR, "Can't access `%s` directory.", dataDirectory);
+			elog(ERROR, "Can't access `%s` directory.", data_directory);
 		} else {
-			elog(ERROR, "Other error when reading `%s`.", dataDirectory);
+			elog(ERROR, "Other error when reading `%s`.", data_directory);
 		}
 	}
 
 	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "`%s` is not directory.", dataDirectory);
+		elog(WARNING, "`%s` is not directory.", data_directory);
 	}
 
-	if (access(dataDirectory, R_OK | W_OK)) {
-		elog(ERROR, "Directory `%s` permission problem.", dataDirectory);
+	if (access(data_directory, R_OK | W_OK)) {
+		elog(ERROR, "Directory `%s` permission problem.", data_directory);
 	}
 
 	return true;
 }
 
 static std::string
-duckdbGetExtensionDirectory() {
-	StringInfo duckdbExtensionDataDirectory = makeStringInfo();
-	appendStringInfo(duckdbExtensionDataDirectory, "%s/duckdb_extensions", DataDir);
+GetExtensionDirectory() {
+	StringInfo duckdb_extension_data_directory = makeStringInfo();
+	appendStringInfo(duckdb_extension_data_directory, "%s/duckdb_extensions", DataDir);
 
-	if (!duckdbCheckDataDirectory(duckdbExtensionDataDirectory->data)) {
-		if (mkdir(duckdbExtensionDataDirectory->data, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
+	if (!CheckDataDirectory(duckdb_extension_data_directory->data)) {
+		if (mkdir(duckdb_extension_data_directory->data, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
 			int error = errno;
-			pfree(duckdbExtensionDataDirectory->data);
+			pfree(duckdb_extension_data_directory->data);
 			elog(ERROR, "Creating duckdb extensions directory failed with reason `%s`\n", strerror(error));
 		}
-		elog(DEBUG2, "Created %s as `duckdb.data_dir`", duckdbExtensionDataDirectory->data);
+		elog(DEBUG2, "Created %s as `duckdb.data_dir`", duckdb_extension_data_directory->data);
 	};
 
-	std::string duckdbExtensionDirectory(duckdbExtensionDataDirectory->data);
-	pfree(duckdbExtensionDataDirectory->data);
-	return duckdbExtensionDirectory;
+	std::string duckdb_extension_directory(duckdb_extension_data_directory->data);
+	pfree(duckdb_extension_data_directory->data);
+	return duckdb_extension_directory;
 }
 
 duckdb::unique_ptr<duckdb::DuckDB>
 DuckdbOpenDatabase() {
 	duckdb::DBConfig config;
-	config.SetOptionByName("extension_directory", duckdbGetExtensionDirectory());
+	config.SetOptionByName("extension_directory", GetExtensionDirectory());
 	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 }
 
 duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColumns, const char *query) {
+DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
 	auto db = DuckdbOpenDatabase();
 
 	/* Add tables */
 	db->instance->config.replacement_scans.emplace_back(
 	    pgduckdb::PostgresReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, plannerInfo,
-	                                                                                     neededColumns, query));
+	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, planner_info,
+	                                                                                     needed_columns, query));
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
@@ -99,42 +99,42 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo, List *neededColu
 	catalog.CreateTableFunction(context, &index_scan_info);
 	context.transaction.Commit();
 
-	auto duckdbSecrets = ReadDuckdbSecrets();
+	auto duckdb_secrets = ReadDuckdbSecrets();
 
-	int secretId = 0;
-	for (auto &secret : duckdbSecrets) {
-		StringInfo secretKey = makeStringInfo();
-		bool isR2CloudSecret = (secret.type.rfind("R2", 0) == 0);
-		appendStringInfo(secretKey, "CREATE SECRET duckdbSecret_%d ", secretId);
-		appendStringInfo(secretKey, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
+	int secret_id = 0;
+	for (auto &secret : duckdb_secrets) {
+		StringInfo secret_key = makeStringInfo();
+		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
+		appendStringInfo(secret_key, "CREATE SECRET duckdbSecret_%d ", secret_id);
+		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
 		                 secret.secret.c_str());
-		if (secret.region.length() && !isR2CloudSecret) {
-			appendStringInfo(secretKey, ", REGION '%s'", secret.region.c_str());
+		if (secret.region.length() && !is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
 		}
-		if (secret.endpoint.length() && !isR2CloudSecret) {
-			appendStringInfo(secretKey, ", ENDPOINT '%s'", secret.endpoint.c_str());
+		if (secret.endpoint.length() && !is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
 		}
-		if (isR2CloudSecret) {
-			appendStringInfo(secretKey, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
+		if (is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
 		}
-		appendStringInfo(secretKey, ");");
-		context.Query(secretKey->data, false);
-		pfree(secretKey->data);
-		secretId++;
+		appendStringInfo(secret_key, ");");
+		context.Query(secret_key->data, false);
+		pfree(secret_key->data);
+		secret_id++;
 	}
 
-	auto duckdbExtensions = ReadDuckdbExtensions();
+	auto duckdb_extensions = ReadDuckdbExtensions();
 
-	for (auto &extension : duckdbExtensions) {
-		StringInfo duckdbExtension = makeStringInfo();
+	for (auto &extension : duckdb_extensions) {
+		StringInfo duckdb_extension = makeStringInfo();
 		if (extension.enabled) {
-			appendStringInfo(duckdbExtension, "LOAD %s;", extension.name.c_str());
-			auto res = context.Query(duckdbExtension->data, false);
+			appendStringInfo(duckdb_extension, "LOAD %s;", extension.name.c_str());
+			auto res = context.Query(duckdb_extension->data, false);
 			if (res->HasError()) {
 				elog(ERROR, "Extension `%s` could not be loaded with DuckDB", extension.name.c_str());
 			}
 		}
-		pfree(duckdbExtension->data);
+		pfree(duckdb_extension->data);
 	}
 
 	return connection;

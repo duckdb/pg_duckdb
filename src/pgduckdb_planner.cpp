@@ -16,11 +16,11 @@ extern "C" {
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 static PlannerInfo *
-duckdb_plan_query(Query *parse, ParamListInfo boundParams) {
+PlanQuery(Query *parse, ParamListInfo bound_params) {
 
 	PlannerGlobal *glob = makeNode(PlannerGlobal);
 
-	glob->boundParams = boundParams;
+	glob->boundParams = bound_params;
 	glob->subplans = NIL;
 	glob->subroots = NIL;
 	glob->rewindPlanIDs = NULL;
@@ -42,7 +42,7 @@ duckdb_plan_query(Query *parse, ParamListInfo boundParams) {
 }
 
 static Plan *
-duckdb_create_plan(Query *query, const char *queryString, ParamListInfo boundParams) {
+CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 
 	List *rtables = query->rtable;
 
@@ -51,23 +51,23 @@ duckdb_create_plan(Query *query, const char *queryString, ParamListInfo boundPar
 	List *vars = list_concat(pull_var_clause((Node *)query->targetList, flags),
 	                         pull_var_clause((Node *)query->jointree->quals, flags));
 
-	PlannerInfo *queryPlannerInfo = duckdb_plan_query(query, boundParams);
-	auto duckdbConnection = pgduckdb::DuckdbCreateConnection(rtables, queryPlannerInfo, vars, queryString);
-	auto context = duckdbConnection->context;
+	PlannerInfo *query_planner_info = PlanQuery(query, bound_params);
+	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
+	auto context = duckdb_connection->context;
 
-	auto preparedQuery = context->Prepare(queryString);
+	auto prepared_query = context->Prepare(query_string);
 
-	if (preparedQuery->HasError()) {
-		elog(WARNING, "(DuckDB) %s", preparedQuery->GetError().c_str());
+	if (prepared_query->HasError()) {
+		elog(WARNING, "(DuckDB) %s", prepared_query->GetError().c_str());
 		return nullptr;
 	}
 
-	CustomScan *duckdbNode = makeNode(CustomScan);
+	CustomScan *duckdb_node = makeNode(CustomScan);
 
-	auto &preparedResultTypes = preparedQuery->GetTypes();
+	auto &prepared_result_types = prepared_query->GetTypes();
 
-	for (auto i = 0; i < preparedResultTypes.size(); i++) {
-		auto &column = preparedResultTypes[i];
+	for (auto i = 0; i < prepared_result_types.size(); i++) {
+		auto &column = prepared_result_types[i];
 		Oid postgresColumnOid = pgduckdb::GetPostgresDuckDBType(column);
 
 		HeapTuple tp;
@@ -81,25 +81,25 @@ duckdb_create_plan(Query *query, const char *queryString, ParamListInfo boundPar
 
 		Var *var = makeVar(INDEX_VAR, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
 
-		duckdbNode->custom_scan_tlist =
-		    lappend(duckdbNode->custom_scan_tlist,
-		            makeTargetEntry((Expr *)var, i + 1, (char *)preparedQuery->GetNames()[i].c_str(), false));
+		duckdb_node->custom_scan_tlist =
+		    lappend(duckdb_node->custom_scan_tlist,
+		            makeTargetEntry((Expr *)var, i + 1, (char *)prepared_query->GetNames()[i].c_str(), false));
 
 		ReleaseSysCache(tp);
 	}
 
-	duckdbNode->custom_private = list_make2(duckdbConnection.release(), preparedQuery.release());
-	duckdbNode->methods = &duckdb_scan_scan_methods;
+	duckdb_node->custom_private = list_make2(duckdb_connection.release(), prepared_query.release());
+	duckdb_node->methods = &duckdb_scan_scan_methods;
 
-	return (Plan *)duckdbNode;
+	return (Plan *)duckdb_node;
 }
 
 PlannedStmt *
-duckdb_plan_node(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams) {
+DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	/* We need to check can we DuckDB create plan */
-	Plan *duckdbPlan = (Plan *)castNode(CustomScan, duckdb_create_plan(parse, query_string, boundParams));
+	Plan *duckdb_plan = (Plan *)castNode(CustomScan, CreatePlan(parse, query_string, bound_params));
 
-	if (!duckdbPlan) {
+	if (!duckdb_plan) {
 		return nullptr;
 	}
 
@@ -114,7 +114,7 @@ duckdb_plan_node(Query *parse, const char *query_string, int cursorOptions, Para
 	result->transientPlan = false;
 	result->dependsOnRole = false;
 	result->parallelModeNeeded = false;
-	result->planTree = duckdbPlan;
+	result->planTree = duckdb_plan;
 	result->rtable = NULL;
 	result->permInfos = NULL;
 	result->resultRelations = NULL;

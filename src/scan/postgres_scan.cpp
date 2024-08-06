@@ -57,10 +57,10 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 
 static Oid
 FindMatchingRelation(const duckdb::string &to_find) {
-	RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
-	Oid relOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, true);
-	if (relOid != InvalidOid) {
-		return relOid;
+	RangeVar *table_range_var = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
+	Oid rel_oid = RangeVarGetRelid(table_range_var, AccessShareLock, true);
+	if (rel_oid != InvalidOid) {
+		return rel_oid;
 	}
 	return InvalidOid;
 }
@@ -97,7 +97,7 @@ CreateFunctionIndexScanArguments(uint64_t cardinality, Path *path, PlannerInfo *
 	    duckdb::make_uniq<duckdb::ConstantExpression>(duckdb::Value::POINTER(duckdb::CastPointerToValue(path)))));
 
 	children.push_back(duckdb::make_uniq<duckdb::ComparisonExpression>(
-	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("plannerInfo"),
+	    duckdb::ExpressionType::COMPARE_EQUAL, duckdb::make_uniq<duckdb::ColumnRefExpression>("planner_info"),
 	    duckdb::make_uniq<duckdb::ConstantExpression>(
 	        duckdb::Value::POINTER(duckdb::CastPointerToValue(plannerInfo)))));
 
@@ -111,22 +111,22 @@ CreateFunctionIndexScanArguments(uint64_t cardinality, Path *path, PlannerInfo *
 duckdb::unique_ptr<duckdb::TableRef>
 ReplaceView(Oid view) {
 	auto oid = ObjectIdGetDatum(view);
-	Datum viewdef = DirectFunctionCall1(pg_get_viewdef, oid);
-	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
+	Datum view_def = DirectFunctionCall1(pg_get_viewdef, oid);
+	auto view_definiton = text_to_cstring(DatumGetTextP(view_def));
 
-	if (!view_definition) {
+	if (!view_definiton) {
 		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", view);
 	}
 
 	duckdb::Parser parser;
-	parser.ParseQuery(view_definition);
+	parser.ParseQuery(view_definiton);
 	auto statements = std::move(parser.statements);
 	if (statements.size() != 1) {
 		elog(ERROR, "View definition contained more than 1 statement!");
 	}
 
 	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
-		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definition);
+		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definiton);
 	}
 
 	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
@@ -135,18 +135,18 @@ ReplaceView(Oid view) {
 }
 
 static RelOptInfo *
-find_matching_rel_entry(Oid relid, PlannerInfo *plannerInfo) {
+FindMatchingRelEntry(Oid relid, PlannerInfo *planner_info) {
 	int i = 1;
 	RelOptInfo *node = nullptr;
-	for (; i < plannerInfo->simple_rel_array_size; i++) {
-		if (plannerInfo->simple_rte_array[i]->rtekind == RTE_SUBQUERY && plannerInfo->simple_rel_array[i]) {
-			node = find_matching_rel_entry(relid, plannerInfo->simple_rel_array[i]->subroot);
+	for (; i < planner_info->simple_rel_array_size; i++) {
+		if (planner_info->simple_rte_array[i]->rtekind == RTE_SUBQUERY && planner_info->simple_rel_array[i]) {
+			node = FindMatchingRelEntry(relid, planner_info->simple_rel_array[i]->subroot);
 			if (node) {
 				return node;
 			}
-		} else if (plannerInfo->simple_rte_array[i]->rtekind == RTE_RELATION) {
-			if (relid == plannerInfo->simple_rte_array[i]->relid) {
-				return plannerInfo->simple_rel_array[i];
+		} else if (planner_info->simple_rte_array[i]->rtekind == RTE_RELATION) {
+			if (relid == planner_info->simple_rte_array[i]->relid) {
+				return planner_info->simple_rel_array[i];
 			}
 		};
 	}
@@ -157,7 +157,7 @@ duckdb::unique_ptr<duckdb::TableRef>
 PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
                         duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
 
-	auto &table_name = input.table_name;
+	auto table_name = duckdb::ReplacementScan::GetFullPath(input);
 	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
 
 	/* Check name against query table list and verify that it is heap table */
@@ -183,19 +183,20 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	ReleaseSysCache(tuple);
 
 	RelOptInfo *node = nullptr;
-	Path *nodePath = nullptr;
+	Path *node_path = nullptr;
 
 	if (scan_data.m_query_planner_info) {
-		node = find_matching_rel_entry(relid, scan_data.m_query_planner_info);
-		if (node)
-			nodePath = get_cheapest_fractional_path(node, 0.0);
+		node = FindMatchingRelEntry(relid, scan_data.m_query_planner_info);
+		if (node) {
+			node_path = get_cheapest_fractional_path(node, 0.0);
+		}
 	}
 
 	/* SELECT query will have nodePath so we can return cardinality estimate of scan */
-	Cardinality nodeCardinality = nodePath ? nodePath->rows : 1;
+	Cardinality nodeCardinality = node_path ? node_path->rows : 1;
 
-	if ((nodePath != nullptr && (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan))) {
-		auto children = CreateFunctionIndexScanArguments(nodeCardinality, nodePath, scan_data.m_query_planner_info,
+	if ((node_path != nullptr && (node_path->pathtype == T_IndexScan || node_path->pathtype == T_IndexOnlyScan))) {
+		auto children = CreateFunctionIndexScanArguments(nodeCardinality, node_path, scan_data.m_query_planner_info,
 		                                                 GetActiveSnapshot());
 		auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 		table_function->function =

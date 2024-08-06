@@ -22,16 +22,15 @@ extern "C" {
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 
-static constexpr char duckdbCopyS3FilenamePrefix[] = "s3://";
-static constexpr char duckdbCopyGCSFilenamePrefix[] = "gs://";
-static constexpr char duckdbCopyR2FilenamePrefix[] = "r2://";
+static constexpr char s3_filename_prefix[] = "s3://";
+static constexpr char gcs_filename_prefix[] = "gs://";
+static constexpr char r2_filename_prefix[] = "r2://";
 
 static bool
-create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List **vars, int stmt_location,
-                                 int stmt_len) {
+CreateRelationCopyParseState(ParseState *pstate, const CopyStmt *stmt, List **vars, int stmt_location, int stmt_len) {
 	ParseNamespaceItem *nsitem;
 	RTEPermissionInfo *perminfo;
-	TupleDesc tupDesc;
+	TupleDesc tuple_desc;
 	List *attnums;
 	ListCell *cur;
 	Relation rel;
@@ -47,8 +46,8 @@ create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List 
 	perminfo = nsitem->p_perminfo;
 	perminfo->requiredPerms = ACL_SELECT;
 
-	tupDesc = RelationGetDescr(rel);
-	attnums = CopyGetAttnums(tupDesc, rel, stmt->attlist);
+	tuple_desc = RelationGetDescr(rel);
+	attnums = CopyGetAttnums(tuple_desc, rel, stmt->attlist);
 
 	foreach (cur, attnums) {
 		int attno;
@@ -56,9 +55,9 @@ create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List 
 		attno = lfirst_int(cur) - FirstLowInvalidHeapAttributeNumber;
 		bms = &perminfo->selectedCols;
 		*bms = bms_add_member(*bms, attno);
-		*vars = lappend(*vars, makeVar(1, lfirst_int(cur), tupDesc->attrs[lfirst_int(cur) - 1].atttypid,
-		                               tupDesc->attrs[lfirst_int(cur) - 1].atttypmod,
-		                               tupDesc->attrs[lfirst_int(cur) - 1].attcollation, 0));
+		*vars = lappend(*vars, makeVar(1, lfirst_int(cur), tuple_desc->attrs[lfirst_int(cur) - 1].atttypid,
+		                               tuple_desc->attrs[lfirst_int(cur) - 1].atttypmod,
+		                               tuple_desc->attrs[lfirst_int(cur) - 1].attcollation, 0));
 	}
 
 	if (!ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), false)) {
@@ -81,35 +80,35 @@ create_relation_copy_parse_state(ParseState *pstate, const CopyStmt *stmt, List 
 }
 
 bool
-duckdb_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment *queryEnv, uint64 *processed) {
-	CopyStmt *copyStmt = (CopyStmt *)pstmt->utilityStmt;
+DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env, uint64 *processed) {
+	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
 
 	/* Copy `filename` should start with S3/GS/R2 prefix */
-	if (duckdb::string(copyStmt->filename).rfind(duckdbCopyS3FilenamePrefix, 0) &&
-	    duckdb::string(copyStmt->filename).rfind(duckdbCopyGCSFilenamePrefix, 0) &&
-	    duckdb::string(copyStmt->filename).rfind(duckdbCopyR2FilenamePrefix, 0)) {
+	if (duckdb::string(copy_stmt->filename).rfind(s3_filename_prefix, 0) &&
+	    duckdb::string(copy_stmt->filename).rfind(gcs_filename_prefix, 0) &&
+	    duckdb::string(copy_stmt->filename).rfind(r2_filename_prefix, 0)) {
 		return false;
 	}
 
 	/* We handle only COPY .. TO */
-	if (copyStmt->is_from) {
+	if (copy_stmt->is_from) {
 		return false;
 	}
 
 	List *rtables = NIL;
 	List *vars = NIL;
 
-	if (copyStmt->query) {
+	if (copy_stmt->query) {
 		List *rewritten;
-		RawStmt *rawStmt;
+		RawStmt *raw_stmt;
 		Query *query;
 
-		rawStmt = makeNode(RawStmt);
-		rawStmt->stmt = copyStmt->query;
-		rawStmt->stmt_location = pstmt->stmt_location;
-		rawStmt->stmt_len = pstmt->stmt_len;
+		raw_stmt = makeNode(RawStmt);
+		raw_stmt->stmt = copy_stmt->query;
+		raw_stmt->stmt_location = pstmt->stmt_location;
+		raw_stmt->stmt_len = pstmt->stmt_len;
 
-		rewritten = pg_analyze_and_rewrite_fixedparams(rawStmt, queryString, NULL, 0, NULL);
+		rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
 		query = linitial_node(Query, rewritten);
 
 		/* Extract required vars for table */
@@ -118,16 +117,16 @@ duckdb_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment
 		                   pull_var_clause((Node *)query->jointree->quals, flags));
 	} else {
 		ParseState *pstate = make_parsestate(NULL);
-		pstate->p_sourcetext = queryString;
-		pstate->p_queryEnv = queryEnv;
-		if (!create_relation_copy_parse_state(pstate, copyStmt, &vars, pstmt->stmt_location, pstmt->stmt_len)) {
+		pstate->p_sourcetext = query_string;
+		pstate->p_queryEnv = query_env;
+		if (!CreateRelationCopyParseState(pstate, copy_stmt, &vars, pstmt->stmt_location, pstmt->stmt_len)) {
 			return false;
 		}
 		rtables = pstate->p_rtable;
 	}
 
-	auto duckdbConnection = pgduckdb::DuckdbCreateConnection(rtables, nullptr, vars, queryString);
-	auto res = duckdbConnection->context->Query(queryString, false);
+	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, nullptr, vars, query_string);
+	auto res = duckdb_connection->context->Query(query_string, false);
 
 	if (res->HasError()) {
 		elog(WARNING, "(Duckdb) %s", res->GetError().c_str());

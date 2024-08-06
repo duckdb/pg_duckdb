@@ -13,29 +13,29 @@ extern "C" {
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/utility/copy.hpp"
 
-static planner_hook_type PrevPlannerHook = NULL;
-static ProcessUtility_hook_type PrevProcessUtilityHook = NULL;
+static planner_hook_type prev_planner_hook = NULL;
+static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
 static bool
-is_duckdb_extension_registered() {
+IsDuckdbExtensionRegistered() {
 	return get_extension_oid("pg_duckdb", true) != InvalidOid;
 }
 
 static bool
-is_catalog_table(List *tables) {
+IsCatalogTable(List *tables) {
 	ListCell *lc;
 	foreach (lc, tables) {
 		RangeTblEntry *table = (RangeTblEntry *)lfirst(lc);
 		if (table->rtekind == RTE_SUBQUERY) {
 			/* Check Subquery rtable list if any table is from PG catalog */
-			if (is_catalog_table(table->subquery->rtable)) {
+			if (IsCatalogTable(table->subquery->rtable)) {
 				return true;
 			}
 		}
 		if (table->relid) {
 			auto rel = RelationIdGetRelation(table->relid);
-			auto namespaceOid = RelationGetNamespace(rel);
-			if (namespaceOid == PG_CATALOG_NAMESPACE || namespaceOid == PG_TOAST_NAMESPACE) {
+			auto namespace_oid = RelationGetNamespace(rel);
+			if (namespace_oid == PG_CATALOG_NAMESPACE || namespace_oid == PG_TOAST_NAMESPACE) {
 				RelationClose(rel);
 				return true;
 			}
@@ -46,7 +46,7 @@ is_catalog_table(List *tables) {
 }
 
 static bool
-is_allowed_statement() {
+IsAllowedStatement() {
 	/* For `SELECT ..` ActivePortal doesn't exist */
 	if (!ActivePortal)
 		return true;
@@ -57,29 +57,29 @@ is_allowed_statement() {
 }
 
 static PlannedStmt *
-duckdb_planner(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams) {
-	if (duckdb_execution && is_allowed_statement() && is_duckdb_extension_registered() && parse->rtable &&
-	    !is_catalog_table(parse->rtable) && parse->commandType == CMD_SELECT) {
-		PlannedStmt *duckdbPlan = duckdb_plan_node(parse, query_string, cursorOptions, boundParams);
-		if (duckdbPlan) {
-			return duckdbPlan;
+DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+	if (duckdb_execution && IsAllowedStatement() && IsDuckdbExtensionRegistered() && parse->rtable &&
+	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
+		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
+		if (duckdb_plan) {
+			return duckdb_plan;
 		}
 	}
 
-	if (PrevPlannerHook) {
-		return PrevPlannerHook(parse, query_string, cursorOptions, boundParams);
+	if (prev_planner_hook) {
+		return prev_planner_hook(parse, query_string, cursor_options, bound_params);
 	} else {
-		return standard_planner(parse, query_string, cursorOptions, boundParams);
+		return standard_planner(parse, query_string, cursor_options, bound_params);
 	}
 }
 
 static void
-duckdb_utility(PlannedStmt *pstmt, const char *queryString, bool readOnlyTree, ProcessUtilityContext context,
-               ParamListInfo params, struct QueryEnvironment *queryEnv, DestReceiver *dest, QueryCompletion *qc) {
+DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
+                  ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
-	if (duckdb_execution && is_duckdb_extension_registered() && IsA(parsetree, CopyStmt)) {
+	if (duckdb_execution && IsDuckdbExtensionRegistered() && IsA(parsetree, CopyStmt)) {
 		uint64 processed;
-		if (duckdb_copy(pstmt, queryString, queryEnv, &processed)) {
+		if (DuckdbCopy(pstmt, query_string, query_env, &processed)) {
 			if (qc) {
 				SetQueryCompletion(qc, CMDTAG_COPY, processed);
 			}
@@ -87,18 +87,18 @@ duckdb_utility(PlannedStmt *pstmt, const char *queryString, bool readOnlyTree, P
 		}
 	}
 
-	if (PrevProcessUtilityHook) {
-		(*PrevProcessUtilityHook)(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
+	if (prev_process_utility_hook) {
+		(*prev_process_utility_hook)(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 	} else {
-		standard_ProcessUtility(pstmt, queryString, readOnlyTree, context, params, queryEnv, dest, qc);
+		standard_ProcessUtility(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 	}
 }
 
 void
-duckdb_init_hooks(void) {
-	PrevPlannerHook = planner_hook;
-	planner_hook = duckdb_planner;
+DuckdbInitHooks(void) {
+	prev_planner_hook = planner_hook;
+	planner_hook = DuckdbPlannerHook;
 
-	PrevProcessUtilityHook = ProcessUtility_hook ? ProcessUtility_hook : standard_ProcessUtility;
-	ProcessUtility_hook = duckdb_utility;
+	prev_process_utility_hook = ProcessUtility_hook ? ProcessUtility_hook : standard_ProcessUtility;
+	ProcessUtility_hook = DuckdbUtilityHook;
 }

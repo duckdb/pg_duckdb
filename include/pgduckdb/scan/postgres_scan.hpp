@@ -41,9 +41,9 @@ public:
 
 struct PostgresReplacementScanData : public duckdb::ReplacementScanData {
 public:
-	PostgresReplacementScanData(List *rtables, PlannerInfo *queryPlannerInfo, List *neededColumns,
+	PostgresReplacementScanData(List *rtables, PlannerInfo *query_planner_info, List *needed_columns,
 	                            const char *query_string)
-	    : m_rtables(rtables), m_query_planner_info(queryPlannerInfo), m_needed_columns(neededColumns),
+	    : m_rtables(rtables), m_query_planner_info(query_planner_info), m_needed_columns(needed_columns),
 	      m_query_string(query_string) {
 	}
 	~PostgresReplacementScanData() override {};

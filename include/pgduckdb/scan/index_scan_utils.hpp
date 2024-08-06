@@ -12,8 +12,7 @@ extern "C" {
 
 namespace pgduckdb {
 
-extern Node *fix_indexqual_operand(Node *node, IndexOptInfo *index, int indexcol);
-extern Node *fix_indexqual_clause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node *clause,
-                                  List *indexcolnos);
+Node *FixIndexQualOperand(Node *node, IndexOptInfo *index, int indexcol);
+Node *FixIndexQualClause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node *clause, List *indexcolnos);
 
 } // namespace pgduckdb
