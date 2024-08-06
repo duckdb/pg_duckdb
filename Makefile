@@ -1,8 +1,8 @@
 .PHONY: duckdb install-duckdb clean-duckdb lintcheck check-regression-duckdb clean-regression .depend
 
-MODULE_big = duckdb
-EXTENSION = duckdb
-DATA = duckdb.control $(wildcard sql/duckdb--*.sql)
+MODULE_big = pg_duckdb
+EXTENSION = pg_duckdb
+DATA = pg_duckdb.control $(wildcard sql/pg_duckdb--*.sql)
 
 SRCS = src/scan/heap_reader.cpp \
 	   src/scan/index_scan_utils.cpp \
