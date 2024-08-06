@@ -31,52 +31,52 @@ extern "C" {
 namespace pgduckdb {
 
 struct varlena *
-_pglz_decompress_datum(const struct varlena *value) {
+PglzDecompressDatum(const struct varlena *value) {
 	struct varlena *result;
-	int32 rawsize;
+	int32 raw_size;
 
 	result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
 
-	rawsize = pglz_decompress((char *)value + VARHDRSZ_COMPRESSED, VARSIZE(value) - VARHDRSZ_COMPRESSED,
-	                          VARDATA(result), VARDATA_COMPRESSED_GET_EXTSIZE(value), true);
-	if (rawsize < 0)
+	raw_size = pglz_decompress((char *)value + VARHDRSZ_COMPRESSED, VARSIZE(value) - VARHDRSZ_COMPRESSED,
+	                           VARDATA(result), VARDATA_COMPRESSED_GET_EXTSIZE(value), true);
+	if (raw_size < 0)
 		ereport(ERROR, (errcode(ERRCODE_DATA_CORRUPTED), errmsg_internal("compressed pglz data is corrupt")));
 
-	SET_VARSIZE(result, rawsize + VARHDRSZ);
+	SET_VARSIZE(result, raw_size + VARHDRSZ);
 
 	return result;
 }
 
 struct varlena *
-_lz4_decompress_datum(const struct varlena *value) {
+Lz4DecompresDatum(const struct varlena *value) {
 #ifndef USE_LZ4
 	return NULL; /* keep compiler quiet */
 #else
-	int32 rawsize;
+	int32 raw_size;
 	struct varlena *result;
 
 	result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
 
-	rawsize = LZ4_decompress_safe((char *)value + VARHDRSZ_COMPRESSED, VARDATA(result),
-	                              VARSIZE(value) - VARHDRSZ_COMPRESSED, VARDATA_COMPRESSED_GET_EXTSIZE(value));
-	if (rawsize < 0)
+	raw_size = LZ4_decompress_safe((char *)value + VARHDRSZ_COMPRESSED, VARDATA(result),
+	                               VARSIZE(value) - VARHDRSZ_COMPRESSED, VARDATA_COMPRESSED_GET_EXTSIZE(value));
+	if (raw_size < 0)
 		ereport(ERROR, (errcode(ERRCODE_DATA_CORRUPTED), errmsg_internal("compressed lz4 data is corrupt")));
 
-	SET_VARSIZE(result, rawsize + VARHDRSZ);
+	SET_VARSIZE(result, raw_size + VARHDRSZ);
 
 	return result;
 #endif
 }
 
 static struct varlena *
-_toast_decompress_datum(struct varlena *attr) {
+ToastDecompressDatum(struct varlena *attr) {
 	ToastCompressionId cmid;
 	cmid = (ToastCompressionId)TOAST_COMPRESS_METHOD(attr);
 	switch (cmid) {
 	case TOAST_PGLZ_COMPRESSION_ID:
-		return _pglz_decompress_datum(attr);
+		return PglzDecompressDatum(attr);
 	case TOAST_LZ4_COMPRESSION_ID:
-		return _lz4_decompress_datum(attr);
+		return Lz4DecompresDatum(attr);
 	default:
 		elog(ERROR, "invalid compression method id %d", TOAST_COMPRESS_METHOD(attr));
 		return NULL; /* keep compiler quiet */
@@ -84,7 +84,7 @@ _toast_decompress_datum(struct varlena *attr) {
 }
 
 static struct varlena *
-_toast_fetch_datum(struct varlena *attr) {
+ToastFetchDatum(struct varlena *attr) {
 	Relation toastrel;
 	struct varlena *result;
 	struct varatt_external toast_pointer;
@@ -119,48 +119,48 @@ _toast_fetch_datum(struct varlena *attr) {
 }
 
 Datum
-DetoastPostgresDatum(struct varlena *attr, bool *shouldFree) {
-	struct varlena *toastedValue = nullptr;
-	*shouldFree = true;
+DetoastPostgresDatum(struct varlena *attr, bool *should_free) {
+	struct varlena *toasted_value = nullptr;
+	*should_free = true;
 	if (VARATT_IS_EXTERNAL_ONDISK(attr)) {
-		toastedValue = _toast_fetch_datum(attr);
-		if (VARATT_IS_COMPRESSED(toastedValue)) {
-			struct varlena *tmp = toastedValue;
-			toastedValue = _toast_decompress_datum(tmp);
+		toasted_value = ToastFetchDatum(attr);
+		if (VARATT_IS_COMPRESSED(toasted_value)) {
+			struct varlena *tmp = toasted_value;
+			toasted_value = ToastDecompressDatum(tmp);
 			duckdb_free(tmp);
 		}
 	} else if (VARATT_IS_EXTERNAL_INDIRECT(attr)) {
 		struct varatt_indirect redirect;
 		VARATT_EXTERNAL_GET_POINTER(redirect, attr);
-		toastedValue = (struct varlena *)redirect.pointer;
-		toastedValue = reinterpret_cast<struct varlena *>(DetoastPostgresDatum(attr, shouldFree));
+		toasted_value = (struct varlena *)redirect.pointer;
+		toasted_value = reinterpret_cast<struct varlena *>(DetoastPostgresDatum(attr, should_free));
 		if (attr == (struct varlena *)redirect.pointer) {
 			struct varlena *result;
 			result = (struct varlena *)(VARSIZE_ANY(attr));
 			memcpy(result, attr, VARSIZE_ANY(attr));
-			toastedValue = result;
+			toasted_value = result;
 		}
 	} else if (VARATT_IS_EXTERNAL_EXPANDED(attr)) {
 		ExpandedObjectHeader *eoh;
 		Size resultsize;
 		eoh = DatumGetEOHP(PointerGetDatum(attr));
 		resultsize = EOH_get_flat_size(eoh);
-		toastedValue = (struct varlena *)duckdb_malloc(resultsize);
-		EOH_flatten_into(eoh, (void *)toastedValue, resultsize);
+		toasted_value = (struct varlena *)duckdb_malloc(resultsize);
+		EOH_flatten_into(eoh, (void *)toasted_value, resultsize);
 	} else if (VARATT_IS_COMPRESSED(attr)) {
-		toastedValue = _toast_decompress_datum(attr);
+		toasted_value = ToastDecompressDatum(attr);
 	} else if (VARATT_IS_SHORT(attr)) {
 		Size data_size = VARSIZE_SHORT(attr) - VARHDRSZ_SHORT;
 		Size new_size = data_size + VARHDRSZ;
-		toastedValue = (struct varlena *)duckdb_malloc(new_size);
-		SET_VARSIZE(toastedValue, new_size);
-		memcpy(VARDATA(toastedValue), VARDATA_SHORT(attr), data_size);
+		toasted_value = (struct varlena *)duckdb_malloc(new_size);
+		SET_VARSIZE(toasted_value, new_size);
+		memcpy(VARDATA(toasted_value), VARDATA_SHORT(attr), data_size);
 	} else {
-		toastedValue = attr;
-		*shouldFree = false;
+		toasted_value = attr;
+		*should_free = false;
 	}
 
-	return reinterpret_cast<Datum>(toastedValue);
+	return reinterpret_cast<Datum>(toasted_value);
 }
 
 } // namespace pgduckdb

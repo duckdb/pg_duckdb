@@ -5,4 +5,4 @@ extern "C" {
 #include "optimizer/planner.h"
 }
 
-PlannedStmt *duckdb_plan_node(Query *parse, const char *query_string, int cursorOptions, ParamListInfo boundParams);
+PlannedStmt *DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params);

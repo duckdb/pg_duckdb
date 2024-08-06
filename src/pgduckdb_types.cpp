@@ -885,8 +885,8 @@ typedef struct HeapTupleReadState {
 } HeapTupleReadState;
 
 static Datum
-HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heapTupleReadState, int attNum,
-                              bool *isNull) {
+HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heap_tuple_read_state,
+                              int att_num, bool *is_null) {
 	HeapTupleHeader tup = tuple->t_data;
 	bool hasnulls = HeapTupleHasNulls(tuple);
 	int attnum;
@@ -896,31 +896,31 @@ HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleRea
 	bool slow = false;
 	Datum value = (Datum)0;
 
-	attnum = heapTupleReadState.m_last_tuple_att;
+	attnum = heap_tuple_read_state.m_last_tuple_att;
 
 	if (attnum == 0) {
 		/* Start from the first attribute */
 		off = 0;
-		heapTupleReadState.m_slow = false;
+		heap_tuple_read_state.m_slow = false;
 	} else {
 		/* Restore state from previous execution */
-		off = heapTupleReadState.m_page_tuple_offset;
-		slow = heapTupleReadState.m_slow;
+		off = heap_tuple_read_state.m_page_tuple_offset;
+		slow = heap_tuple_read_state.m_slow;
 	}
 
 	tp = (char *)tup + tup->t_hoff;
 
-	for (; attnum < attNum; attnum++) {
+	for (; attnum < att_num; attnum++) {
 		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, attnum);
 
 		if (hasnulls && att_isnull(attnum, bp)) {
 			value = (Datum)0;
-			*isNull = true;
+			*is_null = true;
 			slow = true; /* can't use attcacheoff anymore */
 			continue;
 		}
 
-		*isNull = false;
+		*is_null = false;
 
 		if (!slow && thisatt->attcacheoff >= 0) {
 			off = thisatt->attcacheoff;
@@ -947,78 +947,78 @@ HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleRea
 		}
 	}
 
-	heapTupleReadState.m_last_tuple_att = attNum;
-	heapTupleReadState.m_page_tuple_offset = off;
+	heap_tuple_read_state.m_last_tuple_att = att_num;
+	heap_tuple_read_state.m_page_tuple_offset = off;
 
 	if (slow) {
-		heapTupleReadState.m_slow = true;
+		heap_tuple_read_state.m_slow = true;
 	} else {
-		heapTupleReadState.m_slow = false;
+		heap_tuple_read_state.m_slow = false;
 	}
 
 	return value;
 }
 
 void
-InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scanGlobalState,
-                     duckdb::shared_ptr<PostgresScanLocalState> scanLocalState, HeapTupleData *tuple) {
-	HeapTupleReadState heapTupleReadState = {};
+InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scan_global_state,
+                     duckdb::shared_ptr<PostgresScanLocalState> scan_local_state, HeapTupleData *tuple) {
+	HeapTupleReadState heap_tuple_read_state = {};
 
-	if (scanGlobalState->m_count_tuples_only) {
-		scanLocalState->m_output_vector_size++;
+	if (scan_global_state->m_count_tuples_only) {
+		scan_local_state->m_output_vector_size++;
 		return;
 	}
 
 	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
-	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * scanGlobalState->m_columns.size());
-	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * scanGlobalState->m_columns.size());
+	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * scan_global_state->m_columns.size());
+	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * scan_global_state->m_columns.size());
 
-	bool validTuple = true;
+	bool valid_tuple = true;
 
-	for (auto const &[columnIdx, valueIdx] : scanGlobalState->m_columns) {
-		values[valueIdx] = HeapTupleFetchNextColumnDatum(scanGlobalState->m_tuple_desc, tuple, heapTupleReadState,
+	for (auto const &[columnIdx, valueIdx] : scan_global_state->m_columns) {
+		values[valueIdx] = HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state,
 		                                                 columnIdx + 1, &nulls[valueIdx]);
-		if (scanGlobalState->m_filters &&
-		    (scanGlobalState->m_filters->filters.find(valueIdx) != scanGlobalState->m_filters->filters.end())) {
-			auto &filter = scanGlobalState->m_filters->filters[valueIdx];
-			validTuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
-			                              scanGlobalState->m_tuple_desc->attrs[columnIdx].atttypid);
+		if (scan_global_state->m_filters &&
+		    (scan_global_state->m_filters->filters.find(valueIdx) != scan_global_state->m_filters->filters.end())) {
+			auto &filter = scan_global_state->m_filters->filters[valueIdx];
+			valid_tuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
+			                               scan_global_state->m_tuple_desc->attrs[columnIdx].atttypid);
 		}
 
-		if (!validTuple) {
+		if (!valid_tuple) {
 			break;
 		}
 	}
 
-	for (idx_t idx = 0; validTuple && idx < scanGlobalState->m_projections.size(); idx++) {
+	for (idx_t idx = 0; valid_tuple && idx < scan_global_state->m_projections.size(); idx++) {
 		auto &result = output.data[idx];
 		if (nulls[idx]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(scanLocalState->m_output_vector_size);
+			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
 		} else {
-			idx_t projectionColumnIdx = scanGlobalState->m_columns[scanGlobalState->m_projections[idx]];
-			if (scanGlobalState->m_tuple_desc->attrs[scanGlobalState->m_projections[idx]].attlen == -1) {
-				bool shouldFree = false;
+			idx_t projectionColumnIdx = scan_global_state->m_columns[scan_global_state->m_projections[idx]];
+			if (scan_global_state->m_tuple_desc->attrs[scan_global_state->m_projections[idx]].attlen == -1) {
+				bool should_free = false;
 				values[projectionColumnIdx] =
-				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]), &shouldFree);
-				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scanLocalState->m_output_vector_size);
-				if (shouldFree) {
+				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]), &should_free);
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scan_local_state->m_output_vector_size);
+				if (should_free) {
 					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));
 				}
 			} else {
-				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scanLocalState->m_output_vector_size);
+				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scan_local_state->m_output_vector_size);
 			}
 		}
 	}
 
-	if (validTuple) {
-		scanLocalState->m_output_vector_size++;
+	if (valid_tuple) {
+		scan_local_state->m_output_vector_size++;
 	}
 
-	output.SetCardinality(scanLocalState->m_output_vector_size);
+	output.SetCardinality(scan_local_state->m_output_vector_size);
 	output.Verify();
 
-	scanGlobalState->m_total_row_count++;
+	scan_global_state->m_total_row_count++;
 
 	duckdb_free(values);
 	duckdb_free(nulls);

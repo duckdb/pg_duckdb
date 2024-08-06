@@ -10,8 +10,8 @@ extern "C" {
 
 namespace pgduckdb {
 
-extern duckdb::unique_ptr<duckdb::DuckDB> DuckdbOpenDatabase();
-extern duckdb::unique_ptr<duckdb::Connection> DuckdbCreateConnection(List *rtables, PlannerInfo *plannerInfo,
-                                                                     List *neededColumns, const char *query);
+duckdb::unique_ptr<duckdb::DuckDB> DuckdbOpenDatabase();
+duckdb::unique_ptr<duckdb::Connection> DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info,
+                                                              List *needed_columns, const char *query);
 
 } // namespace pgduckdb

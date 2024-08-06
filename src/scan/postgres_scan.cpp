@@ -56,9 +56,13 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 }
 
 static Oid
-FindMatchingRelation(const duckdb::string &table) {
-	RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(table.c_str(), NULL));
-	Oid relOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, true);
+FindMatchingRelation(const duckdb::string &schema, const duckdb::string &table) {
+	List *name_list = NIL;
+	name_list = lappend(name_list, makeString(pstrdup(schema.c_str())));
+	name_list = lappend(name_list, makeString(pstrdup(table.c_str())));
+
+	RangeVar *table_range_var = makeRangeVarFromNameList(name_list);
+	Oid relOid = RangeVarGetRelid(table_range_var, AccessShareLock, true);
 	if (relOid != InvalidOid) {
 		return relOid;
 	}
@@ -69,10 +73,11 @@ duckdb::unique_ptr<duckdb::TableRef>
 PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
                         duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
 
-	auto &table_name = input.table_name;
+	auto &schema_name = input.schema;
+	auto &table_name = input.table;
 	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
 
-	auto relid = FindMatchingRelation(table_name);
+	auto relid = FindMatchingRelation(schema_name, table_name);
 
 	if (relid == InvalidOid) {
 		return nullptr;

@@ -17,7 +17,7 @@ namespace pgduckdb {
 // Global State
 
 struct PostgresIndexScanGlobalState : public duckdb::GlobalTableFunctionState {
-	explicit PostgresIndexScanGlobalState(IndexScanState *indexScanState, Relation relation,
+	explicit PostgresIndexScanGlobalState(IndexScanState *index_scan_state, Relation relation,
 	                                      duckdb::TableFunctionInitInput &input);
 	~PostgresIndexScanGlobalState();
 	idx_t
@@ -35,7 +35,7 @@ public:
 
 struct PostgresIndexScanLocalState : public duckdb::LocalTableFunctionState {
 public:
-	PostgresIndexScanLocalState(IndexScanDesc indexScanDesc, Relation relation);
+	PostgresIndexScanLocalState(IndexScanDesc index_scan_desc, Relation relation);
 	~PostgresIndexScanLocalState() override;
 
 public:
@@ -49,8 +49,8 @@ public:
 
 struct PostgresIndexScanFunctionData : public duckdb::TableFunctionData {
 public:
-	PostgresIndexScanFunctionData(uint64_t cardinality, Path *path, PlannerInfo *plannerInfo, Oid relationOid,
-	                              Snapshot Snapshot);
+	PostgresIndexScanFunctionData(uint64_t cardinality, Path *path, PlannerInfo *planner_info, Oid relation_oid,
+	                              Snapshot snapshot);
 	~PostgresIndexScanFunctionData() override;
 
 public:
