@@ -11,7 +11,32 @@
 
 #pragma once
 
+#include "c.h"
+
+#include "nodes/pg_list.h"
+
+#if PG_VERSION_NUM < 170000
+
+/*
+ * Remove the original definition of foreach_delete_current so we can redefine
+ * it below in a way that works for the easier to use foreach_* macros.
+ */
+#undef foreach_delete_current
+
 // clang-format off
+/*
+ * foreach_delete_current -
+ *	  delete the current list element from the List associated with a
+ *	  surrounding foreach() or foreach_*() loop, returning the new List
+ *	  pointer; pass the name of the iterator variable.
+ *
+ * This is similar to list_delete_cell(), but it also adjusts the loop's state
+ * so that no list elements will be missed.  Do not delete elements from an
+ * active foreach or foreach_* loop's list in any other way!
+ */
+#define foreach_delete_current(lst, var_or_cell)	\
+	((List *) (var_or_cell##__state.l = list_delete_nth_cell(lst, var_or_cell##__state.i--)))
+
 /*
  * Convenience macros that loop through a list without needing a separate
  * "ListCell *" variable.  Instead, the macros declare a locally-scoped loop
@@ -63,3 +88,4 @@
 			 (var = lfirst_node(type, &var##__state.l->elements[var##__state.i]), true)); \
 			 var##__state.i++)
 // clang-format on
+#endif
