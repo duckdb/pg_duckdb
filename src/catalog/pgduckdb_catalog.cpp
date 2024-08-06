@@ -79,7 +79,7 @@ PostgresCatalog::GetSchema(CatalogTransaction transaction, const string &schema_
 
 void
 PostgresCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) {
-	throw duckdb::NotImplementedException("ScanSchemas not supported yet");
+	return;
 }
 
 unique_ptr<PhysicalOperator>

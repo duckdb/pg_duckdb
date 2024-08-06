@@ -30,7 +30,7 @@ PostgresSchema::PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapsho
 
 void
 PostgresSchema::Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
-	throw duckdb::NotImplementedException("Scan(with context) not supported yet");
+	return;
 }
 
 void
