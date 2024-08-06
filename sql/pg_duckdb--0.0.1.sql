@@ -75,4 +75,10 @@ CREATE TABLE extensions (
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 
+DO $$
+BEGIN
+    RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';
+END
+$$;
+
 RESET search_path;
