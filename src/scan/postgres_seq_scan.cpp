@@ -28,10 +28,10 @@ PostgresSeqScanGlobalState::~PostgresSeqScanGlobalState() {
 //
 
 PostgresSeqScanLocalState::PostgresSeqScanLocalState(Relation relation,
-                                                     duckdb::shared_ptr<HeapReaderGlobalState> heapReaderGlobalState,
-                                                     duckdb::shared_ptr<PostgresScanGlobalState> globalState)
+                                                     duckdb::shared_ptr<HeapReaderGlobalState> heap_reder_global_state,
+                                                     duckdb::shared_ptr<PostgresScanGlobalState> global_state)
     : m_local_state(duckdb::make_shared_ptr<PostgresScanLocalState>()) {
-	m_heap_table_reader = duckdb::make_uniq<HeapReader>(relation, heapReaderGlobalState, globalState, m_local_state);
+	m_heap_table_reader = duckdb::make_uniq<HeapReader>(relation, heap_reder_global_state, global_state, m_local_state);
 }
 
 PostgresSeqScanLocalState::~PostgresSeqScanLocalState() {
@@ -73,16 +73,16 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
 	auto rel = RelationIdGetRelation(relid);
-	auto tupleDesc = RelationGetDescr(rel);
+	auto relation_descr = RelationGetDescr(rel);
 
-	if (!tupleDesc) {
+	if (!relation_descr) {
 		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", relid);
 		RelationClose(rel);
 		return nullptr;
 	}
 
-	for (int i = 0; i < tupleDesc->natts; i++) {
-		Form_pg_attribute attr = &tupleDesc->attrs[i];
+	for (int i = 0; i < relation_descr->natts; i++) {
+		Form_pg_attribute attr = &relation_descr->attrs[i];
 		auto col_name = duckdb::string(NameStr(attr->attname));
 		auto duck_type = ConvertPostgresToDuckColumnType(attr);
 		return_types.push_back(duck_type);
@@ -99,46 +99,46 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresSeqScanFunction::PostgresSeqScanInitGlobal(duckdb::ClientContext &context,
                                                    duckdb::TableFunctionInitInput &input) {
-	auto &bindData = input.bind_data->CastNoConst<PostgresSeqScanFunctionData>();
-	auto globalState = duckdb::make_uniq<PostgresSeqScanGlobalState>(RelationIdGetRelation(bindData.m_relid), input);
-	globalState->m_global_state->m_snapshot = bindData.m_snapshot;
-	globalState->m_relid = bindData.m_relid;
-	return std::move(globalState);
+	auto &bind_data = input.bind_data->CastNoConst<PostgresSeqScanFunctionData>();
+	auto global_state = duckdb::make_uniq<PostgresSeqScanGlobalState>(RelationIdGetRelation(bind_data.m_relid), input);
+	global_state->m_global_state->m_snapshot = bind_data.m_snapshot;
+	global_state->m_relid = bind_data.m_relid;
+	return std::move(global_state);
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
 PostgresSeqScanFunction::PostgresSeqScanInitLocal(duckdb::ExecutionContext &context,
                                                   duckdb::TableFunctionInitInput &input,
                                                   duckdb::GlobalTableFunctionState *gstate) {
-	auto globalState = reinterpret_cast<PostgresSeqScanGlobalState *>(gstate);
+	auto glboal_state = reinterpret_cast<PostgresSeqScanGlobalState *>(gstate);
 	return duckdb::make_uniq<PostgresSeqScanLocalState>(
-	    globalState->m_relation, globalState->m_heap_reader_global_state, globalState->m_global_state);
+	    glboal_state->m_relation, glboal_state->m_heap_reader_global_state, glboal_state->m_global_state);
 }
 
 void
 PostgresSeqScanFunction::PostgresSeqScanFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data,
                                              duckdb::DataChunk &output) {
-	auto &localState = data.local_state->Cast<PostgresSeqScanLocalState>();
+	auto &local_state = data.local_state->Cast<PostgresSeqScanLocalState>();
 
-	localState.m_local_state->m_output_vector_size = 0;
+	local_state.m_local_state->m_output_vector_size = 0;
 
 	/* We have exhausted seq scan of heap table so we can return */
-	if (localState.m_local_state->m_exhausted_scan) {
+	if (local_state.m_local_state->m_exhausted_scan) {
 		output.SetCardinality(0);
 		return;
 	}
 
-	auto has_tuple = localState.m_heap_table_reader->ReadPageTuples(output);
+	auto hasTuple = local_state.m_heap_table_reader->ReadPageTuples(output);
 
-	if (!has_tuple || localState.m_heap_table_reader->GetCurrentBlockNumber() == InvalidBlockNumber) {
-		localState.m_local_state->m_exhausted_scan = true;
+	if (!hasTuple || local_state.m_heap_table_reader->GetCurrentBlockNumber() == InvalidBlockNumber) {
+		local_state.m_local_state->m_exhausted_scan = true;
 	}
 }
 
 duckdb::unique_ptr<duckdb::NodeStatistics>
 PostgresSeqScanFunction::PostgresSeqScanCardinality(duckdb::ClientContext &context, const duckdb::FunctionData *data) {
-	auto &bindData = data->Cast<PostgresSeqScanFunctionData>();
-	return duckdb::make_uniq<duckdb::NodeStatistics>(bindData.m_cardinality, bindData.m_cardinality);
+	auto &bind_data = data->Cast<PostgresSeqScanFunctionData>();
+	return duckdb::make_uniq<duckdb::NodeStatistics>(bind_data.m_cardinality, bind_data.m_cardinality);
 }
 
 } // namespace pgduckdb

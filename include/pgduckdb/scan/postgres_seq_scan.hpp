@@ -39,8 +39,8 @@ public:
 
 struct PostgresSeqScanLocalState : public duckdb::LocalTableFunctionState {
 public:
-	PostgresSeqScanLocalState(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heapReaderGlobalState,
-	                          duckdb::shared_ptr<PostgresScanGlobalState> globalState);
+	PostgresSeqScanLocalState(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
+	                          duckdb::shared_ptr<PostgresScanGlobalState> global_state);
 	~PostgresSeqScanLocalState() override;
 
 public:
@@ -52,7 +52,7 @@ public:
 
 struct PostgresSeqScanFunctionData : public duckdb::TableFunctionData {
 public:
-	PostgresSeqScanFunctionData(uint64_t cardinality, Oid relid, Snapshot Snapshot);
+	PostgresSeqScanFunctionData(uint64_t cardinality, Oid relid, Snapshot snapshot);
 	~PostgresSeqScanFunctionData() override;
 
 public:

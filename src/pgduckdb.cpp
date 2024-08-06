@@ -7,7 +7,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
-static void duckdb_init_guc(void);
+static void DuckdbInitGUC(void);
 
 bool duckdb_execution = true;
 int duckdb_max_threads_per_query = 1;
@@ -17,15 +17,15 @@ PG_MODULE_MAGIC;
 
 void
 _PG_init(void) {
-	duckdb_init_guc();
-	duckdb_init_hooks();
-	duckdb_init_node();
+	DuckdbInitGUC();
+	DuckdbInitHooks();
+	DuckdbInitNode();
 }
 }
 
 /* clang-format off */
 static void
-duckdb_init_guc(void) {
+DuckdbInitGUC(void) {
 
     DefineCustomBoolVariable("duckdb.execution",
                              gettext_noop("Is DuckDB query execution enabled."),

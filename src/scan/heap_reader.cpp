@@ -36,10 +36,10 @@ HeapReaderGlobalState::AssignNextBlockNumber(std::mutex &lock) {
 // HeapReader
 //
 
-HeapReader::HeapReader(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heapReaderGlobalState,
-                       duckdb::shared_ptr<PostgresScanGlobalState> globalState,
-                       duckdb::shared_ptr<PostgresScanLocalState> localState)
-    : m_global_state(globalState), m_heap_reader_global_state(heapReaderGlobalState), m_local_state(localState),
+HeapReader::HeapReader(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
+                       duckdb::shared_ptr<PostgresScanGlobalState> global_state,
+                       duckdb::shared_ptr<PostgresScanLocalState> local_state)
+    : m_global_state(global_state), m_heap_reader_global_state(heap_reader_global_state), m_local_state(local_state),
       m_relation(relation), m_inited(false), m_read_next_page(true), m_block_number(InvalidBlockNumber),
       m_buffer(InvalidBuffer), m_current_tuple_index(InvalidOffsetNumber), m_page_tuples_left(0) {
 	m_tuple.t_data = NULL;

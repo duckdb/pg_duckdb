@@ -5,5 +5,4 @@ extern "C" {
 #include "nodes/plannodes.h"
 }
 
-extern bool duckdb_copy(PlannedStmt *pstmt, const char *queryString, struct QueryEnvironment *queryEnv,
-                        uint64 *processed);
+bool DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env, uint64 *processed);

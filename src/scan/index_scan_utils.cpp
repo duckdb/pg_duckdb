@@ -13,7 +13,7 @@ namespace pgduckdb {
  * expression actually matches the index column it's claimed to.
  */
 Node *
-fix_indexqual_operand(Node *node, IndexOptInfo *index, int indexcol) {
+FixIndexQualOperand(Node *node, IndexOptInfo *index, int indexcol) {
 	Var *result;
 	int pos;
 	ListCell *indexpr_item;
@@ -74,7 +74,7 @@ fix_indexqual_operand(Node *node, IndexOptInfo *index, int indexcol) {
  * or expressions by index Var nodes.
  */
 Node *
-fix_indexqual_clause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node *clause, List *indexcolnos) {
+FixIndexQualClause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node *clause, List *indexcolnos) {
 	/*
 	 * Replace any outer-relation variables with nestloop params.
 	 *
@@ -86,24 +86,24 @@ fix_indexqual_clause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node 
 	if (IsA(clause, OpExpr)) {
 		OpExpr *op = (OpExpr *)clause;
 		/* Replace the indexkey expression with an index Var. */
-		linitial(op->args) = fix_indexqual_operand((Node *)linitial(op->args), index, indexcol);
+		linitial(op->args) = FixIndexQualOperand((Node *)linitial(op->args), index, indexcol);
 	} else if (IsA(clause, RowCompareExpr)) {
 		RowCompareExpr *rc = (RowCompareExpr *)clause;
 		ListCell *lca, *lcai;
 		/* Replace the indexkey expressions with index Vars. */
 		Assert(list_length(rc->largs) == list_length(indexcolnos));
 		forboth(lca, rc->largs, lcai, indexcolnos) {
-			lfirst(lca) = fix_indexqual_operand((Node *)lfirst(lca), index, lfirst_int(lcai));
+			lfirst(lca) = FixIndexQualOperand((Node *)lfirst(lca), index, lfirst_int(lcai));
 		}
 	} else if (IsA(clause, ScalarArrayOpExpr)) {
 		ScalarArrayOpExpr *saop = (ScalarArrayOpExpr *)clause;
 
 		/* Replace the indexkey expression with an index Var. */
-		linitial(saop->args) = fix_indexqual_operand((Node *)linitial(saop->args), index, indexcol);
+		linitial(saop->args) = FixIndexQualOperand((Node *)linitial(saop->args), index, indexcol);
 	} else if (IsA(clause, NullTest)) {
 		NullTest *nt = (NullTest *)clause;
 		/* Replace the indexkey expression with an index Var. */
-		nt->arg = (Expr *)fix_indexqual_operand((Node *)(Node *)nt->arg, index, indexcol);
+		nt->arg = (Expr *)FixIndexQualOperand((Node *)(Node *)nt->arg, index, indexcol);
 	} else
 		elog(ERROR, "unsupported indexqual type: %d", (int)nodeTag(clause));
 

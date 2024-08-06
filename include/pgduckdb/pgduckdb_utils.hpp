@@ -9,7 +9,7 @@
 namespace pgduckdb {
 
 inline std::vector<std::string>
-tokenizeString(char *str, const char delimiter) {
+TokenizeString(char *str, const char delimiter) {
 	std::vector<std::string> v;
 	std::stringstream ss(str); // Turn the string into a stream.
 	std::string tok;
