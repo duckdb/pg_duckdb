@@ -28,7 +28,6 @@ CREATE EXTENSION pg_duckdb;
 ```
 
 **IMPORTANT:** Once loaded you can use DuckDB execution by running `SET duckdb.execution TO true`. This is _opt-in_ to avoid breaking existing queries. To avoid doing that for every session, you can configure it for a certain user by doing `ALTER USER my_analytics_user SET duckdb.execution TO true`.
-```sql
 
 ## Features
 
