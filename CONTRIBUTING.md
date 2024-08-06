@@ -20,7 +20,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## Outside Contributors
 
-* Discuss your intended changes with the core team on Github
+* Discuss your intended changes with the core team on GitHub
 * Announce that you are working or want to work on a specific issue
 * Avoid large pull requests - they are much less likely to be merged as they are incredibly hard to review
 
@@ -42,7 +42,7 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 ## Building
 
-* To build the project, run `make`.
+* To build the project, run `make -j$(nproc)`.
 
 ## Testing
 
@@ -57,17 +57,30 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * Use tabs for indentation, spaces for alignment.
 * Lines should not exceed 120 columns.
-* To make sure the formatting is consistent, please use version 10.0.1, installable through `python3 -m pip install clang-format==10.0.1.1`
+* To make sure the formatting is consistent, please use version 18.1.3, installable through `python3 -m pip install clang-format==10.0.1.1`
 * `clang_format` and `black` enforce these rules automatically, use `make format-fix` to run the formatter.
 * The project also comes with an [`.editorconfig` file](https://editorconfig.org/) that corresponds to these rules.
 
-## C++ Guidelines
+## C/C++ Guidelines
+
+By definition this project needs to interface both with Postgres and DuckDB,
+which are written in C and C++ respectively. These both have fairly different
+coding styles.
+
+### Postgres C Guidelines
+
+* Use memory contexts to allocate memory, e.g. `palloc` or `palloc0`.
+* Casing is very inconsistent in Postgres, we use `CamelCase` for function names and `snake_case` for variables.
+* If you copied code from Postgres, try to keep the Postgres style and prefer to keep it in a separate function so that it is easy to update when the Postgres code changes.
+* TODO: Add more guidelines here.
+
+### DuckDB C++ Guidelines
 
 * Do not use `malloc`, prefer the use of smart pointers. Keywords `new` and `delete` are a code smell.
 * Strongly prefer the use of `unique_ptr` over `shared_ptr`, only use `shared_ptr` if you **absolutely** have to.
 * Use `const` whenever possible.
 * Do **not** import namespaces (e.g. `using std`).
-* All functions in source files in the core (`src` directory) should be part of the `duckdb` namespace.
+* All functions in source files in the core (`src` directory) should be part of the `pgduckdb` namespace.
 * When overriding a virtual method, avoid repeating virtual and always use `override` or `final`.
 * Use `[u]int(8|16|32|64)_t` instead of `int`, `long`, `uint` etc. Use `idx_t` instead of `size_t` for offsets/indices/counts of any kind.
 * Prefer using references over pointers as arguments.
