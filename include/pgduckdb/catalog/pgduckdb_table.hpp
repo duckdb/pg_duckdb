@@ -6,6 +6,16 @@
 extern "C" {
 #include "postgres.h"
 #include "utils/snapshot.h"
+#include "postgres.h"
+#include "catalog/namespace.h"
+#include "catalog/pg_class.h"
+#include "optimizer/planmain.h"
+#include "optimizer/planner.h"
+#include "utils/builtins.h"
+#include "utils/regproc.h"
+#include "utils/snapmgr.h"
+#include "utils/syscache.h"
+#include "access/htup_details.h"
 }
 
 namespace pgduckdb {
@@ -28,20 +38,40 @@ using duckdb::unique_ptr;
 
 class PostgresTable : public TableCatalogEntry {
 public:
-	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Oid oid, Snapshot snapshot);
-
+	virtual ~PostgresTable() {}
 public:
 	static bool PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot);
+protected:
+	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot);
+protected:
+	Snapshot snapshot;
+};
+
+class PostgresHeapTable : public PostgresTable {
+public:
+	PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Oid oid);
 
 public:
 	// -- Table API --
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
-
 private:
 	Oid oid;
-	Snapshot snapshot;
+};
+
+class PostgresIndexTable : public PostgresTable {
+public:
+	PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Path *path, PlannerInfo *planner_info);
+
+public:
+	// -- Table API --
+	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
+	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
+	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+private:
+	Path *path;
+	PlannerInfo *planner_info;
 };
 
 } // namespace pgduckdb

@@ -13,6 +13,13 @@ extern "C" {
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "access/htup_details.h"
+#include "executor/nodeIndexscan.h"
+#include "nodes/pathnodes.h"
+#include "nodes/execnodes.h"
+#include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "parser/parsetree.h"
+#include "utils/rel.h"
 }
 
 namespace pgduckdb {
@@ -146,7 +153,8 @@ PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const
 	// Check if the relation is a view
 	if (relForm->relkind == RELKIND_VIEW) {
 		ReleaseSysCache(tuple);
-		throw duckdb::NotImplementedException("Can't scan VIEWs yet");
+		// Let the replacement scan handle this
+		return nullptr;
 	}
 	ReleaseSysCache(tuple);
 
@@ -159,16 +167,24 @@ PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const
 		}
 	}
 
-	if (IsIndexScan(node_path)) {
-		throw duckdb::NotImplementedException("Can't perform INDEX SCAN yet");
-	}
-
+	duckdb::unique_ptr<PostgresTable> table;
 	CreateTableInfo info;
 	info.table = name;
-	if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
-		return nullptr;
+	if (IsIndexScan(node_path)) {
+		RangeTblEntry *rte = planner_rt_fetch(node_path->parent->relid, planner_info);
+		rel_oid = rte->relid;
+		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
+			return nullptr;
+		}
+		table = duckdb::make_uniq<PostgresIndexTable>(catalog, *this, info, snapshot, node_path, planner_info);
+	} else {
+		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
+			return nullptr;
+		}
+		table = duckdb::make_uniq<PostgresHeapTable>(catalog, *this, info, snapshot, rel_oid);
 	}
-	tables[name] = duckdb::make_uniq<PostgresTable>(catalog, *this, info, rel_oid, snapshot);
+
+	tables[name] = std::move(table);
 	return tables[name].get();
 }
 

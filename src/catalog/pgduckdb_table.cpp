@@ -3,19 +3,29 @@
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
+#include "pgduckdb/scan/postgres_index_scan.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "access/tableam.h"
 #include "access/heapam.h"
 #include "storage/bufmgr.h"
+#include "catalog/namespace.h"
+#include "catalog/pg_class.h"
+#include "optimizer/planmain.h"
+#include "optimizer/planner.h"
+#include "utils/builtins.h"
+#include "utils/regproc.h"
+#include "utils/snapmgr.h"
+#include "utils/syscache.h"
+#include "access/htup_details.h"
+#include "parser/parsetree.h"
 }
 
 namespace pgduckdb {
 
-PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Oid oid,
-                             Snapshot snapshot)
-    : TableCatalogEntry(catalog, schema, info), oid(oid), snapshot(snapshot) {
+PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot)
+    : TableCatalogEntry(catalog, schema, info), snapshot(snapshot) {
 }
 
 bool
@@ -43,20 +53,54 @@ PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapsh
 	return true;
 }
 
+//===--------------------------------------------------------------------===//
+// PostgresHeapTable
+//===--------------------------------------------------------------------===//
+
+PostgresHeapTable::PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Oid oid)
+    : PostgresTable(catalog, schema, info, snapshot), oid(oid) {
+}
+
 unique_ptr<BaseStatistics>
-PostgresTable::GetStatistics(ClientContext &context, column_t column_id) {
+PostgresHeapTable::GetStatistics(ClientContext &context, column_t column_id) {
 	throw duckdb::NotImplementedException("GetStatistics not supported yet");
 }
 
 TableFunction
-PostgresTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
+PostgresHeapTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
 	// TODO: add cardinality
 	bind_data = duckdb::make_uniq<PostgresSeqScanFunctionData>(0, oid, snapshot);
 	return PostgresSeqScanFunction();
 }
 
 TableStorageInfo
-PostgresTable::GetStorageInfo(ClientContext &context) {
+PostgresHeapTable::GetStorageInfo(ClientContext &context) {
+	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
+}
+
+//===--------------------------------------------------------------------===//
+// PostgresIndexTable
+//===--------------------------------------------------------------------===//
+
+PostgresIndexTable::PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Path *path, PlannerInfo *planner_info)
+    : PostgresTable(catalog, schema, info, snapshot), path(path), planner_info(planner_info) {
+}
+
+unique_ptr<BaseStatistics>
+PostgresIndexTable::GetStatistics(ClientContext &context, column_t column_id) {
+	throw duckdb::NotImplementedException("GetStatistics not supported yet");
+}
+
+TableFunction
+PostgresIndexTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
+	// TODO: add cardinality
+	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
+	bind_data = duckdb::make_uniq<PostgresIndexScanFunctionData>(0, path, planner_info, rte->relid, snapshot);
+	return PostgresIndexScanFunction();
+}
+
+TableStorageInfo
+PostgresIndexTable::GetStorageInfo(ClientContext &context) {
 	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
 }
 
