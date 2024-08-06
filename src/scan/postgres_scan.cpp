@@ -56,8 +56,8 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 }
 
 static Oid
-FindMatchingRelation(const duckdb::string &to_find) {
-	RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
+FindMatchingRelation(const duckdb::string &table) {
+	RangeVar *tableRangeVar = makeRangeVarFromNameList(stringToQualifiedNameList(table.c_str(), NULL));
 	Oid relOid = RangeVarGetRelid(tableRangeVar, AccessShareLock, true);
 	if (relOid != InvalidOid) {
 		return relOid;
@@ -72,14 +72,12 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	auto &table_name = input.table_name;
 	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
 
-	/* Check name against query table list and verify that it is heap table */
 	auto relid = FindMatchingRelation(table_name);
 
 	if (relid == InvalidOid) {
 		return nullptr;
 	}
 
-	// Check if the Relation is a VIEW
 	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple)) {
 		elog(ERROR, "Cache lookup failed for relation %u", relid);
@@ -87,7 +85,6 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
 
-	// Check if the relation is a view
 	if (relForm->relkind != RELKIND_VIEW) {
 		ReleaseSysCache(tuple);
 		return nullptr;

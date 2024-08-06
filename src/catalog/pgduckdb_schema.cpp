@@ -122,8 +122,7 @@ static bool IsIndexScan(const Path* nodePath) {
 optional_ptr<CatalogEntry>
 PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const string &entry_name) {
 	if (type != CatalogType::TABLE_ENTRY) {
-		throw duckdb::NotImplementedException("GetEntry (type: %s) not supported yet",
-		                                      duckdb::EnumUtil::ToString(type));
+		return nullptr;
 	}
 
 	auto it = tables.find(entry_name);
