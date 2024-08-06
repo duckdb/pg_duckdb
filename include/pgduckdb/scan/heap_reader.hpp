@@ -28,9 +28,9 @@ public:
 class HeapReader {
 private:
 public:
-	HeapReader(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heapReaderGlobalState,
-	           duckdb::shared_ptr<PostgresScanGlobalState> globalState,
-	           duckdb::shared_ptr<PostgresScanLocalState> localState);
+	HeapReader(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
+	           duckdb::shared_ptr<PostgresScanGlobalState> global_state,
+	           duckdb::shared_ptr<PostgresScanLocalState> local_state);
 	~HeapReader();
 	HeapReader(const HeapReader &other) = delete;
 	HeapReader &operator=(const HeapReader &other) = delete;

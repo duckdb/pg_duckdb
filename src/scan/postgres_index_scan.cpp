@@ -38,8 +38,8 @@ PostgresIndexScanGlobalState::~PostgresIndexScanGlobalState() {
 // PostgresIndexScanLocalState
 //
 
-PostgresIndexScanLocalState::PostgresIndexScanLocalState(IndexScanDesc indexScanDesc, Relation relation)
-    : m_local_state(duckdb::make_shared_ptr<PostgresScanLocalState>()), m_index_scan_desc(indexScanDesc),
+PostgresIndexScanLocalState::PostgresIndexScanLocalState(IndexScanDesc index_scan_desc, Relation relation)
+    : m_local_state(duckdb::make_shared_ptr<PostgresScanLocalState>()), m_index_scan_desc(index_scan_desc),
       m_relation(relation) {
 	m_slot = MakeTupleTableSlot(CreateTupleDescCopy(RelationGetDescr(m_relation)), &TTSOpsBufferHeapTuple);
 }
@@ -52,10 +52,11 @@ PostgresIndexScanLocalState::~PostgresIndexScanLocalState() {
 // PostgresIndexScanFunctionData
 //
 
-PostgresIndexScanFunctionData::PostgresIndexScanFunctionData(uint64_t cardinality, Path *path, PlannerInfo *plannerInfo,
-                                                             Oid relationOid, Snapshot snapshot)
-    : m_cardinality(cardinality), m_path(path), m_planner_info(plannerInfo), m_snapshot(snapshot),
-      m_relation_oid(relationOid) {
+PostgresIndexScanFunctionData::PostgresIndexScanFunctionData(uint64_t cardinality, Path *path,
+                                                             PlannerInfo *planner_info, Oid relation_oid,
+                                                             Snapshot snapshot)
+    : m_cardinality(cardinality), m_path(path), m_planner_info(planner_info), m_snapshot(snapshot),
+      m_relation_oid(relation_oid) {
 }
 
 PostgresIndexScanFunctionData::~PostgresIndexScanFunctionData() {
@@ -70,7 +71,7 @@ PostgresIndexScanFunction::PostgresIndexScanFunction()
                     PostgresIndexScanInitGlobal, PostgresIndexScanInitLocal) {
 	named_parameters["cardinality"] = duckdb::LogicalType::UBIGINT;
 	named_parameters["path"] = duckdb::LogicalType::POINTER;
-	named_parameters["plannerInfo"] = duckdb::LogicalType::POINTER;
+	named_parameters["planner_info"] = duckdb::LogicalType::POINTER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
 	projection_pushdown = true;
 	filter_pushdown = true;
@@ -84,21 +85,21 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
                                                  duckdb::vector<duckdb::string> &names) {
 	auto cardinality = input.named_parameters["cardinality"].GetValue<uint64_t>();
 	auto path = (reinterpret_cast<Path *>(input.named_parameters["path"].GetPointer()));
-	auto plannerInfo = (reinterpret_cast<PlannerInfo *>(input.named_parameters["plannerInfo"].GetPointer()));
+	auto planner_info = (reinterpret_cast<PlannerInfo *>(input.named_parameters["planner_info"].GetPointer()));
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
-	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, plannerInfo);
+	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
 
 	auto rel = RelationIdGetRelation(rte->relid);
-	auto tupleDesc = RelationGetDescr(rel);
+	auto relation_descr = RelationGetDescr(rel);
 
-	if (!tupleDesc) {
+	if (!relation_descr) {
 		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", rel->rd_id);
 		return nullptr;
 	}
 
-	for (int i = 0; i < tupleDesc->natts; i++) {
-		Form_pg_attribute attr = &tupleDesc->attrs[i];
+	for (int i = 0; i < relation_descr->natts; i++) {
+		Form_pg_attribute attr = &relation_descr->attrs[i];
 		auto col_name = duckdb::string(NameStr(attr->attname));
 		auto duck_type = ConvertPostgresToDuckColumnType(attr);
 		return_types.push_back(duck_type);
@@ -110,44 +111,44 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
 
 	RelationClose(rel);
 
-	return duckdb::make_uniq<PostgresIndexScanFunctionData>(cardinality, path, plannerInfo, rte->relid, snapshot);
+	return duckdb::make_uniq<PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid, snapshot);
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresIndexScanFunction::PostgresIndexScanInitGlobal(duckdb::ClientContext &context,
                                                        duckdb::TableFunctionInitInput &input) {
-	auto &bindData = input.bind_data->CastNoConst<PostgresIndexScanFunctionData>();
+	auto &bind_data = input.bind_data->CastNoConst<PostgresIndexScanFunctionData>();
 
-	IndexScanState *indexstate = makeNode(IndexScanState);
-	IndexPath *indexPath = (IndexPath *)bindData.m_path;
+	IndexScanState *index_state = makeNode(IndexScanState);
+	IndexPath *index_path = (IndexPath *)bind_data.m_path;
 
-	indexstate->iss_RelationDesc = index_open(indexPath->indexinfo->indexoid, AccessShareLock);
-	indexstate->iss_RuntimeKeysReady = false;
-	indexstate->iss_RuntimeKeys = NULL;
-	indexstate->iss_NumRuntimeKeys = 0;
+	index_state->iss_RelationDesc = index_open(index_path->indexinfo->indexoid, AccessShareLock);
+	index_state->iss_RuntimeKeysReady = false;
+	index_state->iss_RuntimeKeys = NULL;
+	index_state->iss_NumRuntimeKeys = 0;
 
-	List *stripped_list_clauses = NIL;
-	IndexOptInfo *index = indexPath->indexinfo;
+	List *stripped_clause_list = NIL;
+	IndexOptInfo *index = index_path->indexinfo;
 
 	ListCell *lc;
-	foreach (lc, indexPath->indexclauses) {
+	foreach (lc, index_path->indexclauses) {
 		IndexClause *iclause = lfirst_node(IndexClause, lc);
 		int indexcol = iclause->indexcol;
 		ListCell *lc2;
 		foreach (lc2, iclause->indexquals) {
 			RestrictInfo *rinfo = lfirst_node(RestrictInfo, lc2);
 			Node *clause = (Node *)rinfo->clause;
-			clause = fix_indexqual_clause(bindData.m_planner_info, index, indexcol, clause, iclause->indexcols);
-			stripped_list_clauses = lappend(stripped_list_clauses, clause);
+			clause = FixIndexQualClause(bind_data.m_planner_info, index, indexcol, clause, iclause->indexcols);
+			stripped_clause_list = lappend(stripped_clause_list, clause);
 		}
 	}
 
-	ExecIndexBuildScanKeys((PlanState *)indexstate, indexstate->iss_RelationDesc, stripped_list_clauses, false,
-	                       &indexstate->iss_ScanKeys, &indexstate->iss_NumScanKeys, &indexstate->iss_RuntimeKeys,
-	                       &indexstate->iss_NumRuntimeKeys, NULL, /* no ArrayKeys */
+	ExecIndexBuildScanKeys((PlanState *)index_state, index_state->iss_RelationDesc, stripped_clause_list, false,
+	                       &index_state->iss_ScanKeys, &index_state->iss_NumScanKeys, &index_state->iss_RuntimeKeys,
+	                       &index_state->iss_NumRuntimeKeys, NULL, /* no ArrayKeys */
 	                       NULL);
 
-	return duckdb::make_uniq<PostgresIndexScanGlobalState>(indexstate, RelationIdGetRelation(bindData.m_relation_oid),
+	return duckdb::make_uniq<PostgresIndexScanGlobalState>(index_state, RelationIdGetRelation(bind_data.m_relation_oid),
 	                                                       input);
 }
 
@@ -155,56 +156,55 @@ duckdb::unique_ptr<duckdb::LocalTableFunctionState>
 PostgresIndexScanFunction::PostgresIndexScanInitLocal(duckdb::ExecutionContext &context,
                                                       duckdb::TableFunctionInitInput &input,
                                                       duckdb::GlobalTableFunctionState *gstate) {
-
-	auto &bindData = input.bind_data->CastNoConst<PostgresIndexScanFunctionData>();
-	auto globalState = reinterpret_cast<PostgresIndexScanGlobalState *>(gstate);
+	auto &bind_data = input.bind_data->CastNoConst<PostgresIndexScanFunctionData>();
+	auto global_state = reinterpret_cast<PostgresIndexScanGlobalState *>(gstate);
 
 	IndexScanDesc scandesc =
-	    index_beginscan(globalState->m_relation, globalState->m_index_scan->iss_RelationDesc, bindData.m_snapshot,
-	                    globalState->m_index_scan->iss_NumScanKeys, globalState->m_index_scan->iss_NumOrderByKeys);
+	    index_beginscan(global_state->m_relation, global_state->m_index_scan->iss_RelationDesc, bind_data.m_snapshot,
+	                    global_state->m_index_scan->iss_NumScanKeys, global_state->m_index_scan->iss_NumOrderByKeys);
 
-	if (globalState->m_index_scan->iss_NumRuntimeKeys == 0 || globalState->m_index_scan->iss_RuntimeKeysReady)
-		index_rescan(scandesc, globalState->m_index_scan->iss_ScanKeys, globalState->m_index_scan->iss_NumScanKeys,
-		             globalState->m_index_scan->iss_OrderByKeys, globalState->m_index_scan->iss_NumOrderByKeys);
+	if (global_state->m_index_scan->iss_NumRuntimeKeys == 0 || global_state->m_index_scan->iss_RuntimeKeysReady)
+		index_rescan(scandesc, global_state->m_index_scan->iss_ScanKeys, global_state->m_index_scan->iss_NumScanKeys,
+		             global_state->m_index_scan->iss_OrderByKeys, global_state->m_index_scan->iss_NumOrderByKeys);
 
-	return duckdb::make_uniq<PostgresIndexScanLocalState>(scandesc, globalState->m_relation);
+	return duckdb::make_uniq<PostgresIndexScanLocalState>(scandesc, global_state->m_relation);
 }
 
 void
 PostgresIndexScanFunction::PostgresIndexScanFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data,
                                                  duckdb::DataChunk &output) {
-	auto &localState = data.local_state->Cast<PostgresIndexScanLocalState>();
-	auto &globalState = data.global_state->Cast<PostgresIndexScanGlobalState>();
-	bool nextIndexTuple = false;
+	auto &local_state = data.local_state->Cast<PostgresIndexScanLocalState>();
+	auto &global_state = data.global_state->Cast<PostgresIndexScanGlobalState>();
+	bool next_index_tuple = false;
 
-	localState.m_local_state->m_output_vector_size = 0;
+	local_state.m_local_state->m_output_vector_size = 0;
 
-	if (localState.m_local_state->m_exhausted_scan) {
+	if (local_state.m_local_state->m_exhausted_scan) {
 		output.SetCardinality(0);
 		return;
 	}
 
-	while (
-	    localState.m_local_state->m_output_vector_size < STANDARD_VECTOR_SIZE &&
-	    (nextIndexTuple = index_getnext_slot(localState.m_index_scan_desc, ForwardScanDirection, localState.m_slot))) {
-		bool shouldFree;
-		auto tuple = ExecFetchSlotHeapTuple(localState.m_slot, false, &shouldFree);
-		InsertTupleIntoChunk(output, globalState.m_global_state, localState.m_local_state, tuple);
-		ExecClearTuple(localState.m_slot);
+	while (local_state.m_local_state->m_output_vector_size < STANDARD_VECTOR_SIZE &&
+	       (next_index_tuple =
+	            index_getnext_slot(local_state.m_index_scan_desc, ForwardScanDirection, local_state.m_slot))) {
+		bool should_free;
+		auto tuple = ExecFetchSlotHeapTuple(local_state.m_slot, false, &should_free);
+		InsertTupleIntoChunk(output, global_state.m_global_state, local_state.m_local_state, tuple);
+		ExecClearTuple(local_state.m_slot);
 	}
 
-	if (!nextIndexTuple) {
-		localState.m_local_state->m_exhausted_scan = true;
+	if (!next_index_tuple) {
+		local_state.m_local_state->m_exhausted_scan = true;
 	}
 
-	output.SetCardinality(localState.m_local_state->m_output_vector_size);
+	output.SetCardinality(local_state.m_local_state->m_output_vector_size);
 }
 
 duckdb::unique_ptr<duckdb::NodeStatistics>
 PostgresIndexScanFunction::PostgresIndexScanCardinality(duckdb::ClientContext &context,
                                                         const duckdb::FunctionData *data) {
-	auto &bindData = data->Cast<PostgresIndexScanFunctionData>();
-	return duckdb::make_uniq<duckdb::NodeStatistics>(bindData.m_cardinality, bindData.m_cardinality);
+	auto &bind_data = data->Cast<PostgresIndexScanFunctionData>();
+	return duckdb::make_uniq<duckdb::NodeStatistics>(bind_data.m_cardinality, bind_data.m_cardinality);
 }
 
 } // namespace pgduckdb

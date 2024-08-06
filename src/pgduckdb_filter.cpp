@@ -19,8 +19,8 @@ TemplatedFilterOperation(Datum &value, const duckdb::Value &constant) {
 
 template <class OP>
 static bool
-FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid typeOid) {
-	switch (typeOid) {
+FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
+	switch (type_oid) {
 	case BOOLOID:
 		return TemplatedFilterOperation<bool, OP>(value, constant);
 		break;
@@ -43,49 +43,49 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid typeOid) {
 		return TemplatedFilterOperation<double, OP>(value, constant);
 		break;
 	case DATEOID: {
-		Datum dateDatum = static_cast<int32_t>(value + pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET);
-		return TemplatedFilterOperation<int32_t, OP>(dateDatum, constant);
+		Datum date_datum = static_cast<int32_t>(value + pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET);
+		return TemplatedFilterOperation<int32_t, OP>(date_datum, constant);
 		break;
 	}
 	case TIMESTAMPOID: {
-		Datum timeStampDatum = static_cast<int64_t>(value + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
-		return TemplatedFilterOperation<int64_t, OP>(timeStampDatum, constant);
+		Datum timestamp_datum = static_cast<int64_t>(value + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
+		return TemplatedFilterOperation<int64_t, OP>(timestamp_datum, constant);
 		break;
 	}
 	default:
-		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", typeOid);
+		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid);
 	}
 }
 
 bool
-ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool isNull, Oid typeOid) {
+ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool is_null, Oid type_oid) {
 	switch (filter.filter_type) {
 	case duckdb::TableFilterType::CONJUNCTION_AND: {
 		auto &conjunction = filter.Cast<duckdb::ConjunctionAndFilter>();
-		bool valueFilterResult = true;
+		bool value_filter_result = true;
 		for (auto &child_filter : conjunction.child_filters) {
-			valueFilterResult &= ApplyValueFilter(*child_filter, value, isNull, typeOid);
+			value_filter_result &= ApplyValueFilter(*child_filter, value, is_null, type_oid);
 		}
-		return valueFilterResult;
+		return value_filter_result;
 		break;
 	}
 	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<duckdb::ConstantFilter>();
 		switch (constant_filter.comparison_type) {
 		case duckdb::ExpressionType::COMPARE_EQUAL:
-			return FilterOperationSwitch<duckdb::Equals>(value, constant_filter.constant, typeOid);
+			return FilterOperationSwitch<duckdb::Equals>(value, constant_filter.constant, type_oid);
 			break;
 		case duckdb::ExpressionType::COMPARE_LESSTHAN:
-			return FilterOperationSwitch<duckdb::LessThan>(value, constant_filter.constant, typeOid);
+			return FilterOperationSwitch<duckdb::LessThan>(value, constant_filter.constant, type_oid);
 			break;
 		case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
-			return FilterOperationSwitch<duckdb::LessThanEquals>(value, constant_filter.constant, typeOid);
+			return FilterOperationSwitch<duckdb::LessThanEquals>(value, constant_filter.constant, type_oid);
 			break;
 		case duckdb::ExpressionType::COMPARE_GREATERTHAN:
-			return FilterOperationSwitch<duckdb::GreaterThan>(value, constant_filter.constant, typeOid);
+			return FilterOperationSwitch<duckdb::GreaterThan>(value, constant_filter.constant, type_oid);
 			break;
 		case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
-			return FilterOperationSwitch<duckdb::GreaterThanEquals>(value, constant_filter.constant, typeOid);
+			return FilterOperationSwitch<duckdb::GreaterThanEquals>(value, constant_filter.constant, type_oid);
 			break;
 		default:
 			D_ASSERT(0);
@@ -93,10 +93,10 @@ ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool isNull, Oid typ
 		break;
 	}
 	case duckdb::TableFilterType::IS_NOT_NULL:
-		return isNull == false;
+		return is_null == false;
 		break;
 	case duckdb::TableFilterType::IS_NULL:
-		return isNull == true;
+		return is_null == true;
 		break;
 	default:
 		D_ASSERT(0);
