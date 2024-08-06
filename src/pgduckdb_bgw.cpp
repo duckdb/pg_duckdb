@@ -146,9 +146,9 @@ static bool pgduckdb_init_shmem(void)
 }
 
 void
-duckdb_init_bgw(void)
+DuckdbInitBgw(void)
 {
-    elog(INFO, "duckdb_init_bgw -> starting MyBackendId=%d", MyBackendId);
+    elog(INFO, "DuckdbInitBgw -> starting MyBackendId=%d", MyBackendId);
 
     prev_shmem_request_hook = shmem_request_hook;
     shmem_request_hook = pgduckdb_shmem_request;
