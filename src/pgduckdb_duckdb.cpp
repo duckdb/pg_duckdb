@@ -15,6 +15,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pwd.h>
+#include <fstream>
 
 namespace pgduckdb {
 
@@ -87,6 +89,38 @@ DuckDBManager::DuckDBManager() {
 	LoadFunctions(context);
 	LoadSecrets(context);
 	LoadExtensions(context);
+	ProcessRCFile(context);
+}
+
+std::string
+FindHomeDirectory() {
+	struct passwd *pwent;
+	uid_t uid = getuid();
+	if ((pwent = getpwuid(uid)) != NULL) {
+		if (pwent->pw_dir) {
+			return pwent->pw_dir;
+		}
+	}
+	return getenv("HOME");
+}
+
+void
+DuckDBManager::ProcessRCFile(duckdb::ClientContext &context) {
+	std::string home = FindHomeDirectory();
+	std::ifstream rc_file(home + "/.pg_duckrc");
+	if (rc_file.fail()) {
+		elog(DEBUG2, "No '.pg_duckrc' file found in home directory '%s'", home.c_str());
+		return;
+	}
+
+	elog(INFO, "Executing commands from '%s/.pg_duckrc' file", home.c_str());
+	std::string line;
+	while (std::getline(rc_file, line)) {
+		auto res = context.Query(line, false);
+		if (res->HasError()) {
+			elog(WARNING, "Error executing '%s' from '.pg_duckrc' file: %s", line.c_str(), res->GetError().c_str());
+		}
+	}
 }
 
 void
