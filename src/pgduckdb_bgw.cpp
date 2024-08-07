@@ -30,9 +30,9 @@ typedef struct
     pid_t worker_pid;
     LWLock lock;
     Latch *worker_latch;
-    dsm_handle connection_seg[MAX_BACKENDS];
     LWLock	 state_version_lock;
     uint32_t state_version;
+    dsm_handle connection_seg[MAX_BACKENDS]; // todo - FLEXIBLE_ARRAY_MEMBER init w/MaxBackends
 } PGDuckDBSharedState;
 
 typedef struct
