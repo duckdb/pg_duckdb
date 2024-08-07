@@ -22,9 +22,11 @@ jobs:
       - name: Fetch main branch
         run: git fetch --depth=1 origin +main:refs/remotes/origin/main
       - name: Add LLVM repository
-        run: curl -L https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add - && \
-             sudo apt-get install -y software-properties-common && \
-             sudo add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-11 main"
+        run: |
+          apt-get update
+          apt-get install -y curl software-properties-common
+          curl -L https://apt.llvm.org/llvm-snapshot.gpg.key | apt-key add -
+          add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-11 main"
 
       - name: Install clang-format
         run: sudo apt-get update -y -qq && sudo apt-get install clang-format-11
