@@ -57,7 +57,8 @@ PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapsh
 // PostgresHeapTable
 //===--------------------------------------------------------------------===//
 
-PostgresHeapTable::PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Oid oid)
+PostgresHeapTable::PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
+                                     Snapshot snapshot, Oid oid)
     : PostgresTable(catalog, schema, info, snapshot), oid(oid) {
 }
 
@@ -82,7 +83,8 @@ PostgresHeapTable::GetStorageInfo(ClientContext &context) {
 // PostgresIndexTable
 //===--------------------------------------------------------------------===//
 
-PostgresIndexTable::PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Path *path, PlannerInfo *planner_info)
+PostgresIndexTable::PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
+                                       Snapshot snapshot, Path *path, PlannerInfo *planner_info)
     : PostgresTable(catalog, schema, info, snapshot), path(path), planner_info(planner_info) {
 }
 

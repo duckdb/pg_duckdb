@@ -38,11 +38,15 @@ using duckdb::unique_ptr;
 
 class PostgresTable : public TableCatalogEntry {
 public:
-	virtual ~PostgresTable() {}
+	virtual ~PostgresTable() {
+	}
+
 public:
 	static bool PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot);
+
 protected:
 	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot);
+
 protected:
 	Snapshot snapshot;
 };
@@ -56,19 +60,22 @@ public:
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+
 private:
 	Oid oid;
 };
 
 class PostgresIndexTable : public PostgresTable {
 public:
-	PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Path *path, PlannerInfo *planner_info);
+	PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot,
+	                   Path *path, PlannerInfo *planner_info);
 
 public:
 	// -- Table API --
 	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
 	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
 	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+
 private:
 	Path *path;
 	PlannerInfo *planner_info;

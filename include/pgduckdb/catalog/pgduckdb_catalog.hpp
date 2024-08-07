@@ -42,7 +42,8 @@ using duckdb::unique_ptr;
 
 class PostgresCatalog : public Catalog {
 public:
-	PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode, Snapshot snapshot, PlannerInfo *planner_info);
+	PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode, Snapshot snapshot,
+	                PlannerInfo *planner_info);
 
 public:
 	static unique_ptr<Catalog> Attach(StorageExtensionInfo *storage_info, ClientContext &context, AttachedDatabase &db,

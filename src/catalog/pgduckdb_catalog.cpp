@@ -23,7 +23,8 @@ namespace pgduckdb {
 
 PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &db, const duckdb::string &connection_string,
                                  duckdb::AccessMode access_mode, Snapshot snapshot, PlannerInfo *planner_info)
-    : duckdb::Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot), planner_info(planner_info) {
+    : duckdb::Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot),
+      planner_info(planner_info) {
 }
 
 duckdb::unique_ptr<duckdb::Catalog>

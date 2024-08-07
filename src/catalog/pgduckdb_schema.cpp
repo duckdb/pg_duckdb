@@ -107,16 +107,17 @@ FindMatchingRelEntry(Oid relid, PlannerInfo *planner_info) {
 	return nullptr;
 }
 
-static bool IsIndexScan(const Path* nodePath) {
-    if (nodePath == nullptr) {
-        return false;
-    }
+static bool
+IsIndexScan(const Path *nodePath) {
+	if (nodePath == nullptr) {
+		return false;
+	}
 
-    if (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan) {
-        return true;
-    }
+	if (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan) {
+		return true;
+	}
 
-    return false;
+	return false;
 }
 
 optional_ptr<CatalogEntry>
