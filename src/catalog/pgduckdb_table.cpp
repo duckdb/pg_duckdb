@@ -24,8 +24,9 @@ extern "C" {
 
 namespace pgduckdb {
 
-PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot)
-    : TableCatalogEntry(catalog, schema, info), snapshot(snapshot) {
+PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
+                             Cardinality cardinality, Snapshot snapshot)
+    : TableCatalogEntry(catalog, schema, info), cardinality(cardinality), snapshot(snapshot) {
 }
 
 bool
@@ -58,8 +59,8 @@ PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapsh
 //===--------------------------------------------------------------------===//
 
 PostgresHeapTable::PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-                                     Snapshot snapshot, Oid oid)
-    : PostgresTable(catalog, schema, info, snapshot), oid(oid) {
+                                     Cardinality cardinality, Snapshot snapshot, Oid oid)
+    : PostgresTable(catalog, schema, info, cardinality, snapshot), oid(oid) {
 }
 
 unique_ptr<BaseStatistics>
@@ -69,8 +70,7 @@ PostgresHeapTable::GetStatistics(ClientContext &context, column_t column_id) {
 
 TableFunction
 PostgresHeapTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
-	// TODO: add cardinality
-	bind_data = duckdb::make_uniq<PostgresSeqScanFunctionData>(0, oid, snapshot);
+	bind_data = duckdb::make_uniq<PostgresSeqScanFunctionData>(cardinality, oid, snapshot);
 	return PostgresSeqScanFunction();
 }
 
@@ -84,8 +84,9 @@ PostgresHeapTable::GetStorageInfo(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 
 PostgresIndexTable::PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-                                       Snapshot snapshot, Path *path, PlannerInfo *planner_info)
-    : PostgresTable(catalog, schema, info, snapshot), path(path), planner_info(planner_info) {
+                                       Cardinality cardinality, Snapshot snapshot, Path *path,
+                                       PlannerInfo *planner_info)
+    : PostgresTable(catalog, schema, info, cardinality, snapshot), path(path), planner_info(planner_info) {
 }
 
 unique_ptr<BaseStatistics>
@@ -95,9 +96,8 @@ PostgresIndexTable::GetStatistics(ClientContext &context, column_t column_id) {
 
 TableFunction
 PostgresIndexTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
-	// TODO: add cardinality
 	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
-	bind_data = duckdb::make_uniq<PostgresIndexScanFunctionData>(0, path, planner_info, rte->relid, snapshot);
+	bind_data = duckdb::make_uniq<PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid, snapshot);
 	return PostgresIndexScanFunction();
 }
 

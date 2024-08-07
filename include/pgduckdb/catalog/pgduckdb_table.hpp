@@ -45,15 +45,18 @@ public:
 	static bool PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot);
 
 protected:
-	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot);
+	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Cardinality cardinality,
+	              Snapshot snapshot);
 
 protected:
+	Cardinality cardinality;
 	Snapshot snapshot;
 };
 
 class PostgresHeapTable : public PostgresTable {
 public:
-	PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot, Oid oid);
+	PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Cardinality cardinality,
+	                  Snapshot snapshot, Oid oid);
 
 public:
 	// -- Table API --
@@ -67,8 +70,8 @@ private:
 
 class PostgresIndexTable : public PostgresTable {
 public:
-	PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Snapshot snapshot,
-	                   Path *path, PlannerInfo *planner_info);
+	PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Cardinality cardinality,
+	                   Snapshot snapshot, Path *path, PlannerInfo *planner_info);
 
 public:
 	// -- Table API --

@@ -170,18 +170,20 @@ PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const
 	duckdb::unique_ptr<PostgresTable> table;
 	CreateTableInfo info;
 	info.table = name;
+	Cardinality cardinality = node_path ? node_path->rows : 1;
 	if (IsIndexScan(node_path)) {
 		RangeTblEntry *rte = planner_rt_fetch(node_path->parent->relid, planner_info);
 		rel_oid = rte->relid;
 		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
 			return nullptr;
 		}
-		table = duckdb::make_uniq<PostgresIndexTable>(catalog, *this, info, snapshot, node_path, planner_info);
+		table =
+		    duckdb::make_uniq<PostgresIndexTable>(catalog, *this, info, cardinality, snapshot, node_path, planner_info);
 	} else {
 		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
 			return nullptr;
 		}
-		table = duckdb::make_uniq<PostgresHeapTable>(catalog, *this, info, snapshot, rel_oid);
+		table = duckdb::make_uniq<PostgresHeapTable>(catalog, *this, info, cardinality, snapshot, rel_oid);
 	}
 
 	tables[name] = std::move(table);
