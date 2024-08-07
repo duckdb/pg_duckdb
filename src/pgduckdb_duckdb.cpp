@@ -63,28 +63,34 @@ GetExtensionDirectory() {
 	return duckdb_extension_directory;
 }
 
-duckdb::unique_ptr<duckdb::DuckDB>
-DuckdbOpenDatabase() {
-	duckdb::DBConfig config;
-	config.SetOptionByName("extension_directory", GetExtensionDirectory());
-	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+Connection::~Connection() {
+	auto &scans = context->db->config.replacement_scans;
+	for (auto it = scans.begin(); it != scans.end(); ++it) {
+		auto casted = dynamic_cast<PostgresReplacementScanData *>(it->data.get());
+		if (casted && casted->id == tracked_replacement_scan_id) {
+			scans.erase(it);
+			break;
+		}
+	}
 }
 
-duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
-	auto db = DuckdbOpenDatabase();
+DuckDBManager::DuckDBManager() {
+	elog(DEBUG2, "Creating DuckDB instance");
 
-	/* Add tables */
-	db->instance->config.replacement_scans.emplace_back(
-	    pgduckdb::PostgresReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, planner_info,
-	                                                                                     needed_columns, query));
+	duckdb::DBConfig config;
+	config.SetOptionByName("extension_directory", GetExtensionDirectory());
+	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
-	// Add the postgres_scan inserted by the replacement scan
 	auto &context = *connection->context;
+	LoadFunctions(context);
+	LoadSecrets(context);
+	LoadExtensions(context);
+}
 
+void
+DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
 	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);
 
@@ -93,12 +99,15 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
-	auto &instance = *db->instance;
+	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	catalog.CreateTableFunction(context, &seq_scan_info);
 	catalog.CreateTableFunction(context, &index_scan_info);
 	context.transaction.Commit();
+}
 
+void
+DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	auto duckdb_secrets = ReadDuckdbSecrets();
 
 	int secret_id = 0;
@@ -122,7 +131,10 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 		pfree(secret_key->data);
 		secret_id++;
 	}
+}
 
+void
+DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
@@ -136,8 +148,23 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 		}
 		pfree(duckdb_extension->data);
 	}
+}
 
-	return connection;
+duckdb::unique_ptr<Connection>
+DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
+	auto &db = DuckDBManager::Get().GetDatabase();
+
+	/* Add DuckDB replacement scan */
+	auto &ref = db.instance->config.replacement_scans.emplace_back(
+	    pgduckdb::PostgresReplacementScan,
+	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, planner_info,
+	                                                                                     needed_columns, query));
+
+	auto con = duckdb::make_uniq<Connection>(db);
+
+	/* Store replacement scan identifier to be removed when connection is destroyed */
+	con->SetTrackedReplacementScanId(static_cast<PostgresReplacementScanData *>(ref.data.get())->id);
+	return con;
 }
 
 } // namespace pgduckdb
