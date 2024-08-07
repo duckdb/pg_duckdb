@@ -21,16 +21,13 @@ jobs:
         uses: actions/checkout@v4
       - name: Fetch main branch
         run: git fetch --depth=1 origin +main:refs/remotes/origin/main
-      - name: Add LLVM repository
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y curl software-properties-common
-          sudo add-apt-repository universe
-          curl -L https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-11 main"
+      - name: Set up Python 3
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
 
-      - name: Install clang-format
-        run: sudo apt-get update -y -qq && sudo apt-get install clang-format-11
+      - name: Install clang-format (11.0.1)
+        run: python3 -m pip install "clang-format==11.0.1"
       - name: Run clang-format
         run: git clang-format refs/remotes/origin/main --diff
   build-and-test:
