@@ -10,34 +10,7 @@ extern "C" {
 #include "nodes/pathnodes.h"
 }
 
-namespace pgduckdb {
-
-using duckdb::AccessMode;
-using duckdb::AlterInfo;
-using duckdb::AttachedDatabase;
-using duckdb::BoundCreateTableInfo;
-using duckdb::case_insensitive_map_t;
-using duckdb::Catalog;
-using duckdb::CatalogEntry;
-using duckdb::CatalogTransaction;
-using duckdb::CatalogType;
-using duckdb::ClientContext;
-using duckdb::CreateCollationInfo;
-using duckdb::CreateCopyFunctionInfo;
-using duckdb::CreateFunctionInfo;
-using duckdb::CreateIndexInfo;
-using duckdb::CreatePragmaFunctionInfo;
-using duckdb::CreateSchemaInfo;
-using duckdb::CreateSequenceInfo;
-using duckdb::CreateTableFunctionInfo;
-using duckdb::CreateTypeInfo;
-using duckdb::CreateViewInfo;
-using duckdb::DropInfo;
-using duckdb::optional_ptr;
-using duckdb::SchemaCatalogEntry;
-using duckdb::string;
-using duckdb::TableCatalogEntry;
-using duckdb::unique_ptr;
+namespace duckdb {
 
 class PostgresSchema : public SchemaCatalogEntry {
 public:
@@ -72,4 +45,4 @@ private:
 	PlannerInfo *planner_info;
 };
 
-} // namespace pgduckdb
+} // namespace duckdb

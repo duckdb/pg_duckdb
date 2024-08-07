@@ -19,28 +19,28 @@ extern "C" {
 #include "access/xact.h"
 }
 
-namespace pgduckdb {
+namespace duckdb {
 
-PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &db, const duckdb::string &connection_string,
-                                 duckdb::AccessMode access_mode, Snapshot snapshot, PlannerInfo *planner_info)
-    : duckdb::Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot),
+PostgresCatalog::PostgresCatalog(AttachedDatabase &db, const string &connection_string,
+                                 AccessMode access_mode, Snapshot snapshot, PlannerInfo *planner_info)
+    : Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot),
       planner_info(planner_info) {
 }
 
-duckdb::unique_ptr<duckdb::Catalog>
-PostgresCatalog::Attach(duckdb::StorageExtensionInfo *storage_info_p, duckdb::ClientContext &context,
-                        duckdb::AttachedDatabase &db, const duckdb::string &name, duckdb::AttachInfo &info,
-                        duckdb::AccessMode access_mode) {
-	duckdb::string connection_string = info.path;
+unique_ptr<Catalog>
+PostgresCatalog::Attach(StorageExtensionInfo *storage_info_p, ClientContext &context,
+                        AttachedDatabase &db, const string &name, AttachInfo &info,
+                        AccessMode access_mode) {
+	string connection_string = info.path;
 
 	if (!storage_info_p) {
-		throw duckdb::InternalException(
+		throw InternalException(
 		    "PostgresCatalog should always have access to the PostgresStorageExtensionInfo");
 	}
 	auto &storage_info = static_cast<PostgresStorageExtensionInfo &>(*storage_info_p);
 	auto snapshot = storage_info.snapshot;
 	auto planner_info = storage_info.planner_info;
-	return duckdb::make_uniq<PostgresCatalog>(db, connection_string, access_mode, snapshot, planner_info);
+	return make_uniq<PostgresCatalog>(db, connection_string, access_mode, snapshot, planner_info);
 }
 
 // ------------------ Catalog API ---------------------
@@ -57,7 +57,7 @@ PostgresCatalog::GetCatalogType() {
 
 optional_ptr<CatalogEntry>
 PostgresCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) {
-	throw duckdb::NotImplementedException("CreateSchema not supported yet");
+	throw NotImplementedException("CreateSchema not supported yet");
 }
 
 optional_ptr<SchemaCatalogEntry>
@@ -74,7 +74,7 @@ PostgresCatalog::GetSchema(CatalogTransaction transaction, const string &schema_
 
 	CreateSchemaInfo create_schema;
 	create_schema.schema = schema_name;
-	schemas[schema_name] = duckdb::make_uniq<PostgresSchema>(*this, create_schema, snapshot, planner_info);
+	schemas[schema_name] = make_uniq<PostgresSchema>(*this, create_schema, snapshot, planner_info);
 	return schemas[schema_name].get();
 }
 
@@ -85,33 +85,33 @@ PostgresCatalog::ScanSchemas(ClientContext &context, std::function<void(SchemaCa
 
 unique_ptr<PhysicalOperator>
 PostgresCatalog::PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op, unique_ptr<PhysicalOperator> plan) {
-	throw duckdb::NotImplementedException("PlanCreateTableAs not supported yet");
+	throw NotImplementedException("PlanCreateTableAs not supported yet");
 }
 
 unique_ptr<PhysicalOperator>
 PostgresCatalog::PlanInsert(ClientContext &context, LogicalInsert &op, unique_ptr<PhysicalOperator> plan) {
-	throw duckdb::NotImplementedException("PlanInsert not supported yet");
+	throw NotImplementedException("PlanInsert not supported yet");
 }
 
 unique_ptr<PhysicalOperator>
 PostgresCatalog::PlanDelete(ClientContext &context, LogicalDelete &op, unique_ptr<PhysicalOperator> plan) {
-	throw duckdb::NotImplementedException("PlanDelete not supported yet");
+	throw NotImplementedException("PlanDelete not supported yet");
 }
 
 unique_ptr<PhysicalOperator>
 PostgresCatalog::PlanUpdate(ClientContext &context, LogicalUpdate &op, unique_ptr<PhysicalOperator> plan) {
-	throw duckdb::NotImplementedException("PlanUpdate not supported yet");
+	throw NotImplementedException("PlanUpdate not supported yet");
 }
 
 unique_ptr<LogicalOperator>
 PostgresCatalog::BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
                                  unique_ptr<LogicalOperator> plan) {
-	throw duckdb::NotImplementedException("BindCreateIndex not supported yet");
+	throw NotImplementedException("BindCreateIndex not supported yet");
 }
 
 DatabaseSize
 PostgresCatalog::GetDatabaseSize(ClientContext &context) {
-	throw duckdb::NotImplementedException("GetDatabaseSize not supported yet");
+	throw NotImplementedException("GetDatabaseSize not supported yet");
 }
 
 bool
@@ -126,7 +126,7 @@ PostgresCatalog::GetDBPath() {
 
 void
 PostgresCatalog::DropSchema(ClientContext &context, DropInfo &info) {
-	throw duckdb::NotImplementedException("DropSchema not supported yet");
+	throw NotImplementedException("DropSchema not supported yet");
 }
 
-} // namespace pgduckdb
+} // namespace duckdb

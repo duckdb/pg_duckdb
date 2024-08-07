@@ -18,23 +18,7 @@ extern "C" {
 #include "access/htup_details.h"
 }
 
-namespace pgduckdb {
-
-using duckdb::BaseStatistics;
-using duckdb::Catalog;
-using duckdb::CatalogEntry;
-using duckdb::CatalogType;
-using duckdb::ClientContext;
-using duckdb::column_t;
-using duckdb::CreateTableInfo;
-using duckdb::FunctionData;
-using duckdb::optional_ptr;
-using duckdb::SchemaCatalogEntry;
-using duckdb::string;
-using duckdb::TableCatalogEntry;
-using duckdb::TableFunction;
-using duckdb::TableStorageInfo;
-using duckdb::unique_ptr;
+namespace duckdb {
 
 class PostgresTable : public TableCatalogEntry {
 public:
@@ -84,4 +68,4 @@ private:
 	PlannerInfo *planner_info;
 };
 
-} // namespace pgduckdb
+} // namespace duckdb

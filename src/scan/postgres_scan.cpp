@@ -77,7 +77,6 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 
 	auto &schema_name = input.schema_name;
 	auto &table_name = input.table_name;
-	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
 
 	auto relid = FindMatchingRelation(schema_name, table_name);
 

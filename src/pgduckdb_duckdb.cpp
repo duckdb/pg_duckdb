@@ -86,7 +86,7 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 
 	auto &config = duckdb::DBConfig::GetConfig(*db->instance);
 	config.storage_extensions["pgduckdb"] =
-	    duckdb::make_uniq<PostgresStorageExtension>(GetActiveSnapshot(), planner_info);
+	    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot(), planner_info);
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 

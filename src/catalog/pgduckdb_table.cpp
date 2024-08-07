@@ -22,7 +22,7 @@ extern "C" {
 #include "parser/parsetree.h"
 }
 
-namespace pgduckdb {
+namespace duckdb {
 
 PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
                              Cardinality cardinality, Snapshot snapshot)
@@ -43,7 +43,7 @@ PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapsh
 	for (int i = 0; i < tupleDesc->natts; i++) {
 		Form_pg_attribute attr = &tupleDesc->attrs[i];
 		auto col_name = duckdb::string(NameStr(attr->attname));
-		auto duck_type = ConvertPostgresToDuckColumnType(attr);
+		auto duck_type = pgduckdb::ConvertPostgresToDuckColumnType(attr);
 		info.columns.AddColumn(duckdb::ColumnDefinition(col_name, duck_type));
 		/* Log column name and type */
 		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
@@ -70,8 +70,8 @@ PostgresHeapTable::GetStatistics(ClientContext &context, column_t column_id) {
 
 TableFunction
 PostgresHeapTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
-	bind_data = duckdb::make_uniq<PostgresSeqScanFunctionData>(cardinality, oid, snapshot);
-	return PostgresSeqScanFunction();
+	bind_data = duckdb::make_uniq<pgduckdb::PostgresSeqScanFunctionData>(cardinality, oid, snapshot);
+	return pgduckdb::PostgresSeqScanFunction();
 }
 
 TableStorageInfo
@@ -97,8 +97,8 @@ PostgresIndexTable::GetStatistics(ClientContext &context, column_t column_id) {
 TableFunction
 PostgresIndexTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
 	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
-	bind_data = duckdb::make_uniq<PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid, snapshot);
-	return PostgresIndexScanFunction();
+	bind_data = duckdb::make_uniq<pgduckdb::PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid, snapshot);
+	return pgduckdb::PostgresIndexScanFunction();
 }
 
 TableStorageInfo
@@ -106,4 +106,4 @@ PostgresIndexTable::GetStorageInfo(ClientContext &context) {
 	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
 }
 
-} // namespace pgduckdb
+} // namespace duckdb

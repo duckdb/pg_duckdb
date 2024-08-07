@@ -8,9 +8,9 @@ extern "C" {
 #include "nodes/pathnodes.h"
 }
 
-namespace pgduckdb {
+namespace duckdb {
 
-class PostgresStorageExtensionInfo : public duckdb::StorageExtensionInfo {
+class PostgresStorageExtensionInfo : public StorageExtensionInfo {
 public:
 	PostgresStorageExtensionInfo(Snapshot snapshot, PlannerInfo *planner_info)
 	    : snapshot(snapshot), planner_info(planner_info) {
@@ -21,9 +21,9 @@ public:
 	PlannerInfo *planner_info;
 };
 
-class PostgresStorageExtension : public duckdb::StorageExtension {
+class PostgresStorageExtension : public StorageExtension {
 public:
 	PostgresStorageExtension(Snapshot snapshot, PlannerInfo *planner_info);
 };
 
-} // namespace pgduckdb
+} // namespace duckdb

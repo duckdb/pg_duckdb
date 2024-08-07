@@ -10,35 +10,7 @@ extern "C" {
 #include "utils/snapshot.h"
 }
 
-namespace pgduckdb {
-
-using duckdb::AccessMode;
-using duckdb::AttachedDatabase;
-using duckdb::AttachInfo;
-using duckdb::Binder;
-using duckdb::case_insensitive_map_t;
-using duckdb::Catalog;
-using duckdb::CatalogEntry;
-using duckdb::CatalogTransaction;
-using duckdb::ClientContext;
-using duckdb::CreateSchemaInfo;
-using duckdb::CreateStatement;
-using duckdb::DatabaseSize;
-using duckdb::DropInfo;
-using duckdb::LogicalCreateTable;
-using duckdb::LogicalDelete;
-using duckdb::LogicalInsert;
-using duckdb::LogicalOperator;
-using duckdb::LogicalUpdate;
-using duckdb::OnEntryNotFound;
-using duckdb::optional_ptr;
-using duckdb::PhysicalOperator;
-using duckdb::QueryErrorContext;
-using duckdb::SchemaCatalogEntry;
-using duckdb::StorageExtensionInfo;
-using duckdb::string;
-using duckdb::TableCatalogEntry;
-using duckdb::unique_ptr;
+namespace duckdb {
 
 class PostgresCatalog : public Catalog {
 public:
@@ -83,4 +55,4 @@ private:
 	PlannerInfo *planner_info;
 };
 
-} // namespace pgduckdb
+} // namespace duckdb
