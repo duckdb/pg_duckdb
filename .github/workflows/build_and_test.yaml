@@ -22,7 +22,7 @@ jobs:
       - name: Fetch main branch
         run: git fetch --depth=1 origin +main:refs/remotes/origin/main
       - name: Install clang-format
-        run: sudo apt-get install clang-format-11
+        run: sudo apt-get update -y -qq && sudo apt-get install clang-format-11
       - name: Run clang-format
         run: git clang-format refs/remotes/origin/main --diff
   build-and-test:
