@@ -19,18 +19,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
-extern "C" {
-#include "postgres.h"
-
-#include "utils/elog.h"
-}
-#include <string>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <errno.h>
-
 namespace pgduckdb {
 
 static bool

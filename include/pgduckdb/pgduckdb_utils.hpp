@@ -102,3 +102,5 @@ DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArg
 }
 
 } // namespace pgduckdb
+
+void DuckdbCreateCacheDirectory(void);

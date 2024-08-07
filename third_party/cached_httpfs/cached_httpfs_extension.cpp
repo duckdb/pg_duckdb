@@ -62,6 +62,10 @@ static void LoadInternal(DatabaseInstance &instance) {
 	config.AddExtensionOption("hf_max_per_page", "Debug option to limit number of items returned in list requests",
 	                          LogicalType::UBIGINT, Value::UBIGINT(0));
 
+	// HTTP file cache options
+	config.AddExtensionOption("enable_http_file_cache", "Enable http file cache", LogicalType::BOOLEAN, Value(false));
+	config.AddExtensionOption("http_file_cache_dir", "HTTP file cache directory", LogicalType::VARCHAR);
+
 	auto provider = make_uniq<AWSEnvironmentCredentialsProvider>(config);
 	provider->SetAll();
 

@@ -169,6 +169,9 @@ CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
 CREATE OR REPLACE FUNCTION raw_query(query TEXT) RETURNS void
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_raw_query';
 
+CREATE OR REPLACE FUNCTION cache(object_path TEXT, type TEXT) RETURNS bool
+    LANGUAGE C AS 'MODULE_PATHNAME', 'cache';
+
 CREATE FUNCTION duckdb_am_handler(internal)
 RETURNS table_am_handler
 AS 'MODULE_PATHNAME'

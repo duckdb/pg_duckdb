@@ -17,8 +17,34 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
+
+/* constants for duckdb.secrets */
+#define Natts_duckdb_secret              7
+#define Anum_duckdb_secret_type          1
+#define Anum_duckdb_secret_id            2
+#define Anum_duckdb_secret_secret        3
+#define Anum_duckdb_secret_region        4
+#define Anum_duckdb_secret_endpoint      5
+#define Anum_duckdb_secret_r2_account_id 6
+#define Anum_duckdb_secret_use_ssl       7
+
+typedef struct DuckdbSecret {
+	std::string type;
+	std::string id;
+	std::string secret;
+	std::string region;
+	std::string endpoint;
+	std::string r2_account_id;
+	bool use_ssl;
+} DuckdbSecret;
+
+/* constants for duckdb.extensions */
+#define Natts_duckdb_extension       2
+#define Anum_duckdb_extension_name   1
+#define Anum_duckdb_extension_enable 2
 
 static Oid
 GetDuckdbNamespace(void) {
@@ -44,8 +70,8 @@ DatumToString(Datum datum) {
 	return column_value;
 }
 
-std::vector<DuckdbSecret>
-ReadDuckdbSecrets() {
+static std::vector<DuckdbSecret>
+DuckdbReadSecrets() {
 	HeapTuple tuple = NULL;
 	Oid duckdb_secret_table_relation_id = SecretsTableRelationId();
 	Relation duckdb_secret_relation = table_open(duckdb_secret_table_relation_id, AccessShareLock);
@@ -87,21 +113,50 @@ ReadDuckdbSecrets() {
 	return duckdb_secrets;
 }
 
-std::vector<DuckdbExension>
+void
+AddSecretsToDuckdbContext(duckdb::ClientContext &context) {
+	auto duckdb_secrets = DuckdbReadSecrets();
+	int secret_id = 0;
+	for (auto &secret : duckdb_secrets) {
+		StringInfo secret_key = makeStringInfo();
+		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
+		appendStringInfo(secret_key, "CREATE SECRET pg_duckdb_secret_%d ", secret_id);
+		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
+		                 secret.secret.c_str());
+		if (secret.region.length() && !is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
+		}
+		if (secret.endpoint.length() && !is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
+		}
+		if (is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
+		}
+		if (!secret.use_ssl) {
+			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
+		}
+		appendStringInfo(secret_key, ");");
+		context.Query(secret_key->data, false);
+		pfree(secret_key->data);
+		secret_id++;
+	}
+}
+
+std::vector<DuckdbExtension>
 ReadDuckdbExtensions() {
 	HeapTuple tuple = NULL;
 	Oid duckdb_extension_table_relation_id = ExtensionsTableRelationId();
 	Relation duckdb_extension_relation = table_open(duckdb_extension_table_relation_id, AccessShareLock);
 	SysScanDescData *scan =
 	    systable_beginscan(duckdb_extension_relation, InvalidOid, false, GetActiveSnapshot(), 0, NULL);
-	std::vector<DuckdbExension> duckdb_extensions;
+	std::vector<DuckdbExtension> duckdb_extensions;
 
 	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
 		Datum datum_array[Natts_duckdb_secret];
 		bool is_null_array[Natts_duckdb_secret];
 
 		heap_deform_tuple(tuple, RelationGetDescr(duckdb_extension_relation), datum_array, is_null_array);
-		DuckdbExension secret;
+		DuckdbExtension secret;
 
 		secret.name = DatumToString(datum_array[Anum_duckdb_extension_name - 1]);
 		secret.enabled = DatumGetBool(datum_array[Anum_duckdb_extension_enable - 1]);
@@ -119,13 +174,8 @@ DuckdbInstallExtension(Datum name) {
 	auto &context = *connection->context;
 
 	auto extension_name = DatumToString(name);
-
-	StringInfo install_extension_command = makeStringInfo();
-	appendStringInfo(install_extension_command, "INSTALL %s;", extension_name.c_str());
-
-	auto res = context.Query(install_extension_command->data, false);
-
-	pfree(install_extension_command->data);
+	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
+	auto res = context.Query(install_extension_command, false);
 
 	if (res->HasError()) {
 		elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
@@ -148,6 +198,55 @@ DuckdbInstallExtension(Datum name) {
 
 	CommandCounterIncrement();
 	relation_close(duckdb_extensions_relation, RowExclusiveLock);
+
+	return true;
+}
+
+static bool
+CanCacheRemoteObject(std::string remote_object) {
+	return (remote_object.rfind("https://", 0) == 0) || (remote_object.rfind("http://", 0) == 0) ||
+	       (remote_object.rfind("s3://", 0) == 0) || (remote_object.rfind("s3a://", 0) == 0) ||
+	       (remote_object.rfind("s3n://", 0) == 0) || (remote_object.rfind("gcs://", 0) == 0) ||
+	       (remote_object.rfind("gs://", 0) == 0) || (remote_object.rfind("r2://", 0) == 0);
+}
+
+static bool
+DuckdbCacheObject(Datum object, Datum type) {
+	auto db = DuckdbOpenDatabase();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
+	auto &context = *connection->context;
+
+	auto object_type = DatumToString(type);
+
+	if (object_type != "parquet" && object_type != "csv") {
+		elog(WARNING, "(DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
+		return false;
+	}
+
+	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
+
+	context.Query("SET enable_http_file_cache TO true;", false);
+	auto http_file_cache_set_dir_query =
+	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
+	context.Query(http_file_cache_set_dir_query, false);
+
+	AddSecretsToDuckdbContext(context);
+
+	auto object_path = DatumToString(object);
+
+	if (!CanCacheRemoteObject(object_path)) {
+		elog(WARNING, "(DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
+		return false;
+	}
+
+	auto cache_object_query =
+	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
+	auto res = context.Query(cache_object_query, false);
+
+	if (res->HasError()) {
+		elog(WARNING, "(DuckdbCacheObject) %s", res->GetError().c_str());
+		return false;
+	}
 
 	return true;
 }
@@ -176,6 +275,15 @@ pgduckdb_raw_query(PG_FUNCTION_ARGS) {
 	}
 	elog(NOTICE, "result: %s", result->ToString().c_str());
 	PG_RETURN_BOOL(true);
+}
+
+PG_FUNCTION_INFO_V1(cache);
+Datum
+cache(PG_FUNCTION_ARGS) {
+	Datum object = PG_GETARG_DATUM(0);
+	Datum type = PG_GETARG_DATUM(1);
+	bool result = pgduckdb::DuckdbCacheObject(object, type);
+	PG_RETURN_BOOL(result);
 }
 
 } // extern "C"
