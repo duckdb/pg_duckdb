@@ -21,6 +21,7 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/vendor/pg_list.hpp"
 
 static constexpr char s3_filename_prefix[] = "s3://";
 static constexpr char gcs_filename_prefix[] = "gs://";
@@ -32,7 +33,6 @@ CreateRelationCopyParseState(ParseState *pstate, const CopyStmt *stmt, List **va
 	RTEPermissionInfo *perminfo;
 	TupleDesc tuple_desc;
 	List *attnums;
-	ListCell *cur;
 	Relation rel;
 	Oid relid;
 
@@ -49,15 +49,15 @@ CreateRelationCopyParseState(ParseState *pstate, const CopyStmt *stmt, List **va
 	tuple_desc = RelationGetDescr(rel);
 	attnums = CopyGetAttnums(tuple_desc, rel, stmt->attlist);
 
-	foreach (cur, attnums) {
+	foreach_int(cur, attnums) {
 		int attno;
 		Bitmapset **bms;
-		attno = lfirst_int(cur) - FirstLowInvalidHeapAttributeNumber;
+		attno = cur - FirstLowInvalidHeapAttributeNumber;
 		bms = &perminfo->selectedCols;
 		*bms = bms_add_member(*bms, attno);
-		*vars = lappend(*vars, makeVar(1, lfirst_int(cur), tuple_desc->attrs[lfirst_int(cur) - 1].atttypid,
-		                               tuple_desc->attrs[lfirst_int(cur) - 1].atttypmod,
-		                               tuple_desc->attrs[lfirst_int(cur) - 1].attcollation, 0));
+		*vars =
+		    lappend(*vars, makeVar(1, cur, tuple_desc->attrs[cur - 1].atttypid, tuple_desc->attrs[cur - 1].atttypmod,
+		                           tuple_desc->attrs[cur - 1].attcollation, 0));
 	}
 
 	if (!ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), false)) {
