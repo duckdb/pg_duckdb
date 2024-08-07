@@ -1,11 +1,3 @@
-//===----------------------------------------------------------------------===//
-//                         DuckDB
-//
-// storage/sqlite_transaction_manager.hpp
-//
-//
-//===----------------------------------------------------------------------===//
-
 #pragma once
 
 #include "duckdb/transaction/transaction_manager.hpp"
