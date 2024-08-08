@@ -45,7 +45,9 @@ public:
 	                            const char *query_string)
 	    : m_rtables(rtables), m_query_planner_info(query_planner_info), m_needed_columns(needed_columns),
 	      m_query_string(query_string) {
+		id = id_counter.fetch_add(1);
 	}
+
 	~PostgresReplacementScanData() override {};
 
 public:
@@ -53,6 +55,10 @@ public:
 	PlannerInfo *m_query_planner_info;
 	List *m_needed_columns;
 	std::string m_query_string;
+	uint32_t id;
+
+private:
+	static std::atomic<uint32_t> id_counter;
 };
 
 duckdb::unique_ptr<duckdb::TableRef> PostgresReplacementScan(duckdb::ClientContext &context,

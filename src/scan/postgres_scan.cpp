@@ -29,6 +29,8 @@ extern "C" {
 
 namespace pgduckdb {
 
+std::atomic<uint32_t> PostgresReplacementScanData::id_counter = 0;
+
 void
 PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) {
 	/* SELECT COUNT(*) FROM */
