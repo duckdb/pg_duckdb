@@ -46,6 +46,7 @@ private:
 	void LoadSecrets(duckdb::ClientContext &);
 	void LoadExtensions(duckdb::ClientContext &);
 	void LoadFunctions(duckdb::ClientContext &);
+	void ProcessRCFile(duckdb::ClientContext &);
 
 	duckdb::unique_ptr<duckdb::DuckDB> database;
 };
