@@ -128,10 +128,6 @@ SELECT * FROM json_tbl;
 CREATE TABLE regclass_tbl (a REGCLASS);
 INSERT INTO regclass_tbl SELECT CAST(42 as REGCLASS);
 SELECT * FROM regclass_tbl;
- a
-----
- 42
-(1 row)
 
 DROP TABLE chr;
 DROP TABLE small;
