@@ -543,8 +543,12 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		}
 		return duck_type;
 	}
-	default:
-		return duckdb::LogicalType::USER("UnsupportedPostgresType");
+	case REGCLASSOID:
+		return duckdb::LogicalTypeId::INTEGER;
+	default: {
+		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
+		return duckdb::LogicalType::USER(name);
+	}
 	}
 }
 

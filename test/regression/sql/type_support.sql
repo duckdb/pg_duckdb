@@ -124,6 +124,11 @@ INSERT INTO json_tbl SELECT CAST(a as JSON) FROM (VALUES
 ) t(a);
 SELECT * FROM json_tbl;
 
+-- REGCLASSOID
+CREATE TABLE regclass_tbl (a REGCLASS);
+INSERT INTO regclass_tbl SELECT CAST(42 as REGCLASS);
+SELECT * FROM regclass_tbl;
+
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
@@ -140,3 +145,4 @@ DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
 DROP TABLE json_tbl;
+DROP TABLE regclass_tbl;
