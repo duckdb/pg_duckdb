@@ -543,6 +543,8 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		}
 		return duck_type;
 	}
+	case REGCLASSOID:
+		return duckdb::LogicalTypeId::INTEGER;
 	default: {
 		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
 		return duckdb::LogicalType::USER(name);
