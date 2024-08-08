@@ -97,7 +97,8 @@ PostgresIndexTable::GetStatistics(ClientContext &context, column_t column_id) {
 TableFunction
 PostgresIndexTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
 	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
-	bind_data = duckdb::make_uniq<pgduckdb::PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid, snapshot);
+	bind_data = duckdb::make_uniq<pgduckdb::PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid,
+	                                                                       snapshot);
 	return pgduckdb::PostgresIndexScanFunction();
 }
 

@@ -5,8 +5,7 @@
 namespace duckdb {
 
 static unique_ptr<TransactionManager>
-CreateTransactionManager(StorageExtensionInfo *storage_info, AttachedDatabase &db,
-                         Catalog &catalog) {
+CreateTransactionManager(StorageExtensionInfo *storage_info, AttachedDatabase &db, Catalog &catalog) {
 	return make_uniq<PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>());
 }
 

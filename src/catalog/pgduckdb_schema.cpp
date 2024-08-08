@@ -177,8 +177,7 @@ PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const
 		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
 			return nullptr;
 		}
-		table =
-		    make_uniq<PostgresIndexTable>(catalog, *this, info, cardinality, snapshot, node_path, planner_info);
+		table = make_uniq<PostgresIndexTable>(catalog, *this, info, cardinality, snapshot, node_path, planner_info);
 	} else {
 		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
 			return nullptr;

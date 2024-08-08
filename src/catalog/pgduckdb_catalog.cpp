@@ -21,21 +21,18 @@ extern "C" {
 
 namespace duckdb {
 
-PostgresCatalog::PostgresCatalog(AttachedDatabase &db, const string &connection_string,
-                                 AccessMode access_mode, Snapshot snapshot, PlannerInfo *planner_info)
-    : Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot),
-      planner_info(planner_info) {
+PostgresCatalog::PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode,
+                                 Snapshot snapshot, PlannerInfo *planner_info)
+    : Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot), planner_info(planner_info) {
 }
 
 unique_ptr<Catalog>
-PostgresCatalog::Attach(StorageExtensionInfo *storage_info_p, ClientContext &context,
-                        AttachedDatabase &db, const string &name, AttachInfo &info,
-                        AccessMode access_mode) {
+PostgresCatalog::Attach(StorageExtensionInfo *storage_info_p, ClientContext &context, AttachedDatabase &db,
+                        const string &name, AttachInfo &info, AccessMode access_mode) {
 	string connection_string = info.path;
 
 	if (!storage_info_p) {
-		throw InternalException(
-		    "PostgresCatalog should always have access to the PostgresStorageExtensionInfo");
+		throw InternalException("PostgresCatalog should always have access to the PostgresStorageExtensionInfo");
 	}
 	auto &storage_info = static_cast<PostgresStorageExtensionInfo &>(*storage_info_p);
 	auto snapshot = storage_info.snapshot;
