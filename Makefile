@@ -79,13 +79,16 @@ third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB):
 	DISABLE_SANITIZER=1 \
 	ENABLE_UBSAN=0 \
 	BUILD_UNITTESTS=OFF \
-	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake"
+	BUILD_HTTPFS=1 \
+	BUILD_JSON=1 \
+	CMAKE_EXPORT_COMPILE_COMMANDS=1 \
+	-j8
 
 install-duckdb:
 	$(install_bin) -m 755 third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
 
 clean-duckdb:
-	rm -rf third_party/duckdb/build
+#rm -rf third_party/duckdb/build
 
 install: install-duckdb
 
