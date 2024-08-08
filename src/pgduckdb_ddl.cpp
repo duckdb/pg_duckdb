@@ -69,7 +69,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	SetUserIdAndSecContext(saved_userid, sec_context);
 
 	if (ret != SPI_OK_INSERT)
-		elog(ERROR, "SPI_exec failed: error code %d", ret);
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	SPI_finish();
 
@@ -126,7 +126,7 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	SetUserIdAndSecContext(saved_userid, sec_context);
 
 	if (ret != SPI_OK_DELETE_RETURNING)
-		elog(ERROR, "SPI_execute failed: error code %d", ret);
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
