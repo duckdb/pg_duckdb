@@ -71,12 +71,12 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	if (ret != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: error code %d", ret);
 
+	SPI_finish();
+
 	if (SPI_processed == 0) {
 		/* it was a regular postgres table, nothing todo */
-		SPI_finish();
 		PG_RETURN_NULL();
 	}
-	SPI_finish();
 
 	// TODO: This is a huge hack, we should build the query string from the parsetree
 	std::string query_string = std::regex_replace(debug_query_string, std::regex(R"((using|USING)\s+duckdb)"), "");
