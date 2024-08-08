@@ -8,6 +8,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
@@ -17,7 +18,7 @@ static CustomExecMethods duckdb_scan_exec_methods;
 
 typedef struct DuckdbScanState {
 	CustomScanState css; /* must be first field */
-	duckdb::Connection *duckdb_connection;
+	pgduckdb::Connection *duckdb_connection;
 	duckdb::PreparedStatement *prepared_statement;
 	bool is_executed;
 	bool fetch_next;
@@ -46,7 +47,7 @@ static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)newNode(sizeof(DuckdbScanState), T_CustomScanState);
 	CustomScanState *custom_scan_state = &duckdb_scan_state->css;
-	duckdb_scan_state->duckdb_connection = (duckdb::Connection *)linitial(cscan->custom_private);
+	duckdb_scan_state->duckdb_connection = (pgduckdb::Connection *)linitial(cscan->custom_private);
 	duckdb_scan_state->prepared_statement = (duckdb::PreparedStatement *)lsecond(cscan->custom_private);
 	duckdb_scan_state->is_executed = false;
 	duckdb_scan_state->fetch_next = true;
