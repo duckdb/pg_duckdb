@@ -4,10 +4,15 @@
 extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
+#include "tcop/pquery.h"
+#include "nodes/params.h"
+#include "utils/ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_planner.hpp"
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
@@ -17,6 +22,8 @@ static CustomExecMethods duckdb_scan_exec_methods;
 
 typedef struct DuckdbScanState {
 	CustomScanState css; /* must be first field */
+	Query *query;
+	ParamListInfo params;
 	duckdb::Connection *duckdb_connection;
 	duckdb::PreparedStatement *prepared_statement;
 	bool is_executed;
@@ -46,10 +53,9 @@ static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)newNode(sizeof(DuckdbScanState), T_CustomScanState);
 	CustomScanState *custom_scan_state = &duckdb_scan_state->css;
-	duckdb_scan_state->duckdb_connection = (duckdb::Connection *)linitial(cscan->custom_private);
-	duckdb_scan_state->prepared_statement = (duckdb::PreparedStatement *)lsecond(cscan->custom_private);
-	duckdb_scan_state->is_executed = false;
-	duckdb_scan_state->fetch_next = true;
+
+	duckdb_scan_state->query = (Query *)linitial(cscan->custom_private);
+	/* FIXME: We should pass a sensible bound_params, this breaks prepared statements */
 	custom_scan_state->methods = &duckdb_scan_exec_methods;
 	return (Node *)custom_scan_state;
 }
@@ -57,6 +63,19 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 void
 Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
+	auto prepare_result = DuckdbPrepare(duckdb_scan_state->query, estate->es_param_list_info);
+	auto prepared_query = std::move(std::get<0>(prepare_result));
+	auto duckdb_connection = std::move(std::get<1>(prepare_result));
+
+	if (prepared_query->HasError()) {
+		elog(ERROR, "DuckDB re-planning failed %s", prepared_query->GetError().c_str());
+	}
+
+	duckdb_scan_state->duckdb_connection = duckdb_connection.release();
+	duckdb_scan_state->prepared_statement = prepared_query.release();
+	duckdb_scan_state->params = estate->es_param_list_info;
+	duckdb_scan_state->is_executed = false;
+	duckdb_scan_state->fetch_next = true;
 	duckdb_scan_state->css.ss.ps.ps_ResultTupleDesc = duckdb_scan_state->css.ss.ss_ScanTupleSlot->tts_tupleDescriptor;
 	HOLD_CANCEL_INTERRUPTS();
 }
@@ -66,8 +85,34 @@ ExecuteQuery(DuckdbScanState *state) {
 	auto &prepared = *state->prepared_statement;
 	auto &query_results = state->query_results;
 	auto &connection = state->duckdb_connection;
+	auto pg_params = state->params;
+	duckdb::vector<duckdb::Value> duckdb_params;
+	if (pg_params) {
+		for (int i = 0; i < pg_params->numParams; i++) {
+			ParamExternData *pg_param;
+			ParamExternData tmp_workspace;
 
-	auto pending = prepared.PendingQuery();
+			/* give hook a chance in case parameter is dynamic */
+			if (pg_params->paramFetch != NULL)
+				pg_param = pg_params->paramFetch(pg_params, i + 1, false, &tmp_workspace);
+			else
+				pg_param = &pg_params->params[i];
+
+			if (pg_param->isnull) {
+				duckdb_params.push_back(duckdb::Value());
+			} else {
+				if (!OidIsValid(pg_param->ptype)) {
+					elog(ERROR, "parameter with invalid type during execution");
+				}
+				duckdb_params.push_back(pgduckdb::ConvertPostgresToDuckValue(pg_param->value, pg_param->ptype));
+			}
+		}
+	}
+
+	auto pending = prepared.PendingQuery(duckdb_params, true);
+	if (pending->HasError()) {
+		elog(ERROR, "Duckdb execute returned an error: %s", pending->GetError().c_str());
+	}
 	duckdb::PendingExecutionResult execution_result;
 	do {
 		execution_result = pending->ExecuteTask();
