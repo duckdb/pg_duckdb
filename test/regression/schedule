@@ -7,3 +7,4 @@ test: views
 test: projection_pushdown_unsupported_type
 test: materialized_view
 test: hugeint_conversion
+test: read_functions

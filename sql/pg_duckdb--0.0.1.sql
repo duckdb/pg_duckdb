@@ -1,6 +1,10 @@
 LOAD 'pg_duckdb';
 
-CREATE OR REPLACE FUNCTION read_parquet(path text)
+CREATE OR REPLACE FUNCTION read_parquet(path text, binary_as_string BOOLEAN DEFAULT FALSE,
+                                                   filename BOOLEAN DEFAULT FALSE,
+                                                   file_row_number BOOLEAN DEFAULT FALSE,
+                                                   hive_partitioning BOOLEAN DEFAULT FALSE,
+                                                   union_by_name BOOLEAN DEFAULT FALSE)
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -8,7 +12,11 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION read_parquet(path text[])
+CREATE OR REPLACE FUNCTION read_parquet(path text[], binary_as_string BOOLEAN DEFAULT FALSE,
+                                                     filename BOOLEAN DEFAULT FALSE,
+                                                     file_row_number BOOLEAN DEFAULT FALSE,
+                                                     hive_partitioning BOOLEAN DEFAULT FALSE,
+                                                     union_by_name BOOLEAN DEFAULT FALSE)
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -16,7 +24,39 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION read_csv(path text)
+
+-- Arguments 'columns' and 'nullstr' are currently not supported for read_csv
+
+CREATE OR REPLACE FUNCTION read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE,
+                                               allow_quoted_nulls BOOLEAN DEFAULT TRUE,
+                                               auto_detect BOOLEAN DEFAULT TRUE,
+                                               auto_type_candidates TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                               compression VARCHAR DEFAULT 'auto',
+                                               dateformat VARCHAR DEFAULT '',
+                                               decimal_separator VARCHAR DEFAULT '.',
+                                               delim VARCHAR DEFAULT ',',
+                                               escape VARCHAR DEFAULT '"',
+                                               filename BOOLEAN DEFAULT FALSE,
+                                               force_not_null TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                               header BOOLEAN DEFAULT FALSE,
+                                               hive_partitioning BOOLEAN DEFAULT FALSE,
+                                               ignore_errors BOOLEAN DEFAULT FALSE,
+                                               max_line_size BIGINT DEFAULT 2097152,
+                                               names TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                               new_line VARCHAR DEFAULT '',
+                                               normalize_names BOOLEAN DEFAULT FALSE,
+                                               null_padding BOOLEAN DEFAULT FALSE,
+                                               nullstr TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                               parallel BOOLEAN DEFAULT FALSE,
+                                               quote VARCHAR DEFAULT '"',
+                                               sample_size BIGINT DEFAULT 20480,
+                                               sep VARCHAR DEFAULT ',',
+                                               skip BIGINT DEFAULT 0,
+                                               timestampformat VARCHAR DEFAULT '',
+                                               types TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                               union_by_name BOOLEAN DEFAULT FALSE)
+
+    
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -24,7 +64,34 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION read_csv(path text[])
+CREATE OR REPLACE FUNCTION read_csv(path text[],  all_varchar BOOLEAN DEFAULT FALSE,
+                                                  allow_quoted_nulls BOOLEAN DEFAULT TRUE,
+                                                  auto_detect BOOLEAN DEFAULT TRUE,
+                                                  auto_type_candidates TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                                  compression VARCHAR DEFAULT 'auto',
+                                                  dateformat VARCHAR DEFAULT '',
+                                                  decimal_separator VARCHAR DEFAULT '.',
+                                                  delim VARCHAR DEFAULT ',',
+                                                  escape VARCHAR DEFAULT '"',
+                                                  filename BOOLEAN DEFAULT FALSE,
+                                                  force_not_null TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                                  header BOOLEAN DEFAULT FALSE,
+                                                  hive_partitioning BOOLEAN DEFAULT FALSE,
+                                                  ignore_errors BOOLEAN DEFAULT FALSE,
+                                                  max_line_size BIGINT DEFAULT 2097152,
+                                                  names TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                                  new_line VARCHAR DEFAULT '',
+                                                  normalize_names BOOLEAN DEFAULT FALSE,
+                                                  null_padding BOOLEAN DEFAULT FALSE,
+                                                  nullstr TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                                  parallel BOOLEAN DEFAULT FALSE,
+                                                  quote VARCHAR DEFAULT '"',
+                                                  sample_size BIGINT DEFAULT 20480,
+                                                  sep VARCHAR DEFAULT ',',
+                                                  skip BIGINT DEFAULT 0,
+                                                  timestampformat VARCHAR DEFAULT '',
+                                                  types TEXT[] DEFAULT ARRAY[]::TEXT[],
+                                                  union_by_name BOOLEAN DEFAULT FALSE)
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
