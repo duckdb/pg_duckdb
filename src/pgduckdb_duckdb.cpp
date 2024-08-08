@@ -9,6 +9,11 @@
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
+extern "C" {
+#include "postgres.h"
+
+#include "utils/elog.h"
+}
 #include <string>
 
 #include <sys/types.h>
@@ -199,6 +204,17 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 	/* Store replacement scan identifier to be removed when connection is destroyed */
 	con->SetTrackedReplacementScanId(static_cast<PostgresReplacementScanData *>(ref.data.get())->id);
 	return con;
+}
+
+duckdb::unique_ptr<duckdb::QueryResult>
+RunQuery(duckdb::Connection const &connection, const std::string &query) {
+	auto result = connection.context->Query(query, false);
+	if (result->HasError()) {
+		auto err = result->GetError().c_str();
+		ereport(ERROR,
+		        (errmsg("received duckdb error: %s", err), errcontext_msg("while running query: %s", query.c_str())));
+	}
+	return result;
 }
 
 } // namespace pgduckdb
