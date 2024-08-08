@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+#include <regex>
 
 extern "C" {
 #include "postgres.h"
@@ -77,9 +78,12 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	}
 	SPI_finish();
 
+	// TODO: This is a huge hack, we should build the query string from the parsetree
+	std::string query_string = std::regex_replace(debug_query_string, std::regex(R"((using|USING)\s+duckdb)"), "");
+
 	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
-	auto result = pgduckdb::RunQuery(*connection, debug_query_string);
+	auto result = pgduckdb::RunQuery(*connection, query_string);
 
 	PG_RETURN_NULL();
 }
@@ -104,7 +108,8 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	// cannot find out if the table was using the duckdb access method. So
 	// instead we keep our own metadata table that also tracks which tables are
 	// duckdb tables.
-	// TODO: Handle schemas in a sensible way
+	// TODO: Handle schemas in a sensible way, by using object_identity instead
+	// of object_name
 	int ret = SPI_exec(R"(
                 DELETE FROM duckdb.tables
                 USING (
@@ -113,7 +118,7 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
                     WHERE object_type = 'table'
                 ) objs
                 WHERE relid = objid
-                RETURNING objs.object_identity
+                RETURNING objs.object_name
                 )",
 	                   0);
 
