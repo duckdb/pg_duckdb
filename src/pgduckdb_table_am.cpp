@@ -125,9 +125,7 @@ duckdb_index_delete_tuples(Relation rel, TM_IndexDeleteOp *delstate) {
 
 static void
 duckdb_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid, int options, BulkInsertState bistate) {
-	// TODO: Make this not implemented again, right now we ignore this to
-	// support CREATE TABLE AS
-	// NOT_IMPLEMENTED();
+	NOT_IMPLEMENTED();
 }
 
 static void
@@ -168,9 +166,15 @@ duckdb_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot, TupleTa
 
 static void
 duckdb_finish_bulk_insert(Relation relation, int options) {
-	// TODO: Make this not implemented again, right now we ignore this to
-	// support CREATE TABLE AS
-	// NOT_IMPLEMENTED();
+	/*
+	 * This function needs to succeed for CREATE TABLE AS to work. It's a bit
+	 * strange that postgres still calls this function even if no rows are
+	 * inserted by the query from CREATE TABLE AS. Luckily we know
+	 * duckdb_tuple_insert is not actually called because that fails with a
+	 * "not implemented" error. So we know nothing was actually meant to be
+	 * inserted and thus it's fine to let duckdb_finish_bulk_insert be a
+	 * no-op.
+	 */
 }
 
 /* ------------------------------------------------------------------------

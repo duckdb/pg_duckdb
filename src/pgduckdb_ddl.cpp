@@ -25,10 +25,20 @@ extern "C" {
 void
 duckdb_handle_ddl(Node *parsetree, const char *queryString) {
 	if (IsA(parsetree, CreateTableAsStmt)) {
-		auto stmt = (CreateTableAsStmt *)parsetree;
+		auto stmt = castNode(CreateTableAsStmt, parsetree);
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
-		// TODO: Do something special here to make sure that the select doesn't
-		// insert into the postgres table too.
+		if (strcmp(access_method, "duckdb") != 0) {
+			/* not a duckdb table, so don't mess with the query */
+			return;
+		}
+
+		/*
+		 * Set the LIMIT to 0 in the query, so that no output is written to the postgres table. Nor are functions like
+		 * read_csv/read_parquet called in postgres.
+		 */
+		auto query = castNode(Query, stmt->query);
+		auto zeroConst = (Node *)makeConst(INT8OID, -1, -1, 8, Int64GetDatum(0), false, true);
+		query->limitCount = zeroConst;
 	}
 }
 
