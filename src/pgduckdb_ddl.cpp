@@ -71,10 +71,12 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	if (ret != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
+	/* if we inserted a row it was a duckdb table */
+	auto isDuckdbTable = SPI_processed > 0;
+
 	SPI_finish();
 
-	if (SPI_processed == 0) {
-		/* it was a regular postgres table, nothing todo */
+	if (!isDuckdbTable) {
 		PG_RETURN_NULL();
 	}
 
