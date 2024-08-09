@@ -15,7 +15,6 @@ AllowAllConstructorInitializersOnNextLine: true
 AllowAllParametersOfDeclarationOnNextLine: true
 AlwaysBreakAfterReturnType: AllDefinitions
 AlignAfterOpenBracket: Align
-BracedInitializerIndentWidth: 4
 IncludeBlocks: Preserve
 IncludeCategories: # we want to ensure postgres.h appear first
   - Regex:           '^"postgres\.h"'
@@ -36,4 +35,3 @@ AllowShortLoopsOnASingleLine: false
 AlwaysBreakTemplateDeclarations: Yes
 Language: Cpp
 AccessModifierOffset: -4
-InsertNewlineAtEOF: true
