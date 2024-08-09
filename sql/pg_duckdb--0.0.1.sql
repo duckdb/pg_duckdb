@@ -79,6 +79,9 @@ CREATE TABLE tables (
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 
+CREATE OR REPLACE FUNCTION query(query TEXT) RETURNS void
+    LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_query';
+
 CREATE FUNCTION duckdb_am_handler(internal)
 RETURNS table_am_handler
 AS 'MODULE_PATHNAME'
