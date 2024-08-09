@@ -1,6 +1,9 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -8,6 +11,7 @@
 #include "pgduckdb/scan/postgres_index_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
 #include <string>
 
@@ -74,15 +78,18 @@ duckdb::unique_ptr<duckdb::Connection>
 DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
 	auto db = DuckdbOpenDatabase();
 
-	/* Add tables */
+	// Transforms VIEWs into their creation query
 	db->instance->config.replacement_scans.emplace_back(
 	    pgduckdb::PostgresReplacementScan,
 	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, planner_info,
 	                                                                                     needed_columns, query));
 
+	auto &config = duckdb::DBConfig::GetConfig(*db->instance);
+	config.storage_extensions["pgduckdb"] =
+	    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot(), planner_info);
+
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
 
-	// Add the postgres_scan inserted by the replacement scan
 	auto &context = *connection->context;
 
 	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
@@ -92,6 +99,10 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 	duckdb::CreateTableFunctionInfo index_scan_info(index_scan_fun);
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+	duckdb::ExtensionInstallInfo extension_install_info;
+	db->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
+	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
+	context.Query("USE pgduckdb", false);
 	context.transaction.BeginTransaction();
 	auto &instance = *db->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);

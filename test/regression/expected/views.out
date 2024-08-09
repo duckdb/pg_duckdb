@@ -29,7 +29,7 @@ create view vw2 as select * from "s.t";
 select * from vw1, vw2;
  ?column? | ?column? 
 ----------+----------
-       21 |       21
+       21 |       42
 (1 row)
 
 drop view vw1;
