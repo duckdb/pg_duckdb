@@ -9,6 +9,7 @@ extern "C" {
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
@@ -155,6 +156,20 @@ install_extension(PG_FUNCTION_ARGS) {
 	Datum extension_name = PG_GETARG_DATUM(0);
 	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
 	PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(pgduckdb_query);
+Datum
+pgduckdb_query(PG_FUNCTION_ARGS) {
+	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto result = pgduckdb::RunQuery(*connection, query);
+	if (result->HasError()) {
+		PG_RETURN_BOOL(false);
+	}
+	elog(NOTICE, "result: %s", result->ToString().c_str());
+	PG_RETURN_BOOL(true);
 }
 
 } // extern "C"
