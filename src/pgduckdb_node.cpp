@@ -85,7 +85,7 @@ ExecuteQuery(DuckdbScanState *state) {
 			ProcessInterrupts();
 			elog(ERROR, "Query cancelled");
 		}
-	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
+	} while (!duckdb::PendingQueryResult::IsFinishedOrBlocked(execution_result));
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
 		elog(ERROR, "Duckdb execute returned an error: %s", pending->GetError().c_str());
 	}

@@ -159,7 +159,7 @@ duckdb::unique_ptr<duckdb::TableRef>
 PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
                         duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
 
-	auto table_name = duckdb::ReplacementScan::GetFullPath(input);
+	auto table_name = input.table_name;
 	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
 
 	/* Check name against query table list and verify that it is heap table */
