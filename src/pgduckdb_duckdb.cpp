@@ -118,7 +118,7 @@ DuckDBManager::ProcessRCFile(duckdb::ClientContext &context) {
 		return;
 	}
 
-	elog(INFO, "Executing commands from '%s/.pg_duckrc' file", home.c_str());
+	elog(DEBUG2, "Executing commands from '%s/.pg_duckrc' file", home.c_str());
 	std::string line;
 	while (std::getline(rc_file, line)) {
 		auto res = context.Query(line, false);
