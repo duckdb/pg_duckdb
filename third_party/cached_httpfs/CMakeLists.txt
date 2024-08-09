@@ -11,6 +11,7 @@ build_static_extension(
   hffs.cpp
   s3fs.cpp
   httpfs.cpp
+  http_file_cache.cpp
   http_state.cpp
   crypto.cpp
   create_secret_functions.cpp
@@ -23,6 +24,7 @@ build_loadable_extension(
   hffs.cpp
   s3fs.cpp
   httpfs.cpp
+  http_file_cache.cpp
   http_state.cpp
   crypto.cpp
   create_secret_functions.cpp

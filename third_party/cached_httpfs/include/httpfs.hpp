@@ -2,6 +2,7 @@
 
 #include "duckdb/common/case_insensitive_map.hpp"
 #include "duckdb/common/file_system.hpp"
+#include "http_file_cache.hpp"
 #include "http_state.hpp"
 #include "duckdb/common/pair.hpp"
 #include "duckdb/common/unordered_map.hpp"
@@ -41,6 +42,8 @@ struct HTTPParams {
 	static constexpr bool DEFAULT_KEEP_ALIVE = true;
 	static constexpr bool DEFAULT_ENABLE_SERVER_CERT_VERIFICATION = false;
 	static constexpr uint64_t DEFAULT_HF_MAX_PER_PAGE = 0;
+	static constexpr const char *DEFAULT_HTTP_FILE_CACHE_DIR = "/tmp";
+	static constexpr bool DEFAULT_HTTP_CACHE = false;
 
 	uint64_t timeout;
 	uint64_t retries;
@@ -54,6 +57,9 @@ struct HTTPParams {
 	string bearer_token;
 
 	idx_t hf_max_per_page;
+
+	bool enable_http_file_cache;
+	std::string http_file_cache_dir;
 
 	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener);
 };
@@ -181,6 +187,7 @@ public:
 	static void Verify();
 
 	optional_ptr<HTTPMetadataCache> GetGlobalCache();
+	optional_ptr<HTTPFileCache> GetGlobalFileCache(ClientContext &context);
 
 protected:
 	virtual duckdb::unique_ptr<HTTPFileHandle> CreateHandle(const string &path, FileOpenFlags flags,
@@ -194,6 +201,7 @@ private:
 	// Global cache
 	mutex global_cache_lock;
 	duckdb::unique_ptr<HTTPMetadataCache> global_metadata_cache;
+	duckdb::unique_ptr<HTTPFileCache> glob_file_cache;
 };
 
 } // namespace duckdb

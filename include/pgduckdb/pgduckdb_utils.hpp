@@ -19,4 +19,8 @@ TokenizeString(char *str, const char delimiter) {
 	return v;
 };
 
+std::string CreateOrGetDirectoryPath(std::string directoryName);
+
 } // namespace pgduckdb
+
+void DuckdbCreateCacheDirectory(void);

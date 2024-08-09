@@ -19,6 +19,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/pgduckdb_options.cpp \
 	   src/pgduckdb_planner.cpp \
 	   src/pgduckdb_types.cpp \
+	   src/pgduckdb_utils.cpp \
 	   src/pgduckdb.cpp
 
 OBJS = $(subst .cpp,.o, $(SRCS))

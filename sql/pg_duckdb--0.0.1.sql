@@ -75,6 +75,9 @@ CREATE TABLE extensions (
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 
+CREATE OR REPLACE FUNCTION cache(object_path TEXT, type TEXT) RETURNS bool
+    LANGUAGE C AS 'MODULE_PATHNAME', 'cache';
+
 DO $$
 BEGIN
     RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';

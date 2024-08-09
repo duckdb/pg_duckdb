@@ -58,6 +58,9 @@ CREATE EXTENSION pg_duckdb;
 - Install DuckDB extensions using `SELECT duckdb.install_extension('extension_name');`
 - Toggle DuckDB execution on/off with a setting:
 	- `SET duckdb.execution = true|false`
+- Cache remote object localy for faster execution using `SELECT duckdb.cache('path', 'type');` where
+	- 'path' is HTTPFS/S3/GCS/R2 remote object
+	- 'type' specify remote object type: 'parquet' or 'csv'
 
 ## Getting Started
 

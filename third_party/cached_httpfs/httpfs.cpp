@@ -1,6 +1,7 @@
 #include "httpfs.hpp"
 
 #include "duckdb/common/atomic.hpp"
+#include "duckdb/common/crypto/md5.hpp"
 #include "duckdb/common/exception/http_exception.hpp"
 #include "duckdb/common/file_opener.hpp"
 #include "http_state.hpp"
@@ -42,6 +43,8 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
 	std::string ca_cert_file;
 	uint64_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
+	bool enable_http_file_cache = DEFAULT_HTTP_CACHE;
+	std::string http_file_cache_dir = DEFAULT_HTTP_FILE_CACHE_DIR;
 
 	Value value;
 	if (FileOpener::TryGetCurrentSetting(opener, "http_timeout", value)) {
@@ -71,6 +74,12 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	if (FileOpener::TryGetCurrentSetting(opener, "hf_max_per_page", value)) {
 		hf_max_per_page = value.GetValue<uint64_t>();
 	}
+	if (FileOpener::TryGetCurrentSetting(opener, "enable_http_file_cache", value)) {
+		enable_http_file_cache = value.GetValue<bool>();
+	}
+	if (FileOpener::TryGetCurrentSetting(opener, "http_file_cache_dir", value)) {
+		http_file_cache_dir = value.ToString();
+	}
 
 	return {timeout,
 	        retries,
@@ -81,7 +90,9 @@ HTTPParams HTTPParams::ReadFrom(optional_ptr<FileOpener> opener) {
 	        enable_server_cert_verification,
 	        ca_cert_file,
 	        "",
-	        hf_max_per_page};
+	        hf_max_per_page,
+	        enable_http_file_cache,
+	        http_file_cache_dir};
 }
 
 unique_ptr<duckdb_httplib_openssl::Client> HTTPClientCache::GetClient() {
@@ -323,7 +334,7 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    hfh.state->total_bytes_received += data_length;
 			    }
 			    if (!hfh.cached_file_handle->GetCapacity()) {
-				    hfh.cached_file_handle->AllocateBuffer(data_length);
+				    hfh.cached_file_handle->Allocate(data_length);
 				    hfh.length = data_length;
 				    hfh.cached_file_handle->Write(data, data_length);
 			    } else {
@@ -331,9 +342,9 @@ unique_ptr<ResponseWrapper> HTTPFileSystem::GetRequest(FileHandle &handle, strin
 				    while (new_capacity < hfh.length + data_length) {
 					    new_capacity *= 2;
 				    }
-				    // Grow buffer when running out of space
+				    // Grow file when running out of space
 				    if (new_capacity != hfh.cached_file_handle->GetCapacity()) {
-					    hfh.cached_file_handle->GrowBuffer(new_capacity, hfh.length);
+					    hfh.cached_file_handle->GrowFile(new_capacity, hfh.length);
 				    }
 				    // We can just copy stuff
 				    hfh.cached_file_handle->Write(data, data_length, hfh.length);
@@ -476,7 +487,7 @@ void HTTPFileSystem::Read(FileHandle &handle, void *buffer, int64_t nr_bytes, id
 		if (!hfh.cached_file_handle->Initialized()) {
 			throw InternalException("Cached file not initialized properly");
 		}
-		memcpy(buffer, hfh.cached_file_handle->GetData() + location, nr_bytes);
+		hfh.cached_file_handle->Read(buffer, nr_bytes, location);
 		hfh.file_offset = location + nr_bytes;
 		return;
 	}
@@ -607,6 +618,14 @@ optional_ptr<HTTPMetadataCache> HTTPFileSystem::GetGlobalCache() {
 	return global_metadata_cache.get();
 }
 
+optional_ptr<HTTPFileCache> HTTPFileSystem::GetGlobalFileCache(ClientContext &context) {
+	lock_guard<mutex> lock(global_cache_lock);
+	if (!glob_file_cache) {
+		glob_file_cache = make_uniq<HTTPFileCache>(context);
+	}
+	return glob_file_cache.get();
+}
+
 // Get either the local, global, or no cache depending on settings
 static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
 	auto db = FileOpener::TryGetDatabase(opener);
@@ -624,6 +643,18 @@ static optional_ptr<HTTPMetadataCache> TryGetMetadataCache(optional_ptr<FileOpen
 	return nullptr;
 }
 
+static optional_ptr<HTTPFileCache> TryGetFileCache(optional_ptr<FileOpener> opener, HTTPFileSystem &httpfs) {
+	auto db = FileOpener::TryGetDatabase(opener);
+	auto client_context = FileOpener::TryGetClientContext(opener);
+	if (!db) {
+		return nullptr;
+	}
+	if (client_context) {
+		return httpfs.GetGlobalFileCache(*client_context);
+	}
+	return nullptr;
+}
+
 void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	auto &hfs = file_system.Cast<HTTPFileSystem>();
 	state = HTTPState::TryGetState(opener);
@@ -632,6 +663,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);
+	auto current_file_cache = TryGetFileCache(opener, hfs);
 
 	bool should_write_cache = false;
 	if (!http_params.force_download && current_cache && !flags.OpenForWriting()) {
@@ -716,25 +748,37 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 			throw IOException("Invalid Content-Length header received: %s", res->headers["Content-Length"]);
 		}
 	}
-	if (state && (length == 0 || http_params.force_download)) {
-		auto &cache_entry = state->GetCachedFile(path);
-		cached_file_handle = cache_entry->GetHandle();
-		if (!cached_file_handle->Initialized()) {
-			// Try to fully download the file first
-			auto full_download_result = hfs.GetRequest(*this, path, {});
-			if (full_download_result->code != 200) {
-				throw HTTPException(*res, "Full download failed to to URL \"%s\": %s (%s)",
-				                    full_download_result->http_url, to_string(full_download_result->code),
-				                    full_download_result->error);
-			}
 
-			// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
-			cached_file_handle->SetInitialized(length);
-
-			// We shouldn't write these to cache
-			should_write_cache = false;
+	if (current_file_cache) {
+		MD5Context md5_context;
+		// NO ETag header
+		if (res->headers.find("ETag") == res->headers.end() || res->headers["ETag"].empty()) {
+			md5_context.Add(StringUtil::Lower(path));
 		} else {
-			length = cached_file_handle->GetSize();
+			md5_context.Add(res->headers["ETag"]);
+		}
+		auto cache_entry = current_file_cache->GetCachedFile(http_params.http_file_cache_dir, md5_context.FinishHex(),
+		                                                     http_params.enable_http_file_cache);
+		if (cache_entry) {
+			//! Cache found or created
+			cached_file_handle = cache_entry->GetHandle();
+			if (!cached_file_handle->Initialized()) {
+				// Try to fully download the file first
+				auto full_download_result = hfs.GetRequest(*this, path, {});
+				if (full_download_result->code != 200) {
+					throw HTTPException(*res, "Full download failed to to URL \"%s\": %s (%s)",
+					                    full_download_result->http_url, to_string(full_download_result->code),
+					                    full_download_result->error);
+				}
+
+				// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
+				cached_file_handle->SetInitialized(length);
+
+				// We shouldn't write these to cache
+				should_write_cache = false;
+			} else {
+				length = cached_file_handle->GetSize();
+			}
 		}
 	}
 
