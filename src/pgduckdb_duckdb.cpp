@@ -189,6 +189,22 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	}
 }
 
+static void
+UseDefaultDB(duckdb::Connection const &connection) {
+	if (duckdb_default_db[0]) {
+		// TODO: Escape the database name correctly
+		pgduckdb::RunQuery(connection, "USE " + std::string(duckdb_default_db) + ";");
+	}
+}
+
+duckdb::unique_ptr<duckdb::Connection>
+DuckdbCreateSimpleConnection() {
+	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	UseDefaultDB(*connection);
+	return connection;
+}
+
 duckdb::unique_ptr<Connection>
 DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
 	auto &db = DuckDBManager::Get().GetDatabase();
@@ -200,6 +216,7 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 	                                                                                     needed_columns, query));
 
 	auto con = duckdb::make_uniq<Connection>(db);
+	UseDefaultDB(*con);
 
 	/* Store replacement scan identifier to be removed when connection is destroyed */
 	con->SetTrackedReplacementScanId(static_cast<PostgresReplacementScanData *>(ref.data.get())->id);

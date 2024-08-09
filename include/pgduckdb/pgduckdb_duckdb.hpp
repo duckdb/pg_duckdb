@@ -51,6 +51,7 @@ private:
 	duckdb::unique_ptr<duckdb::DuckDB> database;
 };
 
+duckdb::unique_ptr<duckdb::Connection> DuckdbCreateSimpleConnection();
 duckdb::unique_ptr<Connection> DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns,
                                                       const char *query);
 duckdb::unique_ptr<duckdb::QueryResult> RunQuery(duckdb::Connection const &connection, const std::string &query);

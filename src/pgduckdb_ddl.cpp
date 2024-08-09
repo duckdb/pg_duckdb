@@ -83,8 +83,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	// TODO: This is a huge hack, we should build the query string from the parsetree
 	std::string query_string = std::regex_replace(debug_query_string, std::regex(R"((using|USING)\s+duckdb)"), "");
 
-	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckdbCreateSimpleConnection();
 	auto result = pgduckdb::RunQuery(*connection, query_string);
 
 	PG_RETURN_NULL();
@@ -130,8 +129,7 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	if (ret != SPI_OK_DELETE_RETURNING)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckdbCreateSimpleConnection();
 
 	for (auto proc = 0; proc < SPI_processed; proc++) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
