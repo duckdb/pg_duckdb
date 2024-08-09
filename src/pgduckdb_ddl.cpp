@@ -20,6 +20,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_pg_list.h"
 
 void
@@ -93,7 +94,16 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	// TODO: This is a huge hack, we should build the query string from the parsetree
 	std::string query_string = std::regex_replace(debug_query_string, std::regex(R"((using|USING)\s+duckdb)"), "");
 
-	auto connection = pgduckdb::DuckdbCreateSimpleConnection();
+	CreateTableAsStmt *stmt = castNode(CreateTableAsStmt, trigdata->parsetree);
+	Query *query = castNode(Query, stmt->query);
+
+	/* TODO - factorize w/ other calls Extract required vars for table */
+	int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
+	List *vars = list_concat(pull_var_clause((Node *)query->targetList, flags),
+	                         pull_var_clause((Node *)query->jointree->quals, flags));
+
+	PlannerInfo *query_planner_info = PlanQuery(query, NULL);
+	auto connection = pgduckdb::DuckdbCreateConnection(query->rtable, query_planner_info, vars, query_string.c_str());
 	auto result = pgduckdb::RunQuery(*connection, query_string);
 
 	PG_RETURN_NULL();
