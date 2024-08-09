@@ -13,5 +13,6 @@ namespace pgduckdb {
 duckdb::unique_ptr<duckdb::DuckDB> DuckdbOpenDatabase();
 duckdb::unique_ptr<duckdb::Connection> DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info,
                                                               List *needed_columns, const char *query);
+duckdb::unique_ptr<duckdb::QueryResult> RunQuery(duckdb::Connection const &connection, const std::string &query);
 
 } // namespace pgduckdb
