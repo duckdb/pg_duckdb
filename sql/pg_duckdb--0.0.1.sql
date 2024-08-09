@@ -104,10 +104,10 @@ CREATE EVENT TRIGGER duckdb_create_table_trigger ON ddl_command_end
     WHEN tag IN ('CREATE TABLE', 'CREATE TABLE AS')
     EXECUTE FUNCTION duckdb_create_table_trigger();
 
-DO $$
-BEGIN
-    RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';
-END
-$$;
+-- DO $$
+-- BEGIN
+--     RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';
+-- END
+-- $$;
 
 RESET search_path;
