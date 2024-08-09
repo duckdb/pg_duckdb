@@ -88,7 +88,7 @@ install-duckdb:
 	$(install_bin) -m 755 third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
 
 clean-duckdb:
-#rm -rf third_party/duckdb/build
+	rm -rf third_party/duckdb/build
 
 install: install-duckdb
 
