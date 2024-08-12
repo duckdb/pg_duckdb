@@ -87,6 +87,7 @@ DuckDBManager::DuckDBManager() {
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", GetExtensionDirectory());
 	config.SetOptionByName("allow_unsigned_extensions", true);
+	config.SetOptionByName("threads", 1);
 	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
