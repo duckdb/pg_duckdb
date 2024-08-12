@@ -15,7 +15,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
-static PlannerInfo *
+PlannerInfo *
 PlanQuery(Query *parse, ParamListInfo bound_params) {
 
 	PlannerGlobal *glob = makeNode(PlannerGlobal);
