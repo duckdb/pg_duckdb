@@ -94,17 +94,26 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	// TODO: This is a huge hack, we should build the query string from the parsetree
 	std::string query_string = std::regex_replace(debug_query_string, std::regex(R"((using|USING)\s+duckdb)"), "");
 
-	CreateTableAsStmt *stmt = castNode(CreateTableAsStmt, trigdata->parsetree);
-	Query *query = castNode(Query, stmt->query);
+	duckdb::unique_ptr<duckdb::Connection> connection;
+	if (IsA(trigdata->parsetree, CreateTableAsStmt)) {
+		// When we have a CTAS statement, we need to use replacement scan
+		CreateTableAsStmt *stmt = castNode(CreateTableAsStmt, trigdata->parsetree);
+		Query *query = castNode(Query, stmt->query);
 
-	/* TODO - factorize w/ other calls Extract required vars for table */
-	int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
-	List *vars = list_concat(pull_var_clause((Node *)query->targetList, flags),
-	                         pull_var_clause((Node *)query->jointree->quals, flags));
+		/* TODO - factorize w/ other calls Extract required vars for table */
+		int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
+		auto targetList = query->targetList ? pull_var_clause((Node *)query->targetList, flags) : NIL;
+		auto quals = query->jointree && query->jointree->quals ? pull_var_clause((Node *)query->jointree->quals, flags) : NIL;
+		List *vars = list_concat(targetList, quals);
 
-	PlannerInfo *query_planner_info = PlanQuery(query, NULL);
-	auto connection = pgduckdb::DuckdbCreateConnection(query->rtable, query_planner_info, vars, query_string.c_str());
-	auto result = pgduckdb::RunQuery(*connection, query_string);
+		PlannerInfo *query_planner_info = PlanQuery(query, NULL);
+		auto connection = pgduckdb::DuckdbCreateConnection(query->rtable, query_planner_info, vars, query_string.c_str());
+		pgduckdb::RunQuery(*connection, query_string);
+	} else {
+		// Otherwise, just use a simple connection
+		auto connection = pgduckdb::DuckdbCreateSimpleConnection();
+		pgduckdb::RunQuery(*connection, query_string);
+	}
 
 	PG_RETURN_NULL();
 }
