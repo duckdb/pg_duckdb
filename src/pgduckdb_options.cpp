@@ -162,8 +162,7 @@ PG_FUNCTION_INFO_V1(pgduckdb_query);
 Datum
 pgduckdb_query(PG_FUNCTION_ARGS) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckdbCreateSimpleConnection();
 	auto result = pgduckdb::RunQuery(*connection, query);
 	if (result->HasError()) {
 		PG_RETURN_BOOL(false);
