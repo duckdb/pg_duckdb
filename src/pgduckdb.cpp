@@ -1,3 +1,5 @@
+#include "duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
@@ -6,11 +8,15 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_node.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 
 static void DuckdbInitGUC(void);
 
 bool duckdb_execution = false;
 int duckdb_max_threads_per_query = 1;
+char *duckdb_background_worker_db = NULL;
+char *duckdb_motherduck_token = NULL;
+char *duckdb_motherduck_postgres_user = NULL;
 
 extern "C" {
 PG_MODULE_MAGIC;
@@ -24,6 +30,7 @@ _PG_init(void) {
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
+	DuckdbInitBackgroundWorker();
 }
 } // extern "C"
 
@@ -55,4 +62,36 @@ DuckdbInitGUC(void) {
                             NULL,
                             NULL);
 
+    DefineCustomStringVariable("duckdb.background_worker_db",
+                            gettext_noop("Which database run the backgorund worker in"),
+                            NULL,
+                            &duckdb_background_worker_db,
+                            "postgres",
+                            PGC_USERSET,
+                            0,
+                            NULL,
+                            NULL,
+                            NULL);
+
+    DefineCustomStringVariable("duckdb.motherduck_token",
+                            gettext_noop("The token to use for MotherDuck"),
+                            NULL,
+                            &duckdb_motherduck_token,
+                            "",
+                            PGC_POSTMASTER,
+                            GUC_SUPERUSER_ONLY,
+                            NULL,
+                            NULL,
+                            NULL);
+
+    DefineCustomStringVariable("duckdb.motherduck_postgres_user",
+                            gettext_noop("As which Postgres user to create the MotherDuck tables in Postgres, empty string means the bootstrap superuser"),
+                            NULL,
+                            &duckdb_motherduck_postgres_user,
+                            "",
+                            PGC_POSTMASTER,
+                            GUC_SUPERUSER_ONLY,
+                            NULL,
+                            NULL,
+                            NULL);
 }

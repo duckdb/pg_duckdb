@@ -8,6 +8,7 @@ extern "C" {
 #include "commands/event_trigger.h"
 #include "fmgr.h"
 #include "catalog/pg_authid_d.h"
+#include "catalog/namespace.h"
 #include "funcapi.h"
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
@@ -22,6 +23,8 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
@@ -37,6 +40,11 @@ DuckdbTruncateTable(Oid relation_oid) {
 
 void
 DuckdbHandleDDL(Node *parsetree, const char *queryString) {
+	if (!pgduckdb::IsExtensionRegistered()) {
+		/* We're not installed, so don't mess with the query */
+		return;
+	}
+
 	if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
@@ -46,6 +54,25 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 		}
 
 		elog(ERROR, "DuckDB does not support CREATE TABLE AS yet");
+	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
+		auto stmt = castNode(CreateSchemaStmt, parsetree);
+		if (strncmp("ddb$", stmt->schemaname, 4) == 0) {
+			elog(ERROR, "Creating ddb$ schemas is currently not supported");
+		}
+		return;
+	} else if (IsA(parsetree, RenameStmt)) {
+		auto stmt = castNode(RenameStmt, parsetree);
+		if (stmt->renameType != OBJECT_SCHEMA) {
+			/* We only care about schema renames for now */
+			return;
+		}
+		if (strncmp("ddb$", stmt->subname, 4) == 0) {
+			elog(ERROR, "Changing the name of a ddb$ schema is currently not supported");
+		}
+		if (strncmp("ddb$", stmt->newname, 4) == 0) {
+			elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
+		}
+		return;
 	}
 }
 
@@ -122,7 +149,9 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
-	if (!is_duckdb_table) {
+	if (!is_duckdb_table || pgduckdb::doing_motherduck_sync) {
+		/* No DuckDB tables were created, or we don't want to forward DDL to
+		 * DuckDB because we're in the background worker */
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
@@ -162,9 +191,9 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	PG_RETURN_NULL();
 }
 
-PG_FUNCTION_INFO_V1(duckdb_drop_table_trigger);
+PG_FUNCTION_INFO_V1(duckdb_drop_trigger);
 Datum
-duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
+duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
@@ -176,13 +205,33 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	 * search_path confusion attacks. See guidance on SECURITY DEFINER
 	 * functions in postgres for details:
 	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
+	 *
+	 * We also temporarily force duckdb.execution to false, because
+	 * pg_catalog.pg_event_trigger_dropped_objects does not exist in DuckDB.
 	 */
 	Oid saved_userid;
 	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("duckdb.execution", "false", PGC_USERSET, PGC_S_SESSION);
 	GetUserIdAndSecContext(&saved_userid, &sec_context);
 	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+	if (!pgduckdb::doing_motherduck_sync) {
+		int ret = SPI_exec(R"(
+			SELECT object_identity
+			FROM pg_catalog.pg_event_trigger_dropped_objects()
+			WHERE object_type = 'schema'
+				AND object_identity LIKE 'ddb$%'
+			)",
+		                   0);
+		if (ret != SPI_OK_SELECT)
+			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+
+		if (SPI_processed > 0) {
+			elog(ERROR, "Currently it's not possible to drop ddb$ schemas");
+		}
+	}
 
 	// Because the table metadata is deleted from the postgres catalogs we
 	// cannot find out if the table was using the duckdb access method. So
@@ -207,8 +256,9 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	if (ret != SPI_OK_DELETE_RETURNING)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	if (SPI_processed == 0) {
-		/* No duckdb tables were dropped */
+	if (SPI_processed == 0 || pgduckdb::doing_motherduck_sync) {
+		/* No DuckDB tables were dropped, or we don't want to forward DDL to
+		 * DuckDB because if we're syncing with MotherDuck */
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
@@ -290,12 +340,59 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
-	if (!is_duckdb_table) {
+	if (!is_duckdb_table || pgduckdb::doing_motherduck_sync) {
+		/* No DuckDB tables were altered, or we don't want to forward DDL to
+		 * DuckDB because we're syncing with MotherDuck */
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
 
 	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
+
+	PG_RETURN_NULL();
+}
+
+/*
+ * This event trigger is called when a GRANT statement is executed. We use it to
+ * block GRANTs on DuckDB tables. We allow grants on schemas though.
+ */
+PG_FUNCTION_INFO_V1(duckdb_grant_trigger);
+Datum
+duckdb_grant_trigger(PG_FUNCTION_ARGS) {
+	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
+		elog(ERROR, "not fired by event trigger manager");
+	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
+	Node *parsetree = trigdata->parsetree;
+	if (!IsA(parsetree, GrantStmt)) {
+		/*
+		 * Not a GRANT statement, so don't mess with the query. This is not
+		 * expected though.
+		 */
+		PG_RETURN_NULL();
+	}
+
+	GrantStmt *stmt = castNode(GrantStmt, parsetree);
+	if (stmt->objtype != OBJECT_TABLE) {
+		/* We only care about blocking table grants */
+		PG_RETURN_NULL();
+	}
+
+	if (stmt->targtype != ACL_TARGET_OBJECT) {
+		/*
+		 * We only care about blocking exact object grants. We don't want to
+		 * block ALL IN SCHEMA or ALTER DEFAULT PRIVELEGES.
+		 */
+		PG_RETURN_NULL();
+	}
+
+	foreach_node(RangeVar, object, stmt->objects) {
+		Oid relation_oid = RangeVarGetRelid(object, AccessShareLock, true);
+		Relation relation = RelationIdGetRelation(relation_oid);
+		if (pgduckdb::IsMotherDuckTable(relation)) {
+			elog(ERROR, "MotherDuck tables do not support GRANT");
+		}
+		RelationClose(relation);
+	}
 
 	PG_RETURN_NULL();
 }

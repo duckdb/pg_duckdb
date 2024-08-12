@@ -23,6 +23,11 @@ public:
 
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
 
+	inline const std::string &
+	GetDefaultDBName() const {
+		return default_dbname;
+	}
+
 private:
 	DuckDBManager();
 
@@ -38,6 +43,7 @@ private:
 	int secret_table_num_rows;
 	int secret_table_current_seq;
 	duckdb::unique_ptr<duckdb::DuckDB> database;
+	std::string default_dbname;
 };
 
 } // namespace pgduckdb

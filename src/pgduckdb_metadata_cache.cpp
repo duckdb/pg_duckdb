@@ -4,6 +4,7 @@ extern "C" {
 #include "access/htup_details.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_proc.h"
@@ -13,9 +14,11 @@ extern "C" {
 #include "utils/catcache.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
+#include "utils/rel.h"
 #include "utils/syscache.h"
 }
 
+#include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 namespace pgduckdb {
@@ -27,6 +30,11 @@ struct {
 	 */
 	bool valid;
 	/*
+	 * An ever increasing counter that is incremented every time the cache is
+	 * revalidated.
+	 */
+	uint64 version;
+	/*
 	 * Is the pg_duckdb extension installed? If this is false all the other
 	 * fields (except valid) should be ignored. It is totally fine to have
 	 * valid=true and installed=false, this happens when the extension is not
@@ -37,6 +45,8 @@ struct {
 	Oid extension_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
+	/* The OID of the duckdb.motherduck_postrges_user */
+	Oid motherduck_postgres_user_oid;
 	/*
 	 * A list of Postgres OIDs of functions that can only be executed by DuckDB.
 	 * XXX: We're iterating over this list in IsDuckdbOnlyFunction. If this list
@@ -142,10 +152,18 @@ IsExtensionRegistered() {
 
 	cache.extension_oid = get_extension_oid("pg_duckdb", true);
 	cache.installed = cache.extension_oid != InvalidOid;
+	cache.version++;
 	if (cache.installed) {
 		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();
 		cache.table_am_oid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum("duckdb"));
+
+		if (duckdb_motherduck_postgres_user[0] != '\0') {
+			cache.motherduck_postgres_user_oid =
+			    GetSysCacheOid1(AUTHNAME, Anum_pg_authid_oid, CStringGetDatum(duckdb_motherduck_postgres_user));
+		} else {
+			cache.motherduck_postgres_user_oid = BOOTSTRAP_SUPERUSERID;
+		}
 	}
 	cache.valid = true;
 
@@ -168,10 +186,57 @@ IsDuckdbOnlyFunction(Oid function_oid) {
 	return false;
 }
 
+uint64
+CacheVersion() {
+	Assert(cache.valid);
+	return cache.version;
+}
+
+Oid
+ExtensionOid() {
+	Assert(cache.valid);
+	return cache.extension_oid;
+}
+
 Oid
 DuckdbTableAmOid() {
 	Assert(cache.valid);
 	return cache.table_am_oid;
+}
+
+Oid
+IsDuckdbTable(Form_pg_class relation) {
+	Assert(cache.valid);
+	return relation->relam == pgduckdb::DuckdbTableAmOid();
+}
+
+Oid
+IsDuckdbTable(Relation relation) {
+	Assert(cache.valid);
+	return IsDuckdbTable(relation->rd_rel);
+}
+
+Oid
+IsMotherDuckTable(Form_pg_class relation) {
+	Assert(cache.valid);
+	return IsDuckdbTable(relation) && relation->relpersistence == RELPERSISTENCE_PERMANENT;
+}
+
+Oid
+IsMotherDuckTable(Relation relation) {
+	Assert(cache.valid);
+	return IsMotherDuckTable(relation->rd_rel);
+}
+
+bool
+IsMotherDuckEnabled() {
+	return duckdb_motherduck_token[0] != '\0';
+}
+
+Oid
+MotherDuckPostgresUser() {
+	Assert(cache.valid);
+	return cache.motherduck_postgres_user_oid;
 }
 
 } // namespace pgduckdb
