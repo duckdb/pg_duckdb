@@ -45,6 +45,8 @@ duckdb_handle_ddl(Node *parsetree, const char *queryString) {
 
 extern "C" {
 
+PGDLLEXPORT bool pgduckdb_forward_create_table = true;
+
 PG_FUNCTION_INFO_V1(duckdb_create_table_trigger);
 
 Datum
@@ -87,7 +89,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 
 	SPI_finish();
 
-	if (!isDuckdbTable) {
+	if (!isDuckdbTable || !pgduckdb_forward_create_table) {
 		PG_RETURN_NULL();
 	}
 
