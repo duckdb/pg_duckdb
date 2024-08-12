@@ -4,6 +4,7 @@ extern "C" {
 #include "access/htup_details.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
+#include "catalog/pg_authid.h"
 #include "catalog/pg_am.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_proc.h"
@@ -16,6 +17,7 @@ extern "C" {
 #include "utils/syscache.h"
 }
 
+#include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 namespace pgduckdb {
@@ -37,6 +39,8 @@ struct {
 	Oid extension_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
+	/* The OID of the duckdb.motherduck_postrges_user */
+	Oid motherduck_postgres_user_oid;
 	/*
 	 * A list of Postgres OIDs of functions that can only be executed by DuckDB.
 	 * XXX: We're iterating over this list in IsDuckdbOnlyFunction. If this list
@@ -146,6 +150,13 @@ IsExtensionRegistered() {
 		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();
 		cache.table_am_oid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum("duckdb"));
+
+		if (duckdb_motherduck_postgres_user[0] != '\0') {
+			cache.motherduck_postgres_user_oid =
+			    GetSysCacheOid1(AUTHNAME, Anum_pg_authid_oid, CStringGetDatum(duckdb_motherduck_postgres_user));
+		} else {
+			cache.motherduck_postgres_user_oid = BOOTSTRAP_SUPERUSERID;
+		}
 	}
 	cache.valid = true;
 
@@ -172,6 +183,17 @@ Oid
 DuckdbTableAmOid() {
 	Assert(cache.valid);
 	return cache.table_am_oid;
+}
+
+bool
+IsMotherDuckEnabled() {
+	return duckdb_motherduck_token[0] != '\0';
+}
+
+Oid
+MotherDuckPostgresUser() {
+	Assert(cache.valid);
+	return cache.motherduck_postgres_user_oid;
 }
 
 } // namespace pgduckdb

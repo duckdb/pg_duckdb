@@ -473,6 +473,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	return true;
 }
 
+static inline int32
+make_numeric_typmod(int precision, int scale) {
+	return ((precision << 16) | (scale & 0x7ff)) + VARHDRSZ;
+}
+
 static inline int
 numeric_typmod_precision(int32 typmod) {
 	return ((typmod - VARHDRSZ) >> 16) & 0xffff;
@@ -624,6 +629,20 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		     type.ToString().c_str());
 		return InvalidOid;
 	}
+	}
+}
+
+int32
+GetPostgresDuckDBTypemod(duckdb::LogicalType type) {
+	auto id = type.id();
+	switch (id) {
+	case duckdb::LogicalTypeId::DECIMAL: {
+		uint8_t width, scale;
+		type.GetDecimalProperties(width, scale);
+		return make_numeric_typmod(width, scale);
+	}
+	default:
+		return -1;
 	}
 }
 
