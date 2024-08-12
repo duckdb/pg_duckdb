@@ -14,6 +14,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -33,7 +34,17 @@ DuckDBManager::Initialize() {
 	// Transforms VIEWs into their view definition
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
 
-	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+	const char *connection_string = nullptr;
+
+	/*
+	 * If MotherDuck is enabled, use it to connect to DuckDB. That way DuckDB
+	 * its default database will be set to the default MotherDuck database.
+	 */
+	if (pgduckdb::IsMotherDuckEnabled()) {
+
+		connection_string = psprintf("md:?motherduck_token=%s", duckdb_motherduck_token);
+	}
+	database = duckdb::make_uniq<duckdb::DuckDB>(connection_string, &config);
 	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
 	    duckdb::make_uniq<duckdb::PostgresStorageExtension>();
 	duckdb::ExtensionInstallInfo extension_install_info;
@@ -42,7 +53,13 @@ DuckDBManager::Initialize() {
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
+	auto &db_manager = duckdb::DatabaseManager::Get(context);
+	default_dbname = db_manager.GetDefaultDatabase(context);
 	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
+	auto result = context.Query("ATTACH DATABASE ':memory:' AS pg_temp;", false);
+	if (result->HasError()) {
+		elog(ERROR, "(PGDuckDB/DuckDBManager) could not attach pg_temp: %s", result->GetError().c_str());
+	}
 
 	LoadFunctions(context);
 	LoadExtensions(context);

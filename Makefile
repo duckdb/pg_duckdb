@@ -16,6 +16,11 @@ DUCKDB_GEN ?= ninja
 DUCKDB_VERSION = v1.1.1
 # duckdb build tweaks
 DUCKDB_CMAKE_VARS = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
+# set to 1 to disable asserts in DuckDB. This is particularly useful in combinition with MotherDuck.
+# When asserts are enabled the released motherduck extension will fail some of
+# those asserts. By disabling asserts it's possible to run a debug build of
+# DuckDB agains the release build of MotherDuck.
+DUCKDB_DISABLE_ASSERTIONS ?= 0
 
 DUCKDB_BUILD_CXX_FLAGS=
 DUCKDB_BUILD_TYPE=
@@ -76,6 +81,7 @@ $(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \
 	DISABLE_SANITIZER=1 \
+	DISABLE_ASSERTIONS=$(DUCKDB_DISABLE_ASSERTIONS) \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake" \
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_BUILD_TYPE)
