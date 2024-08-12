@@ -103,11 +103,13 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 		/* TODO - factorize w/ other calls Extract required vars for table */
 		int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
 		auto targetList = query->targetList ? pull_var_clause((Node *)query->targetList, flags) : NIL;
-		auto quals = query->jointree && query->jointree->quals ? pull_var_clause((Node *)query->jointree->quals, flags) : NIL;
+		auto quals =
+		    query->jointree && query->jointree->quals ? pull_var_clause((Node *)query->jointree->quals, flags) : NIL;
 		List *vars = list_concat(targetList, quals);
 
 		PlannerInfo *query_planner_info = PlanQuery(query, NULL);
-		auto connection = pgduckdb::DuckdbCreateConnection(query->rtable, query_planner_info, vars, query_string.c_str());
+		auto connection =
+		    pgduckdb::DuckdbCreateConnection(query->rtable, query_planner_info, vars, query_string.c_str());
 		pgduckdb::RunQuery(*connection, query_string);
 	} else {
 		// Otherwise, just use a simple connection
