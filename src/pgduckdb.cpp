@@ -5,6 +5,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_node.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 static void DuckdbInitGUC(void);
@@ -12,6 +13,7 @@ static void DuckdbInitGUC(void);
 bool duckdb_execution = false;
 int duckdb_max_threads_per_query = 1;
 char *duckdb_default_db = NULL;
+char *duckdb_background_worker_db = NULL;
 
 extern "C" {
 PG_MODULE_MAGIC;
@@ -21,6 +23,7 @@ _PG_init(void) {
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
+	DuckdbInitBackgroundWorker();
 }
 }
 
@@ -57,6 +60,17 @@ DuckdbInitGUC(void) {
                             NULL,
                             &duckdb_default_db,
                             "",
+                            PGC_USERSET,
+                            0,
+                            NULL,
+                            NULL,
+                            NULL);
+
+    DefineCustomStringVariable("duckdb.background_worker_db",
+                            gettext_noop("Which database run the backgorund worker in"),
+                            NULL,
+                            &duckdb_background_worker_db,
+                            "postgres",
                             PGC_USERSET,
                             0,
                             NULL,

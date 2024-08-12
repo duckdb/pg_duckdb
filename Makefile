@@ -10,6 +10,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/scan/postgres_scan.cpp \
 	   src/scan/postgres_seq_scan.cpp \
 	   src/utility/copy.cpp \
+	   src/pgduckdb_background_worker.cpp \
 	   src/pgduckdb_ddl.cpp \
 	   src/pgduckdb_detoast.cpp \
 	   src/pgduckdb_duckdb.cpp \
