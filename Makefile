@@ -66,12 +66,14 @@ clean-regression:
 
 installcheck: all install check-regression-duckdb
 
-duckdb: third_party/duckdb/Makefile third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
+FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
+duckdb: third_party/duckdb/Makefile $(FULL_DUCKDB_LIB)
+
 
 third_party/duckdb/Makefile:
 	git submodule update --init --recursive
 
-third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB):
+$(FULL_DUCKDB_LIB):
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_BUILD_TYPE) \
 	DISABLE_SANITIZER=1 \
@@ -79,8 +81,8 @@ third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB):
 	BUILD_UNITTESTS=OFF \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake"
 
-install-duckdb:
-	$(install_bin) -m 755 third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
+install-duckdb: $(FULL_DUCKDB_LIB)
+	$(install_bin) -m 755 $(FULL_DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
 
 clean-duckdb:
 	rm -rf third_party/duckdb/build
