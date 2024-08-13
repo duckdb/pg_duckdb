@@ -10,17 +10,13 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_cache.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
-
-static bool
-IsDuckdbExtensionRegistered() {
-	return get_extension_oid("pg_duckdb", true) != InvalidOid;
-}
 
 static bool
 IsCatalogTable(List *tables) {
@@ -57,7 +53,7 @@ IsAllowedStatement() {
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
-	if (duckdb_execution && IsAllowedStatement() && IsDuckdbExtensionRegistered() && parse->rtable &&
+	if (duckdb_execution && IsAllowedStatement() && pgduckdb::IsExtensionRegistered() && parse->rtable &&
 	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
 		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
 		if (duckdb_plan) {
@@ -76,7 +72,7 @@ static void
 DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
-	if (duckdb_execution && IsDuckdbExtensionRegistered() && IsA(parsetree, CopyStmt)) {
+	if (duckdb_execution && pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
 		uint64 processed;
 		if (DuckdbCopy(pstmt, query_string, query_env, &processed)) {
 			if (qc) {
