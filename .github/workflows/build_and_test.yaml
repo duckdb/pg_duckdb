@@ -11,6 +11,7 @@ on:
       - duckdb.control
       - third_party/duckdb
       - '.github/workflows/**'
+      - .clang-format
 
 jobs:
   clang-format:
