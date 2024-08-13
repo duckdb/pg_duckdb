@@ -123,4 +123,4 @@ We welcome all contributions big and small:
 - [Discord discussion](https://discord.duckdb.org/) with the DuckDB community
 - See our docs for more info and limitations
 
-[roadmap]: https://github.com/orgs/duckdb/projects/3
+[roadmap]: https://github.com/orgs/duckdb/projects/10

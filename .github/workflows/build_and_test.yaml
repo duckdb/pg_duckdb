@@ -57,9 +57,26 @@ jobs:
       - name: Checkout pg_duckdb extension code
         uses: actions/checkout@v4
         with:
+          submodules: 'recursive'
           path: duckdb
 
+      - name: Compute DuckDB SHA
+        id: versions
+        run: |
+          pushd duckdb
+          DUCKDB_SHA=`git ls-tree HEAD third_party/duckdb --format='%(objectname)'`
+          echo "duckdb_sha=${DUCKDB_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Got DUCKDB_SHA='${DUCKDB_SHA}'"
+
+      - name: Setup PG build cache
+        id: cache-pg-build
+        uses: actions/cache@v4
+        with:
+          path: postgres/inst
+          key: pg-build-${{ matrix.version }}
+
       - name: Checkout and build PostgreSQL code
+        if: steps.cache-pg-build.outputs.cache-hit != 'true'
         run: |
           rm -rf postgres
           git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
@@ -68,12 +85,18 @@ jobs:
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml
           make -j8 install
 
+      - name: Setup DuckDB build cache
+        id: cache-duckdb-build
+        uses: actions/cache@v4
+        with:
+          path: duckdb/third_party/duckdb/build/
+          key: duckdb-build-${{ steps.versions.outputs.duckdb_sha }}
+
       - name: Build and test pg_duckdb extension
         id: regression-tests
         run: |
           export PATH="${PWD}/postgres/inst/bin:$PATH"
           pushd duckdb
-          git submodule update --init --recursive
           make
           make install
           make installcheck
