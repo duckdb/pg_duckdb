@@ -10,7 +10,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
-#include "pgduckdb/pgduckdb_cache.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
