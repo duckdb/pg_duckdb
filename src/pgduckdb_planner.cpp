@@ -40,9 +40,10 @@ PlanQuery(Query *parse, ParamListInfo bound_params) {
 
 	return subquery_planner(glob, parse, NULL, false, 0.0
 #if PG_VERSION_NUM >= 170000
-				,NULL
+	                        ,
+	                        NULL
 #endif
-				);
+	);
 }
 
 static Plan *
