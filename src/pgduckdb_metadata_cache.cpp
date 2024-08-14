@@ -17,14 +17,33 @@ extern "C" {
 
 namespace pgduckdb {
 struct {
+	/*
+	 * Does the cache contain valid data, i.e. is it initialized? Or is it
+	 * stale and does it need to be refreshed? If this is false none of the
+	 * other fields should be read.
+	 */
 	bool valid;
+	/*
+	 * Is the pg_duckdb extension installed? If this is false all the other
+	 * fields (except valid) should be ignored. It is totally fine to have
+	 * valid=true and installed=false, this happens when the extension is not
+	 * installed and we cached that information.
+	 */
 	bool installed;
+	/* A list of Postgres OIDs of functions that can only be executed by DuckDB */
 	List *duckdb_only_functions;
 } cache = {};
 
 bool callback_is_configured = false;
+/* The hash value of the "duckdb" schema name */
 uint32 schema_hash_value;
 
+/*
+ * This function is called for every pg_namespace tuple that is invalidated. We
+ * only invalidate our cache if the "duckdb" schema is invalidated, because
+ * that means that the extension was created or dropped (see comment in
+ * IsExtensionRegistered for details).
+ */
 static void
 InvalidateCaches(Datum arg, int cache_id, uint32 hash_value) {
 	if (hash_value != schema_hash_value) {
@@ -54,8 +73,13 @@ GetFunctionOid(const char *name, oidvector *args, Oid schema_oid) {
 	return result;
 }
 
+/*
+ * Builds the list of Postgres OIDs of functions that can only be executed by
+ * DuckDB. The resulting list is stored in cache.duckdb_only_functions.
+ */
 static void
 BuildDuckdbOnlyFunctions() {
+	/* This function should only be called during cache initialization */
 	Assert(!cache.valid);
 	Assert(!cache.duckdb_only_functions);
 
@@ -79,6 +103,11 @@ BuildDuckdbOnlyFunctions() {
 	MemoryContextSwitchTo(oldcontext);
 }
 
+/*
+ * Returns true if the pg_duckdb extension is installed (using CREATE
+ * EXTENSION). This also initializes our metadata cache if it is not already
+ * initialized.
+ */
 bool
 IsExtensionRegistered() {
 	if (cache.valid) {
@@ -86,6 +115,16 @@ IsExtensionRegistered() {
 	}
 
 	if (!callback_is_configured) {
+		/*
+		 * The first time this is run for the backend we need to register a
+		 * callback which invalidates the cache. It would be best if we could
+		 * invalidate this on DDL that changes the extension, i.e.
+		 * CREATE/ALTER/DROP EXTENSION. Sadly, this is currently not possible
+		 * because there is no syscache for the pg_extension table. Instead we
+		 * subscribe to the syscache of the pg_namespace table for the duckdb
+		 * schema. This is not perfect, as it doesn't cover extension updates,
+		 * but for now this is acceptable.
+		 */
 		callback_is_configured = true;
 		schema_hash_value = GetSysCacheHashValue1(NAMESPACENAME, CStringGetDatum("duckdb"));
 
@@ -94,6 +133,7 @@ IsExtensionRegistered() {
 
 	cache.installed = get_extension_oid("pg_duckdb", true) != InvalidOid;
 	if (cache.installed) {
+		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();
 	}
 	cache.valid = true;
@@ -101,6 +141,10 @@ IsExtensionRegistered() {
 	return cache.installed;
 }
 
+/*
+ * Returns true if the function with the given OID is a function that can only
+ * be executed by DuckDB.
+ */
 bool
 IsDuckdbOnlyFunction(Oid function_oid) {
 	Assert(cache.valid);
