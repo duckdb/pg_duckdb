@@ -732,7 +732,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		Append<int32_t>(result, DatumGetInt32(value), offset);
 		break;
 	case duckdb::LogicalTypeId::UINTEGER:
-		Append<int32_t>(result, DatumGetUInt32(value), offset);
+		Append<uint32_t>(result, DatumGetUInt32(value), offset);
 		break;
 	case duckdb::LogicalTypeId::BIGINT:
 		Append<int64_t>(result, DatumGetInt64(value), offset);
