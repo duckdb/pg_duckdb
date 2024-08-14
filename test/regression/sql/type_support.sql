@@ -126,7 +126,7 @@ SELECT * FROM json_tbl;
 
 -- REGCLASSOID
 CREATE TABLE regclass_tbl (a REGCLASS);
-INSERT INTO regclass_tbl SELECT CAST(42 as REGCLASS);
+INSERT INTO regclass_tbl VALUES (42), (3_000_000_000);
 SELECT * FROM regclass_tbl;
 
 DROP TABLE chr;
