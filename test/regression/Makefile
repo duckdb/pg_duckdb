@@ -4,6 +4,10 @@ ROOT_DIR = ../..
 
 include $(ROOT_DIR)/Makefile.global
 
+# Just use the already installed version instead of installing to a temp
+# location
+with_temp_install =
+
 check-regression-duckdb:
 	TEST_DIR=$(CURDIR) $(pg_regress_check) \
 	--temp-config regression.conf \
