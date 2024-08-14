@@ -38,7 +38,11 @@ PlanQuery(Query *parse, ParamListInfo bound_params) {
 	glob->transientPlan = false;
 	glob->dependsOnRole = false;
 
-	return subquery_planner(glob, parse, NULL, false, 0.0);
+	return subquery_planner(glob, parse, NULL, false, 0.0
+#if PG_VERSION_NUM >= 170000
+				,NULL
+#endif
+				);
 }
 
 static Plan *
