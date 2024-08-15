@@ -48,7 +48,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        version: [REL_16_STABLE]
+        version: [REL_16_STABLE, REL_17_STABLE]
     runs-on: ${{ matrix.os }}
 
     steps:

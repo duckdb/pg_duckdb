@@ -5,7 +5,8 @@ ROOT_DIR = ../..
 include $(ROOT_DIR)/Makefile.global
 
 check-regression-duckdb:
-	TEST_DIR=$(CURDIR) $(pg_regress_check) \
+	TEST_DIR=$(CURDIR) $(pg_regress_installcheck) \
+	--temp-instance=./tmp_check \
 	--temp-config regression.conf \
 	--load-extension=pg_duckdb \
 	--schedule schedule
