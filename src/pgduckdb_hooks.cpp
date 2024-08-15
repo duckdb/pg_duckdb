@@ -41,7 +41,11 @@ IsCatalogTable(List *tables) {
 }
 
 static bool
-IsAllowedStatement() {
+IsAllowedStatement(Query *query) {
+	/* DuckDB does not support modifying CTEs INSERT/UPDATE/DELETE */
+	if (query->hasModifyingCTE) {
+		return false;
+	}
 	/* For `SELECT ..` ActivePortal doesn't exist */
 	if (!ActivePortal)
 		return true;
@@ -53,7 +57,7 @@ IsAllowedStatement() {
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
-	if (duckdb_execution && IsAllowedStatement() && pgduckdb::IsExtensionRegistered() && parse->rtable &&
+	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered() && parse->rtable &&
 	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
 		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
 		if (duckdb_plan) {
