@@ -4,6 +4,8 @@
 extern "C" {
 #include "postgres.h"
 #include "catalog/pg_type.h"
+#include "utils/builtins.h"
+
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"
@@ -15,6 +17,19 @@ template <class T, class OP>
 bool
 TemplatedFilterOperation(Datum &value, const duckdb::Value &constant) {
 	return OP::Operation((T)value, constant.GetValueUnsafe<T>());
+}
+
+template <class OP>
+bool
+StringFilterOperation(Datum &value, const duckdb::Value &constant) {
+	const auto ptr = (text*)DatumGetPointer(value);
+	auto cstr = text_to_cstring(ptr);
+	const auto datum_sv = std::string_view(cstr);
+	const auto val = duckdb::StringValue::Get(constant);
+	const auto val_sv =  std::string_view(val);
+	const bool res = OP::Operation(datum_sv, val_sv);
+	pfree(cstr);
+	return res;
 }
 
 template <class OP>
@@ -43,6 +58,8 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 		Datum timestamp_datum = static_cast<int64_t>(value + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
 		return TemplatedFilterOperation<int64_t, OP>(timestamp_datum, constant);
 	}
+	case VARCHAROID:
+		return StringFilterOperation<OP>(value, constant);
 	default:
 		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid);
 	}

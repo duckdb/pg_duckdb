@@ -27,6 +27,7 @@ SELECT * FROM bool_tbl;
 CREATE TABLE varchar_tbl(a VARCHAR);
 INSERT INTO varchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), (NULL), ('test'), ('this is a long string')) t(a);
 SELECT * FROM varchar_tbl;
+SELECT * FROM varchar_tbl WHERE a = 'test';
 
 -- DATE
 CREATE TABLE date_tbl(a DATE);
