@@ -53,7 +53,9 @@ HeapReader::~HeapReader() {
 Page
 HeapReader::PreparePageRead() {
 	Page page = BufferGetPage(m_buffer);
+#if PG_VERSION_NUM < 170000
 	TestForOldSnapshot(m_global_state->m_snapshot, m_relation, page);
+#endif
 	m_page_tuples_all_visible = PageIsAllVisible(page) && !m_global_state->m_snapshot->takenDuringRecovery;
 	m_page_tuples_left = PageGetMaxOffsetNumber(page) - FirstOffsetNumber + 1;
 	m_current_tuple_index = FirstOffsetNumber;
