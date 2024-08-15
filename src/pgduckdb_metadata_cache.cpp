@@ -2,12 +2,14 @@ extern "C" {
 #include "postgres.h"
 
 #include "access/htup_details.h"
+#include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_type.h"
 #include "catalog/pg_proc.h"
 #include "commands/extension.h"
 #include "nodes/bitmapset.h"
 #include "utils/builtins.h"
+#include "utils/catcache.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
 #include "utils/syscache.h"
@@ -30,6 +32,8 @@ struct {
 	 * installed and we cached that information.
 	 */
 	bool installed;
+	/* The Postgres OID of the pg_duckdb extension. */
+	Oid extension_oid;
 	/* A list of Postgres OIDs of functions that can only be executed by DuckDB */
 	List *duckdb_only_functions;
 } cache = {};
@@ -56,23 +60,6 @@ InvalidateCaches(Datum arg, int cache_id, uint32 hash_value) {
 	list_free(cache.duckdb_only_functions);
 }
 
-static Oid
-GetFunctionOid(const char *name, oidvector *args, Oid schema_oid) {
-	HeapTuple tuple =
-	    SearchSysCache3(PROCNAMEARGSNSP, CStringGetDatum(name), PointerGetDatum(args), ObjectIdGetDatum(schema_oid));
-
-	if (!tuple) {
-		// Should never happen, but let's check to be sure
-		elog(ERROR, "could not find function %s", name);
-	}
-
-	Form_pg_proc proc = (Form_pg_proc)GETSTRUCT(tuple);
-	Oid result = proc->oid;
-
-	ReleaseSysCache(tuple);
-	return result;
-}
-
 /*
  * Builds the list of Postgres OIDs of functions that can only be executed by
  * DuckDB. The resulting list is stored in cache.duckdb_only_functions.
@@ -82,25 +69,34 @@ BuildDuckdbOnlyFunctions() {
 	/* This function should only be called during cache initialization */
 	Assert(!cache.valid);
 	Assert(!cache.duckdb_only_functions);
+	Assert(cache.extension_oid != InvalidOid);
 
-	Oid text_oid = TEXTOID;
-	Oid text_array_oid = TEXTARRAYOID;
-	oidvector *text_oidvec = buildoidvector(&text_oid, 1);
-	oidvector *text_array_oidvec = buildoidvector(&text_array_oid, 1);
-	Oid public_schema_oid = get_namespace_oid("public", false);
+	/*
+	 * We search the system cache for functions with these specific names. It's
+	 * possible that other functions with the same also exist, so we check if
+	 * each of the found functions is actually part of our extension before
+	 * caching its OID as a DuckDB-only function.
+	 */
+	const char *function_names[] = {"read_parquet", "read_csv", "iceberg_scan"};
 
-	Oid read_parquet_text_oid = GetFunctionOid("read_parquet", text_oidvec, public_schema_oid);
-	Oid read_parquet_text_array_oid = GetFunctionOid("read_parquet", text_array_oidvec, public_schema_oid);
-	Oid read_csv_text_oid = GetFunctionOid("read_csv", text_oidvec, public_schema_oid);
-	Oid read_csv_text_array_oid = GetFunctionOid("read_csv", text_array_oidvec, public_schema_oid);
-	Oid iceberg_scan_oid = GetFunctionOid("read_parquet", text_oidvec, public_schema_oid);
+	for (int i = 0; i < lengthof(function_names); i++) {
+		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
 
-	MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
+		for (int j = 0; j < catlist->n_members; j++) {
+			HeapTuple tuple = &catlist->members[j]->tuple;
+			Form_pg_proc function = (Form_pg_proc)GETSTRUCT(tuple);
+			if (getExtensionOfObject(ProcedureRelationId, function->oid) != cache.extension_oid) {
+				continue;
+			}
 
-	cache.duckdb_only_functions = list_make5_oid(read_parquet_text_oid, read_parquet_text_array_oid, read_csv_text_oid,
-	                                             read_csv_text_array_oid, iceberg_scan_oid);
+			/* The cache needs to outlive the current transaction so store the list in TopMemoryContext */
+			MemoryContext oldcontext = MemoryContextSwitchTo(TopMemoryContext);
+			cache.duckdb_only_functions = lappend_oid(cache.duckdb_only_functions, function->oid);
+			MemoryContextSwitchTo(oldcontext);
+		}
 
-	MemoryContextSwitchTo(oldcontext);
+		ReleaseSysCacheList(catlist);
+	}
 }
 
 /*
@@ -131,7 +127,8 @@ IsExtensionRegistered() {
 		CacheRegisterSyscacheCallback(NAMESPACENAME, InvalidateCaches, (Datum)0);
 	}
 
-	cache.installed = get_extension_oid("pg_duckdb", true) != InvalidOid;
+	cache.extension_oid = get_extension_oid("pg_duckdb", true);
+	cache.installed = cache.extension_oid != InvalidOid;
 	if (cache.installed) {
 		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();

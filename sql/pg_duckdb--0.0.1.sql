@@ -1,6 +1,6 @@
 LOAD 'pg_duckdb';
 
-CREATE OR REPLACE FUNCTION public.read_parquet(path text)
+CREATE OR REPLACE FUNCTION read_parquet(path text)
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -8,7 +8,7 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION public.read_parquet(path text[])
+CREATE OR REPLACE FUNCTION read_parquet(path text[])
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -16,7 +16,7 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION public.read_csv(path text)
+CREATE OR REPLACE FUNCTION read_csv(path text)
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -24,7 +24,7 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION public.read_csv(path text[])
+CREATE OR REPLACE FUNCTION read_csv(path text[])
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -32,7 +32,7 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION public.iceberg_scan(path text)
+CREATE OR REPLACE FUNCTION iceberg_scan(path text)
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
