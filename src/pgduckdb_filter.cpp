@@ -23,34 +23,25 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 	switch (type_oid) {
 	case BOOLOID:
 		return TemplatedFilterOperation<bool, OP>(value, constant);
-		break;
 	case CHAROID:
 		return TemplatedFilterOperation<uint8_t, OP>(value, constant);
-		break;
 	case INT2OID:
 		return TemplatedFilterOperation<int16_t, OP>(value, constant);
-		break;
 	case INT4OID:
 		return TemplatedFilterOperation<int32_t, OP>(value, constant);
-		break;
 	case INT8OID:
 		return TemplatedFilterOperation<int64_t, OP>(value, constant);
-		break;
 	case FLOAT4OID:
 		return TemplatedFilterOperation<float, OP>(value, constant);
-		break;
 	case FLOAT8OID:
 		return TemplatedFilterOperation<double, OP>(value, constant);
-		break;
 	case DATEOID: {
 		Datum date_datum = static_cast<int32_t>(value + pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET);
 		return TemplatedFilterOperation<int32_t, OP>(date_datum, constant);
-		break;
 	}
 	case TIMESTAMPOID: {
 		Datum timestamp_datum = static_cast<int64_t>(value + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
 		return TemplatedFilterOperation<int64_t, OP>(timestamp_datum, constant);
-		break;
 	}
 	default:
 		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid);
