@@ -8,3 +8,4 @@ test: projection_pushdown_unsupported_type
 test: materialized_view
 test: hugeint_conversion
 test: cte
+test: create_table_as

@@ -46,20 +46,18 @@ IsAllowedStatement(Query *query) {
 	if (query->hasModifyingCTE) {
 		return false;
 	}
-	/* For `SELECT ..` ActivePortal doesn't exist */
-	if (!ActivePortal)
-		return true;
-	/* `EXPLAIN ...` should be allowed */
-	if (ActivePortal->commandTag == CMDTAG_EXPLAIN)
-		return true;
-	return false;
+	/* We don't support modifying statements yet */
+	if (query->commandType != CMD_SELECT) {
+		return false;
+	}
+	return true;
 }
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered() && parse->rtable &&
 	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
-		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
+		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, cursor_options, bound_params);
 		if (duckdb_plan) {
 			return duckdb_plan;
 		}
