@@ -3,7 +3,6 @@ extern "C" {
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
-#include "nodes/print.h"
 #include "nodes/nodeFuncs.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
