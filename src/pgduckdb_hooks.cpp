@@ -56,7 +56,7 @@ IsAllowedStatement(Query *query) {
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered() && parse->rtable &&
-	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
+	    !IsCatalogTable(parse->rtable)) {
 		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, cursor_options, bound_params);
 		if (duckdb_plan) {
 			return duckdb_plan;
