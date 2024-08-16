@@ -65,7 +65,7 @@ IsAllowedStatement(Query *query) {
 	 * because DuckDB has its own pg_catalog tables that contain different data
 	 * then Postgres its pg_catalog tables.
 	 */
-	if (!IsCatalogTable(query->rtable)) {
+	if (IsCatalogTable(query->rtable)) {
 		return false;
 	}
 
