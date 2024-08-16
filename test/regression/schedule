@@ -8,3 +8,5 @@ test: projection_pushdown_unsupported_type
 test: materialized_view
 test: hugeint_conversion
 test: duckdb_only_functions
+test: cte
+test: create_table_as

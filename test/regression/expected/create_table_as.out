@@ -1,0 +1,16 @@
+\getenv pwd PWD
+CREATE TABLE webpages AS SELECT * FROM read_csv(:'pwd' || '/data/web_page.csv') as (column00 int, column01 text, column02 date);
+select * from webpages order by column00 limit 2;
+ column00 |     column01     |  column02  
+----------+------------------+------------
+        1 | AAAAAAAABAAAAAAA | 09-03-1997
+        2 | AAAAAAAACAAAAAAA | 09-03-1997
+(2 rows)
+
+select count(*) from webpages;
+ count 
+-------
+    60
+(1 row)
+
+DROP TABLE webpages;
