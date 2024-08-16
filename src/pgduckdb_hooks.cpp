@@ -46,20 +46,37 @@ IsAllowedStatement(Query *query) {
 	if (query->hasModifyingCTE) {
 		return false;
 	}
-	/* For `SELECT ..` ActivePortal doesn't exist */
-	if (!ActivePortal)
-		return true;
-	/* `EXPLAIN ...` should be allowed */
-	if (ActivePortal->commandTag == CMDTAG_EXPLAIN)
-		return true;
-	return false;
+
+	/* We don't support modifying statements yet */
+	if (query->commandType != CMD_SELECT) {
+		return false;
+	}
+
+	/*
+	 * If there's no rtable, we're only selecting constants. There's no point
+	 * in using DuckDB for that.
+	 */
+	if (!query->rtable) {
+		return false;
+	}
+
+	/*
+	 * If any table is from pg_catalog, we don't want to use DuckDB. This is
+	 * because DuckDB has its own pg_catalog tables that contain different data
+	 * then Postgres its pg_catalog tables.
+	 */
+	if (IsCatalogTable(query->rtable)) {
+		return false;
+	}
+
+	/* Anything else is hopefully fine... */
+	return true;
 }
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
-	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered() && parse->rtable &&
-	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
-		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
+	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered()) {
+		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, cursor_options, bound_params);
 		if (duckdb_plan) {
 			return duckdb_plan;
 		}
