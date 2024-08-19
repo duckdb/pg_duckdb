@@ -9,6 +9,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"
+#include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
 namespace pgduckdb {
@@ -22,16 +23,24 @@ TemplatedFilterOperation(Datum &value, const duckdb::Value &constant) {
 template <class OP>
 bool
 StringFilterOperation(Datum &value, const duckdb::Value &constant) {
-	const auto ptr = (text*)DatumGetPointer(value);
-	if (ptr == nullptr || constant.IsNull()) {
+	if (value == (Datum) 0 || constant.IsNull()) {
 		return false; // Comparison to NULL always returns false.
 	}
 
+	bool should_free = false;
+	auto detoasted_value = DetoastPostgresDatum(reinterpret_cast<varlena *>(value), &should_free);
+
+	const auto ptr = (text*)DatumGetPointer(detoasted_value);
 	text* tunpacked = pg_detoast_datum_packed(ptr);
 	const auto datum_sv =  std::string_view((char*)VARDATA_ANY(tunpacked), VARSIZE_ANY_EXHDR(tunpacked));
 	const auto val = duckdb::StringValue::Get(constant);
 	const auto val_sv =  std::string_view(val);
-	return OP::Operation(datum_sv, val_sv);
+	const bool res = OP::Operation(datum_sv, val_sv);
+
+	if (should_free) {
+		duckdb_free(reinterpret_cast<void *>(detoasted_value));
+	}
+	return res;
 }
 
 template <class OP>
