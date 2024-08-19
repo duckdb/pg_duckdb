@@ -14,7 +14,7 @@ public:
 public:
 	optional_ptr<CatalogEntry> GetTable(const string &name);
 public:
-	const string &name;
+	string name;
 	unique_ptr<PostgresSchema> schema;
 	case_insensitive_map_t<unique_ptr<PostgresTable>> tables;
 };
