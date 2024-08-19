@@ -2,6 +2,7 @@
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
+#include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -64,15 +65,11 @@ PostgresCatalog::GetSchema(CatalogTransaction transaction, const string &schema_
 		return GetSchema(transaction, "public", if_not_found, error_context);
 	}
 
-	auto it = schemas.find(schema_name);
-	if (it != schemas.end()) {
-		return it->second.get();
-	}
-
-	CreateSchemaInfo create_schema;
-	create_schema.schema = schema_name;
-	schemas[schema_name] = make_uniq<PostgresSchema>(*this, create_schema, snapshot, planner_info);
-	return schemas[schema_name].get();
+	auto &pg_transaction = transaction.transaction->Cast<PostgresTransaction>();
+	auto res = pg_transaction.GetCatalogEntry(CatalogType::SCHEMA_ENTRY, schema_name, "");
+	D_ASSERT(res);
+	D_ASSERT(res->type == CatalogType::SCHEMA_ENTRY);
+	return (SchemaCatalogEntry *)res.get();
 }
 
 void

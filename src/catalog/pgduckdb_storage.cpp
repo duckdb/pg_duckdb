@@ -6,7 +6,11 @@ namespace duckdb {
 
 static unique_ptr<TransactionManager>
 CreateTransactionManager(StorageExtensionInfo *storage_info, AttachedDatabase &db, Catalog &catalog) {
-	return make_uniq<PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>());
+	auto &pg_storage_info = *(reinterpret_cast<PostgresStorageExtensionInfo *>(storage_info));
+	auto snapshot = pg_storage_info.snapshot;
+	auto planner_info = pg_storage_info.planner_info;
+
+	return make_uniq<PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>(), snapshot, planner_info);
 }
 
 PostgresStorageExtension::PostgresStorageExtension(Snapshot snapshot, PlannerInfo *planner_info) {

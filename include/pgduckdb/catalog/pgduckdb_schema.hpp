@@ -38,8 +38,7 @@ public:
 	void DropEntry(ClientContext &context, DropInfo &info) override;
 	void Alter(CatalogTransaction transaction, AlterInfo &info) override;
 
-private:
-	case_insensitive_map_t<unique_ptr<PostgresTable>> tables;
+public:
 	Snapshot snapshot;
 	Catalog &catalog;
 	PlannerInfo *planner_info;
