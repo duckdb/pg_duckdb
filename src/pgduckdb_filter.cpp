@@ -60,6 +60,7 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 		Datum timestamp_datum = static_cast<int64_t>(value + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
 		return TemplatedFilterOperation<int64_t, OP>(timestamp_datum, constant);
 	}
+	case TEXTOID:
 	case VARCHAROID:
 		return StringFilterOperation<OP>(value, constant);
 	default:

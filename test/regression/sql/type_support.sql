@@ -29,6 +29,12 @@ INSERT INTO varchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), (NULL), ('t
 SELECT * FROM varchar_tbl;
 SELECT * FROM varchar_tbl WHERE a = 'test';
 
+--- TEXT
+CREATE TABLE text_tbl(a TEXT);
+INSERT INTO text_tbl SELECT CAST(a AS TEXT) from (VALUES (''), (NULL), ('test'), ('this is a long string')) t(a);
+SELECT * FROM text_tbl;
+SELECT * FROM text_tbl WHERE a = 'test';
+
 -- DATE
 CREATE TABLE date_tbl(a DATE);
 INSERT INTO date_tbl SELECT CAST(a AS DATE) FROM (VALUES ('2022-04-29'::DATE), (NULL), ('2023-05-15'::DATE)) t(a);
@@ -135,6 +141,7 @@ DROP TABLE small;
 DROP TABLE intgr;
 DROP TABLE big;
 DROP TABLE varchar_tbl;
+DROP TABLE text_tbl;
 DROP TABLE date_tbl;
 DROP TABLE timestamp_tbl;
 DROP TABLE float4_tbl;
