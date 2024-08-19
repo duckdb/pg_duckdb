@@ -5,4 +5,6 @@ extern "C" {
 #include "optimizer/planner.h"
 }
 
+extern bool duckdb_explain_analyze;
+
 PlannedStmt *DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params);
