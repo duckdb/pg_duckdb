@@ -1,42 +1,42 @@
 CREATE TABLE t(a INT, b VARCHAR);
-INSERT INTO t SELECT g % 1000, MD5(g::VARCHAR) FROM generate_series(1,20000) g;
-SELECT COUNT(*) FROM t WHERE a % 100 = 0;
+INSERT INTO t SELECT g % 100, MD5(g::VARCHAR) FROM generate_series(1,1000) g;
+SELECT COUNT(*) FROM t WHERE a % 10 = 0;
  count 
 -------
-   200
+   100
 (1 row)
 
-CREATE MATERIALIZED VIEW tv AS SELECT * FROM t WHERE a % 100 = 0;
+CREATE MATERIALIZED VIEW tv AS SELECT * FROM t WHERE a % 10 = 0;
 SELECT COUNT(*) FROM tv;
  count 
 -------
-   200
+   100
 (1 row)
 
-INSERT INTO t SELECT g % 1000, MD5(g::TEXT) FROM generate_series(1,20000) g;
-SELECT COUNT(*) FROM t WHERE a % 100 = 0;
+INSERT INTO t SELECT g % 100, MD5(g::TEXT) FROM generate_series(1,1000) g;
+SELECT COUNT(*) FROM t WHERE a % 10 = 0;
  count 
 -------
-   400
+   200
 (1 row)
 
 REFRESH MATERIALIZED VIEW tv;
 SELECT COUNT(*) FROM tv;
  count 
 -------
-   400
+   200
 (1 row)
 
-SELECT COUNT(*) FROM t WHERE (a % 100 = 0) AND (a < 30);
+SELECT COUNT(*) FROM t WHERE (a % 10 = 0) AND (a < 3);
  count 
 -------
-    40
+    20
 (1 row)
 
-SELECT COUNT(*) FROM tv WHERE a < 30;
+SELECT COUNT(*) FROM tv WHERE a < 3;
  count 
 -------
-    40
+    20
 (1 row)
 
 DROP MATERIALIZED VIEW tv;
