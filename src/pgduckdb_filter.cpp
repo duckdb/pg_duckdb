@@ -23,13 +23,15 @@ template <class OP>
 bool
 StringFilterOperation(Datum &value, const duckdb::Value &constant) {
 	const auto ptr = (text*)DatumGetPointer(value);
-	auto cstr = text_to_cstring(ptr);
-	const auto datum_sv = std::string_view(cstr);
+	if (ptr == nullptr || constant.IsNull()) {
+		return false; // Comparison to NULL always returns false.
+	}
+
+	text* tunpacked = pg_detoast_datum_packed(ptr);
+	const auto datum_sv =  std::string_view((char*)VARDATA_ANY(tunpacked), VARSIZE_ANY_EXHDR(tunpacked));
 	const auto val = duckdb::StringValue::Get(constant);
 	const auto val_sv =  std::string_view(val);
-	const bool res = OP::Operation(datum_sv, val_sv);
-	pfree(cstr);
-	return res;
+	return OP::Operation(datum_sv, val_sv);
 }
 
 template <class OP>

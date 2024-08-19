@@ -65,6 +65,12 @@ SELECT * FROM varchar_tbl;
  this is a long string
 (4 rows)
 
+SELECT * FROM varchar_tbl WHERE a = 'test';
+  a   
+------
+ test
+(1 row)
+
 -- DATE
 CREATE TABLE date_tbl(a DATE);
 INSERT INTO date_tbl SELECT CAST(a AS DATE) FROM (VALUES ('2022-04-29'::DATE), (NULL), ('2023-05-15'::DATE)) t(a);
