@@ -496,9 +496,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case FLOAT4ARRAYOID: {
 		ConvertDuckToPostgresArray<FloatArray>(slot, value, col);
+		break;
 	}
 	case FLOAT8ARRAYOID: {
 		ConvertDuckToPostgresArray<DoubleArray>(slot, value, col);
+		break;
 	}
 	default:
 		throw duckdb::NotImplementedException("(DuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
