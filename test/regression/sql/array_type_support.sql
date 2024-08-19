@@ -64,8 +64,19 @@ INSERT INTO bool_array_1d SELECT CAST(a as BOOL[]) FROM (VALUES
 ) t(a);
 SELECT * FROM bool_array_1d;
 
+-- FLOAT (single dimension)
+CREATE TABLE float_array_1d(a FLOAT[]);
+INSERT INTO float_array_1d SELECT CAST(a as FLOAT[]) FROM (VALUES
+	('{-340282346638528859811704183484516925440.0000000000000000, 340282346638528859811704183484516925440.0000000000000000, 0.000001}'),
+	(NULL),
+	('{1.23456789, -340234.903950204}'),
+	('{}')
+) t(a);
+SELECT * FROM float_array_1d;
+
 DROP TABLE int_array_0d;
 DROP TABLE int_array_1d;
 DROP TABLE int_array_2d;
 DROP TABLE bigint_array_1d;
 DROP TABLE bool_array_1d;
+DROP TABLE float_array_1d;

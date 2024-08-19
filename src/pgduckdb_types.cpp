@@ -42,6 +42,38 @@ public:
 	}
 };
 
+struct FloatArray {
+public:
+	static ArrayType *
+	ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, FLOAT4OID, sizeof(float), true, 'd');
+	}
+	static duckdb::LogicalTypeId
+	ExpectedType() {
+		return duckdb::LogicalTypeId::FLOAT;
+	}
+	static Datum
+	ConvertToPostgres(const duckdb::Value &val) {
+		return Datum(val.GetValue<float>());
+	}
+};
+
+struct DoubleArray {
+public:
+	static ArrayType *
+	ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, FLOAT8OID, sizeof(double), true, 'd');
+	}
+	static duckdb::LogicalTypeId
+	ExpectedType() {
+		return duckdb::LogicalTypeId::DOUBLE;
+	}
+	static Datum
+	ConvertToPostgres(const duckdb::Value &val) {
+		return Datum(val.GetValue<double>());
+	}
+};
+
 template <int32_t OID>
 struct PostgresIntegerOIDMapping {};
 
@@ -462,6 +494,12 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<INT8OID>>>(slot, value, col);
 		break;
 	}
+	case FLOAT4ARRAYOID: {
+		ConvertDuckToPostgresArray<FloatArray>(slot, value, col);
+	}
+	case FLOAT8ARRAYOID: {
+		ConvertDuckToPostgresArray<DoubleArray>(slot, value, col);
+	}
 	default:
 		throw duckdb::NotImplementedException("(DuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 	}
@@ -488,6 +526,10 @@ ChildTypeFromArray(Oid array_type) {
 		return duckdb::LogicalTypeId::INTEGER;
 	case INT8ARRAYOID:
 		return duckdb::LogicalTypeId::BIGINT;
+	case FLOAT4ARRAYOID:
+		return duckdb::LogicalTypeId::FLOAT;
+	case FLOAT8ARRAYOID:
+		return duckdb::LogicalTypeId::DOUBLE;
 	default:
 		throw duckdb::NotImplementedException("No child type set for Postgres OID %d", array_type);
 	}
@@ -535,6 +577,8 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case JSONOID:
 		return duckdb::LogicalType::JSON();
 	case BOOLARRAYOID:
+	case FLOAT4ARRAYOID:
+	case FLOAT8ARRAYOID:
 	case INT4ARRAYOID:
 	case INT8ARRAYOID: {
 		auto duck_type = ChildTypeFromArray(type);
@@ -607,6 +651,10 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 			return INT4ARRAYOID;
 		case duckdb::LogicalTypeId::BIGINT:
 			return INT8ARRAYOID;
+		case duckdb::LogicalTypeId::FLOAT:
+			return FLOAT4ARRAYOID;
+		case duckdb::LogicalTypeId::DOUBLE:
+			return FLOAT8ARRAYOID;
 		default:
 			throw duckdb::InvalidInputException("(DuckDB/GetPostgresDuckDBType) Unsupported pgduckdb type: %s",
 			                                    type.ToString().c_str());
