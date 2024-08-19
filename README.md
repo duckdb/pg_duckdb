@@ -23,7 +23,7 @@ Pre-built binaries and additional installation options are coming soon.
 
 To build pg_duckdb, you need:
 
-* Postgres 16
+* Postgres 16 or 17
 * Ubuntu 22.04 or MacOS
 * Standard set of build tools for building Postgres extensions
 * [Build tools that are required to build DuckDB](https://duckdb.org/docs/dev/building/build_instructions)
@@ -136,4 +136,4 @@ We welcome all contributions big and small:
 - [Discord discussion](https://discord.duckdb.org/) with the DuckDB community
 - See our docs for more info and limitations
 
-[roadmap]: https://github.com/orgs/duckdb/projects/3
+[roadmap]: https://github.com/orgs/duckdb/projects/10

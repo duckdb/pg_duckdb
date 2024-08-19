@@ -1,0 +1,3 @@
+namespace pgduckdb {
+bool IsExtensionRegistered();
+}
