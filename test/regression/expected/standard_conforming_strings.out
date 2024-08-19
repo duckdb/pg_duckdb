@@ -1,0 +1,12 @@
+CREATE TABLE foo(t text);
+set standard_conforming_strings = off;
+select * from foo where t = 'foo\'bar';
+WARNING:  nonstandard use of \' in a string literal
+LINE 1: select * from foo where t = 'foo\'bar';
+                                    ^
+HINT:  Use '' to write quotes in strings, or use the escape string syntax (E'...').
+ t 
+---
+(0 rows)
+
+DROP TABLE foo;

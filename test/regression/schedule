@@ -10,3 +10,4 @@ test: hugeint_conversion
 test: read_functions
 test: cte
 test: create_table_as
+test: standard_conforming_strings
