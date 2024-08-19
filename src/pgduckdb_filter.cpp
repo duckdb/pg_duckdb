@@ -28,11 +28,8 @@ StringFilterOperation(Datum &value, const duckdb::Value &constant) {
 	}
 
 	bool should_free = false;
-	auto detoasted_value = DetoastPostgresDatum(reinterpret_cast<varlena *>(value), &should_free);
-
-	const auto ptr = (text*)DatumGetPointer(detoasted_value);
-	text* tunpacked = pg_detoast_datum_packed(ptr);
-	const auto datum_sv =  std::string_view((char*)VARDATA_ANY(tunpacked), VARSIZE_ANY_EXHDR(tunpacked));
+	const auto detoasted_value = DetoastPostgresDatum(reinterpret_cast<varlena *>(value), &should_free);
+	const auto datum_sv =  std::string_view((const char*)VARDATA_ANY(detoasted_value), VARSIZE_ANY_EXHDR(detoasted_value));
 	const auto val = duckdb::StringValue::Get(constant);
 	const auto val_sv =  std::string_view(val);
 	const bool res = OP::Operation(datum_sv, val_sv);
