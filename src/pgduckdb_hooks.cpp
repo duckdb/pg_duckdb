@@ -13,10 +13,12 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/utility/copy.hpp"
+#include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
+static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
 
 static bool
 IsCatalogTable(List *tables) {
@@ -110,6 +112,16 @@ DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_t
 	}
 }
 
+extern "C" {
+#include "nodes/print.h"
+}
+void
+DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, ExplainState *es, const char *queryString,
+                          ParamListInfo params, QueryEnvironment *queryEnv) {
+	duckdb_explain_analyze = es->analyze;
+	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
+}
+
 void
 DuckdbInitHooks(void) {
 	prev_planner_hook = planner_hook;
@@ -117,4 +129,7 @@ DuckdbInitHooks(void) {
 
 	prev_process_utility_hook = ProcessUtility_hook ? ProcessUtility_hook : standard_ProcessUtility;
 	ProcessUtility_hook = DuckdbUtilityHook;
+
+	prev_explain_one_query_hook = ExplainOneQuery_hook ? ExplainOneQuery_hook : standard_ExplainOneQuery;
+	ExplainOneQuery_hook = DuckdbExplainOneQueryHook;
 }
