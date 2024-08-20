@@ -34,7 +34,12 @@ struct {
 	bool installed;
 	/* The Postgres OID of the pg_duckdb extension. */
 	Oid extension_oid;
-	/* A list of Postgres OIDs of functions that can only be executed by DuckDB */
+	/*
+	 * A list of Postgres OIDs of functions that can only be executed by DuckDB.
+	 * XXX: We're iterating over this list in IsDuckdbOnlyFunction. If this list
+	 * ever becomes large we should consider using a different datastructure
+	 * instead (e.g. a hash table). For now using a list is fine though.
+	 */
 	List *duckdb_only_functions;
 } cache = {};
 
