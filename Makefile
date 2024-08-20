@@ -25,6 +25,12 @@ SRCS = src/scan/heap_reader.cpp \
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
+
+C_SRCS = src/vendor/pg_ruleutils_16.c \
+		 src/vendor/pg_ruleutils_17.c
+OBJS += $(subst .c,.o, $(C_SRCS))
+
+
 DUCKDB_BUILD_CXX_FLAGS=
 DUCKDB_BUILD_TYPE=
 
@@ -36,14 +42,15 @@ else
 	DUCKDB_BUILD_TYPE = release
 endif
 
-override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2 -std=c++17 -Wno-sign-compare ${DUCKDB_BUILD_CXX_FLAGS}
+override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2
+override PG_CXXFLAGS += -std=c++17 -Wno-sign-compare ${DUCKDB_BUILD_CXX_FLAGS}
 
 SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -lstdc++ -llz4
 
-COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
+COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) $(PG_CXXFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
 
 %.bc : %.cpp
-	$(COMPILE.cc.bc) $(SHLIB_LINK) $(PG_CPPFLAGS) -I$(INCLUDE_SERVER) -o $@ $<
+	$(COMPILE.cc.bc) $(SHLIB_LINK) -I$(INCLUDE_SERVER) -o $@ $<
 
 # determine the name of the duckdb library that is built
 UNAME_S := $(shell uname -s)
