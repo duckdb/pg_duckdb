@@ -1,19 +1,17 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils.c
+ * pg_ruleutils_17.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
  * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- *
- * IDENTIFICATION
- *	  src/backend/utils/adt/ruleutils.c
- *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
+#if PG_VERSION_NUM >= 170000 && PG_VERSION_NUM < 180000
 
 #include <ctype.h>
 #include <unistd.h>
@@ -66,12 +64,14 @@
 #include "utils/lsyscache.h"
 #include "utils/partcache.h"
 #include "utils/rel.h"
-#include "utils/ruleutils.h"
+#include "pgduckdb/vendor/pg_ruleutils.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 #include "utils/varlena.h"
 #include "utils/xml.h"
+
+#include "pgduckdb/utility/rename_ruleutils.h"
 
 /* ----------
  * Pretty formatting constants
@@ -13314,3 +13314,5 @@ get_list_partvalue_string(Const *val)
 
 	return buf->data;
 }
+
+#endif
