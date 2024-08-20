@@ -66,7 +66,8 @@ check-regression-duckdb:
 clean-regression:
 	$(MAKE) -C test/regression clean-regression
 
-installcheck: all install check-regression-duckdb
+installcheck: all install
+	$(MAKE) check-regression-duckdb
 
 FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
 duckdb: third_party/duckdb/Makefile $(FULL_DUCKDB_LIB)
