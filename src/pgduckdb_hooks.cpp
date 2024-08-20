@@ -3,6 +3,7 @@ extern "C" {
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
 #include "utils/rel.h"
@@ -43,6 +44,31 @@ IsCatalogTable(List *tables) {
 }
 
 static bool
+ContainsDuckdbFunctions(Node *node, void *context) {
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query)) {
+		Query *query = (Query *)node;
+		return query_tree_walker(query, ContainsDuckdbFunctions, context, 0);
+	}
+
+	if (IsA(node, FuncExpr)) {
+		FuncExpr *func = castNode(FuncExpr, node);
+		if (pgduckdb::IsDuckdbOnlyFunction(func->funcid)) {
+			return true;
+		}
+	}
+
+	return expression_tree_walker(node, ContainsDuckdbFunctions, context);
+}
+
+static bool
+NeedsDuckdbExecution(Query *query) {
+	return query_tree_walker(query, ContainsDuckdbFunctions, NULL, 0);
+}
+
+static bool
 IsAllowedStatement(Query *query) {
 	/* DuckDB does not support modifying CTEs INSERT/UPDATE/DELETE */
 	if (query->hasModifyingCTE) {
@@ -77,10 +103,22 @@ IsAllowedStatement(Query *query) {
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
-	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered()) {
-		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, cursor_options, bound_params);
-		if (duckdb_plan) {
-			return duckdb_plan;
+	if (pgduckdb::IsExtensionRegistered()) {
+		if (duckdb_execution && IsAllowedStatement(parse)) {
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
+			if (duckdbPlan) {
+				return duckdbPlan;
+			}
+		}
+
+		if (NeedsDuckdbExecution(parse)) {
+			if (!IsAllowedStatement(parse)) {
+				elog(ERROR, "only SELECT statements involving DuckDB are supported");
+			}
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
+			if (duckdbPlan) {
+				return duckdbPlan;
+			}
 		}
 	}
 
