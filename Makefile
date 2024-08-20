@@ -20,6 +20,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/pgduckdb_node.cpp \
 	   src/pgduckdb_options.cpp \
 	   src/pgduckdb_planner.cpp \
+	   src/pgduckdb_ruleutils.cpp \
 	   src/pgduckdb_types.cpp \
 	   src/pgduckdb.cpp
 

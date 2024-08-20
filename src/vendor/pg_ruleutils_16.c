@@ -72,6 +72,8 @@
 #include "utils/varlena.h"
 #include "utils/xml.h"
 
+#include "pgduckdb/pgduckdb_ruleutils.h"
+
 #include "pgduckdb/utility/rename_ruleutils.h"
 
 /* ----------
@@ -12203,6 +12205,10 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 	Oid			p_vatype;
 	Oid		   *p_true_typeids;
 	bool		force_qualify = false;
+
+	result = pgduckdb_function_name(funcid);
+	if (result)
+		return result;
 
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(proctup))
