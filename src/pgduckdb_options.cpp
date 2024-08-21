@@ -71,6 +71,10 @@ ReadDuckdbSecrets() {
 		if (!is_null_array[Anum_duckdb_secret_r2_account_id - 1])
 			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_r2_account_id - 1]);
 
+		if (!is_null_array[Anum_duckdb_secret_use_ssl - 1])
+			secret.use_ssl = DatumGetBool(DatumGetBool(datum_array[Anum_duckdb_secret_use_ssl - 1]));
+		else
+			secret.use_ssl = true;
 		duckdb_secrets.push_back(secret);
 	}
 
