@@ -118,7 +118,7 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
 		}
 		if (!secret.use_ssl) {
-			appendStringInfo(secret_key, ", USE_SSL '%s'", "FALSE");
+			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
 		}
 		appendStringInfo(secret_key, ");");
 		context.Query(secret_key->data, false);
