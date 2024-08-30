@@ -117,6 +117,7 @@ CREATE TABLE secrets (
     region TEXT,
     endpoint TEXT,
     r2_account_id TEXT,
+    use_ssl BOOLEAN DEFAULT true,
     CONSTRAINT type_constraint CHECK (type IN ('S3', 'GCS', 'R2'))
 );
 
