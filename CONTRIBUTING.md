@@ -44,9 +44,25 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * To build the project, run `make -j$(nproc)`.
 
+## Python dependencies
+
+We have several python dependencies for testing and formatting code.
+You can install these dependencies like this:
+```bash
+# Needed only once
+pip -m venv env
+# Needed every time you open a new terminal
+source env/bin/activate
+# Needed only once, or when dependencies change
+pip install -r dev_requirements.txt
+```
+
+You can also install the dependencies globally if you prefer, but this is not
+recommended because they might cause conflicts with other projects.
+
 ## Testing
 
-* Tests use standard regression tests for Postgres extensions. To run tests, run `make installcheck`.
+* Tests use standard regression tests for Postgres extensions as well as a custom Python based testing framework. To run tests, run `make check`.
 * Write many tests.
 * Test with different types, especially numerics, strings and complex nested types.
 * Try to test unexpected/incorrect usage as well, instead of only the happy path.
@@ -57,8 +73,8 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * Use tabs for indentation, spaces for alignment.
 * Lines should not exceed 120 columns.
-* To make sure the formatting is consistent, please use version 18.1.3, installable through `python3 -m pip install clang-format==10.0.1.1`
-* `clang_format` and `black` enforce these rules automatically, use `make format-fix` to run the formatter.
+* To make sure the formatting is consistent, use the instructions in the [Python dependencies](#python-dependencies) section to install the correct versions of the dependencies.
+* `clang-format` and `ruff` enforce these rules automatically, use `make format` to run the formatter.
 * The project also comes with an [`.editorconfig` file](https://editorconfig.org/) that corresponds to these rules.
 
 ## C/C++ Guidelines

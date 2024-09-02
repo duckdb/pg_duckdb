@@ -60,6 +60,8 @@ include Makefile.global
 
 NO_INSTALLCHECK = 1
 
+PYTEST_CONCURRENCY = auto
+
 check-regression-duckdb:
 	$(MAKE) -C test/regression check-regression-duckdb
 
@@ -68,6 +70,11 @@ clean-regression:
 
 installcheck: all install
 	$(MAKE) check-regression-duckdb
+
+pycheck: all install
+	pytest -n $(PYTEST_CONCURRENCY)
+
+check: installcheck pycheck
 
 FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
 duckdb: third_party/duckdb/Makefile $(FULL_DUCKDB_LIB)
@@ -96,6 +103,7 @@ clean: clean-regression clean-duckdb
 
 lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
+	ruff check
 
 .depend:
 	$(RM) -f .depend
@@ -103,5 +111,6 @@ lintcheck:
 
 format:
 	git clang-format origin/main
+	ruff format
 
 include .depend
