@@ -14,7 +14,7 @@ namespace pgduckdb {
 #define Anum_duckdb_secret_session_token 5
 #define Anum_duckdb_secret_endpoint      6
 #define Anum_duckdb_secret_r2_account_id 7
-#define Anum_duckdb_secret_use_ssl       7
+#define Anum_duckdb_secret_use_ssl       8
 
 typedef struct DuckdbSecret {
 	std::string type;
