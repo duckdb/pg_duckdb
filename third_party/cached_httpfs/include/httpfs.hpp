@@ -96,6 +96,7 @@ public:
 	FileOpenFlags flags;
 	idx_t length;
 	time_t last_modified;
+	string md5_key;
 
 	// When using full file download, the full file will be written to a cached file handle
 	unique_ptr<CachedFileHandle> cached_file_handle;

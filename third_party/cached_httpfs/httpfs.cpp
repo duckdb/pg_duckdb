@@ -670,6 +670,13 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 		if (found) {
 			last_modified = value.last_modified;
 			length = value.length;
+			if (current_file_cache) {
+				auto cache_entry = current_file_cache->GetCachedFile(http_params.http_file_cache_dir, value.key,
+		                                                     		 false);
+				if (cache_entry) {
+					cached_file_handle = cache_entry->GetHandle();
+				}
+			}
 
 			if (flags.OpenForReading()) {
 				read_buffer = duckdb::unique_ptr<data_t[]>(new data_t[READ_BUFFER_LEN]);
@@ -753,7 +760,8 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 		} else {
 			md5_context.Add(res->headers["ETag"]);
 		}
-		auto cache_entry = current_file_cache->GetCachedFile(http_params.http_file_cache_dir, md5_context.FinishHex(),
+		md5_key = md5_context.FinishHex();
+		auto cache_entry = current_file_cache->GetCachedFile(http_params.http_file_cache_dir, md5_key,
 		                                                     http_params.enable_http_file_cache);
 		if (cache_entry) {
 			//! Cache found or created
@@ -793,7 +801,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	}
 
 	if (should_write_cache) {
-		current_cache->Insert(path, {length, last_modified});
+		current_cache->Insert(path, {length, last_modified, md5_key});
 	}
 }
 
