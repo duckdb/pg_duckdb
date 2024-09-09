@@ -152,3 +152,19 @@ DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
 
 	return result;
 }
+
+extern "C" {
+
+PG_FUNCTION_INFO_V1(star_in_func);
+Datum
+star_in_func(PG_FUNCTION_ARGS) {
+	elog(ERROR, "ducdkb.star is a fake type, it cannot be created");
+}
+
+PG_FUNCTION_INFO_V1(star_out_func);
+Datum
+star_out_func(PG_FUNCTION_ARGS) {
+	elog(ERROR, "ducdkb.star is a fake type, it does not have a string representation");
+}
+
+} // extern "C"

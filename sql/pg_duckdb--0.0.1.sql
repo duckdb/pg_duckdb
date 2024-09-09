@@ -150,4 +150,18 @@ BEGIN
 END
 $$;
 
+CREATE TYPE star;
+
+CREATE FUNCTION star_in_func(cstring) RETURNS star IMMUTABLE
+    LANGUAGE C AS 'MODULE_PATHNAME', 'star_in_func';
+
+CREATE FUNCTION star_out_func(star) RETURNS cstring IMMUTABLE
+    LANGUAGE C AS 'MODULE_PATHNAME', 'star_out_func';
+
+CREATE TYPE star (
+    INTERNALLENGTH = VARIABLE,
+    INPUT = star_in_func,
+    OUTPUT = star_out_func
+);
+
 RESET search_path;
