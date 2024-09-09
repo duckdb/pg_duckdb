@@ -55,8 +55,6 @@ CREATE OR REPLACE FUNCTION read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE
                                                timestampformat VARCHAR DEFAULT '',
                                                types TEXT[] DEFAULT ARRAY[]::TEXT[],
                                                union_by_name BOOLEAN DEFAULT FALSE)
-
-    
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
