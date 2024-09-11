@@ -29,8 +29,8 @@ create view vw2 as select * from "s.t";
 select * from vw1, vw2;
 WARNING:  (DuckDB) Binder Error: Referenced table "t" not found!
 Candidate tables: "s.t"
-LINE 3:    FROM ( SELECT t."?column?"
-                         ^
+LINE 1: ...?column?", vw2."?column?" FROM (SELECT t."?column?" FROM s.t) vw1, (SELECT "s....
+                                                  ^
  ?column? | ?column? 
 ----------+----------
        21 |       42
