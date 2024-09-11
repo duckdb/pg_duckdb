@@ -65,6 +65,9 @@ ReadDuckdbSecrets() {
 		if (!is_null_array[Anum_duckdb_secret_region - 1])
 			secret.region = DatumToString(datum_array[Anum_duckdb_secret_region - 1]);
 
+		if (!is_null_array[Anum_duckdb_secret_session_token - 1])
+			secret.session_token = DatumToString(datum_array[Anum_duckdb_secret_session_token - 1]);
+
 		if (!is_null_array[Anum_duckdb_secret_endpoint - 1])
 			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_endpoint - 1]);
 

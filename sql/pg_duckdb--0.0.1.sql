@@ -113,6 +113,7 @@ CREATE TABLE secrets (
     id TEXT NOT NULL,
     secret TEXT NOT NULL,
     region TEXT,
+    session_token TEXT,
     endpoint TEXT,
     r2_account_id TEXT,
     use_ssl BOOLEAN DEFAULT true,

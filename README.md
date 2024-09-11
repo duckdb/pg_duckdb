@@ -66,9 +66,10 @@ The best way to get started is to connect Postgres to a new or existing object s
 1. Add a credential to enable DuckDB's httpfs support.
 
 	```sql
+	-- Session Token is Optional
 	INSERT INTO duckdb.secrets
-	(cloud_type, cloud_id, cloud_secret, cloud_region)
-	VALUES ('S3', 'access_key_id', 'secret_accss_key', 'us-east-1');
+	(type, id, secret, session_token, region)
+	VALUES ('S3', 'access_key_id', 'secret_access_key', 'session_token', 'us-east-1');
 	```
 
 2. Copy data directly to your bucket - no ETL pipeline!
