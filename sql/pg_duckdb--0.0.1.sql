@@ -56,7 +56,7 @@ CREATE OR REPLACE FUNCTION read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE
                                                types TEXT[] DEFAULT ARRAY[]::TEXT[],
                                                union_by_name BOOLEAN DEFAULT FALSE)
 
-    
+
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -115,6 +115,7 @@ CREATE TABLE secrets (
     id TEXT NOT NULL,
     secret TEXT NOT NULL,
     region TEXT,
+    session_token TEXT,
     endpoint TEXT,
     r2_account_id TEXT,
     use_ssl BOOLEAN DEFAULT true,

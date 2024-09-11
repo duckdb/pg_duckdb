@@ -111,6 +111,9 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 		if (secret.region.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
 		}
+		if (secret.session_token.length() && !is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", SESSION_TOKEN '%s'", secret.session_token.c_str());
+		}
 		if (secret.endpoint.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
 		}
