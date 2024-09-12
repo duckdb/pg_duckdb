@@ -96,7 +96,7 @@
 /* Standard conversion of a "bool pretty" option to detailed flags */
 #define GET_PRETTY_FLAGS(pretty) \
 	((pretty) ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) \
-	 : PRETTYFLAG_INDENT)
+	 : 0)
 
 /* Default line length for pretty-print wrapping: 0 means wrap always */
 #define WRAP_COLUMN_DEFAULT		0
