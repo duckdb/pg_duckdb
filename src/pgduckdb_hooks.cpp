@@ -1,3 +1,5 @@
+#include "duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "catalog/pg_namespace.h"

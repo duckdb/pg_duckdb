@@ -158,7 +158,15 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
                         duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
 
 	auto table_name = duckdb::ReplacementScan::GetFullPath(input);
-	auto &scan_data = reinterpret_cast<PostgresReplacementScanData &>(*data);
+	auto scan_data = context.registered_state->Get<PostgresReplacementScanDataClientContextState>("postgres_scan");
+	if (!scan_data) {
+		/* There is no scan data provided by postgres so we cannot access any
+		 * of postgres tables. This is the case for queries that are not
+		 * directly based on a Postgres query, such as queries that pg_duckdb
+		 * executes internally like CREATE SECRET.
+		 */
+		return nullptr;
+	}
 
 	/* Check name against query table list and verify that it is heap table */
 	auto relid = FindMatchingRelation(table_name);
@@ -185,8 +193,8 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	RelOptInfo *node = nullptr;
 	Path *node_path = nullptr;
 
-	if (scan_data.m_query_planner_info) {
-		node = FindMatchingRelEntry(relid, scan_data.m_query_planner_info);
+	if (scan_data->m_query_planner_info) {
+		node = FindMatchingRelEntry(relid, scan_data->m_query_planner_info);
 		if (node) {
 			node_path = get_cheapest_fractional_path(node, 0.0);
 		}
@@ -196,7 +204,7 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	Cardinality nodeCardinality = node_path ? node_path->rows : 1;
 
 	if ((node_path != nullptr && (node_path->pathtype == T_IndexScan || node_path->pathtype == T_IndexOnlyScan))) {
-		auto children = CreateFunctionIndexScanArguments(nodeCardinality, node_path, scan_data.m_query_planner_info,
+		auto children = CreateFunctionIndexScanArguments(nodeCardinality, node_path, scan_data->m_query_planner_info,
 		                                                 GetActiveSnapshot());
 		auto table_function = duckdb::make_uniq<duckdb::TableFunctionRef>();
 		table_function->function =

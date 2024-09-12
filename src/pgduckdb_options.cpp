@@ -114,8 +114,8 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-	auto db = DuckdbOpenDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
+	auto &db = DuckDBManager::Get().GetDatabase();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
 	auto &context = *connection->context;
 
 	auto extension_name = DatumToString(name);
