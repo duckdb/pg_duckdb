@@ -543,8 +543,12 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		}
 		return duck_type;
 	}
-	default:
-		return duckdb::LogicalType::USER("UnsupportedPostgresType");
+	case REGCLASSOID:
+		return duckdb::LogicalTypeId::UINTEGER;
+	default: {
+		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
+		return duckdb::LogicalType::USER(name);
+	}
 	}
 }
 
@@ -726,6 +730,9 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	case duckdb::LogicalTypeId::INTEGER:
 		Append<int32_t>(result, DatumGetInt32(value), offset);
+		break;
+	case duckdb::LogicalTypeId::UINTEGER:
+		Append<uint32_t>(result, DatumGetUInt32(value), offset);
 		break;
 	case duckdb::LogicalTypeId::BIGINT:
 		Append<int64_t>(result, DatumGetInt64(value), offset);

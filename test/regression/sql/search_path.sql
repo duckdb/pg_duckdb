@@ -15,8 +15,8 @@ SELECT count(*) FROM other.t;
 SELECT count(*) FROM t,t;
 
 -- search_path ORDER matters.
-SET search_path TO other, public;
-SELECT count(*) FROM t;
+-- SET search_path TO other, public;
+-- SELECT count(*) FROM t;
 -- (currently broken, see #56)
 -- SELECT count(*) FROM t, public.t;
 

@@ -10,17 +10,13 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
-
-static bool
-IsDuckdbExtensionRegistered() {
-	return get_extension_oid("pg_duckdb", true) != InvalidOid;
-}
 
 static bool
 IsCatalogTable(List *tables) {
@@ -45,21 +41,42 @@ IsCatalogTable(List *tables) {
 }
 
 static bool
-IsAllowedStatement() {
-	/* For `SELECT ..` ActivePortal doesn't exist */
-	if (!ActivePortal)
-		return true;
-	/* `EXPLAIN ...` should be allowed */
-	if (ActivePortal->commandTag == CMDTAG_EXPLAIN)
-		return true;
-	return false;
+IsAllowedStatement(Query *query) {
+	/* DuckDB does not support modifying CTEs INSERT/UPDATE/DELETE */
+	if (query->hasModifyingCTE) {
+		return false;
+	}
+
+	/* We don't support modifying statements yet */
+	if (query->commandType != CMD_SELECT) {
+		return false;
+	}
+
+	/*
+	 * If there's no rtable, we're only selecting constants. There's no point
+	 * in using DuckDB for that.
+	 */
+	if (!query->rtable) {
+		return false;
+	}
+
+	/*
+	 * If any table is from pg_catalog, we don't want to use DuckDB. This is
+	 * because DuckDB has its own pg_catalog tables that contain different data
+	 * then Postgres its pg_catalog tables.
+	 */
+	if (IsCatalogTable(query->rtable)) {
+		return false;
+	}
+
+	/* Anything else is hopefully fine... */
+	return true;
 }
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
-	if (duckdb_execution && IsAllowedStatement() && IsDuckdbExtensionRegistered() && parse->rtable &&
-	    !IsCatalogTable(parse->rtable) && parse->commandType == CMD_SELECT) {
-		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params);
+	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered()) {
+		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, cursor_options, bound_params);
 		if (duckdb_plan) {
 			return duckdb_plan;
 		}
@@ -76,7 +93,7 @@ static void
 DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
-	if (duckdb_execution && IsDuckdbExtensionRegistered() && IsA(parsetree, CopyStmt)) {
+	if (duckdb_execution && pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
 		uint64 processed;
 		if (DuckdbCopy(pstmt, query_string, query_env, &processed)) {
 			if (qc) {

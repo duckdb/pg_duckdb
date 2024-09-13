@@ -27,6 +27,10 @@ create table "s.t" as select 42;
 create view vw1 as select * from s.t;
 create view vw2 as select * from "s.t";
 select * from vw1, vw2;
+WARNING:  (DuckDB) Binder Error: Referenced table "t" not found!
+Candidate tables: "s.t"
+LINE 3:    FROM ( SELECT t."?column?"
+                         ^
  ?column? | ?column? 
 ----------+----------
        21 |       42

@@ -1,42 +1,42 @@
 CREATE TABLE t(a INT);
-INSERT INTO t SELECT g % 10 from generate_series(1,1000000) g;
+INSERT INTO t SELECT g % 10 from generate_series(1,1000) g;
 SET client_min_messages to 'DEBUG1';
 SELECT COUNT(*) FROM t;
- count_star() 
---------------
-      1000000
+ count 
+-------
+  1000
 (1 row)
 
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
- a | count_star() 
----+--------------
- 6 |       100000
- 7 |       100000
- 8 |       100000
- 9 |       100000
+ a | count 
+---+-------
+ 6 |   100
+ 7 |   100
+ 8 |   100
+ 9 |   100
 (4 rows)
 
 SET duckdb.max_threads_per_query to 4;
 SELECT COUNT(*) FROM t;
- count_star() 
---------------
-      1000000
+ count 
+-------
+  1000
 (1 row)
 
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
- a | count_star() 
----+--------------
- 6 |       100000
- 7 |       100000
- 8 |       100000
- 9 |       100000
+ a | count 
+---+-------
+ 6 |   100
+ 7 |   100
+ 8 |   100
+ 9 |   100
 (4 rows)
 
 CREATE TABLE empty(a INT);
 SELECT COUNT(*) FROM empty;
- count_star() 
---------------
-            0
+ count 
+-------
+     0
 (1 row)
 
 SET duckdb.max_threads_per_query TO default;

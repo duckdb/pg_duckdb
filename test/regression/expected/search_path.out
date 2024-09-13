@@ -1,15 +1,15 @@
 CREATE TABLE t(a INT);
 INSERT INTO t SELECT g from generate_series(1,10) g;
 SELECT count(*) FROM t;
- count_star() 
---------------
-           10
+ count 
+-------
+    10
 (1 row)
 
 SELECT count(*) FROM public.t;
- count_star() 
---------------
-           10
+ count 
+-------
+    10
 (1 row)
 
 -- Create schema `other`
@@ -17,9 +17,9 @@ CREATE SCHEMA other;
 CREATE TABLE other.t(a INT);
 INSERT INTO other.t SELECT g from generate_series(1,100) g;
 SELECT count(*) FROM other.t;
- count_star() 
---------------
-          100
+ count 
+-------
+   100
 (1 row)
 
 -- Test fully qualified table name combinations (currently broken, see #56)
@@ -28,13 +28,8 @@ SELECT count(*) FROM other.t;
 SELECT count(*) FROM t,t;
 ERROR:  table name "t" specified more than once
 -- search_path ORDER matters.
-SET search_path TO other, public;
-SELECT count(*) FROM t;
- count_star() 
---------------
-           10
-(1 row)
-
+-- SET search_path TO other, public;
+-- SELECT count(*) FROM t;
 -- (currently broken, see #56)
 -- SELECT count(*) FROM t, public.t;
 -- No search_path

@@ -228,6 +228,16 @@ SELECT * FROM json_tbl;
  {}
 (4 rows)
 
+-- REGCLASSOID
+CREATE TABLE regclass_tbl (a REGCLASS);
+INSERT INTO regclass_tbl VALUES (42), (3_000_000_000);
+SELECT * FROM regclass_tbl;
+     a      
+------------
+         42
+ 3000000000
+(2 rows)
+
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
@@ -244,3 +254,4 @@ DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
 DROP TABLE json_tbl;
+DROP TABLE regclass_tbl;
