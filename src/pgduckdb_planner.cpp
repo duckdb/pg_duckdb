@@ -68,7 +68,8 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 	auto prepared_query = context->Prepare(query_string);
 
 	if (prepared_query->HasError()) {
-		elog(WARNING, "(DuckDB) %s", prepared_query->GetError().c_str());
+		elog(WARNING, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s",
+		     prepared_query->GetError().c_str());
 		return nullptr;
 	}
 
@@ -80,12 +81,19 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 		auto &column = prepared_result_types[i];
 		Oid postgresColumnOid = pgduckdb::GetPostgresDuckDBType(column);
 
+		if (!OidIsValid(postgresColumnOid)) {
+			elog(WARNING, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
+			return nullptr;
+		}
+
 		HeapTuple tp;
 		Form_pg_type typtup;
 
 		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
-		if (!HeapTupleIsValid(tp))
-			elog(ERROR, "cache lookup failed for type %u", postgresColumnOid);
+		if (!HeapTupleIsValid(tp)) {
+			elog(WARNING, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
+			return nullptr;
+		}
 
 		typtup = (Form_pg_type)GETSTRUCT(tp);
 

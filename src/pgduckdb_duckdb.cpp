@@ -24,21 +24,21 @@ CheckDataDirectory(const char *data_directory) {
 
 	if (lstat(data_directory, &info) != 0) {
 		if (errno == ENOENT) {
-			elog(DEBUG2, "Directory `%s` doesn't exists.", data_directory);
+			elog(DEBUG2, "(PGDuckDB/CheckDataDirectory) Directory `%s` doesn't exists", data_directory);
 			return false;
 		} else if (errno == EACCES) {
-			elog(ERROR, "Can't access `%s` directory.", data_directory);
+			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Can't access `%s` directory", data_directory);
 		} else {
-			elog(ERROR, "Other error when reading `%s`.", data_directory);
+			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Other error when reading `%s`", data_directory);
 		}
 	}
 
 	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "`%s` is not directory.", data_directory);
+		elog(WARNING, "(PGDuckDB/CheckDataDirectory) `%s` is not directory", data_directory);
 	}
 
 	if (access(data_directory, R_OK | W_OK)) {
-		elog(ERROR, "Directory `%s` permission problem.", data_directory);
+		elog(ERROR, "(PGDuckDB/CheckDataDirectory) Directory `%s` permission problem", data_directory);
 	}
 
 	return true;
@@ -53,9 +53,12 @@ GetExtensionDirectory() {
 		if (mkdir(duckdb_extension_data_directory->data, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
 			int error = errno;
 			pfree(duckdb_extension_data_directory->data);
-			elog(ERROR, "Creating duckdb extensions directory failed with reason `%s`\n", strerror(error));
+			elog(ERROR,
+			     "(PGDuckDB/GetExtensionDirectory) Creating duckdb extensions directory failed with reason `%s`\n",
+			     strerror(error));
 		}
-		elog(DEBUG2, "Created %s as `duckdb.data_dir`", duckdb_extension_data_directory->data);
+		elog(DEBUG2, "(PGDuckDB/GetExtensionDirectory) Created %s as `duckdb.data_dir`",
+		     duckdb_extension_data_directory->data);
 	};
 
 	std::string duckdb_extension_directory(duckdb_extension_data_directory->data);
@@ -64,7 +67,7 @@ GetExtensionDirectory() {
 }
 
 DuckDBManager::DuckDBManager() {
-	elog(DEBUG2, "Creating DuckDB instance");
+	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", GetExtensionDirectory());
@@ -139,7 +142,7 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 			appendStringInfo(duckdb_extension, "LOAD %s;", extension.name.c_str());
 			auto res = context.Query(duckdb_extension->data, false);
 			if (res->HasError()) {
-				elog(ERROR, "Extension `%s` could not be loaded with DuckDB", extension.name.c_str());
+				elog(ERROR, "(PGDuckDB/LoadExtensions) `%s` could not be loaded with DuckDB", extension.name.c_str());
 			}
 		}
 		pfree(duckdb_extension->data);

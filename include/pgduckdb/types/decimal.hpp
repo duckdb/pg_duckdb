@@ -199,8 +199,11 @@ CreateNumeric(const NumericVar &var, bool *have_error) {
 		 * but it seems worthwhile to expend a few cycles to ensure that we
 		 * never write any nonzero reserved bits to disk.
 		 */
-		if (!(sign == NUMERIC_NAN || sign == NUMERIC_PINF || sign == NUMERIC_NINF))
-			elog(ERROR, "invalid numeric sign value 0x%x", sign);
+		if (!(sign == NUMERIC_NAN || sign == NUMERIC_PINF || sign == NUMERIC_NINF)) {
+			elog(WARNING, "(PGDuckdDB/CreateNumeric) Invalid numeric sign value 0x%x", sign);
+			*have_error = true;
+			return NULL;
+		}
 
 		result = (Numeric)palloc(NUMERIC_HDRSZ_SHORT);
 

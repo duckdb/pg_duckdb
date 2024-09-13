@@ -77,16 +77,16 @@ ExecuteQuery(DuckdbScanState *state) {
 			auto &executor = duckdb::Executor::Get(*connection->context);
 			// Wait for all tasks to terminate
 			executor.CancelTasks();
-
 			// Delete the scan state
 			CleanupDuckdbScanState(state);
 			// Process the interrupt on the Postgres side
 			ProcessInterrupts();
-			elog(ERROR, "Query cancelled");
+			elog(ERROR, "(PGDuckDB/ExecuteQuery) Query cancelled");
 		}
 	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
-		elog(ERROR, "Duckdb execute returned an error: %s", pending->GetError().c_str());
+		CleanupDuckdbScanState(state);
+		elog(ERROR, "(PGDuckDB/ExecuteQuery) Query execution returned an error: %s", pending->GetError().c_str());
 	}
 	query_results = pending->Execute();
 	state->column_count = query_results->ColumnCount();
@@ -127,7 +127,10 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 			slot->tts_isnull[col] = true;
 		} else {
 			slot->tts_isnull[col] = false;
-			pgduckdb::ConvertDuckToPostgresValue(slot, value, col);
+			if (!pgduckdb::ConvertDuckToPostgresValue(slot, value, col)) {
+				CleanupDuckdbScanState(duckdb_scan_state);
+				elog(ERROR, "(PGDuckDB/Duckdb_ExecCustomScan) Value conversion failed");
+			}
 		}
 	}
 

@@ -39,8 +39,9 @@ PglzDecompressDatum(const struct varlena *value) {
 
 	raw_size = pglz_decompress((char *)value + VARHDRSZ_COMPRESSED, VARSIZE(value) - VARHDRSZ_COMPRESSED,
 	                           VARDATA(result), VARDATA_COMPRESSED_GET_EXTSIZE(value), true);
-	if (raw_size < 0)
-		ereport(ERROR, (errcode(ERRCODE_DATA_CORRUPTED), errmsg_internal("compressed pglz data is corrupt")));
+	if (raw_size < 0) {
+		throw duckdb::InvalidInputException("(PGDuckDB/PglzDecompressDatum) Compressed pglz data is corrupt");
+	}
 
 	SET_VARSIZE(result, raw_size + VARHDRSZ);
 
@@ -59,8 +60,9 @@ Lz4DecompresDatum(const struct varlena *value) {
 
 	raw_size = LZ4_decompress_safe((char *)value + VARHDRSZ_COMPRESSED, VARDATA(result),
 	                               VARSIZE(value) - VARHDRSZ_COMPRESSED, VARDATA_COMPRESSED_GET_EXTSIZE(value));
-	if (raw_size < 0)
-		ereport(ERROR, (errcode(ERRCODE_DATA_CORRUPTED), errmsg_internal("compressed lz4 data is corrupt")));
+	if (raw_size < 0) {
+		throw duckdb::InvalidInputException("(PGDuckDB/Lz4DecompresDatum) Compressed lz4 data is corrupt");
+	}
 
 	SET_VARSIZE(result, raw_size + VARHDRSZ);
 
@@ -78,7 +80,8 @@ ToastDecompressDatum(struct varlena *attr) {
 	case TOAST_LZ4_COMPRESSION_ID:
 		return Lz4DecompresDatum(attr);
 	default:
-		elog(ERROR, "invalid compression method id %d", TOAST_COMPRESS_METHOD(attr));
+		throw duckdb::InvalidInputException("(PGDuckDB/ToastDecompressDatum) Invalid compression method id %d",
+		                                    TOAST_COMPRESS_METHOD(attr));
 		return NULL; /* keep compiler quiet */
 	}
 }
@@ -90,8 +93,9 @@ ToastFetchDatum(struct varlena *attr) {
 	struct varatt_external toast_pointer;
 	int32 attrsize;
 
-	if (!VARATT_IS_EXTERNAL_ONDISK(attr))
-		elog(ERROR, "toast_fetch_datum shouldn't be called for non-ondisk datums");
+	if (!VARATT_IS_EXTERNAL_ONDISK(attr)) {
+		throw duckdb::InvalidInputException("(PGDuckDB/ToastFetchDatum) Shouldn't be called for non-ondisk datums");
+	}
 
 	/* Must copy to access aligned fields */
 	VARATT_EXTERNAL_GET_POINTER(toast_pointer, attr);
@@ -106,14 +110,38 @@ ToastFetchDatum(struct varlena *attr) {
 		SET_VARSIZE(result, attrsize + VARHDRSZ);
 	}
 
-	if (attrsize == 0)
+	if (attrsize == 0) {
 		return result;
+	}
 
 	DuckdbProcessLock::GetLock().lock();
-	toast_rel = table_open(toast_pointer.va_toastrelid, AccessShareLock);
-	table_relation_fetch_toast_slice(toast_rel, toast_pointer.va_valueid, attrsize, 0, attrsize, result);
+	toast_rel = try_table_open(toast_pointer.va_toastrelid, AccessShareLock);
+
+	if (toast_rel != NULL) {
+		DuckdbProcessLock::GetLock().unlock();
+		throw duckdb::InternalException("(PGDuckDB/ToastFetchDatum) Error opening toast relation");
+	}
+
+	bool error_fetch_toast = false;
+	// clang-format off
+	PG_TRY();
+	{
+		table_relation_fetch_toast_slice(toast_rel, toast_pointer.va_valueid, attrsize, 0, attrsize, result);
+	}
+	PG_CATCH();
+	{
+		/* Error reported */
+		error_fetch_toast = true;
+	}
+	PG_END_TRY();
+	// clang-format on
+
 	table_close(toast_rel, AccessShareLock);
 	DuckdbProcessLock::GetLock().unlock();
+
+	if (error_fetch_toast) {
+		throw duckdb::InternalException("(PGDuckDB/ToastFetchDatum) Error reading external toast table");
+	}
 
 	return result;
 }

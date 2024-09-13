@@ -86,9 +86,25 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			CHECK_FOR_INTERRUPTS();
 			DuckdbProcessLock::GetLock().lock();
 			block = m_block_number;
-			m_buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
-			LockBuffer(m_buffer, BUFFER_LOCK_SHARE);
+
+			// clang-format off
+			PG_TRY();
+			{
+				m_buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
+				LockBuffer(m_buffer, BUFFER_LOCK_SHARE);
+			}
+			PG_CATCH();
+			{
+				m_buffer = InvalidBuffer;
+			}
+			PG_END_TRY();
+			// clang-format on
+
 			DuckdbProcessLock::GetLock().unlock();
+			if (m_buffer == InvalidBuffer) {
+				throw duckdb::InternalException("(PGDuckdDB/ReadPageTuples) Reading next page failed");
+			}
+
 			page = PreparePageRead();
 			m_read_next_page = false;
 		}
