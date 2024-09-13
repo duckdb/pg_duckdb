@@ -20,6 +20,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 /*
  * Following functions are direct logic found in postgres code but for duckdb execution they are needed to be thread
@@ -123,18 +124,10 @@ ToastFetchDatum(struct varlena *attr) {
 	}
 
 	bool error_fetch_toast = false;
-	// clang-format off
-	PG_TRY();
-	{
-		table_relation_fetch_toast_slice(toast_rel, toast_pointer.va_valueid, attrsize, 0, attrsize, result);
-	}
-	PG_CATCH();
-	{
-		/* Error reported */
+	if (PostgresVoidFunctionGuard(table_relation_fetch_toast_slice, toast_rel, toast_pointer.va_valueid, attrsize, 0,
+	                              attrsize, result)) {
 		error_fetch_toast = true;
 	}
-	PG_END_TRY();
-	// clang-format on
 
 	table_close(toast_rel, AccessShareLock);
 	DuckdbProcessLock::GetLock().unlock();

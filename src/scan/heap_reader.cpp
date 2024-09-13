@@ -12,6 +12,9 @@ extern "C" {
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/scan/heap_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+
+#include <optional>
 
 namespace pgduckdb {
 
@@ -87,24 +90,22 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			DuckdbProcessLock::GetLock().lock();
 			block = m_block_number;
 
-			// clang-format off
-			PG_TRY();
-			{
-				m_buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
-				LockBuffer(m_buffer, BUFFER_LOCK_SHARE);
+			auto opt_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_relation, MAIN_FORKNUM, block,
+			                                                RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
+
+			if (!opt_buffer.has_value()) {
+				DuckdbProcessLock::GetLock().unlock();
+				throw duckdb::InternalException("(PGDuckdDB/ReadPageTuples) ReadBufferExtended failed");
 			}
-			PG_CATCH();
-			{
-				m_buffer = InvalidBuffer;
+
+			m_buffer = opt_buffer.value();
+
+			if (PostgresVoidFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE)) {
+				DuckdbProcessLock::GetLock().unlock();
+				throw duckdb::InternalException("(PGDuckdDB/ReadPageTuples) LockBuffer failed");
 			}
-			PG_END_TRY();
-			// clang-format on
 
 			DuckdbProcessLock::GetLock().unlock();
-			if (m_buffer == InvalidBuffer) {
-				throw duckdb::InternalException("(PGDuckdDB/ReadPageTuples) Reading next page failed");
-			}
-
 			page = PreparePageRead();
 			m_read_next_page = false;
 		}
