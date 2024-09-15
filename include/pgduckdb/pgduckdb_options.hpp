@@ -6,7 +6,7 @@
 namespace pgduckdb {
 
 /* constants for duckdb.secrets */
-#define Natts_duckdb_secret              7
+#define Natts_duckdb_secret              8
 #define Anum_duckdb_secret_type          1
 #define Anum_duckdb_secret_id            2
 #define Anum_duckdb_secret_secret        3
