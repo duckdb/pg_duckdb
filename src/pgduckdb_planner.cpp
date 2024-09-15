@@ -30,7 +30,9 @@ PlanQuery(Query *parse, ParamListInfo bound_params) {
 	glob->subroots = NIL;
 	glob->rewindPlanIDs = NULL;
 	glob->finalrtable = NIL;
+#if PG_VERSION_NUM >= 160000
 	glob->finalrteperminfos = NIL;
+#endif
 	glob->finalrowmarks = NIL;
 	glob->resultRelations = NIL;
 	glob->appendRelations = NIL;
@@ -66,7 +68,6 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 	auto context = duckdb_connection->context;
 
 	auto prepared_query = context->Prepare(query_string);
-
 	if (prepared_query->HasError()) {
 		elog(WARNING, "(DuckDB) %s", prepared_query->GetError().c_str());
 		return nullptr;
@@ -135,7 +136,9 @@ DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
 	result->parallelModeNeeded = false;
 	result->planTree = duckdb_plan;
 	result->rtable = NULL;
+#if PG_VERSION_NUM >= 160000
 	result->permInfos = NULL;
+#endif
 	result->resultRelations = NULL;
 	result->appendRelations = NULL;
 	result->subplans = NIL;

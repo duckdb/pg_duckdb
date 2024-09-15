@@ -30,7 +30,12 @@ static constexpr char r2_filename_prefix[] = "r2://";
 static bool
 CreateRelationCopyParseState(ParseState *pstate, const CopyStmt *stmt, List **vars, int stmt_location, int stmt_len) {
 	ParseNamespaceItem *nsitem;
+#if PG_VERSION_NUM >= 160000
 	RTEPermissionInfo *perminfo;
+#else 
+	RangeTblEntry *rte;
+	ListCell   *cur;
+#endif
 	TupleDesc tuple_desc;
 	List *attnums;
 	Relation rel;
@@ -43,12 +48,18 @@ CreateRelationCopyParseState(ParseState *pstate, const CopyStmt *stmt, List **va
 
 	nsitem = addRangeTableEntryForRelation(pstate, rel, AccessShareLock, NULL, false, false);
 
+#if PG_VERSION_NUM >= 160000
 	perminfo = nsitem->p_perminfo;
 	perminfo->requiredPerms = ACL_SELECT;
+#else
+	rte = nsitem->p_rte;
+	rte->requiredPerms = ACL_SELECT;
+#endif
 
 	tuple_desc = RelationGetDescr(rel);
 	attnums = CopyGetAttnums(tuple_desc, rel, stmt->attlist);
 
+#if PG_VERSION_NUM >= 160000
 	foreach_int(cur, attnums) {
 		int attno;
 		Bitmapset **bms;
@@ -59,12 +70,27 @@ CreateRelationCopyParseState(ParseState *pstate, const CopyStmt *stmt, List **va
 		    lappend(*vars, makeVar(1, cur, tuple_desc->attrs[cur - 1].atttypid, tuple_desc->attrs[cur - 1].atttypmod,
 		                           tuple_desc->attrs[cur - 1].attcollation, 0));
 	}
+#else
+	foreach(cur, attnums)
+	{
+		int			attno = lfirst_int(cur) -
+		FirstLowInvalidHeapAttributeNumber;
 
+		rte->selectedCols = bms_add_member(rte->selectedCols, attno);
+	}
+#endif
+
+#if PG_VERSION_NUM >= 160000
 	if (!ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), false)) {
 		ereport(WARNING, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 		                  errmsg("(Duckdb) Failed Permission \"%s\"", RelationGetRelationName(rel))));
 	}
-
+#else
+	if (!ExecCheckRTPerms(pstate->p_rtable, true)) {
+		ereport(WARNING, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                  errmsg("(Duckdb) Failed Permission \"%s\"", RelationGetRelationName(rel))));
+	}
+#endif
 	table_close(rel, AccessShareLock);
 
 	/*
@@ -108,7 +134,12 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		raw_stmt->stmt_location = pstmt->stmt_location;
 		raw_stmt->stmt_len = pstmt->stmt_len;
 
-		rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
+		#if PG_VERSION_NUM >= 150000
+			rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
+		#else
+			rewritten = pg_analyze_and_rewrite(raw_stmt, query_string, NULL, 0, NULL); 
+		#endif
+
 		query = linitial_node(Query, rewritten);
 
 		/* Extract required vars for table */

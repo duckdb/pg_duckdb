@@ -57,7 +57,11 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 
 static Oid
 FindMatchingRelation(const duckdb::string &to_find) {
+#if PG_VERSION_NUM >= 160000
 	RangeVar *table_range_var = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str(), NULL));
+#else
+	RangeVar *table_range_var = makeRangeVarFromNameList(stringToQualifiedNameList(to_find.c_str()));
+#endif
 	Oid rel_oid = RangeVarGetRelid(table_range_var, AccessShareLock, true);
 	if (rel_oid != InvalidOid) {
 		return rel_oid;
@@ -201,7 +205,7 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	}
 
 	/* SELECT query will have nodePath so we can return cardinality estimate of scan */
-	Cardinality nodeCardinality = node_path ? node_path->rows : 1;
+	uint64_t nodeCardinality = node_path ? node_path->rows : 1;
 
 	if ((node_path != nullptr && (node_path->pathtype == T_IndexScan || node_path->pathtype == T_IndexOnlyScan))) {
 		auto children = CreateFunctionIndexScanArguments(nodeCardinality, node_path, scan_data->m_query_planner_info,

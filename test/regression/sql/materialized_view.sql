@@ -21,7 +21,7 @@ DROP TABLE t;
 CREATE TABLE t_csv(a INT, b INT);
 INSERT INTO t_csv VALUES (1,1),(2,2),(3,3);
 
-\getenv pwd PWD
+\set pwd `pwd`
 \set csv_file_path '\'' :pwd '/tmp_check/t_csv.csv'  '\''
 
 COPY t_csv TO :csv_file_path (FORMAT CSV, HEADER TRUE, DELIMITER ',');

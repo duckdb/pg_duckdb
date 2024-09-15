@@ -27,7 +27,8 @@ SRCS = src/scan/heap_reader.cpp \
 OBJS = $(subst .cpp,.o, $(SRCS))
 
 
-C_SRCS = src/vendor/pg_ruleutils_16.c \
+C_SRCS = src/vendor/pg_ruleutils_14.c \
+		 src/vendor/pg_ruleutils_16.c \
 		 src/vendor/pg_ruleutils_17.c
 OBJS += $(subst .c,.o, $(C_SRCS))
 
