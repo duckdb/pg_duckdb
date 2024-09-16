@@ -28,13 +28,13 @@ extern "C" {
 
 namespace duckdb {
 
-PostgresTransaction::PostgresTransaction(TransactionManager &manager, ClientContext &context, PostgresCatalog &catalog, Snapshot snapshot)
+PostgresTransaction::PostgresTransaction(TransactionManager &manager, ClientContext &context, PostgresCatalog &catalog,
+                                         Snapshot snapshot)
     : Transaction(manager, context), catalog(catalog), snapshot(snapshot) {
 }
 
 PostgresTransaction::~PostgresTransaction() {
 }
-
 
 static RelOptInfo *
 FindMatchingRelEntry(Oid relid, PlannerInfo *planner_info) {
@@ -68,7 +68,8 @@ IsIndexScan(const Path *nodePath) {
 	return false;
 }
 
-optional_ptr<CatalogEntry> SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
+optional_ptr<CatalogEntry>
+SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
 	auto it = tables.find(entry_name);
 	if (it != tables.end()) {
 		return it->second.get();
@@ -98,7 +99,8 @@ optional_ptr<CatalogEntry> SchemaItems::GetTable(const string &entry_name, Plann
 	// Check if the relation is a view
 	if (relForm->relkind == RELKIND_VIEW) {
 		ReleaseSysCache(tuple);
-		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
+		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which
+		// will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
 		return nullptr;
 	}
 	ReleaseSysCache(tuple);
@@ -134,7 +136,8 @@ optional_ptr<CatalogEntry> SchemaItems::GetTable(const string &entry_name, Plann
 	return tables[entry_name].get();
 }
 
-optional_ptr<CatalogEntry> PostgresTransaction::GetSchema(const string &name) {
+optional_ptr<CatalogEntry>
+PostgresTransaction::GetSchema(const string &name) {
 	auto it = schemas.find(name);
 	if (it != schemas.end()) {
 		return it->second.schema.get();
@@ -147,29 +150,30 @@ optional_ptr<CatalogEntry> PostgresTransaction::GetSchema(const string &name) {
 	return schemas.at(name).schema.get();
 }
 
-optional_ptr<CatalogEntry> PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, const string &name) {
+optional_ptr<CatalogEntry>
+PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, const string &name) {
 	auto scan_data = context.lock()->registered_state->Get<pgduckdb::PostgresContextState>("postgres_state");
 	if (!scan_data) {
 		throw InternalException("Could not find 'postgres_state' in 'PostgresTransaction::GetCatalogEntry'");
 	}
 	auto planner_info = scan_data->m_query_planner_info;
 	switch (type) {
-		case CatalogType::TABLE_ENTRY: {
-			auto it = schemas.find(schema);
-			if (it == schemas.end()) {
-				return nullptr;
-			}
-			auto &schema_entry = it->second;
-			return schema_entry.GetTable(name, planner_info);
-		}
-		case CatalogType::SCHEMA_ENTRY: {
-			return GetSchema(schema);
-		}
-		default:
+	case CatalogType::TABLE_ENTRY: {
+		auto it = schemas.find(schema);
+		if (it == schemas.end()) {
 			return nullptr;
+		}
+		auto &schema_entry = it->second;
+		return schema_entry.GetTable(name, planner_info);
+	}
+	case CatalogType::SCHEMA_ENTRY: {
+		return GetSchema(schema);
+	}
+	default:
+		return nullptr;
 	}
 }
 
-}
+} // namespace duckdb
 
 // namespace duckdb

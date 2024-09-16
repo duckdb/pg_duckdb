@@ -76,7 +76,8 @@ DuckDBManager::DuckDBManager() {
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
 
 	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
-	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] = duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot());
+	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
+	    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot());
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
@@ -162,7 +163,7 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 	/* Add DuckDB replacement scan to read PG data */
 	auto con = duckdb::make_uniq<duckdb::Connection>(db);
 	auto &context = *con->context;
-	
+
 	context.registered_state->Insert(
 	    "postgres_state", duckdb::make_shared_ptr<PostgresContextState>(rtables, planner_info, needed_columns, query));
 	auto res = context.Query("set search_path='pgduckdb.main'", false);

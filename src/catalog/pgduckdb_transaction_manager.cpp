@@ -3,7 +3,8 @@
 
 namespace duckdb {
 
-PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog, Snapshot snapshot)
+PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog,
+                                                       Snapshot snapshot)
     : TransactionManager(db_p), catalog(catalog), snapshot(snapshot) {
 }
 
