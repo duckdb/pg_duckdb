@@ -86,32 +86,31 @@ ExecuteQuery(DuckdbScanState *state) {
 	auto &query_results = state->query_results;
 	auto &connection = state->duckdb_connection;
 	auto pg_params = state->params;
+	const auto num_params = pg_params ? pg_params->numParams : 0;
 	duckdb::vector<duckdb::Value> duckdb_params;
-	if (pg_params) {
-		for (int i = 0; i < pg_params->numParams; i++) {
-			ParamExternData *pg_param;
-			ParamExternData tmp_workspace;
+	for (int i = 0; i < num_params; i++) {
+		ParamExternData *pg_param;
+		ParamExternData tmp_workspace;
 
-			/* give hook a chance in case parameter is dynamic */
-			if (pg_params->paramFetch != NULL)
-				pg_param = pg_params->paramFetch(pg_params, i + 1, false, &tmp_workspace);
-			else
-				pg_param = &pg_params->params[i];
+		/* give hook a chance in case parameter is dynamic */
+		if (pg_params->paramFetch != NULL)
+			pg_param = pg_params->paramFetch(pg_params, i + 1, false, &tmp_workspace);
+		else
+			pg_param = &pg_params->params[i];
 
-			if (pg_param->isnull) {
-				duckdb_params.push_back(duckdb::Value());
-			} else {
-				if (!OidIsValid(pg_param->ptype)) {
-					elog(ERROR, "parameter with invalid type during execution");
-				}
-				duckdb_params.push_back(pgduckdb::ConvertPostgresToDuckValue(pg_param->value, pg_param->ptype));
+		if (pg_param->isnull) {
+			duckdb_params.push_back(duckdb::Value());
+		} else {
+			if (!OidIsValid(pg_param->ptype)) {
+				elog(ERROR, "parameter with invalid type during execution");
 			}
+			duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype));
 		}
 	}
 
 	auto pending = prepared.PendingQuery(duckdb_params, true);
 	if (pending->HasError()) {
-		elog(ERROR, "Duckdb execute returned an error: %s", pending->GetError().c_str());
+		elog(ERROR, "DuckDB execute returned an error: %s", pending->GetError().c_str());
 	}
 	duckdb::PendingExecutionResult execution_result;
 	do {

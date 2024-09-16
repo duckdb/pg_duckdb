@@ -707,8 +707,14 @@ ConvertDecimal(const NumericVar &numeric) {
 	return (NumericIsNegative(numeric) ? -base_res : base_res);
 }
 
+/*
+ * Convert a Postgres Datum to a DuckDB Value. This is meant to be used to
+ * covert query parameters in a prepared statement to its DuckDB equivalent.
+ * Passing it a Datum that is stored on disk results in undefined behavior,
+ * because this fuction makes no effert to detoast the Datum.
+ */
 duckdb::Value
-ConvertPostgresToDuckValue(Datum value, Oid postgres_type) {
+ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	switch (postgres_type) {
 	case BOOLOID:
 		return duckdb::Value::BOOLEAN(DatumGetBool(value));
