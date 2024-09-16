@@ -1,6 +1,7 @@
 #include "pgduckdb/catalog/pgduckdb_catalog.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
@@ -27,8 +28,8 @@ extern "C" {
 
 namespace duckdb {
 
-PostgresTransaction::PostgresTransaction(TransactionManager &manager, ClientContext &context, PostgresCatalog &catalog, Snapshot snapshot, PlannerInfo *planner_info)
-    : Transaction(manager, context), catalog(catalog), snapshot(snapshot), planner_info(planner_info) {
+PostgresTransaction::PostgresTransaction(TransactionManager &manager, ClientContext &context, PostgresCatalog &catalog, Snapshot snapshot)
+    : Transaction(manager, context), catalog(catalog), snapshot(snapshot) {
 }
 
 PostgresTransaction::~PostgresTransaction() {
@@ -67,12 +68,11 @@ IsIndexScan(const Path *nodePath) {
 	return false;
 }
 
-optional_ptr<CatalogEntry> SchemaItems::GetTable(const string &entry_name) {
+optional_ptr<CatalogEntry> SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
 	auto it = tables.find(entry_name);
 	if (it != tables.end()) {
 		return it->second.get();
 	}
-	auto planner_info = schema->planner_info;
 	auto snapshot = schema->snapshot;
 	auto &catalog = schema->catalog;
 
@@ -142,12 +142,17 @@ optional_ptr<CatalogEntry> PostgresTransaction::GetSchema(const string &name) {
 
 	CreateSchemaInfo create_schema;
 	create_schema.schema = name;
-	auto pg_schema = make_uniq<PostgresSchema>(catalog, create_schema, snapshot, planner_info);
+	auto pg_schema = make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
 	schemas.emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
 	return schemas.at(name).schema.get();
 }
 
 optional_ptr<CatalogEntry> PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, const string &name) {
+	auto scan_data = context.lock()->registered_state->Get<pgduckdb::PostgresContextState>("postgres_state");
+	if (!scan_data) {
+		throw InternalException("Could not find 'postgres_state' in 'PostgresTransaction::GetCatalogEntry'");
+	}
+	auto planner_info = scan_data->m_query_planner_info;
 	switch (type) {
 		case CatalogType::TABLE_ENTRY: {
 			auto it = schemas.find(schema);
@@ -155,7 +160,7 @@ optional_ptr<CatalogEntry> PostgresTransaction::GetCatalogEntry(CatalogType type
 				return nullptr;
 			}
 			auto &schema_entry = it->second;
-			return schema_entry.GetTable(name);
+			return schema_entry.GetTable(name, planner_info);
 		}
 		case CatalogType::SCHEMA_ENTRY: {
 			return GetSchema(schema);
@@ -165,4 +170,6 @@ optional_ptr<CatalogEntry> PostgresTransaction::GetCatalogEntry(CatalogType type
 	}
 }
 
-} // namespace duckdb
+}
+
+// namespace duckdb

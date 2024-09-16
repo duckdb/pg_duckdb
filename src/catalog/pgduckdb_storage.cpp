@@ -8,15 +8,14 @@ static unique_ptr<TransactionManager>
 CreateTransactionManager(StorageExtensionInfo *storage_info, AttachedDatabase &db, Catalog &catalog) {
 	auto &pg_storage_info = *(reinterpret_cast<PostgresStorageExtensionInfo *>(storage_info));
 	auto snapshot = pg_storage_info.snapshot;
-	auto planner_info = pg_storage_info.planner_info;
 
-	return make_uniq<PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>(), snapshot, planner_info);
+	return make_uniq<PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>(), snapshot);
 }
 
-PostgresStorageExtension::PostgresStorageExtension(Snapshot snapshot, PlannerInfo *planner_info) {
+PostgresStorageExtension::PostgresStorageExtension(Snapshot snapshot) {
 	attach = PostgresCatalog::Attach;
 	create_transaction_manager = CreateTransactionManager;
-	storage_info = make_uniq<PostgresStorageExtensionInfo>(snapshot, planner_info);
+	storage_info = make_uniq<PostgresStorageExtensionInfo>(snapshot);
 }
 
 } // namespace duckdb

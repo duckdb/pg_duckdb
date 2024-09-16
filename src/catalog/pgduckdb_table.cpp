@@ -3,6 +3,7 @@
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_index_scan.hpp"
 
 extern "C" {
@@ -84,8 +85,7 @@ PostgresHeapTable::GetStorageInfo(ClientContext &context) {
 //===--------------------------------------------------------------------===//
 
 PostgresIndexTable::PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-                                       Cardinality cardinality, Snapshot snapshot, Path *path,
-                                       PlannerInfo *planner_info)
+                                       Cardinality cardinality, Snapshot snapshot, Path *path, PlannerInfo *planner_info)
     : PostgresTable(catalog, schema, info, cardinality, snapshot), path(path), planner_info(planner_info) {
 }
 

@@ -23,8 +23,8 @@ extern "C" {
 namespace duckdb {
 
 PostgresCatalog::PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode,
-                                 Snapshot snapshot, PlannerInfo *planner_info)
-    : Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot), planner_info(planner_info) {
+                                 Snapshot snapshot)
+    : Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot) {
 }
 
 unique_ptr<Catalog>
@@ -37,8 +37,7 @@ PostgresCatalog::Attach(StorageExtensionInfo *storage_info_p, ClientContext &con
 	}
 	auto &storage_info = static_cast<PostgresStorageExtensionInfo &>(*storage_info_p);
 	auto snapshot = storage_info.snapshot;
-	auto planner_info = storage_info.planner_info;
-	return make_uniq<PostgresCatalog>(db, connection_string, access_mode, snapshot, planner_info);
+	return make_uniq<PostgresCatalog>(db, connection_string, access_mode, snapshot);
 }
 
 // ------------------ Catalog API ---------------------

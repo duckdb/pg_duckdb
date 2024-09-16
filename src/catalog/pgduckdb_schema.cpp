@@ -25,8 +25,8 @@ extern "C" {
 
 namespace duckdb {
 
-PostgresSchema::PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapshot snapshot, PlannerInfo *planner_info)
-    : SchemaCatalogEntry(catalog, info), snapshot(snapshot), catalog(catalog), planner_info(planner_info) {
+PostgresSchema::PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapshot snapshot)
+    : SchemaCatalogEntry(catalog, info), snapshot(snapshot), catalog(catalog) {
 }
 
 void

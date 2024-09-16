@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PostgresSchema : public SchemaCatalogEntry {
 public:
-	PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapshot snapshot, PlannerInfo *planner_info);
+	PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapshot snapshot);
 
 public:
 	// -- Schema API --
@@ -41,7 +41,6 @@ public:
 public:
 	Snapshot snapshot;
 	Catalog &catalog;
-	PlannerInfo *planner_info;
 };
 
 } // namespace duckdb

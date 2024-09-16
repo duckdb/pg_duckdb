@@ -12,18 +12,17 @@ namespace duckdb {
 
 class PostgresStorageExtensionInfo : public StorageExtensionInfo {
 public:
-	PostgresStorageExtensionInfo(Snapshot snapshot, PlannerInfo *planner_info)
-	    : snapshot(snapshot), planner_info(planner_info) {
+	PostgresStorageExtensionInfo(Snapshot snapshot)
+	    : snapshot(snapshot) {
 	}
 
 public:
 	Snapshot snapshot;
-	PlannerInfo *planner_info;
 };
 
 class PostgresStorageExtension : public StorageExtension {
 public:
-	PostgresStorageExtension(Snapshot snapshot, PlannerInfo *planner_info);
+	PostgresStorageExtension(Snapshot snapshot);
 };
 
 } // namespace duckdb

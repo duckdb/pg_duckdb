@@ -63,6 +63,9 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 
 	PlannerInfo *query_planner_info = PlanQuery(query, bound_params);
 	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
+	if (!duckdb_connection) {
+		return nullptr;
+	}
 	auto context = duckdb_connection->context;
 
 	auto prepared_query = context->Prepare(query_string);
