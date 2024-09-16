@@ -42,13 +42,13 @@ SET search_path TO other, public;
 SELECT count(*) FROM t;
  count 
 -------
-    10
+   100
 (1 row)
 
 SELECT count(*) FROM t, public.t;
  count 
 -------
-   100
+  1000
 (1 row)
 
 -- No search_path

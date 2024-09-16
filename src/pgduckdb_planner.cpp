@@ -7,6 +7,7 @@ extern "C" {
 #include "optimizer/optimizer.h"
 #include "tcop/pquery.h"
 #include "utils/syscache.h"
+#include "utils/guc.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 }
@@ -109,7 +110,10 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("search_path", "pg_catalog", PGC_USERSET, PGC_S_SESSION);
 	const char *query_string = pgduckdb_pg_get_querydef(parse, false);
+	AtEOXact_GUC(false, save_nestlevel);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {
