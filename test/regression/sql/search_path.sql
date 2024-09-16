@@ -9,22 +9,19 @@ CREATE TABLE other.t(a INT);
 INSERT INTO other.t SELECT g from generate_series(1,100) g;
 SELECT count(*) FROM other.t;
 
--- Test fully qualified table name combinations (currently broken, see #56)
--- SELECT count(*) FROM public.t, other.t;
--- SELECT count(*) FROM t, other.t;
+SELECT count(*) FROM public.t, other.t;
+SELECT count(*) FROM t, other.t;
 SELECT count(*) FROM t,t;
 
 -- search_path ORDER matters.
--- SET search_path TO other, public;
--- SELECT count(*) FROM t;
--- (currently broken, see #56)
--- SELECT count(*) FROM t, public.t;
+SET search_path TO other, public;
+SELECT count(*) FROM t;
+SELECT count(*) FROM t, public.t;
 
 -- No search_path
 SET search_path TO '';
--- (currently broken, see #56)
--- SELECT count(*) FROM t, other.t;
--- SELECT count(*) FROM public.t, other.t;
+SELECT count(*) FROM t, other.t;
+SELECT count(*) FROM public.t, other.t;
 
 -- Cleanup
 DROP TABLE other.t;

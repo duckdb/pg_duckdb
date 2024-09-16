@@ -102,7 +102,7 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 	duckdb::ExtensionInstallInfo extension_install_info;
 	db->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
-	context.Query("USE pgduckdb", false);
+	context.Query("set search_path='pgduckdb.main'", false);
 	context.transaction.BeginTransaction();
 	auto &instance = *db->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
