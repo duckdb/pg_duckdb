@@ -46,8 +46,8 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 }
 
 template <typename FuncType, typename... FuncArgs>
-bool
-PostgresVoidFunctionGuard(FuncType postgres_function, FuncArgs... args) {
+std::optional<bool>
+PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	bool error = false;
 	// clang-format off
 	PG_TRY();

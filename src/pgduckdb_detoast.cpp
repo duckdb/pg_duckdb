@@ -124,8 +124,8 @@ ToastFetchDatum(struct varlena *attr) {
 	}
 
 	bool error_fetch_toast = false;
-	if (PostgresVoidFunctionGuard(table_relation_fetch_toast_slice, toast_rel, toast_pointer.va_valueid, attrsize, 0,
-	                              attrsize, result)) {
+	if (PostgresFunctionGuard(table_relation_fetch_toast_slice, toast_rel, toast_pointer.va_valueid, attrsize, 0,
+	                          attrsize, result).value()) {
 		error_fetch_toast = true;
 	}
 

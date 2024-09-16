@@ -128,6 +128,10 @@ coding styles.
 ## Error Handling
 
 * Use exceptions **only** when an error is encountered that terminates a query (e.g. parser error, table not found). Exceptions should only be used for **exceptional** situations. For regular errors that do not break the execution flow (e.g. errors you **expect** might occur) use a return value instead.
+* *Exception* should be used in code that is executed inside duckdb engine.
+* Use PostgreSQL *elog* API to report messages back to user. Using *ERROR* is strictly forbiden to use as it can brake execution and lead to
+unexpected memory problems - *ERROR* is only used in duckdb node to early bail out execution in case of query preparation error or execution interruption.
+* Calling PostgreSQL native functions needs to be used with *PostgresFunctionGuard*. *PostgresFunctionGuard* will handle correctly *ERROR* log messages that could be emmited from these functions.
 * Try to add test cases that trigger exceptions. If an exception cannot be easily triggered using a test case then it should probably be an assertion. This is not always true (e.g. out of memory errors are exceptions, but are very hard to trigger).
 * Use `D_ASSERT` to assert. Use **assert** only when failing the assert means a programmer error. Assert should never be triggered by user input. Avoid code like `D_ASSERT(a > b + 3);` without comments or context.
 * Assert liberally, but make it clear with comments next to the assert what went wrong when the assert is triggered.

@@ -100,7 +100,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 
 			m_buffer = opt_buffer.value();
 
-			if (PostgresVoidFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE)) {
+			if (PostgresFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE).value()) {
 				DuckdbProcessLock::GetLock().unlock();
 				throw duckdb::InternalException("(PGDuckdDB/ReadPageTuples) LockBuffer failed");
 			}
