@@ -4,11 +4,14 @@ extern "C" {
 #include "postgres.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
+#include "nodes/parsenodes.h"
 #include "optimizer/optimizer.h"
 #include "tcop/pquery.h"
 #include "utils/syscache.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
+#include "nodes/print.h"
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -104,8 +107,53 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 	return (Plan *)duckdb_node;
 }
 
+struct StarReplaceContext {
+	List *rtables;
+};
+
+struct StarReplaceData {
+	int varno;
+	int varattno;
+};
+
+struct ReplacedVar {
+	Var var;
+};
+
+static Node *
+ReplaceDuckdbStarMutator(Node *node, void *context) {
+	if (node == NULL)
+		return NULL;
+	if (IsA(node, Query)) {
+		Query *query = (Query *)node;
+		// pprint(query);
+		query_tree_mutator((Query *)node, ReplaceDuckdbStarMutator, NULL, 0);
+		foreach_node(RangeTblEntry, rte, query->rtable) {
+			if (rte->rtekind != RTE_FUNCTION) {
+				continue;
+			}
+			pprint(rte);
+			foreach_node(RangeTblFunction, function, rte->functions) {
+				pprint(function);
+				foreach_oid(column_oid, function->funccoltypes) {
+					if (column_oid == 16507) {
+						elog(WARNING, "YAAY found");
+					}
+				}
+			}
+		}
+	}
+	return node;
+}
+
+static Node *
+ReplaceDuckdbStar(Query *query) {
+	return ReplaceDuckdbStarMutator((Node *)query, NULL);
+}
+
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
+	ReplaceDuckdbStar(parse);
 	const char *query_string = pgduckdb_pg_get_querydef(parse, false);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
