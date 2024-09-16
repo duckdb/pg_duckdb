@@ -98,7 +98,7 @@ optional_ptr<CatalogEntry> SchemaItems::GetTable(const string &entry_name, Plann
 	// Check if the relation is a view
 	if (relForm->relkind == RELKIND_VIEW) {
 		ReleaseSysCache(tuple);
-		// Let the replacement scan handle this
+		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
 		return nullptr;
 	}
 	ReleaseSysCache(tuple);
