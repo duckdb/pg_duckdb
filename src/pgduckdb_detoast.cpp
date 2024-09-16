@@ -85,7 +85,7 @@ ToastDecompressDatum(struct varlena *attr) {
 
 static struct varlena *
 ToastFetchDatum(struct varlena *attr) {
-	Relation toastrel;
+	Relation toast_rel;
 	struct varlena *result;
 	struct varatt_external toast_pointer;
 	int32 attrsize;
@@ -110,9 +110,9 @@ ToastFetchDatum(struct varlena *attr) {
 		return result;
 
 	DuckdbProcessLock::GetLock().lock();
-	toastrel = table_open(toast_pointer.va_toastrelid, AccessShareLock);
-	table_relation_fetch_toast_slice(toastrel, toast_pointer.va_valueid, attrsize, 0, attrsize, result);
-	table_close(toastrel, AccessShareLock);
+	toast_rel = table_open(toast_pointer.va_toastrelid, AccessShareLock);
+	table_relation_fetch_toast_slice(toast_rel, toast_pointer.va_valueid, attrsize, 0, attrsize, result);
+	table_close(toast_rel, AccessShareLock);
 	DuckdbProcessLock::GetLock().unlock();
 
 	return result;
