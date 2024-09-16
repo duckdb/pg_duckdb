@@ -1,8 +1,11 @@
+#include "duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
 #include "utils/rel.h"
@@ -13,10 +16,12 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/utility/copy.hpp"
+#include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
+static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
 
 static bool
 IsCatalogTable(List *tables) {
@@ -38,6 +43,31 @@ IsCatalogTable(List *tables) {
 		}
 	}
 	return false;
+}
+
+static bool
+ContainsDuckdbFunctions(Node *node, void *context) {
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query)) {
+		Query *query = (Query *)node;
+		return query_tree_walker(query, ContainsDuckdbFunctions, context, 0);
+	}
+
+	if (IsA(node, FuncExpr)) {
+		FuncExpr *func = castNode(FuncExpr, node);
+		if (pgduckdb::IsDuckdbOnlyFunction(func->funcid)) {
+			return true;
+		}
+	}
+
+	return expression_tree_walker(node, ContainsDuckdbFunctions, context);
+}
+
+static bool
+NeedsDuckdbExecution(Query *query) {
+	return query_tree_walker(query, ContainsDuckdbFunctions, NULL, 0);
 }
 
 static bool
@@ -75,10 +105,22 @@ IsAllowedStatement(Query *query) {
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
-	if (duckdb_execution && IsAllowedStatement(parse) && pgduckdb::IsExtensionRegistered()) {
-		PlannedStmt *duckdb_plan = DuckdbPlanNode(parse, cursor_options, bound_params);
-		if (duckdb_plan) {
-			return duckdb_plan;
+	if (pgduckdb::IsExtensionRegistered()) {
+		if (duckdb_execution && IsAllowedStatement(parse)) {
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
+			if (duckdbPlan) {
+				return duckdbPlan;
+			}
+		}
+
+		if (NeedsDuckdbExecution(parse)) {
+			if (!IsAllowedStatement(parse)) {
+				elog(ERROR, "only SELECT statements involving DuckDB are supported");
+			}
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
+			if (duckdbPlan) {
+				return duckdbPlan;
+			}
 		}
 	}
 
@@ -110,6 +152,16 @@ DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_t
 	}
 }
 
+extern "C" {
+#include "nodes/print.h"
+}
+void
+DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, ExplainState *es, const char *queryString,
+                          ParamListInfo params, QueryEnvironment *queryEnv) {
+	duckdb_explain_analyze = es->analyze;
+	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
+}
+
 void
 DuckdbInitHooks(void) {
 	prev_planner_hook = planner_hook;
@@ -117,4 +169,7 @@ DuckdbInitHooks(void) {
 
 	prev_process_utility_hook = ProcessUtility_hook ? ProcessUtility_hook : standard_ProcessUtility;
 	ProcessUtility_hook = DuckdbUtilityHook;
+
+	prev_explain_one_query_hook = ExplainOneQuery_hook ? ExplainOneQuery_hook : standard_ExplainOneQuery;
+	ExplainOneQuery_hook = DuckdbExplainOneQueryHook;
 }

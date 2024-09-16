@@ -67,31 +67,32 @@ GetExtensionDirectory() {
 	return duckdb_extension_directory;
 }
 
-duckdb::unique_ptr<duckdb::DuckDB>
-DuckdbOpenDatabase() {
+DuckDBManager::DuckDBManager() {
+	elog(DEBUG2, "Creating DuckDB instance");
+
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", GetExtensionDirectory());
-	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
-}
+	// Transforms VIEWs into their view definition
+	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
 
-duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
-	auto db = DuckdbOpenDatabase();
+	// FIXME: this is broken, I believe we don't have a snapshot here right?, and certainly not planner_info
+	//config.storage_extensions["pgduckdb"] =
+	//    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot(), planner_info);
+	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+	duckdb::ExtensionInstallInfo extension_install_info;
+	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
-	// Transforms VIEWs into their creation query
-	db->instance->config.replacement_scans.emplace_back(
-	    pgduckdb::PostgresReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, planner_info,
-	                                                                                     needed_columns, query));
-
-	auto &config = duckdb::DBConfig::GetConfig(*db->instance);
-	config.storage_extensions["pgduckdb"] =
-	    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot(), planner_info);
-
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
+	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
+	LoadFunctions(context);
+	LoadSecrets(context);
+	LoadExtensions(context);
+}
 
+void
+DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
 	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);
 
@@ -99,17 +100,16 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 	duckdb::CreateTableFunctionInfo index_scan_info(index_scan_fun);
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
-	duckdb::ExtensionInstallInfo extension_install_info;
-	db->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
-	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
-	context.Query("set search_path='pgduckdb.main'", false);
 	context.transaction.BeginTransaction();
-	auto &instance = *db->instance;
+	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	catalog.CreateTableFunction(context, &seq_scan_info);
 	catalog.CreateTableFunction(context, &index_scan_info);
 	context.transaction.Commit();
+}
 
+void
+DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	auto duckdb_secrets = ReadDuckdbSecrets();
 
 	int secret_id = 0;
@@ -122,18 +122,27 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 		if (secret.region.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
 		}
+		if (secret.session_token.length() && !is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", SESSION_TOKEN '%s'", secret.session_token.c_str());
+		}
 		if (secret.endpoint.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
 		}
 		if (is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
 		}
+		if (!secret.use_ssl) {
+			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
+		}
 		appendStringInfo(secret_key, ");");
 		context.Query(secret_key->data, false);
 		pfree(secret_key->data);
 		secret_id++;
 	}
+}
 
+void
+DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
@@ -147,8 +156,21 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 		}
 		pfree(duckdb_extension->data);
 	}
+}
 
-	return connection;
+duckdb::unique_ptr<duckdb::Connection>
+DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
+	auto &db = DuckDBManager::Get().GetDatabase();
+	/* Add DuckDB replacement scan to read PG data */
+	auto con = duckdb::make_uniq<duckdb::Connection>(db);
+	auto &context = *con->context;
+	
+	context.Query("set search_path='pgduckdb.main'", false);
+
+	context.registered_state->Insert(
+	    "postgres_scan", duckdb::make_shared_ptr<PostgresReplacementScanDataClientContextState>(rtables, planner_info,
+	                                                                                            needed_columns, query));
+	return con;
 }
 
 } // namespace pgduckdb

@@ -1,3 +1,4 @@
+\getenv pwd PWD
 CREATE TABLE t(a INT);
 INSERT INTO t SELECT g from generate_series(1,10) g;
 SELECT count(*) FROM t;
@@ -60,6 +61,12 @@ SELECT count(*) FROM public.t, other.t;
  count 
 -------
   1000
+(1 row)
+
+SELECT count(*) FROM public.read_csv(:'pwd' || '/data/web_page.csv') as (column00 int);
+ count 
+-------
+    60
 (1 row)
 
 -- Cleanup

@@ -1,3 +1,5 @@
+\getenv pwd PWD
+
 CREATE TABLE t(a INT);
 INSERT INTO t SELECT g from generate_series(1,10) g;
 SELECT count(*) FROM t;
@@ -22,6 +24,8 @@ SELECT count(*) FROM t, public.t;
 SET search_path TO '';
 SELECT count(*) FROM t, other.t;
 SELECT count(*) FROM public.t, other.t;
+
+SELECT count(*) FROM public.read_csv(:'pwd' || '/data/web_page.csv') as (column00 int);
 
 -- Cleanup
 DROP TABLE other.t;

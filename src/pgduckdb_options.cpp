@@ -65,12 +65,19 @@ ReadDuckdbSecrets() {
 		if (!is_null_array[Anum_duckdb_secret_region - 1])
 			secret.region = DatumToString(datum_array[Anum_duckdb_secret_region - 1]);
 
+		if (!is_null_array[Anum_duckdb_secret_session_token - 1])
+			secret.session_token = DatumToString(datum_array[Anum_duckdb_secret_session_token - 1]);
+
 		if (!is_null_array[Anum_duckdb_secret_endpoint - 1])
 			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_endpoint - 1]);
 
 		if (!is_null_array[Anum_duckdb_secret_r2_account_id - 1])
 			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_r2_account_id - 1]);
 
+		if (!is_null_array[Anum_duckdb_secret_use_ssl - 1])
+			secret.use_ssl = DatumGetBool(DatumGetBool(datum_array[Anum_duckdb_secret_use_ssl - 1]));
+		else
+			secret.use_ssl = true;
 		duckdb_secrets.push_back(secret);
 	}
 
@@ -107,8 +114,8 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-	auto db = DuckdbOpenDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
+	auto &db = DuckDBManager::Get().GetDatabase();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
 	auto &context = *connection->context;
 
 	auto extension_name = DatumToString(name);

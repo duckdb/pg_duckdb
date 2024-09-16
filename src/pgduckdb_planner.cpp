@@ -6,8 +6,9 @@ extern "C" {
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
 #include "tcop/pquery.h"
-#include "utils/ruleutils.h"
 #include "utils/syscache.h"
+
+#include "pgduckdb/vendor/pg_ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -16,6 +17,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+
+bool duckdb_explain_analyze = false;
 
 static PlannerInfo *
 PlanQuery(Query *parse, ParamListInfo bound_params) {
@@ -103,10 +106,14 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
-	const char *query_string = pg_get_querydef(parse, false);
+	const char *query_string = pgduckdb_pg_get_querydef(parse, false);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
-		query_string = psprintf("EXPLAIN %s", query_string);
+		if (duckdb_explain_analyze) {
+			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);
+		} else {
+			query_string = psprintf("EXPLAIN %s", query_string);
+		}
 	}
 	/* We need to check can we DuckDB create plan */
 	Plan *duckdb_plan = (Plan *)castNode(CustomScan, CreatePlan(parse, query_string, bound_params));
