@@ -203,15 +203,16 @@ Duckdb_ReScanCustomScan(CustomScanState *node) {
 
 void
 Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
+	elog(NOTICE, "DuckDB explain custom scan");
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
-	auto res = duckdb_scan_state->prepared_statement->Execute();
-	std::string explain_output = "\n\n";
-	auto chunk = res->Fetch();
+	ExecuteQuery(duckdb_scan_state);
+	auto chunk = duckdb_scan_state->query_results->Fetch();
 	if (!chunk || chunk->size() == 0) {
 		return;
 	}
 	/* Is it safe to hardcode this as result of DuckDB explain? */
 	auto value = chunk->GetValue(1, 0);
+	std::string explain_output = "\n\n";
 	explain_output += value.GetValue<duckdb::string>();
 	explain_output += "\n";
 	ExplainPropertyText("DuckDB Execution Plan", explain_output.c_str(), es);
