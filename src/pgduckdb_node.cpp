@@ -81,12 +81,12 @@ ExecuteQuery(DuckdbScanState *state) {
 			CleanupDuckdbScanState(state);
 			// Process the interrupt on the Postgres side
 			ProcessInterrupts();
-			elog(ERROR, "(PGDuckDB/ExecuteQuery) Query cancelled");
+			elog(ERROR, "Query cancelled");
 		}
 	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
 		CleanupDuckdbScanState(state);
-		elog(ERROR, "(PGDuckDB/ExecuteQuery) Query execution returned an error: %s", pending->GetError().c_str());
+		elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", pending->GetError().c_str());
 	}
 	query_results = pending->Execute();
 	state->column_count = query_results->ColumnCount();

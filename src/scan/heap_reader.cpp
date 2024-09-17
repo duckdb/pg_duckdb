@@ -87,25 +87,14 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 	while (block != InvalidBlockNumber) {
 		if (m_read_next_page) {
 			CHECK_FOR_INTERRUPTS();
-			DuckdbProcessLock::GetLock().lock();
+			std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 			block = m_block_number;
 
-			auto opt_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_relation, MAIN_FORKNUM, block,
-			                                                RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
+			m_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_relation, MAIN_FORKNUM, block, RBM_NORMAL,
+			                                         GetAccessStrategy(BAS_BULKREAD));
 
-			if (!opt_buffer.has_value()) {
-				DuckdbProcessLock::GetLock().unlock();
-				throw duckdb::InternalException("(PGDuckdDB/ReadPageTuples) ReadBufferExtended failed");
-			}
+			PostgresFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE);
 
-			m_buffer = opt_buffer.value();
-
-			if (PostgresFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE).value()) {
-				DuckdbProcessLock::GetLock().unlock();
-				throw duckdb::InternalException("(PGDuckdDB/ReadPageTuples) LockBuffer failed");
-			}
-
-			DuckdbProcessLock::GetLock().unlock();
 			page = PreparePageRead();
 			m_read_next_page = false;
 		}

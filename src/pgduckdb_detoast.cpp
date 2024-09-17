@@ -115,26 +115,18 @@ ToastFetchDatum(struct varlena *attr) {
 		return result;
 	}
 
-	DuckdbProcessLock::GetLock().lock();
-	toast_rel = try_table_open(toast_pointer.va_toastrelid, AccessShareLock);
+	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 
-	if (toast_rel != NULL) {
-		DuckdbProcessLock::GetLock().unlock();
-		throw duckdb::InternalException("(PGDuckDB/ToastFetchDatum) Error opening toast relation");
+	toast_rel = PostgresFunctionGuard<Relation>(try_table_open, toast_pointer.va_toastrelid, AccessShareLock);
+
+	if (toast_rel == NULL) {
+		throw duckdb::InternalException("(PGDuckDB/ToastFetchDatum) Error toast relation is NULL");
 	}
 
-	bool error_fetch_toast = false;
-	if (PostgresFunctionGuard(table_relation_fetch_toast_slice, toast_rel, toast_pointer.va_valueid, attrsize, 0,
-	                          attrsize, result).value()) {
-		error_fetch_toast = true;
-	}
+	PostgresFunctionGuard(table_relation_fetch_toast_slice, toast_rel, toast_pointer.va_valueid, attrsize, 0, attrsize,
+	                      result);
 
-	table_close(toast_rel, AccessShareLock);
-	DuckdbProcessLock::GetLock().unlock();
-
-	if (error_fetch_toast) {
-		throw duckdb::InternalException("(PGDuckDB/ToastFetchDatum) Error reading external toast table");
-	}
+	PostgresFunctionGuard(table_close, toast_rel, AccessShareLock);
 
 	return result;
 }

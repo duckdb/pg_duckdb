@@ -4,11 +4,11 @@ extern "C" {
 #include "postgres.h"
 }
 
+#include "duckdb/common/exception.hpp"
+
 #include <vector>
 #include <string>
 #include <sstream>
-#include <cstdio>
-#include <optional>
 
 namespace pgduckdb {
 
@@ -23,11 +23,16 @@ TokenizeString(char *str, const char delimiter) {
 	return v;
 };
 
+/*
+ * DuckdbGlobalLock should be held before calling.
+ */
 template <typename T, typename FuncType, typename... FuncArgs>
-std::optional<T>
+T
 PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	T return_value;
 	bool error = false;
+	MemoryContext ctx = CurrentMemoryContext;
+	ErrorData *edata = nullptr;
 	// clang-format off
 	PG_TRY();
 	{
@@ -35,20 +40,25 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(ctx);
+		edata = CopyErrorData();
+		FlushErrorState();
 		error = true;
 	}
 	PG_END_TRY();
 	// clang-format on
 	if (error) {
-		return std::nullopt;
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
 	}
 	return return_value;
 }
 
 template <typename FuncType, typename... FuncArgs>
-std::optional<bool>
+void
 PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	bool error = false;
+	MemoryContext ctx = CurrentMemoryContext;
+	ErrorData *edata = nullptr;
 	// clang-format off
 	PG_TRY();
 	{
@@ -56,11 +66,16 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	}
 	PG_CATCH();
 	{
+		MemoryContextSwitchTo(ctx);
+		edata = CopyErrorData();
+		FlushErrorState();
 		error = true;
 	}
 	PG_END_TRY();
 	// clang-format on
-	return error;
+	if (error) {
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
+	}
 }
 
 } // namespace pgduckdb
