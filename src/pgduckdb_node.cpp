@@ -22,7 +22,7 @@ static CustomExecMethods duckdb_scan_exec_methods;
 
 typedef struct DuckdbScanState {
 	CustomScanState css; /* must be first field */
-	Query *query;
+	const Query *query;
 	ParamListInfo params;
 	duckdb::Connection *duckdb_connection;
 	duckdb::PreparedStatement *prepared_statement;
@@ -54,7 +54,7 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)newNode(sizeof(DuckdbScanState), T_CustomScanState);
 	CustomScanState *custom_scan_state = &duckdb_scan_state->css;
 
-	duckdb_scan_state->query = (Query *)linitial(cscan->custom_private);
+	duckdb_scan_state->query = (const Query *)linitial(cscan->custom_private);
 	/* FIXME: We should pass a sensible bound_params, this breaks prepared statements */
 	custom_scan_state->methods = &duckdb_scan_exec_methods;
 	return (Node *)custom_scan_state;

@@ -54,8 +54,13 @@ PlanQuery(Query *parse, ParamListInfo bound_params) {
 }
 
 std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
-DuckdbPrepare(Query *query, ParamListInfo bound_params) {
-	const char *query_string = pgduckdb_pg_get_querydef(query, false);
+DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
+	/*
+	 * Copy the query, so the original one is not modified by the
+	 * subquery_planner call that PlanQuery does.
+	 */
+	Query *copied_query = (Query *)copyObjectImpl(query);
+	const char *query_string = pgduckdb_pg_get_querydef(copied_query, false);
 
 	/* TODO: Move this state into custom_private probably */
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
@@ -66,12 +71,12 @@ DuckdbPrepare(Query *query, ParamListInfo bound_params) {
 		}
 	}
 
-	List *rtables = query->rtable;
+	List *rtables = copied_query->rtable;
 	/* Extract required vars for table */
 	int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
-	List *vars = list_concat(pull_var_clause((Node *)query->targetList, flags),
-	                         pull_var_clause((Node *)query->jointree->quals, flags));
-	PlannerInfo *query_planner_info = PlanQuery(query, bound_params);
+	List *vars = list_concat(pull_var_clause((Node *)copied_query->targetList, flags),
+	                         pull_var_clause((Node *)copied_query->jointree->quals, flags));
+	PlannerInfo *query_planner_info = PlanQuery(copied_query, bound_params);
 	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
 	auto context = duckdb_connection->context;
 	auto prepared_query = context->Prepare(query_string);
@@ -80,14 +85,6 @@ DuckdbPrepare(Query *query, ParamListInfo bound_params) {
 
 static Plan *
 CreatePlan(Query *query, ParamListInfo bound_params) {
-	/*
-	 * Copy the arguments so we can attach unmodified versions to the
-	 * custom_private field at the end of the function. DuckdbPrepare will
-	 * slightly modify the query tree, because it calls subquery_planner, and
-	 * that slightly modifies the query tree)
-	 */
-	auto query_copy = (Query *)copyObjectImpl(query);
-
 	/*
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
@@ -133,7 +130,7 @@ CreatePlan(Query *query, ParamListInfo bound_params) {
 		ReleaseSysCache(tp);
 	}
 
-	duckdb_node->custom_private = list_make1(query_copy);
+	duckdb_node->custom_private = list_make1(query);
 	duckdb_node->methods = &duckdb_scan_scan_methods;
 
 	return (Plan *)duckdb_node;
