@@ -55,7 +55,6 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	CustomScanState *custom_scan_state = &duckdb_scan_state->css;
 
 	duckdb_scan_state->query = (const Query *)linitial(cscan->custom_private);
-	/* FIXME: We should pass a sensible bound_params, this breaks prepared statements */
 	custom_scan_state->methods = &duckdb_scan_exec_methods;
 	return (Node *)custom_scan_state;
 }
@@ -203,7 +202,6 @@ Duckdb_ReScanCustomScan(CustomScanState *node) {
 
 void
 Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
-	elog(NOTICE, "DuckDB explain custom scan");
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	ExecuteQuery(duckdb_scan_state);
 	auto chunk = duckdb_scan_state->query_results->Fetch();
