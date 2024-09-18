@@ -62,7 +62,6 @@ DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
 	const char *query_string = pgduckdb_pg_get_querydef(copied_query, false);
 
-	/* TODO: Move this state into custom_private probably */
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {
 			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);
