@@ -64,9 +64,6 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 
 	PlannerInfo *query_planner_info = PlanQuery(query, bound_params);
 	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
-	if (!duckdb_connection) {
-		return nullptr;
-	}
 	auto context = duckdb_connection->context;
 
 	auto prepared_query = context->Prepare(query_string);
@@ -110,8 +107,14 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
+	/*
+		Temporarily clear search_path so that the query will contain only fully qualified tables.
+		If we don't do this tables are only fully-qualified if they are not part of the current search_path.
+		NOTE: This still doesn't fully qualify tables in pg_catalog or temporary tables, for that we'd need to modify pgduckdb_pg_get_querydef
+	*/
+
 	auto save_nestlevel = NewGUCNestLevel();
-	SetConfigOption("search_path", "pg_catalog", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
 	const char *query_string = pgduckdb_pg_get_querydef(parse, false);
 	AtEOXact_GUC(false, save_nestlevel);
 

@@ -111,18 +111,18 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
 
 	if (!view_definition) {
-		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", relid);
+		throw duckdb::InvalidInputException("Could not retrieve view definition for Relation with relid: %u", relid);
 	}
 
 	duckdb::Parser parser;
 	parser.ParseQuery(view_definition);
 	auto statements = std::move(parser.statements);
 	if (statements.size() != 1) {
-		elog(ERROR, "View definition contained more than 1 statement!");
+		throw duckdb::InvalidInputException("View definition contained more than 1 statement!");
 	}
 
 	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
-		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definition);
+		throw duckdb::InvalidInputException("View definition (%s) did not contain a SELECT statement!", view_definition);
 	}
 
 	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));

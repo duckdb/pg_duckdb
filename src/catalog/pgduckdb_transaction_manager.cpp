@@ -19,7 +19,6 @@ PostgresTransactionManager::StartTransaction(ClientContext &context) {
 
 ErrorData
 PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
-	auto &postgres_transaction = transaction.Cast<PostgresTransaction>();
 	lock_guard<mutex> l(transaction_lock);
 	transactions.erase(transaction);
 	return ErrorData();
@@ -32,7 +31,7 @@ PostgresTransactionManager::RollbackTransaction(Transaction &transaction) {
 
 void
 PostgresTransactionManager::Checkpoint(ClientContext &context, bool force) {
-	auto &transaction = PostgresTransaction::Get(context, db.GetCatalog());
+	return;
 }
 
 } // namespace duckdb

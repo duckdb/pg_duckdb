@@ -12,7 +12,6 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
-#include "utils/snapshot.h"
 #include "access/heapam.h"
 #include "access/htup_details.h"
 #include "catalog/indexing.h"
@@ -22,22 +21,15 @@ extern "C" {
 
 namespace duckdb {
 
-PostgresCatalog::PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode,
-                                 Snapshot snapshot)
-    : Catalog(db), path(connection_string), access_mode(access_mode), snapshot(snapshot) {
+PostgresCatalog::PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode)
+    : Catalog(db), path(connection_string), access_mode(access_mode) {
 }
 
 unique_ptr<Catalog>
 PostgresCatalog::Attach(StorageExtensionInfo *storage_info_p, ClientContext &context, AttachedDatabase &db,
                         const string &name, AttachInfo &info, AccessMode access_mode) {
 	string connection_string = info.path;
-
-	if (!storage_info_p) {
-		throw InternalException("PostgresCatalog should always have access to the PostgresStorageExtensionInfo");
-	}
-	auto &storage_info = static_cast<PostgresStorageExtensionInfo &>(*storage_info_p);
-	auto snapshot = storage_info.snapshot;
-	return make_uniq<PostgresCatalog>(db, connection_string, access_mode, snapshot);
+	return make_uniq<PostgresCatalog>(db, connection_string, access_mode);
 }
 
 // ------------------ Catalog API ---------------------
@@ -60,10 +52,6 @@ PostgresCatalog::CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &
 optional_ptr<SchemaCatalogEntry>
 PostgresCatalog::GetSchema(CatalogTransaction transaction, const string &schema_name, OnEntryNotFound if_not_found,
                            QueryErrorContext error_context) {
-	if (schema_name == DEFAULT_SCHEMA) {
-		return GetSchema(transaction, "public", if_not_found, error_context);
-	}
-
 	auto &pg_transaction = transaction.transaction->Cast<PostgresTransaction>();
 	auto res = pg_transaction.GetCatalogEntry(CatalogType::SCHEMA_ENTRY, schema_name, "");
 	D_ASSERT(res);

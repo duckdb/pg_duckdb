@@ -14,7 +14,7 @@ namespace duckdb {
 
 class PostgresCatalog : public Catalog {
 public:
-	PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode, Snapshot snapshot);
+	PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode);
 
 public:
 	static unique_ptr<Catalog> Attach(StorageExtensionInfo *storage_info, ClientContext &context, AttachedDatabase &db,
@@ -50,7 +50,6 @@ public:
 
 private:
 	case_insensitive_map_t<unique_ptr<PostgresSchema>> schemas;
-	Snapshot snapshot;
 };
 
 } // namespace duckdb
