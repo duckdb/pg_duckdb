@@ -1,6 +1,7 @@
 #include "duckdb.hpp"
 
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
+#include "pgduckdb/common/scoped_postgres_resource.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
 namespace pgduckdb {
@@ -72,12 +73,12 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 	auto relid = input.named_parameters["relid"].GetValue<uint32_t>();
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
-	auto rel = RelationIdGetRelation(relid);
+	auto rel = ScopedPostgresResource<Relation>(RelationIdGetRelation(relid), [](Relation rel) { RelationClose(rel); });
+
 	auto relation_descr = RelationGetDescr(rel);
 
 	if (!relation_descr) {
 		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", relid);
-		RelationClose(rel);
 		return nullptr;
 	}
 
@@ -92,7 +93,6 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 		     duck_type.ToString().c_str());
 	}
 
-	RelationClose(rel);
 	return duckdb::make_uniq<PostgresSeqScanFunctionData>(cardinality, relid, snapshot);
 }
 
