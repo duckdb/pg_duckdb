@@ -18,35 +18,34 @@ using duckdb::Vector;
 template <class T>
 class PGDuckDBEnumTypeInfo : public EnumTypeInfoTemplated<T> {
 public:
-	PGDuckDBEnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p, Oid type_oid)
-	    : EnumTypeInfoTemplated<T>(values_insert_order_p, dict_size_p), type_oid(type_oid) {
+	PGDuckDBEnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p, Vector &oid_vec)
+	    : EnumTypeInfoTemplated<T>(values_insert_order_p, dict_size_p), oid_vec(oid_vec) {
 	}
 
 public:
-	Oid
-	GetTypeOid() const {
-		return type_oid;
+	Vector &GetMemberOids() const {
+		return oid_vec;
 	}
 
 private:
-	Oid type_oid = InvalidOid;
+	Vector oid_vec;
 };
 
 struct PGDuckDBEnum {
 	static LogicalType
-	CreateEnumType(Vector &ordered_data, idx_t size, Oid type_oid) {
+	CreateEnumType(Vector &ordered_data, idx_t size, Vector &oid_vec) {
 		// Generate EnumTypeInfo
 		shared_ptr<ExtraTypeInfo> info;
 		auto enum_internal_type = EnumTypeInfo::DictType(size);
 		switch (enum_internal_type) {
 		case PhysicalType::UINT8:
-			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint8_t>>(ordered_data, size, type_oid);
+			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint8_t>>(ordered_data, size, oid_vec);
 			break;
 		case PhysicalType::UINT16:
-			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint16_t>>(ordered_data, size, type_oid);
+			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint16_t>>(ordered_data, size, oid_vec);
 			break;
 		case PhysicalType::UINT32:
-			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint32_t>>(ordered_data, size, type_oid);
+			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint32_t>>(ordered_data, size, oid_vec);
 			break;
 		default:
 			throw InternalException("Invalid Physical Type for ENUMs");
