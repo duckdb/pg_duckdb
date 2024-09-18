@@ -70,6 +70,8 @@ DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
 		}
 	}
 
+	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
+
 	List *rtables = copied_query->rtable;
 	/* Extract required vars for table */
 	int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;

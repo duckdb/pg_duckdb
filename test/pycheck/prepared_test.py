@@ -4,27 +4,33 @@ from .utils import Cursor
 def test_prepared(cur: Cursor):
     cur.sql("CREATE TABLE test_table (id int)")
 
+    # Try prepared query without parameters
     q1 = "SELECT count(*) FROM test_table"
-    # Run it 6 times because after the 5th time some special logic kicks in.
-    # See this link for more details:
-    # https://github.com/postgres/postgres/blob/89f908a6d0ac1337c868625008c9598487d184e7/src/backend/utils/cache/plancache.c#L1073-L1075
     assert cur.sql(q1, prepare=True) == 0
-    assert cur.sql(q1) == 0
-    assert cur.sql(q1) == 0
-    assert cur.sql(q1) == 0
     assert cur.sql(q1) == 0
     assert cur.sql(q1) == 0
 
     cur.sql("INSERT INTO test_table VALUES (1), (2), (3)")
-    # Ensure that the result is different now
     assert cur.sql(q1) == 3
 
+    # The following tests a prepared query that has parameters.
+    # There are two ways in which prepared queries that have parameters can be
+    # executed:
+    # 1. With a custom plan, where the query is prepared with the exact values
+    # 2. With a generic plan, where the query is planned without the values and
+    #    the values get only substituted at execution time
+    #
+    # The below tests both of these cases, by setting the plan_cache_mode.
     q2 = "SELECT count(*) FROM test_table where id = %s"
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
     assert cur.sql(q2, (1,), prepare=True) == 1
     assert cur.sql(q2, (1,)) == 1
     assert cur.sql(q2, (1,)) == 1
-    assert cur.sql(q2, (1,)) == 1
-    assert cur.sql(q2, (1,)) == 1
-    assert cur.sql(q2, (1,)) == 1
+    assert cur.sql(q2, (3,)) == 1
+    assert cur.sql(q2, (4,)) == 0
 
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q2, (1,)) == 1  # creates generic plan
+    assert cur.sql(q2, (1,)) == 1
+    assert cur.sql(q2, (3,)) == 1
     assert cur.sql(q2, (4,)) == 0
