@@ -8,8 +8,10 @@ extern "C" {
 #include "fmgr.h"
 #include "miscadmin.h"
 #include "catalog/pg_type.h"
+#include "catalog/pg_enum.h"
 #include "executor/tuptable.h"
 #include "utils/numeric.h"
+#include "utils/catcache.h"
 #include "utils/uuid.h"
 #include "utils/array.h"
 #include "fmgr.h"
@@ -493,6 +495,60 @@ ChildTypeFromArray(Oid array_type) {
 	}
 }
 
+static bool IsEnumType(Oid type_oid) {
+	bool result = false;
+	auto type_tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type_oid));
+
+	if (HeapTupleIsValid(type_tuple)) {
+		auto type_form = (Form_pg_type) GETSTRUCT(type_tuple);
+
+		// Check if the type is an enum
+		if (type_form->typtype == 'e') {
+			result = true;
+		}
+		ReleaseSysCache(type_tuple);
+	}
+	return result;
+}
+
+duckdb::LogicalType ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
+	/* Get the list of existing members of the enum */
+	auto list = SearchSysCacheList1(ENUMTYPOIDNAME, ObjectIdGetDatum(enum_oid));
+	auto nelems = list->n_members;
+
+	/* Sort the existing members by enumsortorder */
+	std::vector<HeapTuple> enum_members(nelems);
+	for (int i = 0; i < nelems; ++i) {
+		enum_members[i] = &list->members[i]->tuple;
+	}
+
+	auto sort_order_cmp = [](const HeapTuple& v1, const HeapTuple& v2) {
+		Form_pg_enum en1 = (Form_pg_enum) GETSTRUCT(v1);
+		Form_pg_enum en2 = (Form_pg_enum) GETSTRUCT(v2);
+
+		if (en1->enumsortorder < en2->enumsortorder) {
+			return true; // v1 < v2
+		} else if (en1->enumsortorder > en2->enumsortorder) {
+			return false; // v1 > v2
+		} else {
+			return false; // v1 == v2
+		}
+	};
+
+	std::sort(enum_members.begin(), enum_members.end(), sort_order_cmp);
+
+	auto duck_enum_vec = duckdb::Vector(duckdb::LogicalType::VARCHAR, enum_members.size());
+	auto enum_vec_data = duckdb::FlatVector::GetData<duckdb::string_t>(duck_enum_vec);
+	for (idx_t i = 0; i < enum_members.size(); i++) {
+		auto &member = enum_members[i];
+		auto enum_data = (Form_pg_enum) GETSTRUCT(member);
+		enum_vec_data[i] = duckdb::StringVector::AddString(duck_enum_vec, enum_data->enumlabel.data);
+	}
+
+	ReleaseCatCacheList(list);
+	return duckdb::LogicalType::ENUM(duck_enum_vec, enum_members.size());
+}
+
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	auto &type = attribute->atttypid;
@@ -546,6 +602,9 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSOID:
 		return duckdb::LogicalTypeId::UINTEGER;
 	default: {
+		if (IsEnumType(type)) {
+			return ConvertPostgresEnumToDuckEnum(type);
+		}
 		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
 		return duckdb::LogicalType::USER(name);
 	}
