@@ -614,6 +614,22 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	}
 }
 
+Oid GetEnumTypeOid(Oid enum_oid) {
+    /* Get the pg_type tuple for the enum type */
+    auto tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(enum_oid));
+	Oid result = InvalidOid;
+    if (!HeapTupleIsValid(tuple)) {
+        elog(ERROR, "cache lookup failed for type %u", enum_oid);
+    }
+
+    auto typeForm = (Form_pg_type) GETSTRUCT(tuple);
+	result = typeForm->oid;
+
+    /* Release the cache tuple */
+    ReleaseSysCache(tuple);
+	return result;
+}
+
 Oid
 GetPostgresDuckDBType(duckdb::LogicalType type) {
 	auto id = type.id();
@@ -672,6 +688,20 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		default:
 			throw duckdb::InvalidInputException("(DuckDB/GetPostgresDuckDBType) Unsupported pgduckdb type: %s",
 			                                    type.ToString().c_str());
+		}
+	}
+	case duckdb::LogicalTypeId::ENUM: {
+		auto type_info = type.AuxInfo();
+		auto &enum_type_info = type_info->Cast<duckdb::EnumTypeInfo>();
+		switch (enum_type_info.DictType(enum_type_info.GetDictSize())) {
+		case PhysicalType::UINT8:
+			return GetEnumTypeOid(enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint8_t>>().GetTypeOid());
+		case PhysicalType::UINT16:
+			return GetEnumTypeOid(enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint16_t>>().GetTypeOid());
+		case PhysicalType::UINT32:
+			return GetEnumTypeOid(enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint32_t>>().GetTypeOid());
+		default:
+			throw InternalException("Invalid Physical Type for ENUMs");
 		}
 	}
 	default: {
