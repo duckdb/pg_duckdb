@@ -22,6 +22,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
+#include "pgduckdb/types/pgduckdb_enum.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -495,12 +496,13 @@ ChildTypeFromArray(Oid array_type) {
 	}
 }
 
-static bool IsEnumType(Oid type_oid) {
+static bool
+IsEnumType(Oid type_oid) {
 	bool result = false;
 	auto type_tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type_oid));
 
 	if (HeapTupleIsValid(type_tuple)) {
-		auto type_form = (Form_pg_type) GETSTRUCT(type_tuple);
+		auto type_form = (Form_pg_type)GETSTRUCT(type_tuple);
 
 		// Check if the type is an enum
 		if (type_form->typtype == 'e') {
@@ -511,7 +513,8 @@ static bool IsEnumType(Oid type_oid) {
 	return result;
 }
 
-duckdb::LogicalType ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
+duckdb::LogicalType
+ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
 	/* Get the list of existing members of the enum */
 	auto list = SearchSysCacheList1(ENUMTYPOIDNAME, ObjectIdGetDatum(enum_oid));
 	auto nelems = list->n_members;
@@ -522,9 +525,9 @@ duckdb::LogicalType ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
 		enum_members[i] = &list->members[i]->tuple;
 	}
 
-	auto sort_order_cmp = [](const HeapTuple& v1, const HeapTuple& v2) {
-		Form_pg_enum en1 = (Form_pg_enum) GETSTRUCT(v1);
-		Form_pg_enum en2 = (Form_pg_enum) GETSTRUCT(v2);
+	auto sort_order_cmp = [](const HeapTuple &v1, const HeapTuple &v2) {
+		Form_pg_enum en1 = (Form_pg_enum)GETSTRUCT(v1);
+		Form_pg_enum en2 = (Form_pg_enum)GETSTRUCT(v2);
 
 		if (en1->enumsortorder < en2->enumsortorder) {
 			return true; // v1 < v2
@@ -541,12 +544,12 @@ duckdb::LogicalType ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
 	auto enum_vec_data = duckdb::FlatVector::GetData<duckdb::string_t>(duck_enum_vec);
 	for (idx_t i = 0; i < enum_members.size(); i++) {
 		auto &member = enum_members[i];
-		auto enum_data = (Form_pg_enum) GETSTRUCT(member);
+		auto enum_data = (Form_pg_enum)GETSTRUCT(member);
 		enum_vec_data[i] = duckdb::StringVector::AddString(duck_enum_vec, enum_data->enumlabel.data);
 	}
 
 	ReleaseCatCacheList(list);
-	return duckdb::LogicalType::ENUM(duck_enum_vec, enum_members.size());
+	return PGDuckDBEnum::CreateEnumType(duck_enum_vec, enum_members.size(), enum_oid);
 }
 
 duckdb::LogicalType
