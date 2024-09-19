@@ -8,7 +8,6 @@ extern "C" {
 #include "fmgr.h"
 #include "miscadmin.h"
 #include "catalog/pg_type.h"
-#include "catalog/pg_enum.h"
 #include "executor/tuptable.h"
 #include "utils/numeric.h"
 #include "utils/catcache.h"
@@ -22,10 +21,10 @@ extern "C" {
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
-#include "pgduckdb/types/pgduckdb_enum.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/types/pgduckdb_enum.hpp"
 
 namespace pgduckdb {
 
@@ -324,43 +323,10 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	slot->tts_values[col] = PointerGetDatum(arr);
 }
 
-idx_t
-GetEnumPosition(duckdb::Value &val) {
-	D_ASSERT(val.type().id() == LogicalTypeId::ENUM);
-	auto physical_type = val.type().InternalType();
-	switch (physical_type) {
-	case PhysicalType::UINT8:
-		return val.GetValue<uint8_t>();
-	case PhysicalType::UINT16:
-		return val.GetValue<uint16_t>();
-	case PhysicalType::UINT32:
-		return val.GetValue<uint32_t>();
-	default:
-		throw InternalException("Invalid Physical Type for ENUMs");
-	}
-}
-
-const Vector &
-GetEnumMemberOids(duckdb::Value &val) {
-	D_ASSERT(val.type().id() == LogicalTypeId::ENUM);
-	auto physical_type = val.type().InternalType();
-	auto &enum_type_info = val.type().AuxInfo()->Cast<duckdb::EnumTypeInfo>();
-	switch (physical_type) {
-	case PhysicalType::UINT8:
-		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint8_t>>().GetMemberOids();
-	case PhysicalType::UINT16:
-		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint16_t>>().GetMemberOids();
-	case PhysicalType::UINT32:
-		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint32_t>>().GetMemberOids();
-	default:
-		throw InternalException("Invalid Physical Type for ENUMs");
-	}
-}
-
 void
 ConvertDuckToPostgresEnumValue(TupleTableSlot *slot, duckdb::Value &val, idx_t col) {
-	auto position = GetEnumPosition(val);
-	auto &enum_oids = GetEnumMemberOids(val);
+	auto position = PGDuckDBEnum::GetDuckDBEnumPosition(val);
+	auto &enum_oids = PGDuckDBEnum::GetMemberOids(val.type());
 	auto enum_value_oid = duckdb::FlatVector::GetData<Oid>(enum_oids)[position];
 	slot->tts_values[col] = ObjectIdGetDatum(enum_value_oid);
 }
@@ -547,27 +513,10 @@ ChildTypeFromArray(Oid array_type) {
 	}
 }
 
-static bool
-IsEnumType(Oid type_oid) {
-	bool result = false;
-	auto type_tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type_oid));
-
-	if (HeapTupleIsValid(type_tuple)) {
-		auto type_form = (Form_pg_type)GETSTRUCT(type_tuple);
-
-		// Check if the type is an enum
-		if (type_form->typtype == 'e') {
-			result = true;
-		}
-		ReleaseSysCache(type_tuple);
-	}
-	return result;
-}
-
 duckdb::LogicalType
-ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
+ConvertPostgresEnumToDuckEnum(Oid enum_type_oid) {
 	/* Get the list of existing members of the enum */
-	auto list = SearchSysCacheList1(ENUMTYPOIDNAME, ObjectIdGetDatum(enum_oid));
+	auto list = SearchSysCacheList1(ENUMTYPOIDNAME, ObjectIdGetDatum(enum_type_oid));
 	auto nelems = list->n_members;
 
 	/* Sort the existing members by enumsortorder */
@@ -659,31 +608,13 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSOID:
 		return duckdb::LogicalTypeId::UINTEGER;
 	default: {
-		if (IsEnumType(type)) {
+		if (PGDuckDBEnum::IsEnumType(type)) {
 			return ConvertPostgresEnumToDuckEnum(type);
 		}
 		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
 		return duckdb::LogicalType::USER(name);
 	}
 	}
-}
-
-Oid
-GetEnumTypeOid(const Vector &oids) {
-	/* Get the pg_type tuple for the enum type */
-	auto member_oid = duckdb::FlatVector::GetData<uint32_t>(oids)[0];
-	auto tuple = SearchSysCache1(ENUMOID, ObjectIdGetDatum(member_oid));
-	Oid result = InvalidOid;
-	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "cache lookup failed for enum member with oid %u", member_oid);
-	}
-
-	auto enum_form = (Form_pg_enum)GETSTRUCT(tuple);
-	result = enum_form->enumtypid;
-
-	/* Release the cache tuple */
-	ReleaseSysCache(tuple);
-	return result;
 }
 
 Oid
@@ -747,18 +678,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		}
 	}
 	case duckdb::LogicalTypeId::ENUM: {
-		auto type_info = type.AuxInfo();
-		auto &enum_type_info = type_info->Cast<duckdb::EnumTypeInfo>();
-		switch (enum_type_info.DictType(enum_type_info.GetDictSize())) {
-		case PhysicalType::UINT8:
-			return GetEnumTypeOid(enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint8_t>>().GetMemberOids());
-		case PhysicalType::UINT16:
-			return GetEnumTypeOid(enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint16_t>>().GetMemberOids());
-		case PhysicalType::UINT32:
-			return GetEnumTypeOid(enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint32_t>>().GetMemberOids());
-		default:
-			throw InternalException("Invalid Physical Type for ENUMs");
-		}
+		auto &member_oids = PGDuckDBEnum::GetMemberOids(type);
+		return PGDuckDBEnum::GetEnumTypeOid(member_oids);
 	}
 	default: {
 		elog(ERROR, "Could not convert DuckDB type: %s to Postgres type", type.ToString().c_str());
@@ -848,31 +769,6 @@ ConvertDecimal(const NumericVar &numeric) {
 	// finally
 	auto base_res = OP::Finalize(numeric, integral_part + fractional_part);
 	return (NumericIsNegative(numeric) ? -base_res : base_res);
-}
-
-int
-GetEnumPosition(Datum enum_oid) {
-	HeapTuple enum_tuple;
-	Form_pg_enum enum_entry;
-	int enum_position;
-
-	// Use SearchSysCache1 to fetch the enum entry from pg_enum using its OID
-	enum_tuple = SearchSysCache1(ENUMOID, enum_oid);
-
-	if (!HeapTupleIsValid(enum_tuple)) {
-		elog(ERROR, "could not find enum with OID %u", DatumGetObjectId(enum_oid));
-	}
-
-	// Get the pg_enum structure from the tuple
-	enum_entry = (Form_pg_enum)GETSTRUCT(enum_tuple);
-
-	// The enumsortorder field gives us the position of the enum value
-	enum_position = (int)enum_entry->enumsortorder;
-
-	// Release the cache to free up memory
-	ReleaseSysCache(enum_tuple);
-
-	return enum_position;
 }
 
 void
@@ -1052,7 +948,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	}
 	case LogicalTypeId::ENUM: {
-		auto enum_position = GetEnumPosition(value);
+		auto enum_position = PGDuckDBEnum::GetEnumPosition(value);
 		auto physical_type = result.GetType().InternalType();
 		switch (physical_type) {
 		case PhysicalType::UINT8:

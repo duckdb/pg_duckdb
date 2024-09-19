@@ -11,6 +11,7 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/scan/postgres_seq_scan.cpp \
 	   src/utility/copy.cpp \
 	   src/vendor/pg_explain.cpp \
+	   src/types/pgduckdb_enum.cpp \
 	   src/pgduckdb_metadata_cache.cpp \
 	   src/pgduckdb_detoast.cpp \
 	   src/pgduckdb_duckdb.cpp \

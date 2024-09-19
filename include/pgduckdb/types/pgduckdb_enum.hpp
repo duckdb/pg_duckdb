@@ -2,6 +2,14 @@
 
 #include "pgduckdb/duckdb_vendor/enum_type_info_templated.hpp"
 
+extern "C" {
+	#include "postgres.h"
+	#include "catalog/pg_enum.h"
+	#include "catalog/pg_type.h"
+	#include "utils/syscache.h"
+	#include "access/htup_details.h"
+}
+
 namespace pgduckdb {
 
 using duckdb::EnumTypeInfo;
@@ -18,42 +26,27 @@ using duckdb::Vector;
 template <class T>
 class PGDuckDBEnumTypeInfo : public EnumTypeInfoTemplated<T> {
 public:
-	PGDuckDBEnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p, Vector &oid_vec)
-	    : EnumTypeInfoTemplated<T>(values_insert_order_p, dict_size_p), oid_vec(oid_vec) {
+	PGDuckDBEnumTypeInfo(Vector &values_insert_order_p, idx_t dict_size_p, Vector &enum_member_oids)
+	    : EnumTypeInfoTemplated<T>(values_insert_order_p, dict_size_p), enum_member_oids(enum_member_oids) {
 	}
 
 public:
 	const Vector &
 	GetMemberOids() const {
-		return oid_vec;
+		return enum_member_oids;
 	}
 
 private:
-	Vector oid_vec;
+	Vector enum_member_oids;
 };
 
 struct PGDuckDBEnum {
-	static LogicalType
-	CreateEnumType(Vector &ordered_data, idx_t size, Vector &oid_vec) {
-		// Generate EnumTypeInfo
-		shared_ptr<ExtraTypeInfo> info;
-		auto enum_internal_type = EnumTypeInfo::DictType(size);
-		switch (enum_internal_type) {
-		case PhysicalType::UINT8:
-			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint8_t>>(ordered_data, size, oid_vec);
-			break;
-		case PhysicalType::UINT16:
-			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint16_t>>(ordered_data, size, oid_vec);
-			break;
-		case PhysicalType::UINT32:
-			info = make_shared_ptr<PGDuckDBEnumTypeInfo<uint32_t>>(ordered_data, size, oid_vec);
-			break;
-		default:
-			throw InternalException("Invalid Physical Type for ENUMs");
-		}
-		// Generate Actual Enum Type
-		return LogicalType(LogicalTypeId::ENUM, info);
-	}
+	static LogicalType CreateEnumType(Vector &ordered_data, idx_t size, Vector &enum_member_oids);
+	static idx_t GetDuckDBEnumPosition(duckdb::Value &val);
+	static int GetEnumPosition(Datum enum_member_oid);
+	static bool IsEnumType(Oid type_oid);
+	static Oid GetEnumTypeOid(const Vector &oids);
+	static const Vector &GetMemberOids(const duckdb::LogicalType &type);
 };
 
 } // namespace pgduckdb
