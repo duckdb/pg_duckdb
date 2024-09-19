@@ -23,7 +23,8 @@ public:
 	}
 
 public:
-	const Vector &GetMemberOids() const {
+	const Vector &
+	GetMemberOids() const {
 		return oid_vec;
 	}
 
