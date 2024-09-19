@@ -115,7 +115,7 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 
 		if (NeedsDuckdbExecution(parse)) {
 			if (!IsAllowedStatement(parse)) {
-				elog(ERROR, "only SELECT statements involving DuckDB are supported");
+				elog(ERROR, "(PGDuckDB/DuckdbPlannerHook) Only SELECT statements involving DuckDB are supported.");
 			}
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
 			if (duckdbPlan) {

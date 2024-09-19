@@ -128,7 +128,7 @@ DuckdbInstallExtension(Datum name) {
 	pfree(install_extension_command->data);
 
 	if (res->HasError()) {
-		elog(WARNING, "(duckdb_install_extension) %s", res->GetError().c_str());
+		elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
 		return false;
 	}
 

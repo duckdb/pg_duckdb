@@ -15,7 +15,7 @@ PostgresSeqScanGlobalState::PostgresSeqScanGlobalState(Relation relation, duckdb
       m_heap_reader_global_state(duckdb::make_shared_ptr<HeapReaderGlobalState>(relation)), m_relation(relation) {
 	m_global_state->InitGlobalState(input);
 	m_global_state->m_tuple_desc = RelationGetDescr(m_relation);
-	elog(DEBUG3, "-- (DuckDB/PostgresReplacementScanGlobalState) Running %lu threads -- ", MaxThreads());
+	elog(DEBUG2, "(PGDuckDB/PostgresSeqScanGlobalState) Running %lu threads -- ", MaxThreads());
 }
 
 PostgresSeqScanGlobalState::~PostgresSeqScanGlobalState() {
@@ -73,12 +73,12 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 	auto relid = input.named_parameters["relid"].GetValue<uint32_t>();
 	auto snapshot = (reinterpret_cast<Snapshot>(input.named_parameters["snapshot"].GetPointer()));
 
-	auto rel = ScopedPostgresResource<Relation>(RelationIdGetRelation(relid), [](Relation rel) { RelationClose(rel); });
+	auto rel = ScopedPostgresResource<Relation>(RelationIdGetRelation(relid), RelationClose);
 
 	auto relation_descr = RelationGetDescr(rel);
 
 	if (!relation_descr) {
-		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", relid);
+		elog(WARNING, "(PGDuckDB/PostgresSeqScanBind) Failed to get tuple descriptor for relation with OID %u", relid);
 		return nullptr;
 	}
 
@@ -89,7 +89,7 @@ PostgresSeqScanFunction::PostgresSeqScanBind(duckdb::ClientContext &context, duc
 		return_types.push_back(duck_type);
 		names.push_back(col_name);
 		/* Log column name and type */
-		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
+		elog(DEBUG2, "(PGDuckDB/PostgresSeqScanBind) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
 

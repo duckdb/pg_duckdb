@@ -129,7 +129,7 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 	auto res = duckdb_connection->context->Query(query_string, false);
 
 	if (res->HasError()) {
-		elog(WARNING, "(Duckdb) %s", res->GetError().c_str());
+		elog(WARNING, "(PGDuckDB/DuckdbCopy) Execution failed with an error: %s", res->GetError().c_str());
 		return false;
 	}
 

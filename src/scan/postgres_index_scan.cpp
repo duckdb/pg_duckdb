@@ -92,12 +92,12 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
 
 	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
 
-	auto rel =
-	    ScopedPostgresResource<Relation>(RelationIdGetRelation(rte->relid), [](Relation rel) { RelationClose(rel); });
+	auto rel = ScopedPostgresResource<Relation>(RelationIdGetRelation(rte->relid), RelationClose);
 	auto relation_descr = RelationGetDescr(rel);
 
 	if (!relation_descr) {
-		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", rel->rd_id);
+		elog(WARNING, "(PGDuckDB/PostgresIndexScanBind) Failed to get tuple descriptor for relation with OID %u",
+		     rel->rd_id);
 		return nullptr;
 	}
 
@@ -108,7 +108,7 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
 		return_types.push_back(duck_type);
 		names.push_back(col_name);
 		/* Log column name and type */
-		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
+		elog(DEBUG2, "(PGDuckDB/PostgresIndexScanBind) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
 

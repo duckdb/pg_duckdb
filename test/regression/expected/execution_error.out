@@ -4,6 +4,6 @@ insert into int_as_varchar SELECT * from (
 		('abc')
 ) t(a);
 select a::INTEGER from int_as_varchar;
-ERROR:  Duckdb execute returned an error: Conversion Error: Could not convert string 'abc' to INT32
+ERROR:  (PGDuckDB/ExecuteQuery) Conversion Error: Could not convert string 'abc' to INT32
 LINE 1: SELECT (a)::integer AS a FROM int_as_varchar
                   ^

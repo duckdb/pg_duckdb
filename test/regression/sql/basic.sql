@@ -20,3 +20,8 @@ SET client_min_messages TO default;
 
 DROP TABLE t;
 DROP TABLE empty;
+
+-- Check that DROP / CREATE extension works
+
+DROP EXTENSION pg_duckdb;
+CREATE EXTENSION pg_duckdb;
