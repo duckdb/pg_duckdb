@@ -324,13 +324,41 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	slot->tts_values[col] = PointerGetDatum(arr);
 }
 
-void ConvertDuckToPostgresEnumValue(TupleTableSlot *slot, duckdb::Value &val, idx_t col) {
+idx_t GetEnumPosition(duckdb::Value &val) {
+	D_ASSERT(val.type().id() == LogicalTypeId::ENUM);
+	auto physical_type = val.type().InternalType();
+	switch (physical_type) {
+	case PhysicalType::UINT8:
+		return val.GetValue<uint8_t>();
+	case PhysicalType::UINT16:
+		return val.GetValue<uint16_t>();
+	case PhysicalType::UINT32:
+		return val.GetValue<uint32_t>();
+	default:
+		throw InternalException("Invalid Physical Type for ENUMs");
+	}
+}
+
+const Vector &GetEnumMemberOids(duckdb::Value &val) {
+	D_ASSERT(val.type().id() == LogicalTypeId::ENUM);
+	auto physical_type = val.type().InternalType();
 	auto &enum_type_info = val.type().AuxInfo()->Cast<duckdb::EnumTypeInfo>();
+	switch (physical_type) {
+	case PhysicalType::UINT8:
+		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint8_t>>().GetMemberOids();
+	case PhysicalType::UINT16:
+		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint16_t>>().GetMemberOids();
+	case PhysicalType::UINT32:
+		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint32_t>>().GetMemberOids();
+	default:
+		throw InternalException("Invalid Physical Type for ENUMs");
+	}
+}
 
-	// TODO: make EnumTypeInfoTemplated inherit from PGDuckDBEnum - not the other way around
-
-	// Find the OID of the enum value (not the enum type oid)
-	// TODO: we should store this inside the PGDuckDBEnumTypeInfo
+void ConvertDuckToPostgresEnumValue(TupleTableSlot *slot, duckdb::Value &val, idx_t col) {
+	auto position = GetEnumPosition(val);
+	auto &enum_oids = GetEnumMemberOids(val);
+	auto enum_value_oid = duckdb::FlatVector::GetData<Oid>(enum_oids)[position];
 	slot->tts_values[col] = ObjectIdGetDatum(enum_value_oid);
 }
 
@@ -479,10 +507,12 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		auto type_id = value.type().id();
 		switch (type_id) {
 			case LogicalTypeId::ENUM: {
-				auto &aux_info
+				ConvertDuckToPostgresEnumValue(slot, value, col);
+				break;
+			default:
+				throw duckdb::NotImplementedException("(DuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 			}
 		}
-		throw duckdb::NotImplementedException("(DuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 	}
 	}
 }
@@ -558,7 +588,7 @@ ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
 	std::sort(enum_members.begin(), enum_members.end(), sort_order_cmp);
 
 	auto duck_enum_vec = duckdb::Vector(duckdb::LogicalType::VARCHAR, enum_members.size());
-	auto enum_oid_vec = duckdb::Vector(duckdb::LogicalType::UINT32, enum_members.size());
+	auto enum_oid_vec = duckdb::Vector(duckdb::LogicalType::UINTEGER, enum_members.size());
 	auto enum_vec_data = duckdb::FlatVector::GetData<duckdb::string_t>(duck_enum_vec);
 	auto enum_oid_data = duckdb::FlatVector::GetData<uint32_t>(enum_oid_vec);
 	for (idx_t i = 0; i < enum_members.size(); i++) {
@@ -569,7 +599,7 @@ ConvertPostgresEnumToDuckEnum(Oid enum_oid) {
 	}
 
 	ReleaseCatCacheList(list);
-	return PGDuckDBEnum::CreateEnumType(duck_enum_vec, enum_members.size(), enum_oid_data);
+	return PGDuckDBEnum::CreateEnumType(duck_enum_vec, enum_members.size(), enum_oid_vec);
 }
 
 duckdb::LogicalType
@@ -634,17 +664,17 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	}
 }
 
-Oid GetEnumTypeOid(Vector &oids) {
+Oid GetEnumTypeOid(const Vector &oids) {
     /* Get the pg_type tuple for the enum type */
-	member_oid = FlatVector::GetData<uint32_t>(oids)[0];
-    auto tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(member_oid));
+	auto member_oid = duckdb::FlatVector::GetData<uint32_t>(oids)[0];
+    auto tuple = SearchSysCache1(ENUMOID, ObjectIdGetDatum(member_oid));
 	Oid result = InvalidOid;
     if (!HeapTupleIsValid(tuple)) {
         elog(ERROR, "cache lookup failed for enum member with oid %u", member_oid);
     }
 
-    auto typeForm = (Form_pg_type) GETSTRUCT(tuple);
-	result = typeForm->oid;
+    auto enum_form = (Form_pg_enum) GETSTRUCT(tuple);
+	result = enum_form->enumtypid;
 
     /* Release the cache tuple */
     ReleaseSysCache(tuple);
