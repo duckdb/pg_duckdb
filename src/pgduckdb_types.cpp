@@ -727,9 +727,7 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::BIGINT(DatumGetInt64(value));
 	case BPCHAROID:
 	case TEXTOID:
-	// TODO: Is this the correct place for JSONOID? I'm unable to use it in a
-	// test so I don't know.
-	// case JSONOID:
+	case JSONOID:
 	case VARCHAROID: {
 		// FIXME: TextDatumGetCstring allocates so it needs a
 		// guard, but it's a macro not a function, so our current gaurd
@@ -747,120 +745,8 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	case FLOAT8OID: {
 		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
 	}
-	// case duckdb::LogicalTypeId::DECIMAL: {
-	// 	auto physical_type = type.InternalType();
-	// 	auto numeric = DatumGetNumeric(value);
-	// 	auto numeric_var = FromNumeric(numeric);
-	// 	switch (physical_type) {
-	// 	case duckdb::PhysicalType::INT16: {
-	// 		Append(result, ConvertDecimal<int16_t>(numeric_var), offset);
-	// 		break;
-	// 	}
-	// 	case duckdb::PhysicalType::INT32: {
-	// 		Append(result, ConvertDecimal<int32_t>(numeric_var), offset);
-	// 		break;
-	// 	}
-	// 	case duckdb::PhysicalType::INT64: {
-	// 		Append(result, ConvertDecimal<int64_t>(numeric_var), offset);
-	// 		break;
-	// 	}
-	// 	case duckdb::PhysicalType::INT128: {
-	// 		Append(result, ConvertDecimal<hugeint_t, DecimalConversionHugeint>(numeric_var), offset);
-	// 		break;
-	// 	}
-	// 	default: {
-	// 		throw duckdb::InternalException("Unrecognized physical type (%s) for DECIMAL value",
-	// 		                                duckdb::EnumUtil::ToString(physical_type));
-	// 		break;
-	// 	}
-	// 	}
-	// 	break;
-	// }
-	// case duckdb::LogicalTypeId::UUID: {
-	// 	auto uuid = DatumGetPointer(value);
-	// 	hugeint_t duckdb_uuid;
-	// 	D_ASSERT(UUID_LEN == sizeof(hugeint_t));
-	// 	for (idx_t i = 0; i < UUID_LEN; i++) {
-	// 		((uint8_t *)&duckdb_uuid)[UUID_LEN - 1 - i] = ((uint8_t *)uuid)[i];
-	// 	}
-	// 	duckdb_uuid.upper ^= (uint64_t(1) << 63);
-	// 	Append(result, duckdb_uuid, offset);
-	// 	break;
-	// }
-	// case duckdb::LogicalTypeId::LIST: {
-	// 	// Convert Datum to ArrayType
-	// 	auto array = DatumGetArrayTypeP(value);
-	//
-	// 	auto ndims = ARR_NDIM(array);
-	// 	int *dims = ARR_DIMS(array);
-	//
-	// 	int16 typlen;
-	// 	bool typbyval;
-	// 	char typalign;
-	// 	get_typlenbyvalalign(ARR_ELEMTYPE(array), &typlen, &typbyval, &typalign);
-	//
-	// 	int nelems;
-	// 	Datum *elems;
-	// 	bool *nulls;
-	// 	// Deconstruct the array into Datum elements
-	// 	deconstruct_array(array, ARR_ELEMTYPE(array), typlen, typbyval, typalign, &elems, &nulls, &nelems);
-	//
-	// 	if (ndims == -1) {
-	// 		throw duckdb::InternalException("Array type has an ndims of -1, so it's actually not an array??");
-	// 	}
-	// 	// Set the list_entry_t metadata
-	// 	duckdb::Vector *vec = &result;
-	// 	int write_offset = offset;
-	// 	for (int dim = 0; dim < ndims; dim++) {
-	// 		auto previous_dimension = dim ? dims[dim - 1] : 1;
-	// 		auto dimension = dims[dim];
-	// 		if (vec->GetType().id() != duckdb::LogicalTypeId::LIST) {
-	// 			throw duckdb::InvalidInputException(
-	// 			    "Dimensionality of the schema and the data does not match, data contains more dimensions than
-	// the " 			    "amount of dimensions specified by the schema");
-	// 		}
-	// 		auto child_offset = duckdb::ListVector::GetListSize(*vec);
-	// 		auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
-	// 		for (int entry = 0; entry < previous_dimension; entry++) {
-	// 			list_data[write_offset + entry] = duckdb::list_entry_t(
-	// 			    // All lists in a postgres row are enforced to have the same dimension
-	// 			    // [[1,2],[2,3,4]] is not allowed, second list has 3 elements instead of 2
-	// 			    child_offset + (dimension * entry), dimension);
-	// 		}
-	// 		auto new_child_size = child_offset + (dimension * previous_dimension);
-	// 		duckdb::ListVector::Reserve(*vec, new_child_size);
-	// 		duckdb::ListVector::SetListSize(*vec, new_child_size);
-	// 		write_offset = child_offset;
-	// 		auto &child = duckdb::ListVector::GetEntry(*vec);
-	// 		vec = &child;
-	// 	}
-	// 	if (ndims == 0) {
-	// 		D_ASSERT(nelems == 0);
-	// 		auto child_offset = duckdb::ListVector::GetListSize(*vec);
-	// 		auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
-	// 		list_data[write_offset] = duckdb::list_entry_t(child_offset, 0);
-	// 		vec = &duckdb::ListVector::GetEntry(*vec);
-	// 	}
-	//
-	// 	if (vec->GetType().id() == duckdb::LogicalTypeId::LIST) {
-	// 		throw duckdb::InvalidInputException(
-	// 		    "Dimensionality of the schema and the data does not match, data contains fewer dimensions than the "
-	// 		    "amount of dimensions specified by the schema");
-	// 	}
-	//
-	// 	for (int i = 0; i < nelems; i++) {
-	// 		idx_t dest_idx = write_offset + i;
-	// 		if (nulls[i]) {
-	// 			auto &array_mask = duckdb::FlatVector::Validity(*vec);
-	// 			array_mask.SetInvalid(dest_idx);
-	// 			continue;
-	// 		}
-	// 		ConvertPostgresToDuckValue(elems[i], *vec, dest_idx);
-	// 	}
-	// 	break;
-	// }
 	default:
-		elog(ERROR, "Could not convert Postgres type: %d to DuckDB type", postgres_type);
+		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
 	}
 }
 

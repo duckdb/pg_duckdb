@@ -1,6 +1,7 @@
 from .utils import Cursor
 
 import datetime
+import psycopg.types.json
 
 
 def test_prepared(cur: Cursor):
@@ -51,7 +52,8 @@ def test_extended(cur: Cursor):
             t2 VARCHAR,
             t3 BPCHAR,
             d DATE,
-            ts TIMESTAMP);
+            ts TIMESTAMP,
+            json_obj JSON);
         """)
 
     row = (
@@ -66,8 +68,11 @@ def test_extended(cur: Cursor):
         "t3",
         datetime.date(2024, 5, 4),
         datetime.datetime(2020, 1, 1, 1, 2, 3),
+        psycopg.types.json.Json({"a": 1}),
     )
-    cur.sql("INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", row)
+    cur.sql(
+        "INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", row
+    )
 
     assert (True,) * len(row) == cur.sql(
         """
@@ -82,7 +87,8 @@ def test_extended(cur: Cursor):
             t2 = %s,
             t3 = %s,
             d = %s,
-            ts = %s
+            ts = %s,
+            json_obj::text = %s::text
         FROM t;
         """,
         row,
