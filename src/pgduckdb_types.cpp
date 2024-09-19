@@ -9,6 +9,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
+#include "utils/builtins.h"
 #include "utils/numeric.h"
 #include "utils/uuid.h"
 #include "utils/array.h"
@@ -730,7 +731,10 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	// test so I don't know.
 	// case JSONOID:
 	case VARCHAROID: {
-		return duckdb::Value((const char *)value);
+		// FIXME: TextDatumGetCstring allocates so it needs a
+		// guard, but it's a macro not a function, so our current gaurd
+		// template does not handle it.
+		return duckdb::Value(TextDatumGetCString(value));
 	}
 	case DATEOID:
 		return duckdb::Value::DATE(duckdb::date_t(static_cast<int32_t>(value + PGDUCKDB_DUCK_DATE_OFFSET)));
