@@ -34,7 +34,7 @@ INSERT INTO int_array_2d VALUES
     ('{{11, 12, 13}, {14, 15, 16}}'),
     ('{{17, 18}, {19, 20}}');
 SELECT * FROM int_array_2d;
-ERROR:  Duckdb execute returned an error: Invalid Input Error: Dimensionality of the schema and the data does not match, data contains more dimensions than the amount of dimensions specified by the schema
+ERROR:  (PGDuckDB/ExecuteQuery) Invalid Input Error: Dimensionality of the schema and the data does not match, data contains more dimensions than the amount of dimensions specified by the schema
 drop table int_array_2d;
 -- INT4 (single dimensional data, two dimensionsal type)
 CREATE TABLE int_array_2d(a INT[][]);
@@ -44,7 +44,7 @@ INSERT INTO int_array_2d VALUES
     ('{11, 12, 13}'),
     ('{17, 18}');
 SELECT * FROM int_array_2d;
-ERROR:  Duckdb execute returned an error: Invalid Input Error: Dimensionality of the schema and the data does not match, data contains fewer dimensions than the amount of dimensions specified by the schema
+ERROR:  (PGDuckDB/ExecuteQuery) Invalid Input Error: Dimensionality of the schema and the data does not match, data contains fewer dimensions than the amount of dimensions specified by the schema
 drop table int_array_2d;
 -- INT4 (two dimensional data and type)
 CREATE TABLE int_array_2d(a INT[][]);

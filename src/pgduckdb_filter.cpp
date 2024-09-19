@@ -70,7 +70,8 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 	case VARCHAROID:
 		return StringFilterOperation<OP>(value, constant);
 	default:
-		elog(ERROR, "(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid);
+		throw duckdb::InvalidTypeException(
+		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid));
 	}
 }
 

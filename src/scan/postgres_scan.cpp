@@ -115,18 +115,22 @@ ReplaceView(Oid view) {
 	auto view_definiton = text_to_cstring(DatumGetTextP(view_def));
 
 	if (!view_definiton) {
-		elog(ERROR, "Could not retrieve view definition for Relation with relid: %u", view);
+		elog(WARNING, "(PGDuckDB/ReplaceView) Could not retrieve view definition for Relation with relid: %u", view);
+		return nullptr;
 	}
 
 	duckdb::Parser parser;
 	parser.ParseQuery(view_definiton);
 	auto statements = std::move(parser.statements);
 	if (statements.size() != 1) {
-		elog(ERROR, "View definition contained more than 1 statement!");
+		elog(WARNING, "(PGDuckDB/ReplaceView) View definition contained more than 1 statement!");
+		return nullptr;
 	}
 
 	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
-		elog(ERROR, "View definition (%s) did not contain a SELECT statement!", view_definiton);
+		elog(WARNING, "(PGDuckDB/ReplaceView) View definition (%s) did not contain a SELECT statement!",
+		     view_definiton);
+		return nullptr;
 	}
 
 	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
@@ -178,7 +182,8 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	// Check if the Relation is a VIEW
 	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "Cache lookup failed for relation %u", relid);
+		elog(WARNING, "(PGDuckDB/PostgresReplacementScan) Cache lookup failed for relation %u", relid);
+		return nullptr;
 	}
 
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
