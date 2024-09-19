@@ -43,3 +43,7 @@ SET duckdb.max_threads_per_query TO default;
 SET client_min_messages TO default;
 DROP TABLE t;
 DROP TABLE empty;
+-- Check that DROP / CREATE extension works
+DROP EXTENSION pg_duckdb;
+CREATE EXTENSION pg_duckdb;
+WARNING:  To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"

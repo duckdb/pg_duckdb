@@ -5,7 +5,6 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_node.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 
 static void DuckdbInitGUC(void);
 

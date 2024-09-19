@@ -12,6 +12,9 @@ extern "C" {
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/scan/heap_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+
+#include <optional>
 
 namespace pgduckdb {
 
@@ -84,11 +87,14 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 	while (block != InvalidBlockNumber) {
 		if (m_read_next_page) {
 			CHECK_FOR_INTERRUPTS();
-			DuckdbProcessLock::GetLock().lock();
+			std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 			block = m_block_number;
-			m_buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, block, RBM_NORMAL, GetAccessStrategy(BAS_BULKREAD));
-			LockBuffer(m_buffer, BUFFER_LOCK_SHARE);
-			DuckdbProcessLock::GetLock().unlock();
+
+			m_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_relation, MAIN_FORKNUM, block, RBM_NORMAL,
+			                                         GetAccessStrategy(BAS_BULKREAD));
+
+			PostgresFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE);
+
 			page = PreparePageRead();
 			m_read_next_page = false;
 		}

@@ -62,7 +62,10 @@ InvalidateCaches(Datum arg, int cache_id, uint32 hash_value) {
 		return;
 	}
 	cache.valid = false;
-	list_free(cache.duckdb_only_functions);
+	if (cache.installed) {
+		list_free(cache.duckdb_only_functions);
+		cache.duckdb_only_functions = NIL;
+	}
 }
 
 /*
