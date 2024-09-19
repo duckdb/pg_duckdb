@@ -37,18 +37,24 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 		return;
 	}
 
-	/* We need ordered columns ids for tuple fetch */
+	/* We need ordered columns ids for reading tuple. */
 	for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
-		m_columns[input.column_ids[i]] = i;
+		m_read_columns_ids[input.column_ids[i]] = i;
 	}
 
+	/* We need to check do we consider projection_ids or column_ids list to be used
+	 * for writing to output vector. Projection ids list will be used when
+	 * columns that are used for query filtering are not used afterwards; otherwise
+	 * column ids list will be used and all read tuple columns need to passed
+	 * to upper layers of query execution.
+	 */
 	if (input.CanRemoveFilterColumns()) {
 		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
-			m_projections[i] = input.column_ids[input.projection_ids[i]];
+			m_output_columns_ids[i] = input.column_ids[input.projection_ids[i]];
 		}
 	} else {
-		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
-			m_projections[i] = input.column_ids[i];
+		for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
+			m_output_columns_ids[i] = input.column_ids[i];
 		}
 	}
 
