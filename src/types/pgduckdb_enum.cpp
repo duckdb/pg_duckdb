@@ -2,6 +2,8 @@
 
 namespace pgduckdb {
 
+// This is copied from 'duckdb::EnumTypeInfo::CreateType' with our additional metadata added
+
 LogicalType PGDuckDBEnum::CreateEnumType(Vector &ordered_data, idx_t size, Vector &enum_member_oids) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;

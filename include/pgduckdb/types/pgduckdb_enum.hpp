@@ -23,6 +23,10 @@ using duckdb::PhysicalType;
 using duckdb::shared_ptr;
 using duckdb::Vector;
 
+// To store additional metadata for a type, DuckDB's LogicalType class contains a 'type_info_' field.
+// The type of this is ExtraTypeInfo, ENUMs make use of this in the form of EnumTypeInfo (see duckdb/include/common/extra_type_info.hpp).
+// We derive from this further to store the ENUMs connection with the oids of Postgres' enum members.
+
 template <class T>
 class PGDuckDBEnumTypeInfo : public EnumTypeInfoTemplated<T> {
 public:

@@ -6,6 +6,9 @@
 #include "duckdb/common/string_map_set.hpp"
 #include "duckdb/common/serializer/deserializer.hpp"
 
+// This is copied directly without changes from 'duckdb/src/common/extra_type_info.cpp'
+// The reason this is copied is to be able to inherit from it.
+
 namespace duckdb {
 template <class T>
 struct EnumTypeInfoTemplated : public EnumTypeInfo {
