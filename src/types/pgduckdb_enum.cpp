@@ -1,10 +1,12 @@
 #include "pgduckdb/types/pgduckdb_enum.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
 
 // This is copied from 'duckdb::EnumTypeInfo::CreateType' with our additional metadata added
 
-LogicalType PGDuckDBEnum::CreateEnumType(Vector &ordered_data, idx_t size, Vector &enum_member_oids) {
+LogicalType
+PGDuckDBEnum::CreateEnumType(Vector &ordered_data, idx_t size, Vector &enum_member_oids) {
 	// Generate EnumTypeInfo
 	shared_ptr<ExtraTypeInfo> info;
 	auto enum_internal_type = EnumTypeInfo::DictType(size);
@@ -25,7 +27,8 @@ LogicalType PGDuckDBEnum::CreateEnumType(Vector &ordered_data, idx_t size, Vecto
 	return LogicalType(LogicalTypeId::ENUM, info);
 }
 
-idx_t PGDuckDBEnum::GetDuckDBEnumPosition(duckdb::Value &val) {
+idx_t
+PGDuckDBEnum::GetDuckDBEnumPosition(duckdb::Value &val) {
 	D_ASSERT(val.type().id() == LogicalTypeId::ENUM);
 	auto physical_type = val.type().InternalType();
 	switch (physical_type) {
@@ -40,13 +43,14 @@ idx_t PGDuckDBEnum::GetDuckDBEnumPosition(duckdb::Value &val) {
 	}
 }
 
-int PGDuckDBEnum::GetEnumPosition(Datum enum_member_oid) {
+int
+PGDuckDBEnum::GetEnumPosition(Datum enum_member_oid) {
 	HeapTuple enum_tuple;
 	Form_pg_enum enum_entry;
 	int enum_position;
 
 	// Use SearchSysCache1 to fetch the enum entry from pg_enum using its OID
-	enum_tuple = SearchSysCache1(ENUMOID, enum_member_oid);
+	enum_tuple = PostgresFunctionGuard<HeapTuple>(SearchSysCache1, ENUMOID, enum_member_oid);
 
 	if (!HeapTupleIsValid(enum_tuple)) {
 		elog(ERROR, "could not find enum with OID %u", DatumGetObjectId(enum_member_oid));
@@ -59,14 +63,15 @@ int PGDuckDBEnum::GetEnumPosition(Datum enum_member_oid) {
 	enum_position = (int)enum_entry->enumsortorder;
 
 	// Release the cache to free up memory
-	ReleaseSysCache(enum_tuple);
+	PostgresFunctionGuard(ReleaseSysCache, enum_tuple);
 
 	return enum_position;
 }
 
-bool PGDuckDBEnum::IsEnumType(Oid type_oid) {
+bool
+PGDuckDBEnum::IsEnumType(Oid type_oid) {
 	bool result = false;
-	auto type_tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(type_oid));
+	auto type_tuple = PostgresFunctionGuard<HeapTuple>(SearchSysCache1, TYPEOID, ObjectIdGetDatum(type_oid));
 
 	if (HeapTupleIsValid(type_tuple)) {
 		auto type_form = (Form_pg_type)GETSTRUCT(type_tuple);
@@ -75,15 +80,16 @@ bool PGDuckDBEnum::IsEnumType(Oid type_oid) {
 		if (type_form->typtype == 'e') {
 			result = true;
 		}
-		ReleaseSysCache(type_tuple);
+		PostgresFunctionGuard(ReleaseSysCache, type_tuple);
 	}
 	return result;
 }
 
-Oid PGDuckDBEnum::GetEnumTypeOid(const Vector &oids) {
+Oid
+PGDuckDBEnum::GetEnumTypeOid(const Vector &oids) {
 	/* Get the pg_type tuple for the enum type */
 	auto member_oid = duckdb::FlatVector::GetData<uint32_t>(oids)[0];
-	auto tuple = SearchSysCache1(ENUMOID, ObjectIdGetDatum(member_oid));
+	auto tuple = PostgresFunctionGuard<HeapTuple>(SearchSysCache1, ENUMOID, ObjectIdGetDatum(member_oid));
 	Oid result = InvalidOid;
 	if (!HeapTupleIsValid(tuple)) {
 		elog(ERROR, "cache lookup failed for enum member with oid %u", member_oid);
@@ -93,11 +99,12 @@ Oid PGDuckDBEnum::GetEnumTypeOid(const Vector &oids) {
 	result = enum_form->enumtypid;
 
 	/* Release the cache tuple */
-	ReleaseSysCache(tuple);
+	PostgresFunctionGuard(ReleaseSysCache, tuple);
 	return result;
 }
 
-const Vector &PGDuckDBEnum::GetMemberOids(const duckdb::LogicalType &type) {
+const Vector &
+PGDuckDBEnum::GetMemberOids(const duckdb::LogicalType &type) {
 	auto type_info = type.AuxInfo();
 	auto &enum_type_info = type_info->Cast<duckdb::EnumTypeInfo>();
 	switch (enum_type_info.DictType(enum_type_info.GetDictSize())) {

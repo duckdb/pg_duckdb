@@ -19,6 +19,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
@@ -517,7 +518,9 @@ ChildTypeFromArray(Oid array_type) {
 duckdb::LogicalType
 ConvertPostgresEnumToDuckEnum(Oid enum_type_oid) {
 	/* Get the list of existing members of the enum */
-	auto list = SearchSysCacheList1(ENUMTYPOIDNAME, ObjectIdGetDatum(enum_type_oid));
+	auto list =
+	    PostgresFunctionGuard<CatCList *>([](int cacheId, Datum key) { return SearchSysCacheList1(cacheId, key); },
+	                                      ENUMTYPOIDNAME, ObjectIdGetDatum(enum_type_oid));
 	auto nelems = list->n_members;
 
 	/* Sort the existing members by enumsortorder */
@@ -552,7 +555,7 @@ ConvertPostgresEnumToDuckEnum(Oid enum_type_oid) {
 		enum_oid_data[i] = enum_data->oid;
 	}
 
-	ReleaseCatCacheList(list);
+	PostgresFunctionGuard(ReleaseCatCacheList, list);
 	return PGDuckDBEnum::CreateEnumType(duck_enum_vec, enum_members.size(), enum_oid_vec);
 }
 
