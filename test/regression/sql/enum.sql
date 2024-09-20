@@ -1,4 +1,8 @@
-CREATE TYPE mood AS ENUM ('sad', 'neutral', 'happy');
+CREATE TYPE mood AS ENUM (
+	'sad',
+	'neutral',
+	'happy'
+);
 create table tbl (a mood);
 
 insert into tbl select 'happy';
