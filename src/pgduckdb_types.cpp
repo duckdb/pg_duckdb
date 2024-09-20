@@ -321,7 +321,7 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	slot->tts_values[col] = PointerGetDatum(arr);
 }
 
-void
+bool
 ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
 	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
 
@@ -423,8 +423,8 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 			break;
 		}
 		default: {
-			throw duckdb::InternalException("Unrecognized physical type for DECIMAL value");
-			break;
+			elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unrecognized physical type for DECIMAL value");
+			return false;
 		}
 		}
 		auto numeric = CreateNumeric(numeric_var, NULL);
@@ -463,8 +463,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default:
-		throw duckdb::NotImplementedException("(DuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
+		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
+		return false;
 	}
+	return true;
 }
 
 static inline int
@@ -599,7 +601,6 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 			duck_type = &child_type;
 		}
 		auto child_type_id = duck_type->id();
-
 		switch (child_type_id) {
 		case duckdb::LogicalTypeId::BOOLEAN:
 			return BOOLARRAYOID;
@@ -607,13 +608,17 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 			return INT4ARRAYOID;
 		case duckdb::LogicalTypeId::BIGINT:
 			return INT8ARRAYOID;
-		default:
-			throw duckdb::InvalidInputException("(DuckDB/GetPostgresDuckDBType) Unsupported pgduckdb type: %s",
-			                                    type.ToString().c_str());
+		default: {
+			elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %d to Postgres type",
+			     (uint8)child_type_id);
+			return InvalidOid;
+		}
 		}
 	}
 	default: {
-		elog(ERROR, "Could not convert DuckDB type: %s to Postgres type", type.ToString().c_str());
+		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
+		     type.ToString().c_str());
+		return InvalidOid;
 	}
 	}
 }

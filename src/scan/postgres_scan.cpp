@@ -26,6 +26,7 @@ extern "C" {
 
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
 
@@ -72,6 +73,34 @@ FindMatchingRelation(const duckdb::string &schema, const duckdb::string &table) 
 }
 
 duckdb::unique_ptr<duckdb::TableRef>
+ReplaceView(Oid view) {
+	auto oid = ObjectIdGetDatum(view);
+	Datum viewdef = PostgresFunctionGuard<Datum>(
+	    [](PGFunction func, Datum arg) { return DirectFunctionCall1(func, arg); }, pg_get_viewdef, oid);
+	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
+
+	if (!view_definition) {
+		throw duckdb::InvalidInputException("Could not retrieve view definition for Relation with relid: %u", view);
+	}
+
+	duckdb::Parser parser;
+	parser.ParseQuery(view_definition);
+	auto statements = std::move(parser.statements);
+	if (statements.size() != 1) {
+		throw duckdb::InvalidInputException("View definition contained more than 1 statement!");
+	}
+
+	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
+		throw duckdb::InvalidInputException("View definition (%s) did not contain a SELECT statement!",
+		                                    view_definition);
+	}
+
+	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
+	auto subquery = duckdb::make_uniq<duckdb::SubqueryRef>(std::move(select));
+	return std::move(subquery);
+}
+
+duckdb::unique_ptr<duckdb::TableRef>
 PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
                         duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
 
@@ -93,41 +122,20 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 		return nullptr;
 	}
 
-	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	auto tuple = PostgresFunctionGuard<HeapTuple>(SearchSysCache1, RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "Cache lookup failed for relation %u", relid);
+		elog(WARNING, "(PGDuckDB/PostgresReplacementScan) Cache lookup failed for relation %u", relid);
+		return nullptr;
 	}
 
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
 
 	if (relForm->relkind != RELKIND_VIEW) {
-		ReleaseSysCache(tuple);
+		PostgresFunctionGuard(ReleaseSysCache, tuple);
 		return nullptr;
 	}
-	ReleaseSysCache(tuple);
-
-	auto oid = ObjectIdGetDatum(relid);
-	Datum viewdef = DirectFunctionCall1(pg_get_viewdef, oid);
-	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
-
-	if (!view_definition) {
-		throw duckdb::InvalidInputException("Could not retrieve view definition for Relation with relid: %u", relid);
-	}
-
-	duckdb::Parser parser;
-	parser.ParseQuery(view_definition);
-	auto statements = std::move(parser.statements);
-	if (statements.size() != 1) {
-		throw duckdb::InvalidInputException("View definition contained more than 1 statement!");
-	}
-
-	if (statements[0]->type != duckdb::StatementType::SELECT_STATEMENT) {
-		throw duckdb::InvalidInputException("View definition (%s) did not contain a SELECT statement!", view_definition);
-	}
-
-	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
-	auto subquery = duckdb::make_uniq<duckdb::SubqueryRef>(std::move(select));
-	return std::move(subquery);
+	PostgresFunctionGuard(ReleaseSysCache, tuple);
+	return ReplaceView(relid);
 }
 
 } // namespace pgduckdb
