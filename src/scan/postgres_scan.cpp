@@ -25,6 +25,7 @@ extern "C" {
 }
 
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/common/scoped_postgres_resource.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
 namespace pgduckdb {
@@ -180,7 +181,7 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	}
 
 	// Check if the Relation is a VIEW
-	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
+	auto tuple = ScopedPostgresResource<HeapTuple>(SearchSysCache1(RELOID, ObjectIdGetDatum(relid)), ReleaseSysCache);
 	if (!HeapTupleIsValid(tuple)) {
 		elog(WARNING, "(PGDuckDB/PostgresReplacementScan) Cache lookup failed for relation %u", relid);
 		return nullptr;
@@ -190,10 +191,8 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 
 	// Check if the relation is a view
 	if (relForm->relkind == RELKIND_VIEW) {
-		ReleaseSysCache(tuple);
 		return ReplaceView(relid);
 	}
-	ReleaseSysCache(tuple);
 
 	RelOptInfo *node = nullptr;
 	Path *node_path = nullptr;

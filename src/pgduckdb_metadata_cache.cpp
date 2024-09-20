@@ -15,6 +15,7 @@ extern "C" {
 #include "utils/syscache.h"
 }
 
+#include "pgduckdb/common/scoped_postgres_resource.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 namespace pgduckdb {
@@ -88,7 +89,9 @@ BuildDuckdbOnlyFunctions() {
 	const char *function_names[] = {"read_parquet", "read_csv", "iceberg_scan"};
 
 	for (int i = 0; i < lengthof(function_names); i++) {
-		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
+		auto catlist =
+		    ScopedPostgresResource<CatCList *>(SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i])),
+		                                       [](CatCList *clist) { ReleaseSysCacheList(clist); });
 
 		for (int j = 0; j < catlist->n_members; j++) {
 			HeapTuple tuple = &catlist->members[j]->tuple;
@@ -102,8 +105,6 @@ BuildDuckdbOnlyFunctions() {
 			cache.duckdb_only_functions = lappend_oid(cache.duckdb_only_functions, function->oid);
 			MemoryContextSwitchTo(oldcontext);
 		}
-
-		ReleaseSysCacheList(catlist);
 	}
 }
 
