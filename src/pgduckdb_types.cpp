@@ -987,9 +987,9 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 
 	bool valid_tuple = true;
 
-	/* First we are fetching all required columns oredered by column id
+	/* First we are fetching all required columns ordered by column id
 	 * and than we need to write this tuple into output vector. Output column id list
-	 * could be out of order so we need to match column values from first
+	 * could be out of order so we need to match column values from ordered list.
 	 */
 
 	/* Read heap tuple with all required columns. */

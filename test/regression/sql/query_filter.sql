@@ -23,6 +23,11 @@ INSERT INTO query_filter_output_column VALUES (1, 't1', 1.0), (2, 't1', 2.0), (2
 SELECT b FROM query_filter_output_column WHERE a = 2;
 -- Column ids list used because both of fetched column are used after scan
 SELECT a, b FROM query_filter_output_column WHERE b = 't1';
+-- Column ids list used because both of fetched column are used after scan.
+-- Swapped order of table columns.
+SELECT b, a FROM query_filter_output_column WHERE b = 't1';
 -- Projection ids list will be used (column `b`is not needed after scan)
 SELECT a, c FROM query_filter_output_column WHERE b = 't1';
+-- All columns in tuple unordered
+SELECT c, a, b FROM query_filter_output_column WHERE a = 2;
 DROP TABLE query_filter_output_column;
