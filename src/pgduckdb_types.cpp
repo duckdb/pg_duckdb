@@ -945,12 +945,18 @@ HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleRea
                               int att_num, bool *is_null) {
 	HeapTupleHeader tup = tuple->t_data;
 	bool hasnulls = HeapTupleHasNulls(tuple);
+	int natts = HeapTupleHeaderGetNatts(tup);
 	int attnum;
 	char *tp;
 	uint32 off;
 	bits8 *bp = tup->t_bits;
 	bool slow = false;
 	Datum value = (Datum)0;
+
+	if (natts < att_num) {
+		// FIXME: Create a thread safe version of this and use that instead
+		return getmissingattr(tupleDesc, att_num, is_null);
+	}
 
 	attnum = heap_tuple_read_state.m_last_tuple_att;
 

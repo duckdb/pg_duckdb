@@ -1,0 +1,36 @@
+-- Using aclitem as a type that we wil not support in pg_duckdb any time soon.
+CREATE TABLE ddl_table(id int, myacl aclitem);
+INSERT INTO ddl_table VALUES (1, NULL);
+-- Should fail because aclitem is not supported.
+SELECT * from ddl_table;
+WARNING:  (PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: "UnsupportedPostgresType (Oid=1033)" to Postgres type
+WARNING:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
+ id | myacl 
+----+-------
+  1 | 
+(1 row)
+
+-- Should succed because we don't actually query aclitem
+SELECT id from ddl_table;
+ id 
+----
+  1
+(1 row)
+
+ALTER TABLE ddl_table ADD COLUMN a int DEFAULT 10;
+ALTER TABLE ddl_table ADD COLUMN b int DEFAULT 20;
+ALTER TABLE ddl_table ADD COLUMN c int DEFAULT NULL;
+ALTER TABLE ddl_table ADD COLUMN d int DEFAULT 30;
+ALTER TABLE ddl_table DROP COLUMN myacl;
+select * from ddl_table;
+ id | a  | b  | c | d  
+----+----+----+---+----
+  1 | 10 | 20 |   | 30
+(1 row)
+
+select a, c, d id from ddl_table;
+ a  | c | id 
+----+---+----
+ 10 |   | 30
+(1 row)
+
