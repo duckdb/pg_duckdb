@@ -13,9 +13,9 @@ extern "C" {
 
 namespace pgduckdb {
 
+using duckdb::idx_t;
 using duckdb::LogicalType;
 using duckdb::Vector;
-using duckdb::idx_t;
 
 struct PGDuckDBEnum {
 	static idx_t GetDuckDBEnumPosition(duckdb::Value &val);

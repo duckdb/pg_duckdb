@@ -29,9 +29,9 @@ extern "C" {
 
 namespace pgduckdb {
 
+using duckdb::EnumTypeInfo;
 using duckdb::LogicalTypeId;
 using duckdb::PhysicalType;
-using duckdb::EnumTypeInfo;
 
 struct BoolArray {
 public:
@@ -554,7 +554,7 @@ ConvertPostgresEnumToDuckEnum(Oid enum_type_oid) {
 
 	auto duck_enum_vec = duckdb::Vector(duckdb::LogicalType::VARCHAR, allocation_size);
 	auto enum_vec_data = duckdb::FlatVector::GetData<duckdb::string_t>(duck_enum_vec);
-	auto enum_oid_data = (uint32_t*)(enum_vec_data + enum_members.size());
+	auto enum_oid_data = (uint32_t *)(enum_vec_data + enum_members.size());
 	for (idx_t i = 0; i < enum_members.size(); i++) {
 		auto &member = enum_members[i];
 		auto enum_data = (Form_pg_enum)GETSTRUCT(member);

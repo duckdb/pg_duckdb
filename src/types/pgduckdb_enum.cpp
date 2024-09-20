@@ -5,8 +5,8 @@
 namespace pgduckdb {
 
 using duckdb::idx_t;
-using duckdb::PhysicalType;
 using duckdb::LogicalTypeId;
+using duckdb::PhysicalType;
 
 idx_t
 PGDuckDBEnum::GetDuckDBEnumPosition(duckdb::Value &val) {
@@ -68,7 +68,7 @@ PGDuckDBEnum::GetEnumTypeOid(const Vector &oids) {
 	auto tuple = PostgresFunctionGuard<HeapTuple>(SearchSysCache1, ENUMOID, ObjectIdGetDatum(member_oid));
 	Oid result = InvalidOid;
 	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "cache lookup failed for enum member with oid %u", member_oid);
+		throw duckdb::InvalidInputException("Cache lookup failed for enum member with oid %d", member_oid);
 	}
 
 	auto enum_form = (Form_pg_enum)GETSTRUCT(tuple);
@@ -79,7 +79,8 @@ PGDuckDBEnum::GetEnumTypeOid(const Vector &oids) {
 	return result;
 }
 
-Vector PGDuckDBEnum::GetMemberOids(const duckdb::LogicalType &type) {
+Vector
+PGDuckDBEnum::GetMemberOids(const duckdb::LogicalType &type) {
 	auto type_info = type.AuxInfo();
 	auto &enum_type_info = type_info->Cast<duckdb::EnumTypeInfo>();
 	auto &enum_sort_order = enum_type_info.GetValuesInsertOrder();
