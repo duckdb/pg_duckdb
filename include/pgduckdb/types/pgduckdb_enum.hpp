@@ -18,6 +18,7 @@ using duckdb::LogicalType;
 using duckdb::Vector;
 
 struct PGDuckDBEnum {
+	static LogicalType CreateEnumType(std::vector<HeapTuple> &enum_members);
 	static idx_t GetDuckDBEnumPosition(duckdb::Value &val);
 	static idx_t GetEnumPosition(Datum enum_member_oid, const duckdb::LogicalType &type);
 	static bool IsEnumType(Oid type_oid);

@@ -547,23 +547,9 @@ ConvertPostgresEnumToDuckEnum(Oid enum_type_oid) {
 	};
 
 	std::sort(enum_members.begin(), enum_members.end(), sort_order_cmp);
-
-	idx_t allocation_size = enum_members.size();
-	allocation_size += enum_members.size() / 4;
-	allocation_size += (enum_members.size() % 4) != 0;
-
-	auto duck_enum_vec = duckdb::Vector(duckdb::LogicalType::VARCHAR, allocation_size);
-	auto enum_vec_data = duckdb::FlatVector::GetData<duckdb::string_t>(duck_enum_vec);
-	auto enum_member_oid_data = (uint32_t *)(enum_vec_data + enum_members.size());
-	for (idx_t i = 0; i < enum_members.size(); i++) {
-		auto &member = enum_members[i];
-		auto enum_data = (Form_pg_enum)GETSTRUCT(member);
-		enum_vec_data[i] = duckdb::StringVector::AddString(duck_enum_vec, enum_data->enumlabel.data);
-		enum_member_oid_data[i] = enum_data->oid;
-	}
-
+	auto enum_type = PGDuckDBEnum::CreateEnumType(enum_members);
 	PostgresFunctionGuard(ReleaseCatCacheList, list);
-	return EnumTypeInfo::CreateType(duck_enum_vec, enum_members.size());
+	return enum_type;
 }
 
 duckdb::LogicalType
