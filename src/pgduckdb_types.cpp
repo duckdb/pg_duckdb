@@ -17,7 +17,6 @@ extern "C" {
 #include "utils/syscache.h"
 }
 
-#include "pgduckdb/common/scoped_postgres_resource.hpp"
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
