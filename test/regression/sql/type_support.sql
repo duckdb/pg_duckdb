@@ -27,6 +27,13 @@ SELECT * FROM bool_tbl;
 CREATE TABLE varchar_tbl(a VARCHAR);
 INSERT INTO varchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), (NULL), ('test'), ('this is a long string')) t(a);
 SELECT * FROM varchar_tbl;
+SELECT * FROM varchar_tbl WHERE a = 'test';
+
+--- TEXT
+CREATE TABLE text_tbl(a TEXT);
+INSERT INTO text_tbl SELECT CAST(a AS TEXT) from (VALUES (''), (NULL), ('test'), ('this is a long string')) t(a);
+SELECT * FROM text_tbl;
+SELECT * FROM text_tbl WHERE a = 'test';
 
 -- DATE
 CREATE TABLE date_tbl(a DATE);
@@ -124,11 +131,17 @@ INSERT INTO json_tbl SELECT CAST(a as JSON) FROM (VALUES
 ) t(a);
 SELECT * FROM json_tbl;
 
+-- REGCLASSOID
+CREATE TABLE regclass_tbl (a REGCLASS);
+INSERT INTO regclass_tbl VALUES (42), (3_000_000_000);
+SELECT * FROM regclass_tbl;
+
 DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
 DROP TABLE big;
 DROP TABLE varchar_tbl;
+DROP TABLE text_tbl;
 DROP TABLE date_tbl;
 DROP TABLE timestamp_tbl;
 DROP TABLE float4_tbl;
@@ -140,3 +153,4 @@ DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
 DROP TABLE json_tbl;
+DROP TABLE regclass_tbl;

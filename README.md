@@ -1,82 +1,127 @@
-# pg_quack
+# pg_duckdb: Official Postgres extension for DuckDB
 
-quack is a PostgreSQL extension that embeds DuckDB into Postgres. :duck:
+pg_duckdb is a Postgres extension that embeds DuckDB's columnar-vectorized analytics engine and features into Postgres. We recommend using pg_duckdb to build high performance analytics and data-intensive applications.
 
-## Usage
-
-```
-CREATE EXTENSION quack;
-```
-
-Once loaded, DuckDB is used to execute all SELECT queries. You can disable it by
-setting `quack.execution` to `false`.
-
-Then query as usual. You can toggle DuckDB execution using `quack.execution`:
-
-```sql
-SET quack.execution = false;
-```
-
-## Features
-
-* `SELECT` queries are executed by the DuckDB engine and can directly read Postgres tables.
-* If DuckDB cannot support the query for any reason, execution falls back to Postgres.
-* Able to read [data types][datatypes] that exist in both Postgres and DuckDB. The
-  following data types are supported: numeric, character, binary, date/time,
-  boolean, uuid, json, and arrays (see "Limitations").
-* Add a credential to enable DuckDB's httpfs support.
-  ```sql
-  INSERT INTO quack.secrets
-  (cloud_type, cloud_id, cloud_secret, cloud_region)
-  VALUES ('S3', 'access_key_id', 'secret_accss_key', 'us-east-1')
-  ```
-* Read parquet and csv files
-  * `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
-  * `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
-  * You can pass globs and arrays to these functions, just like in DuckDB
-* Write a query or entire table to parquet in S3
-  * `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
-  * `COPY table TO 's3://...'`
-* Join data from files in S3 with data in your Postgres heap tables, views, and materialized views.
-* Read and write Parquet in a single query:
-
-  ```sql
-  COPY (
-    SELECT count(*), name
-    FROM read_parquet('s3://bucket/file.parquet') AS (name text)
-    GROUP BY name
-    ORDER BY count DESC
-  ) TO 's3://bucket/results.parquet';
-  ```
-
-## Limitations
-
-* Only one- and two-dimensional arrays are supported. Two-dimensional arrays are limited to boolean
-  and integer types.
-* Data types are limited to the most commonly used data types. The following data types are not
-  supported: monetary, geometric, enum, network, bit string, text search, composite, range, xml.
-  These data types refer to [the Postgres datatype documentation][datatypes].
-  * Arbitrary precision `numeric` types are only supported up to a width of 38 digits
-* Types, functions, and casts defined by the user or by an extension are not supported
-
-## Roadmap
-
-Please [see the Github project](https://github.com/orgs/hydradatabase/projects/1) for upcoming planned tasks and
-features.
+pg_duckdb was developed in collaboration with our partners, [Hydra](https://hydra.so) and [MotherDuck](https://motherduck.com).
 
 ## Installation
 
-```
-make install
-```
+Pre-built binaries and additional installation options are coming soon.
 
-Prerequisites:
+To build pg_duckdb, you need:
 
-* Postgres 16
+* Postgres 16 or 17
 * Ubuntu 22.04 or MacOS
 * Standard set of build tools for building Postgres extensions
 * [Build tools that are required to build DuckDB](https://duckdb.org/docs/dev/building/build_instructions)
 
+To build and install, run:
 
+```sh
+make install
+```
 
-[datatypes]: https://www.postgresql.org/docs/current/datatype.html
+Next, load the pg_duckdb extension:
+
+```sql
+CREATE EXTENSION pg_duckdb;
+```
+
+**IMPORTANT:** Once loaded you can use DuckDB execution by running `SET duckdb.execution TO true`. This is _opt-in_ to avoid breaking existing queries. To avoid doing that for every session, you can configure it for a certain user by doing `ALTER USER my_analytics_user SET duckdb.execution TO true`.
+
+## Features
+
+- `SELECT` queries executed by the DuckDB engine can directly read Postgres tables.
+	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, and arrays.
+	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
+- Read parquet and CSV files from object storage (AWS S3, Cloudflare R2, or Google GCS).
+	- `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
+	- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
+	- You can pass globs and arrays to these functions, just like in DuckDB
+- Enable the DuckDB Iceberg extension using `SELECT duckdb.enable_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
+- Write a query — or an entire table — to parquet in object storage.
+	- `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
+	- `COPY table TO 's3://...'`
+- Read and write to Parquet format in a single query
+
+	```sql
+	COPY (
+	  SELECT count(*), name
+	  FROM read_parquet('s3://bucket/file.parquet') AS (name text)
+	  GROUP BY name
+	  ORDER BY count DESC
+	) TO 's3://bucket/results.parquet';
+	```
+
+- Query and `JOIN` data in object storage with Postgres tables, views, and materialized views.
+- Create indexes on Postgres tables to accelerate your DuckDB queries
+- Install DuckDB extensions using `SELECT duckdb.install_extension('extension_name');`
+- Toggle DuckDB execution on/off with a setting:
+	- `SET duckdb.execution = true|false`
+
+## Getting Started
+
+The best way to get started is to connect Postgres to a new or existing object storage bucket (AWS S3, Cloudflare R2, or Google GCS) with pg_duckdb. You can query data in Parquet, CSV, and Iceberg format using `read_parquet`, `read_csv`, and `iceberg_scan` respectively.
+
+1. Add a credential to enable DuckDB's httpfs support.
+
+	```sql
+	-- Session Token is Optional
+	INSERT INTO duckdb.secrets
+	(type, id, secret, session_token, region)
+	VALUES ('S3', 'access_key_id', 'secret_access_key', 'session_token', 'us-east-1');
+	```
+
+2. Copy data directly to your bucket - no ETL pipeline!
+
+	```sql
+	COPY (SELECT user_id, item_id, price, purchased_at FROM purchases)
+	TO 's3://your-bucket/purchases.parquet;
+	```
+
+3. Perform analytics on your data.
+
+	```sql
+	SELECT SUM(price) AS total, item_id
+	FROM read_parquet('s3://your-bucket/purchases.parquet')
+	  AS (price float, item_id int)
+	GROUP BY item_id
+	ORDER BY total DESC
+	LIMIT 100;
+	```
+
+## Roadmap
+
+Please see the [project roadmap][roadmap] for upcoming planned tasks and features.
+
+### Connect with MotherDuck
+
+pg_duckdb integration with MotherDuck will enable hybrid execution with Differential Storage.
+
+* Zero-copy snapshots and forks
+* Time travel
+* Data tiering
+* Improved concurrency and cacheability
+
+## Contributing
+
+pg_duckdb was developed in collaboration with our partners, [Hydra](https://hydra.so) and [MotherDuck](https://motherduck.com). We look forward to their continued contributions and leadership.
+
+[Hydra](https://hydra.so) is a Y Combinator-backed database company, focused on DuckDB-Powered Postgres for app developers.
+
+[MotherDuck](https://motherduck.com) is the cloud-based data warehouse that extends the power of DuckDB.
+
+We welcome all contributions big and small:
+
+- Vote on or suggest features for our roadmap.
+- Open a PR.
+- Submit a feature request or bug report.
+
+## Resources
+
+- Please see the [project roadmap][roadmap] for upcoming planned tasks and features.
+- [GitHub Issues](https://github.com/duckdb/pg_duckdb/issues) for bugs and missing features
+- [Discord discussion](https://discord.duckdb.org/) with the DuckDB community
+- See our docs for more info and limitations
+
+[roadmap]: https://github.com/orgs/duckdb/projects/10

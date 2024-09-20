@@ -1,43 +1,84 @@
-CREATE TABLE t(a INT, b TEXT);
-INSERT INTO t SELECT g % 1000, MD5(g::TEXT) FROM generate_series(1,20000) g;
-SELECT COUNT(*) FROM t WHERE a % 100 = 0;
- count_star() 
---------------
-          200
+CREATE TABLE t(a INT, b VARCHAR);
+INSERT INTO t SELECT g % 100, MD5(g::VARCHAR) FROM generate_series(1,1000) g;
+SELECT COUNT(*) FROM t WHERE a % 10 = 0;
+ count 
+-------
+   100
 (1 row)
 
-CREATE MATERIALIZED VIEW tv AS SELECT * FROM t WHERE a % 100 = 0;
+CREATE MATERIALIZED VIEW tv AS SELECT * FROM t WHERE a % 10 = 0;
 SELECT COUNT(*) FROM tv;
- count_star() 
---------------
-          200
+ count 
+-------
+   100
 (1 row)
 
-INSERT INTO t SELECT g % 1000, MD5(g::TEXT) FROM generate_series(1,20000) g;
-SELECT COUNT(*) FROM t WHERE a % 100 = 0;
- count_star() 
---------------
-          400
+INSERT INTO t SELECT g % 100, MD5(g::TEXT) FROM generate_series(1,1000) g;
+SELECT COUNT(*) FROM t WHERE a % 10 = 0;
+ count 
+-------
+   200
 (1 row)
 
 REFRESH MATERIALIZED VIEW tv;
 SELECT COUNT(*) FROM tv;
- count_star() 
---------------
-          400
+ count 
+-------
+   200
 (1 row)
 
-SELECT COUNT(*) FROM t WHERE (a % 100 = 0) AND (a < 30);
- count_star() 
---------------
-           40
+SELECT COUNT(*) FROM t WHERE (a % 10 = 0) AND (a < 3);
+ count 
+-------
+    20
 (1 row)
 
-SELECT COUNT(*) FROM tv WHERE a < 30;
- count_star() 
---------------
-           40
+SELECT COUNT(*) FROM tv WHERE a < 3;
+ count 
+-------
+    20
 (1 row)
 
 DROP MATERIALIZED VIEW tv;
 DROP TABLE t;
+-- materialized view from duckdb execution
+CREATE TABLE t_csv(a INT, b INT);
+INSERT INTO t_csv VALUES (1,1),(2,2),(3,3);
+\getenv pwd PWD
+\set csv_file_path '\'' :pwd '/tmp_check/t_csv.csv'  '\''
+COPY t_csv TO :csv_file_path (FORMAT CSV, HEADER TRUE, DELIMITER ',');
+CREATE MATERIALIZED VIEW mv_csv AS SELECT * FROM read_csv(:csv_file_path) AS (a BIGINT);
+SELECT COUNT(*) FROM mv_csv;
+ count 
+-------
+     3
+(1 row)
+
+SELECT * FROM mv_csv;
+ a 
+---
+ 1
+ 2
+ 3
+(3 rows)
+
+INSERT INTO t_csv VALUES (4,4);
+COPY t_csv TO :csv_file_path (FORMAT CSV, HEADER TRUE, DELIMITER ',');
+REFRESH MATERIALIZED VIEW mv_csv;
+SELECT COUNT(*) FROM mv_csv;
+ count 
+-------
+     4
+(1 row)
+
+SELECT * FROM mv_csv;
+ a 
+---
+ 1
+ 2
+ 3
+ 4
+(4 rows)
+
+DROP MATERIALIZED VIEW mv_csv;
+DROP TABLE t_csv;

@@ -1,0 +1,20 @@
+[tool.pytest.ini_options]
+addopts = ["--import-mode=prepend", "--showlocals", "--tb=short"]
+pythonpath = ['tests/pyduck']
+timeout = 30
+
+# Make test discovery quicker
+norecursedirs = [
+    '*.egg',
+    '.*',
+    '__pycache__',
+    'venv',
+    'env',
+    'src',
+    'third_party',
+    'include',
+    'sql',
+]
+
+[tool.ruff]
+extend-exclude = ["third_party"]
