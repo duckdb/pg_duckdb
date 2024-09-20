@@ -982,12 +982,18 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 	}
 
 	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
-	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * scan_global_state->m_columns.size());
-	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * scan_global_state->m_columns.size());
+	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * scan_global_state->m_output_columns_ids.size());
+	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * scan_global_state->m_read_columns_ids.size());
 
 	bool valid_tuple = true;
 
-	for (auto const &[columnIdx, valueIdx] : scan_global_state->m_columns) {
+	/* First we are fetching all required columns ordered by column id
+	 * and than we need to write this tuple into output vector. Output column id list
+	 * could be out of order so we need to match column values from ordered list.
+	 */
+
+	/* Read heap tuple with all required columns. */
+	for (auto const &[columnIdx, valueIdx] : scan_global_state->m_read_columns_ids) {
 		values[valueIdx] = HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state,
 		                                                 columnIdx + 1, &nulls[valueIdx]);
 		if (scan_global_state->m_filters &&
@@ -1002,35 +1008,33 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		}
 	}
 
-	for (idx_t idx = 0; valid_tuple && idx < scan_global_state->m_projections.size(); idx++) {
+	/* Write tuple columns in output vector. */
+	for (idx_t idx = 0; valid_tuple && idx < scan_global_state->m_output_columns_ids.size(); idx++) {
 		auto &result = output.data[idx];
 		if (nulls[idx]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
 		} else {
-			idx_t projectionColumnIdx = scan_global_state->m_columns[scan_global_state->m_projections[idx]];
-			if (scan_global_state->m_tuple_desc->attrs[scan_global_state->m_projections[idx]].attlen == -1) {
+			idx_t output_column_idx =
+			    scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
+			if (scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]].attlen == -1) {
 				bool should_free = false;
-				values[projectionColumnIdx] =
-				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[projectionColumnIdx]), &should_free);
-				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scan_local_state->m_output_vector_size);
+				values[output_column_idx] =
+				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[output_column_idx]), &should_free);
+				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
 				if (should_free) {
-					duckdb_free(reinterpret_cast<void *>(values[projectionColumnIdx]));
+					duckdb_free(reinterpret_cast<void *>(values[output_column_idx]));
 				}
 			} else {
-				ConvertPostgresToDuckValue(values[projectionColumnIdx], result, scan_local_state->m_output_vector_size);
+				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
 			}
 		}
 	}
 
 	if (valid_tuple) {
 		scan_local_state->m_output_vector_size++;
+		scan_global_state->m_total_row_count++;
 	}
-
-	output.SetCardinality(scan_local_state->m_output_vector_size);
-	output.Verify();
-
-	scan_global_state->m_total_row_count++;
 
 	duckdb_free(values);
 	duckdb_free(nulls);
