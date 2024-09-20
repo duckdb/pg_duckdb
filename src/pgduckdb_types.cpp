@@ -16,6 +16,8 @@ extern "C" {
 #include "fmgr.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "utils/date.h"
+#include "utils/timestamp.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -735,10 +737,9 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value(TextDatumGetCString(value));
 	}
 	case DATEOID:
-		return duckdb::Value::DATE(duckdb::date_t(static_cast<int32_t>(value + PGDUCKDB_DUCK_DATE_OFFSET)));
+		return duckdb::Value::DATE(duckdb::date_t(DatumGetDateADT(value) + PGDUCKDB_DUCK_DATE_OFFSET));
 	case TIMESTAMPOID:
-		return duckdb::Value::TIMESTAMP(
-		    duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)));
+		return duckdb::Value::TIMESTAMP(duckdb::timestamp_t(DatumGetTimestamp(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
 	case FLOAT4OID: {
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
 	}
