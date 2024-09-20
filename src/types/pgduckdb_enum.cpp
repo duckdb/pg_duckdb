@@ -8,6 +8,11 @@ using duckdb::idx_t;
 using duckdb::LogicalTypeId;
 using duckdb::PhysicalType;
 
+// This is medium hacky, we create extra space in the Vector that would normally only hold the strings corresponding to the enum's members.
+// In that extra space we store the enum member oids.
+
+// We do this so we can find the OID from the offset (which is what DuckDB stores in a Vector of type ENUM) and return that when converting the result from DuckDB -> Postgres
+
 LogicalType PGDuckDBEnum::CreateEnumType(std::vector<HeapTuple> &enum_members) {
 	idx_t allocation_size = enum_members.size();
 	allocation_size += enum_members.size() / 4;
