@@ -155,7 +155,6 @@ DuckdbInstallExtension(Datum name) {
 } // namespace pgduckdb
 
 extern "C" {
-
 PG_FUNCTION_INFO_V1(install_extension);
 Datum
 install_extension(PG_FUNCTION_ARGS) {
@@ -163,5 +162,4 @@ install_extension(PG_FUNCTION_ARGS) {
 	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
 	PG_RETURN_BOOL(result);
 }
-
 } // extern "C"
