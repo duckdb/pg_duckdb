@@ -1,5 +1,6 @@
 extern "C" {
 #include "postgres.h"
+#include "miscadmin.h"
 #include "utils/guc.h"
 }
 
@@ -16,11 +17,15 @@ PG_MODULE_MAGIC;
 
 void
 _PG_init(void) {
+	if (!process_shared_preload_libraries_in_progress) {
+		ereport(ERROR, (errmsg("pg_duckdb needs to be loaded via shared_preload_libraries"),
+		                errhint("Add pg_duckdb to shared_preload_libraries.")));
+	}
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
 }
-}
+} // extern "C"
 
 /* clang-format off */
 static void
