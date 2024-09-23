@@ -107,7 +107,7 @@ clean-duckdb:
 
 install: install-duckdb
 
-clean: clean-regression clean-duckdb
+clean-all: clean clean-regression clean-duckdb
 
 lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
