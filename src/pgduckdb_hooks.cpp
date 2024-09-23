@@ -158,6 +158,17 @@ extern "C" {
 void
 DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, ExplainState *es, const char *queryString,
                           ParamListInfo params, QueryEnvironment *queryEnv) {
+	/*
+	 * It might seem sensible to store this data in the custom_private
+	 * field of the CustomScan node, but that's not a trivial change to make.
+	 * Storing this in a global variable works fine, as long as we only use
+	 * this variable during planning when we're actually executing an explain
+	 * QUERY (this can be checked by checking the commandTag of the
+	 * ActivePortal). This even works when plans would normally be cached,
+	 * because EXPLAIN always execute this hook whenever they are executed.
+	 * EXPLAIN queries are also always re-planned (see
+	 * standard_ExplainOneQuery).
+	 */
 	duckdb_explain_analyze = es->analyze;
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }

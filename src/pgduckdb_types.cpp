@@ -9,12 +9,15 @@ extern "C" {
 #include "miscadmin.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
+#include "utils/builtins.h"
 #include "utils/numeric.h"
 #include "utils/uuid.h"
 #include "utils/array.h"
 #include "fmgr.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "utils/date.h"
+#include "utils/timestamp.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -705,6 +708,47 @@ ConvertDecimal(const NumericVar &numeric) {
 	// finally
 	auto base_res = OP::Finalize(numeric, integral_part + fractional_part);
 	return (NumericIsNegative(numeric) ? -base_res : base_res);
+}
+
+/*
+ * Convert a Postgres Datum to a DuckDB Value. This is meant to be used to
+ * covert query parameters in a prepared statement to its DuckDB equivalent.
+ * Passing it a Datum that is stored on disk results in undefined behavior,
+ * because this fuction makes no effert to detoast the Datum.
+ */
+duckdb::Value
+ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
+	switch (postgres_type) {
+	case BOOLOID:
+		return duckdb::Value::BOOLEAN(DatumGetBool(value));
+	case INT2OID:
+		return duckdb::Value::SMALLINT(DatumGetInt16(value));
+	case INT4OID:
+		return duckdb::Value::INTEGER(DatumGetInt32(value));
+	case INT8OID:
+		return duckdb::Value::BIGINT(DatumGetInt64(value));
+	case BPCHAROID:
+	case TEXTOID:
+	case JSONOID:
+	case VARCHAROID: {
+		// FIXME: TextDatumGetCstring allocates so it needs a
+		// guard, but it's a macro not a function, so our current gaurd
+		// template does not handle it.
+		return duckdb::Value(TextDatumGetCString(value));
+	}
+	case DATEOID:
+		return duckdb::Value::DATE(duckdb::date_t(DatumGetDateADT(value) + PGDUCKDB_DUCK_DATE_OFFSET));
+	case TIMESTAMPOID:
+		return duckdb::Value::TIMESTAMP(duckdb::timestamp_t(DatumGetTimestamp(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
+	case FLOAT4OID: {
+		return duckdb::Value::FLOAT(DatumGetFloat4(value));
+	}
+	case FLOAT8OID: {
+		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
+	}
+	default:
+		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
+	}
 }
 
 void
