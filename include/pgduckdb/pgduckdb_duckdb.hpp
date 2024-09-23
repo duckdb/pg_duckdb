@@ -12,7 +12,7 @@ namespace pgduckdb {
 
 class DuckDBManager {
 public:
-	static inline const DuckDBManager &
+	static inline DuckDBManager &
 	Get() {
 		static DuckDBManager instance;
 		return instance;
@@ -23,6 +23,15 @@ public:
 		return *database;
 	}
 
+	inline duckdb::Connection *
+	GetConnection() const {
+		connection->context->registered_state->Remove("postgres_scan");
+		return connection.get();
+	}
+
+	duckdb::Connection *GetConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns,
+	                                  const char *query);
+
 private:
 	DuckDBManager();
 	void InitializeDatabase();
@@ -32,9 +41,7 @@ private:
 	void LoadFunctions(duckdb::ClientContext &);
 
 	duckdb::unique_ptr<duckdb::DuckDB> database;
+	duckdb::unique_ptr<duckdb::Connection> connection;
 };
-
-duckdb::unique_ptr<duckdb::Connection> DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info,
-                                                              List *needed_columns, const char *query);
 
 } // namespace pgduckdb

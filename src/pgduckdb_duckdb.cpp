@@ -74,7 +74,7 @@ DuckDBManager::DuckDBManager() {
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
 	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
 	LoadFunctions(context);
@@ -153,15 +153,13 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	}
 }
 
-duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
-	auto &db = DuckDBManager::Get().GetDatabase();
-	/* Add DuckDB replacement scan to read PG data */
-	auto con = duckdb::make_uniq<duckdb::Connection>(db);
-	con->context->registered_state->Insert(
+duckdb::Connection *
+DuckDBManager::GetConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
+	connection->context->registered_state->Remove("postgres_scan");
+	connection->context->registered_state->Insert(
 	    "postgres_scan", duckdb::make_shared_ptr<PostgresReplacementScanDataClientContextState>(rtables, planner_info,
 	                                                                                            needed_columns, query));
-	return con;
+	return connection.get();
 }
 
 } // namespace pgduckdb

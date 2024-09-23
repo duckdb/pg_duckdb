@@ -38,7 +38,6 @@ static void
 CleanupDuckdbScanState(DuckdbScanState *state) {
 	state->query_results.reset();
 	delete state->prepared_statement;
-	delete state->duckdb_connection;
 }
 
 /* static callbacks */
@@ -64,13 +63,13 @@ Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) 
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
 	auto prepare_result = DuckdbPrepare(duckdb_scan_state->query, estate->es_param_list_info);
 	auto prepared_query = std::move(std::get<0>(prepare_result));
-	auto duckdb_connection = std::move(std::get<1>(prepare_result));
+	duckdb::Connection *duckdb_connection = std::get<1>(prepare_result);
 
 	if (prepared_query->HasError()) {
 		elog(ERROR, "DuckDB re-planning failed %s", prepared_query->GetError().c_str());
 	}
 
-	duckdb_scan_state->duckdb_connection = duckdb_connection.release();
+	duckdb_scan_state->duckdb_connection = duckdb_connection;
 	duckdb_scan_state->prepared_statement = prepared_query.release();
 	duckdb_scan_state->params = estate->es_param_list_info;
 	duckdb_scan_state->is_executed = false;

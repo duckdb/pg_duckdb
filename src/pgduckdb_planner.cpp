@@ -53,7 +53,7 @@ PlanQuery(Query *parse, ParamListInfo bound_params) {
 	);
 }
 
-std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
+std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::Connection *>
 DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
 	/*
 	 * Copy the query, so the original one is not modified by the
@@ -78,10 +78,11 @@ DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
 	List *vars = list_concat(pull_var_clause((Node *)copied_query->targetList, flags),
 	                         pull_var_clause((Node *)copied_query->jointree->quals, flags));
 	PlannerInfo *query_planner_info = PlanQuery(copied_query, bound_params);
-	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
+	duckdb::Connection *duckdb_connection =
+	    pgduckdb::DuckDBManager::Get().GetConnection(rtables, query_planner_info, vars, query_string);
 	auto context = duckdb_connection->context;
 	auto prepared_query = context->Prepare(query_string);
-	return {std::move(prepared_query), std::move(duckdb_connection)};
+	return {std::move(prepared_query), duckdb_connection};
 }
 
 static Plan *
