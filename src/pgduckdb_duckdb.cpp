@@ -126,7 +126,11 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
 		}
 		appendStringInfo(secret_key, ");");
-		context.Query(secret_key->data, false);
+		auto res = context.Query(secret_key->data, false);
+		if (res->HasError()) {
+			elog(ERROR, "(PGDuckDB/LoadSecrets) secret `%s` could not be loaded with DuckDB", secret.id.c_str());
+		}
+
 		pfree(secret_key->data);
 		secret_id++;
 	}
