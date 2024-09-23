@@ -20,3 +20,10 @@
 #define get_range_partbound_string       pgduckdb_get_range_partbound_string
 #define pg_get_statisticsobjdef_string   pgduckdb_pg_get_statisticsobjdef_string
 #define get_list_partvalue_string        pgduckdb_get_list_partvalue_string
+
+/*
+ * The following replaces all usages of generate_qualified_relation_name and
+ * generate_relation_name with calls to the pgduckdb_relation_name function
+ */
+#define generate_qualified_relation_name          pgduckdb_relation_name
+#define generate_relation_name(relid, namespaces) pgduckdb_relation_name(relid)

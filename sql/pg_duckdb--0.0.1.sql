@@ -139,11 +139,46 @@ CREATE TABLE extensions (
     enabled BOOL DEFAULT TRUE
 );
 
+CREATE TABLE tables (
+    relid regclass PRIMARY KEY
+);
+
+REVOKE ALL ON tables FROM PUBLIC;
+
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 
 CREATE OR REPLACE FUNCTION raw_query(query TEXT) RETURNS void
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_raw_query';
+
+CREATE FUNCTION duckdb_am_handler(internal)
+RETURNS table_am_handler
+AS 'MODULE_PATHNAME'
+LANGUAGE C;
+
+CREATE ACCESS METHOD duckdb
+    TYPE TABLE
+    HANDLER duckdb_am_handler;
+
+CREATE FUNCTION duckdb_drop_table_trigger() RETURNS event_trigger
+    AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE EVENT TRIGGER duckdb_drop_table_trigger ON sql_drop
+    EXECUTE FUNCTION duckdb_drop_table_trigger();
+
+CREATE FUNCTION duckdb_create_table_trigger() RETURNS event_trigger
+    AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE EVENT TRIGGER duckdb_create_table_trigger ON ddl_command_end
+    WHEN tag IN ('CREATE TABLE', 'CREATE TABLE AS')
+    EXECUTE FUNCTION duckdb_create_table_trigger();
+
+CREATE FUNCTION duckdb_alter_table_trigger() RETURNS event_trigger
+    AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE EVENT TRIGGER duckdb_alter_table_trigger ON ddl_command_end
+    WHEN tag IN ('ALTER TABLE')
+    EXECUTE FUNCTION duckdb_alter_table_trigger();
 
 DO $$
 BEGIN

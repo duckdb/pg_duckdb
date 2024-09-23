@@ -47,3 +47,9 @@ def pg(shared_pg, request):
 def cur(pg):
     with pg.cur() as cur:
         yield cur
+
+
+@pytest.fixture
+def conn(pg):
+    with pg.conn() as conn:
+        yield conn

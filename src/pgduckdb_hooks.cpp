@@ -2,19 +2,24 @@
 
 extern "C" {
 #include "postgres.h"
+
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/primnodes.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
 #include "utils/rel.h"
+#include "utils/relcache.h"
 #include "optimizer/optimizer.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_table_am.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
@@ -46,17 +51,41 @@ IsCatalogTable(List *tables) {
 }
 
 static bool
-ContainsDuckdbFunctions(Node *node, void *context) {
+IsDuckdbTable(Oid relid) {
+	if (relid == InvalidOid) {
+		return false;
+	}
+	auto rel = RelationIdGetRelation(relid);
+	bool result = pgduckdb::IsDuckdbTableAm(rel->rd_tableam);
+	RelationClose(rel);
+	return result;
+}
+
+static bool
+ContainsDuckdbTables(List *rte_list) {
+	foreach_node(RangeTblEntry, rte, rte_list) {
+		if (IsDuckdbTable(rte->relid)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
+ContainsDuckdbItems(Node *node, void *context) {
 	if (node == NULL)
 		return false;
 
 	if (IsA(node, Query)) {
 		Query *query = (Query *)node;
-	#if PG_VERSION_NUM >= 160000
-		return query_tree_walker(query, ContainsDuckdbFunctions, context, 0);
-	#else
-		return query_tree_walker(query, (bool (*)()) ((void *) ContainsDuckdbFunctions), context, 0);
-	#endif
+		if (ContainsDuckdbTables(query->rtable)) {
+			return true;
+		}
+#if PG_VERSION_NUM >= 160000
+		return query_tree_walker(query, ContainsDuckdbItems, context, 0);
+#else
+		return query_tree_walker(query, (bool (*)())((void *)ContainsDuckdbItems), context, 0);
+#endif
 	}
 
 	if (IsA(node, FuncExpr)) {
@@ -67,31 +96,33 @@ ContainsDuckdbFunctions(Node *node, void *context) {
 	}
 
 #if PG_VERSION_NUM >= 160000
-	return expression_tree_walker(node, ContainsDuckdbFunctions, context);
+	return expression_tree_walker(node, ContainsDuckdbItems, context);
 #else
-	return expression_tree_walker(node, (bool (*)()) ((void *) ContainsDuckdbFunctions), context);
+	return expression_tree_walker(node, (bool (*)())((void *)ContainsDuckdbItems), context);
 #endif
 }
 
 static bool
 NeedsDuckdbExecution(Query *query) {
-#if PG_VERSION_NUM >= 160000
-	return query_tree_walker(query, ContainsDuckdbFunctions, NULL, 0);
-#else
-	return query_tree_walker(query, (bool (*)()) ((void *) ContainsDuckdbFunctions), NULL, 0);
-#endif
+	return ContainsDuckdbItems((Node *)query, NULL);
 }
 
 static bool
-IsAllowedStatement(Query *query) {
+IsAllowedStatement(Query *query, bool throw_error) {
+	int elevel = throw_error ? ERROR : DEBUG4;
 	/* DuckDB does not support modifying CTEs INSERT/UPDATE/DELETE */
 	if (query->hasModifyingCTE) {
+		elog(elevel, "DuckDB does not support modifying CTEs");
 		return false;
 	}
 
-	/* We don't support modifying statements yet */
+	/* We don't support modifying statements on Postgres tables yet */
 	if (query->commandType != CMD_SELECT) {
-		return false;
+		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
+		if (!IsDuckdbTable(resultRte->relid)) {
+			elog(elevel, "DuckDB does not support modififying Postgres tables");
+			return false;
+		}
 	}
 
 	/*
@@ -99,6 +130,7 @@ IsAllowedStatement(Query *query) {
 	 * in using DuckDB for that.
 	 */
 	if (!query->rtable) {
+		elog(elevel, "DuckDB usage requires at least one table");
 		return false;
 	}
 
@@ -108,6 +140,22 @@ IsAllowedStatement(Query *query) {
 	 * then Postgres its pg_catalog tables.
 	 */
 	if (IsCatalogTable(query->rtable)) {
+		elog(elevel, "DuckDB does not support querying PG catalog tables");
+		return false;
+	}
+
+	/*
+	 * We don't support multi-statement transactions yet, so don't try to
+	 * execute queries in them even if duckdb.execution is enabled.
+	 */
+	if (IsInTransactionBlock(true)) {
+		if (throw_error) {
+			/*
+			 * We don't elog manually here, because PreventInTransactionBlock
+			 * provides very detailed errors.
+			 */
+			PreventInTransactionBlock(true, "DuckDB queries");
+		}
 		return false;
 	}
 
@@ -118,7 +166,7 @@ IsAllowedStatement(Query *query) {
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
-		if (duckdb_execution && IsAllowedStatement(parse)) {
+		if (duckdb_execution && IsAllowedStatement(parse, false)) {
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
 			if (duckdbPlan) {
 				return duckdbPlan;
@@ -126,9 +174,8 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 		}
 
 		if (NeedsDuckdbExecution(parse)) {
-			if (!IsAllowedStatement(parse)) {
-				elog(ERROR, "(PGDuckDB/DuckdbPlannerHook) Only SELECT statements involving DuckDB are supported.");
-			}
+			IsAllowedStatement(parse, true);
+
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
 			if (duckdbPlan) {
 				return duckdbPlan;
@@ -155,6 +202,10 @@ DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_t
 			}
 			return;
 		}
+	}
+
+	if (pgduckdb::IsExtensionRegistered()) {
+		DuckdbHandleDDL(parsetree, query_string);
 	}
 
 	if (prev_process_utility_hook) {

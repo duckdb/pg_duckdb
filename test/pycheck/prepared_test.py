@@ -1,7 +1,8 @@
-from .utils import Cursor
+from .utils import Cursor, Connection
 
 import datetime
 import psycopg.types.json
+import pytest
 
 
 def test_prepared(cur: Cursor):
@@ -93,3 +94,39 @@ def test_extended(cur: Cursor):
         """,
         row,
     )
+
+
+def test_prepared_writes(cur: Cursor):
+    cur.sql("CREATE TEMP TABLE test_table (id int)")
+    cur.sql("INSERT INTO test_table VALUES (%s), (%s), (%s)", (1, 2, 3))
+    assert cur.sql("SELECT * FROM test_table ORDER BY id") == [1, 2, 3]
+
+
+def test_prepared_pipeline(conn: Connection):
+    with conn.pipeline() as p, conn.cursor() as cur:
+        cur = Cursor(cur)
+        cur.execute("CREATE TEMP TABLE heapt (id int)")
+        p.sync()
+        cur.execute("CREATE TEMP TABLE duckt (id int) using duckdb")
+        p.sync()
+
+        # These all auto-commit, so they complete their pipeline immediately
+        # and should succeed
+        cur.execute("INSERT INTO duckt VALUES (%s), (%s), (%s)", (1, 2, 3))
+        cur.execute("DELETE FROM duckt WHERE id = %s", (2,))
+        cur.execute("INSERT INTO duckt VALUES (%s)", (4,))
+        assert cur.sql("SELECT * FROM duckt ORDER BY id") == [1, 3, 4]
+        p.sync()
+
+        # But if we first insert into the heap table, then try to insert into
+        # the duckdb table that should fail because the insert into the heap
+        # table opens an implicit transaction.
+        with pytest.raises(
+            psycopg.errors.ActiveSqlTransaction,
+            match="DuckDB queries cannot be executed within a pipeline",
+        ):
+            cur.execute("INSERT INTO heapt VALUES (%s), (%s), (%s)", (1, 2, 3))
+            cur.execute("INSERT INTO duckt VALUES (%s)", (5,))
+            p.sync()
+        assert cur.sql("SELECT * FROM duckt ORDER BY id") == [1, 3, 4]
+        assert cur.sql("SELECT * FROM heapt ORDER BY id") == []

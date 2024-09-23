@@ -512,8 +512,6 @@ static void get_opclass_name(Oid opclass, Oid actual_datatype,
 static Node *processIndirection(Node *node, deparse_context *context);
 static void printSubscripts(SubscriptingRef *sbsref, deparse_context *context);
 static char *get_relation_name(Oid relid);
-static char *generate_relation_name(Oid relid, List *namespaces);
-static char *generate_qualified_relation_name(Oid relid);
 static char *generate_function_name(Oid funcid, int nargs,
 									List *argnames, Oid *argtypes,
 									bool has_variadic, bool *use_variadic_p,
@@ -12732,102 +12730,6 @@ get_relation_name(Oid relid)
 	return relname;
 }
 
-/*
- * generate_relation_name
- *		Compute the name to display for a relation specified by OID
- *
- * The result includes all necessary quoting and schema-prefixing.
- *
- * If namespaces isn't NIL, it must be a list of deparse_namespace nodes.
- * We will forcibly qualify the relation name if it equals any CTE name
- * visible in the namespace list.
- */
-static char *
-generate_relation_name(Oid relid, List *namespaces)
-{
-	HeapTuple	tp;
-	Form_pg_class reltup;
-	bool		need_qual;
-	ListCell   *nslist;
-	char	   *relname;
-	char	   *nspname;
-	char	   *result;
-
-	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
-	if (!HeapTupleIsValid(tp))
-		elog(ERROR, "cache lookup failed for relation %u", relid);
-	reltup = (Form_pg_class) GETSTRUCT(tp);
-	relname = NameStr(reltup->relname);
-
-	/* Check for conflicting CTE name */
-	need_qual = false;
-	foreach(nslist, namespaces)
-	{
-		deparse_namespace *dpns = (deparse_namespace *) lfirst(nslist);
-		ListCell   *ctlist;
-
-		foreach(ctlist, dpns->ctes)
-		{
-			CommonTableExpr *cte = (CommonTableExpr *) lfirst(ctlist);
-
-			if (strcmp(cte->ctename, relname) == 0)
-			{
-				need_qual = true;
-				break;
-			}
-		}
-		if (need_qual)
-			break;
-	}
-
-	/* Otherwise, qualify the name if not visible in search path */
-	if (!need_qual)
-		need_qual = !RelationIsVisible(relid);
-
-	if (need_qual)
-		nspname = get_namespace_name_or_temp(reltup->relnamespace);
-	else
-		nspname = NULL;
-
-	result = quote_qualified_identifier(nspname, relname);
-
-	ReleaseSysCache(tp);
-
-	return result;
-}
-
-/*
- * generate_qualified_relation_name
- *		Compute the name to display for a relation specified by OID
- *
- * As above, but unconditionally schema-qualify the name.
- */
-static char *
-generate_qualified_relation_name(Oid relid)
-{
-	HeapTuple	tp;
-	Form_pg_class reltup;
-	char	   *relname;
-	char	   *nspname;
-	char	   *result;
-
-	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
-	if (!HeapTupleIsValid(tp))
-		elog(ERROR, "cache lookup failed for relation %u", relid);
-	reltup = (Form_pg_class) GETSTRUCT(tp);
-	relname = NameStr(reltup->relname);
-
-	nspname = get_namespace_name_or_temp(reltup->relnamespace);
-	if (!nspname)
-		elog(ERROR, "cache lookup failed for namespace %u",
-			 reltup->relnamespace);
-
-	result = quote_qualified_identifier(nspname, relname);
-
-	ReleaseSysCache(tp);
-
-	return result;
-}
 
 /*
  * generate_function_name

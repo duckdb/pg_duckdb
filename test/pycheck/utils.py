@@ -225,7 +225,10 @@ def simplify_query_results(results) -> Any:
     return results
 
 
-# Monkey-patch an easy to use sql method into psycopg its Cursor classes
+# Re-exported classes, maybe in the future we want to add some extra
+# functionality, like having cursor return our custom cursor classes
+Connection = psycopg.Connection
+AsyncConnection = psycopg.AsyncConnection
 
 
 class Cursor:

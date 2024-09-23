@@ -13,6 +13,11 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
+extern "C" {
+#include "postgres.h"
+
+#include "utils/elog.h"
+}
 #include <string>
 
 #include <sys/types.h>
@@ -173,10 +178,6 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 
 	context.registered_state->Insert(
 	    "postgres_state", duckdb::make_shared_ptr<PostgresContextState>(rtables, planner_info, needed_columns, query));
-	auto res = context.Query("set search_path='pgduckdb.main'", false);
-	if (res->HasError()) {
-		elog(WARNING, "(DuckDB) %s", res->GetError().c_str());
-	}
 	return con;
 }
 
