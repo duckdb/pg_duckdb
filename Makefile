@@ -1,4 +1,4 @@
-.PHONY: duckdb install-duckdb clean-duckdb lintcheck check-regression-duckdb clean-regression .depend
+.PHONY: duckdb install-duckdb clean-duckdb lintcheck check-regression-duckdb clean-regression
 
 MODULE_big = pg_duckdb
 EXTENSION = pg_duckdb
@@ -62,7 +62,7 @@ ifeq ($(UNAME_S),Linux)
 	DUCKDB_LIB = libduckdb.so
 endif
 
-all: duckdb $(OBJS) .depend
+all: duckdb $(OBJS)
 
 include Makefile.global
 
@@ -113,12 +113,53 @@ lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
 	ruff check
 
-.depend:
-	$(RM) -f .depend
-	$(foreach SRC,$(SRCS),$(CXX) $(CPPFLAGS) -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -MM -MT $(SRC:.cpp=.o) $(SRC) >> .depend;)
-
 format:
 	git clang-format origin/main
 	ruff format
 
-include .depend
+# Vendored in --enabled-depend support from Postgres and enable it even if the
+# --enable-depend flag was not passed in when configuring Postgres.
+ifneq ($(autodepend), yes)
+
+echo:
+	echo hoi
+
+ifndef COMPILE.c
+COMPILE.c = $(CC) $(CFLAGS) $(CPPFLAGS) -c
+endif
+
+ifndef COMPILE.cc
+COMPILE.cc = $(CXX) $(CXXFLAGS) $(CPPFLAGS) -c
+endif
+
+DEPDIR = .deps
+
+ifeq ($(GCC), yes)
+
+# GCC allows us to create object and dependency file in one invocation.
+%.o : %.c
+	@if test ! -d $(DEPDIR); then mkdir -p $(DEPDIR); fi
+	$(COMPILE.c) -o $@ $< -MMD -MP -MF $(DEPDIR)/$(*F).Po
+
+%.o : %.cpp
+	@if test ! -d $(DEPDIR); then mkdir -p $(DEPDIR); fi
+	$(COMPILE.cc) -o $@ $< -MMD -MP -MF $(DEPDIR)/$(*F).Po
+
+endif # GCC
+
+# Include all the dependency files generated for the current
+# directory. Note that make would complain if include was called with
+# no arguments.
+Po_files := $(wildcard $(DEPDIR)/*.Po)
+ifneq (,$(Po_files))
+include $(Po_files)
+endif
+
+# hook for clean-up
+clean distclean: clean-deps
+
+.PHONY: clean-deps
+clean-deps:
+	@rm -rf $(DEPDIR)
+
+endif # autodepend
