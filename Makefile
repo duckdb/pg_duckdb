@@ -1,4 +1,4 @@
-.PHONY: duckdb install-duckdb clean-duckdb lintcheck check-regression-duckdb clean-regression .depend
+.PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression .depend
 
 MODULE_big = pg_duckdb
 EXTENSION = pg_duckdb
@@ -113,7 +113,7 @@ clean-duckdb:
 
 install: install-duckdb
 
-clean: clean-regression clean-duckdb
+clean-all: clean clean-regression clean-duckdb
 
 lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
