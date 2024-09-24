@@ -3,51 +3,51 @@ CREATE TYPE mood AS ENUM (
 	'neutral',
 	'happy'
 );
-create table tbl (a mood);
-insert into tbl select 'happy';
-insert into tbl select 'neutral';
-insert into tbl select 'sad';
+create table tbl (id serial primary key, a mood);
+insert into tbl(a) select 'happy';
+insert into tbl(a) select 'neutral';
+insert into tbl(a) select 'sad';
 select * from tbl;
-    a    
----------
- happy
- neutral
- sad
+ id |    a    
+----+---------
+  1 | happy
+  2 | neutral
+  3 | sad
 (3 rows)
 
-select * from tbl where a = 'sad';
-  a  
------
- sad
+select * from tbl where a = 'sad'; -- returns `sad`
+ id |  a  
+----+-----
+  3 | sad
 (1 row)
 
-select * from tbl where a > 'neutral';
-   a   
--------
- happy
+select * from tbl where a > 'neutral'; --- returns `happy`
+ id |   a   
+----+-------
+  1 | happy
 (1 row)
 
 ALTER TYPE mood ADD VALUE 'a-bit-happy' BEFORE 'happy';
 ALTER TYPE mood ADD VALUE 'very-happy' AFTER 'happy';
 ALTER TYPE mood ADD VALUE 'very-sad' BEFORE 'sad';
-insert into tbl values ('very-sad'), ('very-happy'), ('a-bit-happy');
-select * from tbl where a > 'neutral';
-      a      
--------------
- happy
- very-happy
- a-bit-happy
+insert into tbl(a) values ('very-sad'), ('very-happy'), ('a-bit-happy');
+select * from tbl where a > 'neutral'; --- returns `a-bit-happy`, `happy` and `very-happy`;
+ id |      a      
+----+-------------
+  1 | happy
+  5 | very-happy
+  6 | a-bit-happy
 (3 rows)
 
 select * from tbl;
-      a      
--------------
- happy
- neutral
- sad
- very-sad
- very-happy
- a-bit-happy
+ id |      a      
+----+-------------
+  1 | happy
+  2 | neutral
+  3 | sad
+  4 | very-sad
+  5 | very-happy
+  6 | a-bit-happy
 (6 rows)
 
 drop table tbl;
