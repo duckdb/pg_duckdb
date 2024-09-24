@@ -237,8 +237,8 @@ class Cursor:
     def __getattr__(self, name):
         return getattr(self.cursor, name)
 
-    def sql(self, query, params=None) -> Any:
-        self.execute(query, params)
+    def sql(self, query, params=None, **kwargs) -> Any:
+        self.execute(query, params, **kwargs)
         try:
             return simplify_query_results(self.fetchall())
         except psycopg.ProgrammingError as e:
@@ -256,11 +256,11 @@ class AsyncCursor:
     def __getattr__(self, name):
         return getattr(self.cursor, name)
 
-    def sql(self, query, params=None):
-        return asyncio.ensure_future(self.sql_coroutine(query, params))
+    def sql(self, query, params=None, **kwargs):
+        return asyncio.ensure_future(self.sql_coroutine(query, params, **kwargs))
 
-    async def sql_coroutine(self, query, params=None) -> Any:
-        await self.execute(query, params)
+    async def sql_coroutine(self, query, params=None, **kwargs) -> Any:
+        await self.execute(query, params, **kwargs)
         try:
             return simplify_query_results(await self.fetchall())
         except psycopg.ProgrammingError as e:

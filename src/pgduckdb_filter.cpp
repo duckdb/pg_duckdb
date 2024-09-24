@@ -5,7 +5,8 @@ extern "C" {
 #include "postgres.h"
 #include "catalog/pg_type.h"
 #include "utils/builtins.h"
-
+#include "utils/date.h"
+#include "utils/timestamp.h"
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"
@@ -16,8 +17,8 @@ namespace pgduckdb {
 
 template <class T, class OP>
 bool
-TemplatedFilterOperation(Datum &value, const duckdb::Value &constant) {
-	return OP::Operation((T)value, constant.GetValueUnsafe<T>());
+TemplatedFilterOperation(T value, const duckdb::Value &constant) {
+	return OP::Operation(value, constant.GetValueUnsafe<T>());
 }
 
 template <class OP>
@@ -45,26 +46,26 @@ static bool
 FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 	switch (type_oid) {
 	case BOOLOID:
-		return TemplatedFilterOperation<bool, OP>(value, constant);
+		return TemplatedFilterOperation<bool, OP>(DatumGetBool(value), constant);
 	case CHAROID:
-		return TemplatedFilterOperation<uint8_t, OP>(value, constant);
+		return TemplatedFilterOperation<uint8_t, OP>(DatumGetChar(value), constant);
 	case INT2OID:
-		return TemplatedFilterOperation<int16_t, OP>(value, constant);
+		return TemplatedFilterOperation<int16_t, OP>(DatumGetInt16(value), constant);
 	case INT4OID:
-		return TemplatedFilterOperation<int32_t, OP>(value, constant);
+		return TemplatedFilterOperation<int32_t, OP>(DatumGetInt32(value), constant);
 	case INT8OID:
-		return TemplatedFilterOperation<int64_t, OP>(value, constant);
+		return TemplatedFilterOperation<int64_t, OP>(DatumGetInt64(value), constant);
 	case FLOAT4OID:
-		return TemplatedFilterOperation<float, OP>(value, constant);
+		return TemplatedFilterOperation<float, OP>(DatumGetFloat4(value), constant);
 	case FLOAT8OID:
-		return TemplatedFilterOperation<double, OP>(value, constant);
+		return TemplatedFilterOperation<double, OP>(DatumGetFloat8(value), constant);
 	case DATEOID: {
-		Datum date_datum = static_cast<int32_t>(value + pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET);
-		return TemplatedFilterOperation<int32_t, OP>(date_datum, constant);
+		int32_t date = DatumGetDateADT(value) + pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
+		return TemplatedFilterOperation<int32_t, OP>(date, constant);
 	}
 	case TIMESTAMPOID: {
-		Datum timestamp_datum = static_cast<int64_t>(value + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
-		return TemplatedFilterOperation<int64_t, OP>(timestamp_datum, constant);
+		int64_t timestamp = DatumGetTimestamp(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		return TemplatedFilterOperation<int64_t, OP>(timestamp, constant);
 	}
 	case TEXTOID:
 	case VARCHAROID:
