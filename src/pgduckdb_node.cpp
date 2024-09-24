@@ -141,7 +141,8 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 	TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
 	MemoryContext old_context;
 
-	if (!duckdb_scan_state->is_executed) {
+	bool already_executed = duckdb_scan_state->is_executed;
+	if (!already_executed) {
 		ExecuteQuery(duckdb_scan_state);
 	}
 
@@ -180,7 +181,7 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 
 	duckdb_scan_state->current_row++;
 	if (duckdb_scan_state->current_row >= duckdb_scan_state->current_data_chunk->size()) {
-		delete duckdb_scan_state->current_data_chunk.release();
+		duckdb_scan_state->current_data_chunk.reset();
 		duckdb_scan_state->fetch_next = true;
 	}
 

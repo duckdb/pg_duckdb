@@ -1,6 +1,9 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -8,6 +11,7 @@
 #include "pgduckdb/scan/postgres_index_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
 #include <string>
 
@@ -71,15 +75,27 @@ DuckDBManager::DuckDBManager() {
 
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", GetExtensionDirectory());
+	// Transforms VIEWs into their view definition
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
+
 	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
+	    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot());
+	duckdb::ExtensionInstallInfo extension_install_info;
+	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
 	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
+	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
 	LoadFunctions(context);
 	LoadSecrets(context);
 	LoadExtensions(context);
+
+	auto res = context.Query("set search_path='pgduckdb.main'", false);
+	if (res->HasError()) {
+		elog(WARNING, "(DuckDB) %s", res->GetError().c_str());
+	}
 }
 
 void
@@ -155,10 +171,10 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 
 duckdb::Connection *
 DuckDBManager::GetConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
-	connection->context->registered_state->Remove("postgres_scan");
+	connection->context->registered_state->Remove("postgres_state");
 	connection->context->registered_state->Insert(
-	    "postgres_scan", duckdb::make_shared_ptr<PostgresReplacementScanDataClientContextState>(rtables, planner_info,
-	                                                                                            needed_columns, query));
+	    "postgres_state", duckdb::make_shared_ptr<PostgresContextState>(rtables, planner_info, needed_columns, query));
+
 	return connection.get();
 }
 

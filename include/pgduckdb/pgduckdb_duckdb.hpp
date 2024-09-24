@@ -25,7 +25,7 @@ public:
 
 	inline duckdb::Connection *
 	GetConnection() const {
-		connection->context->registered_state->Remove("postgres_scan");
+		connection->context->registered_state->Remove("postgres_state");
 		return connection.get();
 	}
 

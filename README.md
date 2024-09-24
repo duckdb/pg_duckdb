@@ -38,7 +38,7 @@ CREATE EXTENSION pg_duckdb;
 	- `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
 	- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
 	- You can pass globs and arrays to these functions, just like in DuckDB
-- Enable the DuckDB Iceberg extension using `SELECT duckdb.enable_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
+- Enable the DuckDB Iceberg extension using `SELECT duckdb.install_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
 - Write a query — or an entire table — to parquet in object storage.
 	- `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
 	- `COPY table TO 's3://...'`
