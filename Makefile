@@ -21,6 +21,9 @@ else
 	DUCKDB_BUILD_TYPE = release
 endif
 
+DUCKDB_LIB = libduckdb$(DLSUFFIX)
+FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
+
 override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2
 override PG_CXXFLAGS += -std=c++17 -Wno-sign-compare ${DUCKDB_BUILD_CXX_FLAGS}
 
@@ -31,17 +34,7 @@ COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS)
 %.bc : %.cpp
 	$(COMPILE.cc.bc) $(SHLIB_LINK) -I$(INCLUDE_SERVER) -o $@ $<
 
-# determine the name of the duckdb library that is built
-UNAME_S := $(shell uname -s)
-ifeq ($(UNAME_S),Darwin)
-	DUCKDB_LIB = libduckdb.dylib
-endif
-ifeq ($(UNAME_S),Linux)
-	DUCKDB_LIB = libduckdb.so
-endif
-
 all: $(OBJS)
-all-lib: duckdb
 
 include Makefile.global
 
@@ -63,8 +56,9 @@ pycheck: all install
 
 check: installcheck pycheck
 
-FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
 duckdb: $(FULL_DUCKDB_LIB)
+# make completing duckdb a dependency of linking
+$(shlib): $(FULL_DUCKDB_LIB)
 
 third_party/duckdb/Makefile:
 	git submodule update --init --recursive
