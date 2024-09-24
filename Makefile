@@ -1,4 +1,4 @@
-.PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression .depend
+.PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression
 
 MODULE_big = pg_duckdb
 EXTENSION = pg_duckdb
@@ -68,7 +68,7 @@ ifeq ($(UNAME_S),Linux)
 	DUCKDB_LIB = libduckdb.so
 endif
 
-all: duckdb $(OBJS) .depend
+all: duckdb $(OBJS)
 
 include Makefile.global
 
@@ -119,12 +119,6 @@ lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
 	ruff check
 
-.depend:
-	$(RM) -f .depend
-	$(foreach SRC,$(SRCS),$(CXX) $(CPPFLAGS) -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -MM -MT $(SRC:.cpp=.o) $(SRC) >> .depend;)
-
 format:
 	git clang-format origin/main
 	ruff format
-
-include .depend
