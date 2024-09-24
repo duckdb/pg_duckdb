@@ -11,6 +11,7 @@ CREATE TABLE other.t(a INT);
 INSERT INTO other.t SELECT g from generate_series(1,100) g;
 SELECT count(*) FROM other.t;
 
+-- Test fully qualified table name combinations
 SELECT count(*) FROM public.t, other.t;
 SELECT count(*) FROM t, other.t;
 SELECT count(*) FROM t,t;

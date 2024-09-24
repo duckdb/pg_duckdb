@@ -151,18 +151,7 @@ CreatePlan(Query *query, ParamListInfo bound_params) {
 
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
-	/*
-	    Temporarily clear search_path so that the query will contain only fully qualified tables.
-	    If we don't do this tables are only fully-qualified if they are not part of the current search_path.
-	    NOTE: This still doesn't fully qualify tables in pg_catalog or temporary tables, for that we'd need to modify
-	   pgduckdb_pg_get_querydef
-	*/
-
-	auto save_nestlevel = NewGUCNestLevel();
-	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
 	const char *query_string = pgduckdb_pg_get_querydef(parse, false);
-	AtEOXact_GUC(false, save_nestlevel);
-
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {
 			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);

@@ -9,7 +9,7 @@ check-regression-duckdb:
 	--temp-instance=./tmp_check \
 	--temp-config regression.conf \
 	--load-extension=pg_duckdb \
-	$(if $(TEST),$(TEST),--schedule=schedule)
+	--schedule schedule
 
 clean-regression:
 	rm -fr $(CURDIR)/tmp_check

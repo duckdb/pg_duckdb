@@ -30,5 +30,4 @@ SELECT b, a FROM query_filter_output_column WHERE b = 't1';
 SELECT a, c FROM query_filter_output_column WHERE b = 't1';
 -- All columns in tuple unordered
 SELECT c, a, b FROM query_filter_output_column WHERE a = 2;
-
 DROP TABLE query_filter_output_column;

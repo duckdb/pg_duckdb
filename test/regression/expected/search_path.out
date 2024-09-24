@@ -23,6 +23,7 @@ SELECT count(*) FROM other.t;
    100
 (1 row)
 
+-- Test fully qualified table name combinations
 SELECT count(*) FROM public.t, other.t;
  count 
 -------
