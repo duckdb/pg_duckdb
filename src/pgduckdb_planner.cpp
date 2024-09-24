@@ -9,6 +9,7 @@ extern "C" {
 #include "optimizer/optimizer.h"
 #include "tcop/pquery.h"
 #include "utils/syscache.h"
+#include "utils/guc.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 }
@@ -55,12 +56,23 @@ PlanQuery(Query *parse, ParamListInfo bound_params) {
 
 std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
 DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
+
 	/*
 	 * Copy the query, so the original one is not modified by the
 	 * subquery_planner call that PlanQuery does.
 	 */
 	Query *copied_query = (Query *)copyObjectImpl(query);
+	/*
+	    Temporarily clear search_path so that the query will contain only fully qualified tables.
+	    If we don't do this tables are only fully-qualified if they are not part of the current search_path.
+	    NOTE: This still doesn't fully qualify tables in pg_catalog or temporary tables, for that we'd need to modify
+	   pgduckdb_pg_get_querydef
+	*/
+
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
 	const char *query_string = pgduckdb_pg_get_querydef(copied_query, false);
+	AtEOXact_GUC(false, save_nestlevel);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {
@@ -139,6 +151,14 @@ CreatePlan(Query *query, ParamListInfo bound_params) {
 
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
+	const char *query_string = pgduckdb_pg_get_querydef(parse, false);
+	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+		if (duckdb_explain_analyze) {
+			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);
+		} else {
+			query_string = psprintf("EXPLAIN %s", query_string);
+		}
+	}
 	/* We need to check can we DuckDB create plan */
 	Plan *duckdb_plan = (Plan *)castNode(CustomScan, CreatePlan(parse, bound_params));
 
