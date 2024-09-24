@@ -196,6 +196,7 @@ PostgresIndexScanFunction::PostgresIndexScanFunc(duckdb::ClientContext &context,
 	}
 
 	output.SetCardinality(local_state.m_local_state->m_output_vector_size);
+	output.Verify();
 }
 
 duckdb::unique_ptr<duckdb::NodeStatistics>

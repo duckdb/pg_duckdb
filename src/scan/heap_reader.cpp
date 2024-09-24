@@ -139,6 +139,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 		/* We have collected STANDARD_VECTOR_SIZE */
 		if (m_local_state->m_output_vector_size == STANDARD_VECTOR_SIZE) {
 			output.SetCardinality(m_local_state->m_output_vector_size);
+			output.Verify();
 			m_local_state->m_output_vector_size = 0;
 			return true;
 		}
@@ -147,6 +148,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 	/* Next assigned block number is InvalidBlockNumber so we check did we write any tuples in output vector */
 	if (m_local_state->m_output_vector_size) {
 		output.SetCardinality(m_local_state->m_output_vector_size);
+		output.Verify();
 		m_local_state->m_output_vector_size = 0;
 	}
 

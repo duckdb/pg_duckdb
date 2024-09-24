@@ -13,3 +13,4 @@ test: cte
 test: create_table_as
 test: standard_conforming_strings
 test: enum
+test: query_filter

@@ -23,8 +23,8 @@ public:
 	TupleDesc m_tuple_desc;
 	std::mutex m_lock; // Lock for one replacement scan
 	bool m_count_tuples_only;
-	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_columns;
-	duckdb::map<duckdb::idx_t, duckdb::idx_t> m_projections;
+	duckdb::map<duckdb::idx_t, duckdb::column_t> m_read_columns_ids;
+	duckdb::map<duckdb::idx_t, duckdb::column_t> m_output_columns_ids;
 	duckdb::TableFilterSet *m_filters = nullptr;
 	std::atomic<std::uint32_t> m_total_row_count;
 };
@@ -39,14 +39,13 @@ public:
 	bool m_exhausted_scan;
 };
 
-struct PostgresReplacementScanDataClientContextState : public duckdb::ClientContextState {
+struct PostgresContextState : public duckdb::ClientContextState {
 public:
-	PostgresReplacementScanDataClientContextState(List *rtables, PlannerInfo *query_planner_info, List *needed_columns,
-	                                              const char *query_string)
+	PostgresContextState(List *rtables, PlannerInfo *query_planner_info, List *needed_columns, const char *query_string)
 	    : m_rtables(rtables), m_query_planner_info(query_planner_info), m_needed_columns(needed_columns),
 	      m_query_string(query_string) {
 	}
-	~PostgresReplacementScanDataClientContextState() override {};
+	~PostgresContextState() override {};
 
 public:
 	List *m_rtables;

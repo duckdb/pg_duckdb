@@ -23,7 +23,13 @@ SRCS = src/scan/heap_reader.cpp \
 	   src/pgduckdb_planner.cpp \
 	   src/pgduckdb_ruleutils.cpp \
 	   src/pgduckdb_types.cpp \
-	   src/pgduckdb.cpp
+	   src/pgduckdb.cpp \
+	   src/catalog/pgduckdb_storage.cpp \
+	   src/catalog/pgduckdb_schema.cpp \
+	   src/catalog/pgduckdb_table.cpp \
+	   src/catalog/pgduckdb_transaction.cpp \
+	   src/catalog/pgduckdb_transaction_manager.cpp \
+	   src/catalog/pgduckdb_catalog.cpp
 
 OBJS = $(subst .cpp,.o, $(SRCS))
 
@@ -47,7 +53,7 @@ endif
 override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2
 override PG_CXXFLAGS += -std=c++17 -Wno-sign-compare ${DUCKDB_BUILD_CXX_FLAGS}
 
-SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -L$(PG_LIB) -lduckdb -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -lstdc++ -llz4
+SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lduckdb -lstdc++ -llz4
 
 COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) $(PG_CXXFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
 
