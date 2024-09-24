@@ -14,6 +14,7 @@ extern "C" {
 #include "pgduckdb/scan/index_scan_utils.hpp"
 #include "pgduckdb/scan/postgres_index_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/common/scoped_postgres_resource.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 namespace pgduckdb {
@@ -91,7 +92,7 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
 
 	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
 
-	auto rel = RelationIdGetRelation(rte->relid);
+	auto rel = ScopedPostgresResource<Relation>(RelationIdGetRelation(rte->relid), RelationClose);
 	auto relation_descr = RelationGetDescr(rel);
 
 	if (!relation_descr) {
@@ -110,8 +111,6 @@ PostgresIndexScanFunction::PostgresIndexScanBind(duckdb::ClientContext &context,
 		elog(DEBUG2, "(PGDuckDB/PostgresIndexScanBind) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
-
-	RelationClose(rel);
 
 	return duckdb::make_uniq<PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid, snapshot);
 }

@@ -16,6 +16,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
+#include "pgduckdb/common/scoped_postgres_resource.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -111,10 +112,10 @@ CreatePlan(Query *query, ParamListInfo bound_params) {
 			return nullptr;
 		}
 
-		HeapTuple tp;
 		Form_pg_type typtup;
 
-		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
+		auto tp = pgduckdb::ScopedPostgresResource<HeapTuple>(
+		    SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid)), ReleaseSysCache);
 		if (!HeapTupleIsValid(tp)) {
 			elog(WARNING, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
 			return nullptr;
@@ -127,8 +128,6 @@ CreatePlan(Query *query, ParamListInfo bound_params) {
 		duckdb_node->custom_scan_tlist =
 		    lappend(duckdb_node->custom_scan_tlist,
 		            makeTargetEntry((Expr *)var, i + 1, (char *)pstrdup(prepared_query->GetNames()[i].c_str()), false));
-
-		ReleaseSysCache(tp);
 	}
 
 	duckdb_node->custom_private = list_make1(query);
