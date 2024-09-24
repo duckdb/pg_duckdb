@@ -8,26 +8,45 @@ using duckdb::idx_t;
 using duckdb::LogicalTypeId;
 using duckdb::PhysicalType;
 
-// This is medium hacky, we create extra space in the Vector that would normally only hold the strings corresponding to the enum's members.
-// In that extra space we store the enum member oids.
+// This is medium hacky, we create extra space in the Vector that would normally only hold the strings corresponding to
+// the enum's members. In that extra space we store the enum member oids.
 
-// We do this so we can find the OID from the offset (which is what DuckDB stores in a Vector of type ENUM) and return that when converting the result from DuckDB -> Postgres
+// We do this so we can find the OID from the offset (which is what DuckDB stores in a Vector of type ENUM) and return
+// that when converting the result from DuckDB -> Postgres
 
-LogicalType PGDuckDBEnum::CreateEnumType(std::vector<HeapTuple> &enum_members) {
-	idx_t allocation_size = enum_members.size();
-	allocation_size += enum_members.size() / 4;
-	allocation_size += (enum_members.size() % 4) != 0;
+LogicalType
+PGDuckDBEnum::CreateEnumType(std::vector<HeapTuple> &enum_members) {
+	auto size = enum_members.size();
 
-	auto duck_enum_vec = duckdb::Vector(duckdb::LogicalType::VARCHAR, allocation_size);
+	auto duck_enum_vec = duckdb::Vector(duckdb::LogicalType::VARCHAR, size);
+	auto enum_member_oid_vec = duckdb::Vector(duckdb::LogicalType::UINTEGER, size);
 	auto enum_vec_data = duckdb::FlatVector::GetData<duckdb::string_t>(duck_enum_vec);
-	auto enum_member_oid_data = (uint32_t *)(enum_vec_data + enum_members.size());
-	for (idx_t i = 0; i < enum_members.size(); i++) {
+	auto enum_member_oid_data = duckdb::FlatVector::GetData<uint32_t>(enum_member_oid_vec);
+	for (idx_t i = 0; i < size; i++) {
 		auto &member = enum_members[i];
 		auto enum_data = (Form_pg_enum)GETSTRUCT(member);
 		enum_vec_data[i] = duckdb::StringVector::AddString(duck_enum_vec, enum_data->enumlabel.data);
 		enum_member_oid_data[i] = enum_data->oid;
 	}
-	return duckdb::EnumTypeInfo::CreateType(duck_enum_vec, enum_members.size());
+
+	// Generate EnumTypeInfo
+	duckdb::shared_ptr<duckdb::ExtraTypeInfo> info;
+	auto enum_internal_type = duckdb::EnumTypeInfo::DictType(size);
+	switch (enum_internal_type) {
+	case PhysicalType::UINT8:
+		info = duckdb::make_shared_ptr<PGDuckDBEnumTypeInfo<uint8_t>>(duck_enum_vec, size, enum_member_oid_vec);
+		break;
+	case PhysicalType::UINT16:
+		info = duckdb::make_shared_ptr<PGDuckDBEnumTypeInfo<uint16_t>>(duck_enum_vec, size, enum_member_oid_vec);
+		break;
+	case PhysicalType::UINT32:
+		info = duckdb::make_shared_ptr<PGDuckDBEnumTypeInfo<uint32_t>>(duck_enum_vec, size, enum_member_oid_vec);
+		break;
+	default:
+		throw duckdb::InternalException("Invalid Physical Type for ENUMs");
+	}
+	// Generate Actual Enum Type
+	return LogicalType(LogicalTypeId::ENUM, info);
 }
 
 idx_t
@@ -53,12 +72,12 @@ PGDuckDBEnum::GetEnumPosition(Datum enum_member_oid_p, const duckdb::LogicalType
 	auto &enum_type_info = type.AuxInfo()->Cast<duckdb::EnumTypeInfo>();
 	auto dict_size = enum_type_info.GetDictSize();
 
-	auto enum_member_oids = PGDuckDBEnum::GetMemberOids(type);
+	auto &enum_member_oids = PGDuckDBEnum::GetMemberOids(type);
 	auto oids_data = duckdb::FlatVector::GetData<uint32_t>(enum_member_oids);
 
-	uint32_t *begin = oids_data;
-	uint32_t *end = oids_data + dict_size;
-	uint32_t *result = std::find(begin, end, enum_member_oid);
+	const uint32_t *begin = oids_data;
+	const uint32_t *end = oids_data + dict_size;
+	const uint32_t *result = std::find(begin, end, enum_member_oid);
 
 	if (result == end) {
 		throw duckdb::InternalException("Could not find enum_member_oid: %d", enum_member_oid);
@@ -101,17 +120,21 @@ PGDuckDBEnum::GetEnumTypeOid(const Vector &oids) {
 	return result;
 }
 
-Vector
+const Vector &
 PGDuckDBEnum::GetMemberOids(const duckdb::LogicalType &type) {
 	auto type_info = type.AuxInfo();
 	auto &enum_type_info = type_info->Cast<duckdb::EnumTypeInfo>();
-	auto &enum_sort_order = enum_type_info.GetValuesInsertOrder();
-	idx_t dict_size = enum_type_info.GetDictSize();
 
-	// We store the (Postgres) enum member oids behind the string data in the EnumTypeInfo
-	auto vector_data = duckdb::FlatVector::GetData<duckdb::string_t>(enum_sort_order);
-	// Create a Vector that wraps the existing data, without copying - only valid while the EnumTypeInfo is alive
-	return Vector(duckdb::LogicalType::UINTEGER, (duckdb::data_ptr_t)(vector_data + dict_size));
+	switch (enum_type_info.DictType(enum_type_info.GetDictSize())) {
+	case PhysicalType::UINT8:
+		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint8_t>>().GetMemberOids();
+	case PhysicalType::UINT16:
+		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint16_t>>().GetMemberOids();
+	case PhysicalType::UINT32:
+		return enum_type_info.Cast<PGDuckDBEnumTypeInfo<uint32_t>>().GetMemberOids();
+	default:
+		throw duckdb::InternalException("Invalid Physical Type for ENUMs");
+	}
 }
 
 } // namespace pgduckdb

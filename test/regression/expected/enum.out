@@ -15,13 +15,30 @@ select * from tbl;
  sad
 (3 rows)
 
---select * from tbl where a = 'sad'; -- returns `sad`
---select * from tbl where a > 'neutral'; --- returns `happy`
+select * from tbl where a = 'sad';
+  a  
+-----
+ sad
+(1 row)
+
+select * from tbl where a > 'neutral';
+   a   
+-------
+ happy
+(1 row)
+
 ALTER TYPE mood ADD VALUE 'a-bit-happy' BEFORE 'happy';
 ALTER TYPE mood ADD VALUE 'very-happy' AFTER 'happy';
 ALTER TYPE mood ADD VALUE 'very-sad' BEFORE 'sad';
 insert into tbl values ('very-sad'), ('very-happy'), ('a-bit-happy');
---select * from tbl where a > 'neutral'; --- returns `a-bit-happy`, `happy` and `very-happy`;
+select * from tbl where a > 'neutral';
+      a      
+-------------
+ happy
+ very-happy
+ a-bit-happy
+(3 rows)
+
 select * from tbl;
       a      
 -------------

@@ -10,6 +10,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"
+#include "pgduckdb/types/pgduckdb_enum.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
@@ -71,8 +72,22 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 	case VARCHAROID:
 		return StringFilterOperation<OP>(value, constant);
 	default:
+		if (PGDuckDBEnum::IsEnumType(type_oid)) {
+			auto position = PGDuckDBEnum::GetEnumPosition(value, constant.type());
+			auto physical_type = duckdb::EnumType::GetPhysicalType(constant.type());
+			switch (physical_type) {
+			case duckdb::PhysicalType::UINT8:
+				return TemplatedFilterOperation<uint8_t, OP>(static_cast<uint8_t>(position), constant);
+			case duckdb::PhysicalType::UINT16:
+				return TemplatedFilterOperation<uint16_t, OP>(static_cast<uint16_t>(position), constant);
+			case duckdb::PhysicalType::UINT32:
+				return TemplatedFilterOperation<uint32_t, OP>(static_cast<uint32_t>(position), constant);
+			default:
+				throw duckdb::InternalException("Invalid Physical Type for ENUMs");
+			}
+		}
 		throw duckdb::InvalidTypeException(
-		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid));
+		    duckdb::StringUtil::Format("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid));
 	}
 }
 

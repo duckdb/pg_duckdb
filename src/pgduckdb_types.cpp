@@ -334,7 +334,7 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 void
 ConvertDuckToPostgresEnumValue(TupleTableSlot *slot, duckdb::Value &val, idx_t col) {
 	auto position = PGDuckDBEnum::GetDuckDBEnumPosition(val);
-	auto enum_member_oids = PGDuckDBEnum::GetMemberOids(val.type());
+	auto &enum_member_oids = PGDuckDBEnum::GetMemberOids(val.type());
 	auto enum_member_oid = duckdb::FlatVector::GetData<Oid>(enum_member_oids)[position];
 	slot->tts_values[col] = ObjectIdGetDatum(enum_member_oid);
 }
@@ -679,7 +679,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		}
 	}
 	case duckdb::LogicalTypeId::ENUM: {
-		auto member_oids = PGDuckDBEnum::GetMemberOids(type);
+		auto &member_oids = PGDuckDBEnum::GetMemberOids(type);
 		return PGDuckDBEnum::GetEnumTypeOid(member_oids);
 	}
 	default: {
