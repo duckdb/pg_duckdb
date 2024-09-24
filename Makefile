@@ -68,7 +68,8 @@ ifeq ($(UNAME_S),Linux)
 	DUCKDB_LIB = libduckdb.so
 endif
 
-all: duckdb $(OBJS)
+all: $(OBJS)
+all-lib: duckdb
 
 include Makefile.global
 
