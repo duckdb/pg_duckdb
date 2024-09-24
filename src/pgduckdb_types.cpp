@@ -500,7 +500,7 @@ ChildTypeFromArray(Oid array_type) {
 
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
-	auto &type = attribute->atttypid;
+	auto type = getBaseType(attribute->atttypid);
 	auto &typmod = attribute->atttypmod;
 	auto dimensions = attribute->attndims;
 	switch (type) {
@@ -551,6 +551,7 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSOID:
 		return duckdb::LogicalTypeId::UINTEGER;
 	default: {
+		elog(WARNING, "DuckDB does not support this type Oid: %s", std::to_string(type).c_str());
 		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
 		return duckdb::LogicalType::USER(name);
 	}

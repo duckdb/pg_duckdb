@@ -8,6 +8,9 @@ INSERT INTO my_table (a, b, c) SELECT * from (
 		('c', '<root><element>value</element></root>'::XML, 2000000)
 ) t(a);
 SELECT a, c FROM my_table;
+WARNING:  DuckDB does not support this type Oid: 142
+WARNING:  DuckDB does not support this type Oid: 142
+WARNING:  DuckDB does not support this type Oid: 142
  a |    c    
 ---+---------
  a |      42

@@ -1,0 +1,13 @@
+create domain my_string as varchar;
+CREATE TABLE t(a my_string);
+insert into t values ('test');
+insert into t values ('apple');
+select a > 'hello' from t;
+ ?column? 
+----------
+ t
+ f
+(2 rows)
+
+DROP TABLE t;
+drop domain my_string;
