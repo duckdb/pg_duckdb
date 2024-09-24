@@ -34,7 +34,7 @@ private:
 	duckdb::unique_ptr<duckdb::DuckDB> database;
 };
 
-duckdb::unique_ptr<duckdb::Connection> DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info,
-                                                              List *needed_columns, const char *query);
+// duckdb::unique_ptr<duckdb::Connection> DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info,
+//                                                               List *needed_columns, const char *query);
 
 } // namespace pgduckdb

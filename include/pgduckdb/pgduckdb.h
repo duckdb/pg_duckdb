@@ -7,3 +7,6 @@ extern "C" void _PG_init(void);
 
 // pgduckdb_hooks.c
 void DuckdbInitHooks(void);
+
+// pgduckdb_bgw.cpp
+extern void DuckdbInitBgw(void);

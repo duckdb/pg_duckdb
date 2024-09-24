@@ -15,7 +15,8 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
-#include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/bgw/client.hpp"
+#include "pgduckdb/bgw/messages.hpp"
 
 namespace pgduckdb {
 
@@ -114,21 +115,18 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-	auto &db = DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
-	auto &context = *connection->context;
-
 	auto extension_name = DatumToString(name);
 
 	StringInfo install_extension_command = makeStringInfo();
 	appendStringInfo(install_extension_command, "INSTALL %s;", extension_name.c_str());
 
-	auto res = context.Query(install_extension_command->data, false);
+	auto &client = PGDuckDBBgwClient::Get();
+	auto res = client.RunQuery(install_extension_command->data);
 
 	pfree(install_extension_command->data);
 
 	if (res->HasError()) {
-		elog(WARNING, "(duckdb_install_extension) %s", res->GetError().c_str());
+		elog(WARNING, "(duckdb_install_extension) %s", res->GetError().Message().c_str());
 		return false;
 	}
 

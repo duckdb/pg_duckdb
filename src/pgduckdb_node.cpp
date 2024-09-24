@@ -9,6 +9,9 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
+#include "pgduckdb/bgw/client.hpp"
+#include "pgduckdb/bgw/messages.hpp"
+
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
 
@@ -17,11 +20,12 @@ static CustomExecMethods duckdb_scan_exec_methods;
 
 typedef struct DuckdbScanState {
 	CustomScanState css; /* must be first field */
-	duckdb::Connection *duckdb_connection;
-	duckdb::PreparedStatement *prepared_statement;
+	uint64_t id;
+	// duckdb::Connection *duckdb_connection;
+	// duckdb::PreparedStatement *prepared_statement;
 	bool is_executed;
 	bool fetch_next;
-	duckdb::unique_ptr<duckdb::QueryResult> query_results;
+	// duckdb::unique_ptr<duckdb::QueryResult> query_results;
 	duckdb::idx_t column_count;
 	duckdb::unique_ptr<duckdb::DataChunk> current_data_chunk;
 	duckdb::idx_t current_row;
@@ -29,9 +33,10 @@ typedef struct DuckdbScanState {
 
 static void
 CleanupDuckdbScanState(DuckdbScanState *state) {
-	state->query_results.reset();
-	delete state->prepared_statement;
-	delete state->duckdb_connection;
+	// TODO - clear results in BGW
+	// state->query_results.reset();
+	// delete state->prepared_statement;
+	// delete state->duckdb_connection;
 }
 
 /* static callbacks */
@@ -46,8 +51,7 @@ static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)newNode(sizeof(DuckdbScanState), T_CustomScanState);
 	CustomScanState *custom_scan_state = &duckdb_scan_state->css;
-	duckdb_scan_state->duckdb_connection = (duckdb::Connection *)linitial(cscan->custom_private);
-	duckdb_scan_state->prepared_statement = (duckdb::PreparedStatement *)lsecond(cscan->custom_private);
+	duckdb_scan_state->id = (uint64_t)linitial(cscan->custom_private);
 	duckdb_scan_state->is_executed = false;
 	duckdb_scan_state->fetch_next = true;
 	custom_scan_state->methods = &duckdb_scan_exec_methods;
@@ -63,20 +67,21 @@ Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) 
 
 static void
 ExecuteQuery(DuckdbScanState *state) {
-	auto &prepared = *state->prepared_statement;
-	auto &query_results = state->query_results;
-	auto &connection = state->duckdb_connection;
+	auto &client = pgduckdb::PGDuckDBBgwClient::Get();
+	// auto &prepared = *state->prepared_statement;
+	// auto &query_results = state->query_results;
+	// auto &connection = state->duckdb_connection;
 
-	auto pending = prepared.PendingQuery();
-	duckdb::PendingExecutionResult execution_result;
-	do {
-		execution_result = pending->ExecuteTask();
+	// auto pending = prepared.PendingQuery();
+
+	elog(INFO, "ExecuteQuery - begin");
+	duckdb::unique_ptr<pgduckdb::PGDuckDBPreparedQueryExecutionResult> result =
+	    client.PrepareQueryMakePending(state->id);
+	while (!duckdb::PendingQueryResult::IsResultReady(result->GetExecutionResult())) {
+		result = client.PreparedQueryExecuteTask(state->id); // pending->ExecuteTask();
+		elog(INFO, "ExecuteQuery - after PreparedQueryExecuteTask");
 		if (QueryCancelPending) {
-			// Send an interrupt
-			connection->Interrupt();
-			auto &executor = duckdb::Executor::Get(*connection->context);
-			// Wait for all tasks to terminate
-			executor.CancelTasks();
+			client.Interrupt();
 
 			// Delete the scan state
 			CleanupDuckdbScanState(state);
@@ -84,12 +89,14 @@ ExecuteQuery(DuckdbScanState *state) {
 			ProcessInterrupts();
 			elog(ERROR, "Query cancelled");
 		}
-	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
-	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
-		elog(ERROR, "Duckdb execute returned an error: %s", pending->GetError().c_str());
 	}
-	query_results = pending->Execute();
-	state->column_count = query_results->ColumnCount();
+	elog(INFO, "ExecuteQuery - result ready");
+	if (result->GetExecutionResult() == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
+		elog(ERROR, "Duckdb execute returned an error: %s", result->GetError().c_str());
+	}
+
+	// query_results = pending->Execute();
+	state->column_count = result->GetColumnCount();
 	state->is_executed = true;
 }
 
@@ -104,7 +111,10 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 	}
 
 	if (duckdb_scan_state->fetch_next) {
-		duckdb_scan_state->current_data_chunk = duckdb_scan_state->query_results->Fetch();
+		elog(INFO, "Duckdb_ExecCustomScan - fetch next");
+		auto &client = pgduckdb::PGDuckDBBgwClient::Get();
+		auto res = client.FetchNextChunk(duckdb_scan_state->id);
+		duckdb_scan_state->current_data_chunk = res->MoveChunk(); // duckdb_scan_state->query_results->Fetch();
 		duckdb_scan_state->current_row = 0;
 		duckdb_scan_state->fetch_next = false;
 		if (!duckdb_scan_state->current_data_chunk || duckdb_scan_state->current_data_chunk->size() == 0) {
@@ -157,17 +167,27 @@ Duckdb_ReScanCustomScan(CustomScanState *node) {
 void
 Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
-	auto res = duckdb_scan_state->prepared_statement->Execute();
-	std::string explain_output = "\n\n";
-	auto chunk = res->Fetch();
-	if (!chunk || chunk->size() == 0) {
+
+	auto &client = pgduckdb::PGDuckDBBgwClient::Get();
+
+	auto res = client.PreparedQueryExecute(duckdb_scan_state->id);
+	if (res->HasError()) {
+		elog(ERROR, "Duckdb execute returned an error: %s", res->GetError().Message().c_str());
+	}
+
+	auto &chunk = res->GetChunk();
+	if (chunk.size() == 0) {
 		return;
 	}
+
 	/* Is it safe to hardcode this as result of DuckDB explain? */
-	auto value = chunk->GetValue(1, 0);
-	explain_output += value.GetValue<duckdb::string>();
-	explain_output += "\n";
-	ExplainPropertyText("DuckDB Execution Plan", explain_output.c_str(), es);
+	auto value = chunk.GetValue(1, 0);
+
+	std::ostringstream explain_output;
+	explain_output << "\n\n";
+	explain_output << value.GetValue<duckdb::string>();
+	explain_output << "\n";
+	ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
 }
 
 extern "C" void

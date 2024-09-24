@@ -139,6 +139,9 @@ CREATE TABLE extensions (
     enabled BOOL DEFAULT TRUE
 );
 
+CREATE OR REPLACE FUNCTION run_pgduckdb_tests(text) RETURNS SETOF RECORD
+    LANGUAGE C AS 'MODULE_PATHNAME', 'run_pgduckdb_tests';
+
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 

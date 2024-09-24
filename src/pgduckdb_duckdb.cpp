@@ -9,6 +9,10 @@
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
+extern "C" {
+#include "postmaster/bgworker.h"
+}
+
 #include <string>
 
 #include <sys/types.h>
@@ -74,9 +78,17 @@ DuckDBManager::DuckDBManager() {
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
+
+	BackgroundWorkerInitializeConnection("y", NULL, 0); // FIXMEEEE
+	StartTransactionCommand();
+	PushActiveSnapshot(GetTransactionSnapshot());
+
 	LoadFunctions(context);
 	LoadSecrets(context);
 	LoadExtensions(context);
+
+	PopActiveSnapshot();
+	CommitTransactionCommand();
 }
 
 void
@@ -146,15 +158,15 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	}
 }
 
-duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
-	auto &db = DuckDBManager::Get().GetDatabase();
-	/* Add DuckDB replacement scan to read PG data */
-	auto con = duckdb::make_uniq<duckdb::Connection>(db);
-	con->context->registered_state->Insert(
-	    "postgres_scan", duckdb::make_shared_ptr<PostgresReplacementScanDataClientContextState>(rtables, planner_info,
-	                                                                                            needed_columns, query));
-	return con;
-}
+// duckdb::unique_ptr<duckdb::Connection>
+// DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
+// 	auto &db = DuckDBManager::Get().GetDatabase();
+// 	/* Add DuckDB replacement scan to read PG data */
+// 	auto con = duckdb::make_uniq<duckdb::Connection>(db);
+// 	con->context->registered_state->Insert(
+// 	    "postgres_scan", duckdb::make_shared_ptr<PostgresReplacementScanDataClientContextState>(rtables, planner_info,
+// 	                                                                                            needed_columns, query));
+// 	return con;
+// }
 
 } // namespace pgduckdb

@@ -11,12 +11,14 @@ extern "C" {
 #include "pgduckdb/vendor/pg_ruleutils.h"
 }
 
-#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+
+#include "pgduckdb/bgw/client.hpp"
+#include "pgduckdb/bgw/messages.hpp"
 
 bool duckdb_explain_analyze = false;
 
@@ -62,13 +64,14 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 	                         pull_var_clause((Node *)query->jointree->quals, flags));
 
 	PlannerInfo *query_planner_info = PlanQuery(query, bound_params);
-	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
-	auto context = duckdb_connection->context;
-
-	auto prepared_query = context->Prepare(query_string);
+	auto &client = pgduckdb::PGDuckDBBgwClient::Get();
+	// auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
+	elog(INFO, "CreatePlan-> will prepare '%s'", query_string);
+	auto pquery = pgduckdb::PGDuckDBPrepareQuery(query_string);
+	auto prepared_query = client.PrepareQuery(pquery);
 
 	if (prepared_query->HasError()) {
-		elog(WARNING, "(DuckDB) %s", prepared_query->GetError().c_str());
+		elog(WARNING, "(DuckDB) %s", prepared_query->GetError().Message().c_str());
 		return nullptr;
 	}
 
@@ -98,7 +101,9 @@ CreatePlan(Query *query, const char *query_string, ParamListInfo bound_params) {
 		ReleaseSysCache(tp);
 	}
 
-	duckdb_node->custom_private = list_make2(duckdb_connection.release(), prepared_query.release());
+	elog(INFO, "CreatePlan-> prepared %d", prepared_query->GetId());
+	duckdb_node->custom_private = list_make1(
+	    (void *)prepared_query->GetId()); // list_make2(duckdb_connection.release(), prepared_query.release());
 	duckdb_node->methods = &duckdb_scan_scan_methods;
 
 	return (Plan *)duckdb_node;

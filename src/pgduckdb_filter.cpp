@@ -5,7 +5,6 @@ extern "C" {
 #include "postgres.h"
 #include "catalog/pg_type.h"
 #include "utils/builtins.h"
-
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"

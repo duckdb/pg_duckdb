@@ -20,8 +20,10 @@ extern "C" {
 
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
-#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
+
+#include "pgduckdb/bgw/client.hpp"
+#include "pgduckdb/bgw/messages.hpp"
 
 static constexpr char s3_filename_prefix[] = "s3://";
 static constexpr char gcs_filename_prefix[] = "gs://";
@@ -125,15 +127,17 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		rtables = pstate->p_rtable;
 	}
 
-	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, nullptr, vars, query_string);
-	auto res = duckdb_connection->context->Query(query_string, false);
+	// auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, nullptr, vars, query_string);
+	auto &client = pgduckdb::PGDuckDBBgwClient::Get();
+	auto res = client.RunQuery(query_string);
+
+	// auto res = duckdb_connection->context->Query(query_string, false);
 
 	if (res->HasError()) {
-		elog(WARNING, "(Duckdb) %s", res->GetError().c_str());
+		elog(WARNING, "(Duckdb) %s", res->GetError().Message().c_str());
 		return false;
 	}
 
-	auto chunk = res->Fetch();
-	*processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
+	*processed = res->GetChunk().GetValue(0, 0).GetValue<uint64_t>();
 	return true;
 }
