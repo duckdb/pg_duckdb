@@ -142,6 +142,9 @@ CREATE TABLE extensions (
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 
+CREATE OR REPLACE FUNCTION raw_query(query TEXT) RETURNS void
+    LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_raw_query';
+
 DO $$
 BEGIN
     RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';

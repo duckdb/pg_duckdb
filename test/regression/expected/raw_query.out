@@ -1,0 +1,23 @@
+SELECT duckdb.raw_query($$ CREATE TABLE t(a int) $$);
+NOTICE:  result: Count	
+BIGINT	
+[ Rows: 0]
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+SELECT duckdb.raw_query($$ SELECT * FROM duckdb_tables() $$);
+NOTICE:  result: database_name	database_oid	schema_name	schema_oid	table_name	table_oid	comment	tags	internal	temporary	has_primary_key	estimated_size	column_count	index_count	check_constraint_count	sql	
+VARCHAR	BIGINT	VARCHAR	BIGINT	VARCHAR	BIGINT	VARCHAR	MAP(VARCHAR, VARCHAR)	BOOLEAN	BOOLEAN	BOOLEAN	BIGINT	BIGINT	BIGINT	BIGINT	VARCHAR	
+[ Rows: 1]
+memory	1148	main	1150	t	1266	NULL	{}	false	false	false	0	1	0	0	CREATE TABLE t(a INTEGER);
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
