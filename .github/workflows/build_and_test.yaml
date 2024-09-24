@@ -124,8 +124,7 @@ jobs:
         id: build
         run: |
           pushd duckdb
-          make
-          make install
+          make -j8 install
 
       - name: Run make installcheck
         id: installcheck
