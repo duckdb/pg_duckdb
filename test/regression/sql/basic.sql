@@ -6,6 +6,9 @@ SET client_min_messages to 'DEBUG1';
 
 SELECT COUNT(*) FROM t;
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
+select COUNT(*) from t \bind \g
+select a, COUNT(*) from t WHERE a > $1 GROUP BY a ORDER BY a \bind 5 \g
+\bind 7 \g
 
 SET duckdb.max_threads_per_query to 4;
 
@@ -20,3 +23,8 @@ SET client_min_messages TO default;
 
 DROP TABLE t;
 DROP TABLE empty;
+
+-- Check that DROP / CREATE extension works
+
+DROP EXTENSION pg_duckdb;
+CREATE EXTENSION pg_duckdb;

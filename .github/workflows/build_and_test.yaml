@@ -1,4 +1,4 @@
-name: pg_duckdb Build and Test
+name: CI
 on:
   push:
     branches: ["main"]
@@ -27,8 +27,9 @@ on:
       - .clang-format
 
 jobs:
-  clang-format:
+  format:
     runs-on: ubuntu-24.04
+    name: 'Linting and formatting'
 
     steps:
       - name: Checkout pg_duckdb extension code
@@ -39,11 +40,16 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install clang-format (11.0.1)
-        run: python3 -m pip install "clang-format==11.0.1"
+      - name: Install clang-format (11.0.1) and ruff
+        run: python3 -m pip install "clang-format==11.0.1" ruff
       - name: Run clang-format
         run: git clang-format refs/remotes/origin/main --diff
+      - name: Run ruff check
+        run: ruff check --output-format=github .
+      - name: Run ruff format
+        run: ruff format --diff
   build-and-test:
+    name: 'Build and test'
     strategy:
       fail-fast: false
       matrix:
@@ -62,6 +68,7 @@ jobs:
           sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
             libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo5 cmake \
             libstdc++-12-dev
+          echo "${PWD}/postgres/inst/bin:$PATH'" > $GITHUB_PATH
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
@@ -99,6 +106,10 @@ jobs:
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml
           make -j8 install
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
       - name: Setup DuckDB build cache
         id: cache-duckdb-build
         uses: actions/cache@v4
@@ -106,17 +117,29 @@ jobs:
           path: duckdb/third_party/duckdb/build/
           key: duckdb-build-${{ steps.versions.outputs.duckdb_sha }}
 
+      - name: Install pytest and other test requirements
+        run: python3 -m pip install -r duckdb/requirements.txt
+
       - name: Build and test pg_duckdb extension
-        id: regression-tests
+        id: build
         run: |
-          export PATH="${PWD}/postgres/inst/bin:$PATH"
           pushd duckdb
           make
           make install
+
+      - name: Run make installcheck
+        id: installcheck
+        run: |
+          pushd duckdb
           make installcheck
-          popd
+
+      - name: Run make pycheck
+        id: pycheck
+        run: |
+          pushd duckdb
+          make pycheck
 
       - name: Print regression.diffs if regression tests failed
-        if: failure() && steps.regression-tests.outcome != 'success'
+        if: failure() && steps.installcheck.outcome != 'success'
         run: |
           cat duckdb/test/regression/regression.diffs

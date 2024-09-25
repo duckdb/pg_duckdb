@@ -1,6 +1,9 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/main/extension_util.hpp"
+#include "duckdb/main/client_data.hpp"
+#include "duckdb/catalog/catalog_search_path.hpp"
+#include "duckdb/main/extension_install_info.hpp"
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -8,6 +11,7 @@
 #include "pgduckdb/scan/postgres_index_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
 #include <string>
 
@@ -24,21 +28,21 @@ CheckDataDirectory(const char *data_directory) {
 
 	if (lstat(data_directory, &info) != 0) {
 		if (errno == ENOENT) {
-			elog(DEBUG2, "Directory `%s` doesn't exists.", data_directory);
+			elog(DEBUG2, "(PGDuckDB/CheckDataDirectory) Directory `%s` doesn't exists", data_directory);
 			return false;
 		} else if (errno == EACCES) {
-			elog(ERROR, "Can't access `%s` directory.", data_directory);
+			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Can't access `%s` directory", data_directory);
 		} else {
-			elog(ERROR, "Other error when reading `%s`.", data_directory);
+			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Other error when reading `%s`", data_directory);
 		}
 	}
 
 	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "`%s` is not directory.", data_directory);
+		elog(WARNING, "(PGDuckDB/CheckDataDirectory) `%s` is not directory", data_directory);
 	}
 
 	if (access(data_directory, R_OK | W_OK)) {
-		elog(ERROR, "Directory `%s` permission problem.", data_directory);
+		elog(ERROR, "(PGDuckDB/CheckDataDirectory) Directory `%s` permission problem", data_directory);
 	}
 
 	return true;
@@ -53,9 +57,12 @@ GetExtensionDirectory() {
 		if (mkdir(duckdb_extension_data_directory->data, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
 			int error = errno;
 			pfree(duckdb_extension_data_directory->data);
-			elog(ERROR, "Creating duckdb extensions directory failed with reason `%s`\n", strerror(error));
+			elog(ERROR,
+			     "(PGDuckDB/GetExtensionDirectory) Creating duckdb extensions directory failed with reason `%s`\n",
+			     strerror(error));
 		}
-		elog(DEBUG2, "Created %s as `duckdb.data_dir`", duckdb_extension_data_directory->data);
+		elog(DEBUG2, "(PGDuckDB/GetExtensionDirectory) Created %s as `duckdb.data_dir`",
+		     duckdb_extension_data_directory->data);
 	};
 
 	std::string duckdb_extension_directory(duckdb_extension_data_directory->data);
@@ -63,28 +70,31 @@ GetExtensionDirectory() {
 	return duckdb_extension_directory;
 }
 
-duckdb::unique_ptr<duckdb::DuckDB>
-DuckdbOpenDatabase() {
+DuckDBManager::DuckDBManager() {
+	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
+
 	duckdb::DBConfig config;
 	config.SetOptionByName("extension_directory", GetExtensionDirectory());
-	return duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+	// Transforms VIEWs into their view definition
+	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
+
+	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
+	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
+	    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot());
+	duckdb::ExtensionInstallInfo extension_install_info;
+	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
+
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+
+	auto &context = *connection->context;
+	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
+	LoadFunctions(context);
+	LoadSecrets(context);
+	LoadExtensions(context);
 }
 
-duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
-	auto db = DuckdbOpenDatabase();
-
-	/* Add tables */
-	db->instance->config.replacement_scans.emplace_back(
-	    pgduckdb::PostgresReplacementScan,
-	    duckdb::make_uniq_base<duckdb::ReplacementScanData, PostgresReplacementScanData>(rtables, planner_info,
-	                                                                                     needed_columns, query));
-
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
-
-	// Add the postgres_scan inserted by the replacement scan
-	auto &context = *connection->context;
-
+void
+DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
 	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);
 
@@ -93,12 +103,15 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
-	auto &instance = *db->instance;
+	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	catalog.CreateTableFunction(context, &seq_scan_info);
 	catalog.CreateTableFunction(context, &index_scan_info);
 	context.transaction.Commit();
+}
 
+void
+DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	auto duckdb_secrets = ReadDuckdbSecrets();
 
 	int secret_id = 0;
@@ -111,18 +124,31 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 		if (secret.region.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
 		}
+		if (secret.session_token.length() && !is_r2_cloud_secret) {
+			appendStringInfo(secret_key, ", SESSION_TOKEN '%s'", secret.session_token.c_str());
+		}
 		if (secret.endpoint.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
 		}
 		if (is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
 		}
+		if (!secret.use_ssl) {
+			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
+		}
 		appendStringInfo(secret_key, ");");
-		context.Query(secret_key->data, false);
+		auto res = context.Query(secret_key->data, false);
+		if (res->HasError()) {
+			elog(ERROR, "(PGDuckDB/LoadSecrets) secret `%s` could not be loaded with DuckDB", secret.id.c_str());
+		}
+
 		pfree(secret_key->data);
 		secret_id++;
 	}
+}
 
+void
+DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
@@ -131,13 +157,27 @@ DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_co
 			appendStringInfo(duckdb_extension, "LOAD %s;", extension.name.c_str());
 			auto res = context.Query(duckdb_extension->data, false);
 			if (res->HasError()) {
-				elog(ERROR, "Extension `%s` could not be loaded with DuckDB", extension.name.c_str());
+				elog(ERROR, "(PGDuckDB/LoadExtensions) `%s` could not be loaded with DuckDB", extension.name.c_str());
 			}
 		}
 		pfree(duckdb_extension->data);
 	}
+}
 
-	return connection;
+duckdb::unique_ptr<duckdb::Connection>
+DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
+	auto &db = DuckDBManager::Get().GetDatabase();
+	/* Add DuckDB replacement scan to read PG data */
+	auto con = duckdb::make_uniq<duckdb::Connection>(db);
+	auto &context = *con->context;
+
+	context.registered_state->Insert(
+	    "postgres_state", duckdb::make_shared_ptr<PostgresContextState>(rtables, planner_info, needed_columns, query));
+	auto res = context.Query("set search_path='pgduckdb.main'", false);
+	if (res->HasError()) {
+		elog(WARNING, "(DuckDB) %s", res->GetError().c_str());
+	}
+	return con;
 }
 
 } // namespace pgduckdb

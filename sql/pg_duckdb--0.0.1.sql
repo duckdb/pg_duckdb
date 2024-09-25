@@ -55,8 +55,6 @@ CREATE OR REPLACE FUNCTION read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE
                                                timestampformat VARCHAR DEFAULT '',
                                                types TEXT[] DEFAULT ARRAY[]::TEXT[],
                                                union_by_name BOOLEAN DEFAULT FALSE)
-
-    
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
@@ -115,8 +113,10 @@ CREATE TABLE secrets (
     id TEXT NOT NULL,
     secret TEXT NOT NULL,
     region TEXT,
+    session_token TEXT,
     endpoint TEXT,
     r2_account_id TEXT,
+    use_ssl BOOLEAN DEFAULT true,
     CONSTRAINT type_constraint CHECK (type IN ('S3', 'GCS', 'R2'))
 );
 
@@ -141,6 +141,9 @@ CREATE TABLE extensions (
 
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
+
+CREATE OR REPLACE FUNCTION raw_query(query TEXT) RETURNS void
+    LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_raw_query';
 
 DO $$
 BEGIN

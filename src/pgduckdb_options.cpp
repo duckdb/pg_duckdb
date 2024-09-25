@@ -9,6 +9,7 @@ extern "C" {
 #include "access/xact.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
+#include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
@@ -65,12 +66,19 @@ ReadDuckdbSecrets() {
 		if (!is_null_array[Anum_duckdb_secret_region - 1])
 			secret.region = DatumToString(datum_array[Anum_duckdb_secret_region - 1]);
 
+		if (!is_null_array[Anum_duckdb_secret_session_token - 1])
+			secret.session_token = DatumToString(datum_array[Anum_duckdb_secret_session_token - 1]);
+
 		if (!is_null_array[Anum_duckdb_secret_endpoint - 1])
 			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_endpoint - 1]);
 
 		if (!is_null_array[Anum_duckdb_secret_r2_account_id - 1])
 			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_r2_account_id - 1]);
 
+		if (!is_null_array[Anum_duckdb_secret_use_ssl - 1])
+			secret.use_ssl = DatumGetBool(DatumGetBool(datum_array[Anum_duckdb_secret_use_ssl - 1]));
+		else
+			secret.use_ssl = true;
 		duckdb_secrets.push_back(secret);
 	}
 
@@ -107,8 +115,8 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-	auto db = DuckdbOpenDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
+	auto &db = DuckDBManager::Get().GetDatabase();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
 	auto &context = *connection->context;
 
 	auto extension_name = DatumToString(name);
@@ -121,7 +129,7 @@ DuckdbInstallExtension(Datum name) {
 	pfree(install_extension_command->data);
 
 	if (res->HasError()) {
-		elog(WARNING, "(duckdb_install_extension) %s", res->GetError().c_str());
+		elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
 		return false;
 	}
 
@@ -155,6 +163,21 @@ install_extension(PG_FUNCTION_ARGS) {
 	Datum extension_name = PG_GETARG_DATUM(0);
 	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
 	PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(pgduckdb_raw_query);
+Datum
+pgduckdb_raw_query(PG_FUNCTION_ARGS) {
+	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
+	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto &context = *connection->context;
+	auto result = context.Query(query, false);
+	if (result->HasError()) {
+		elog(ERROR, "(PGDuckDB/DuckdbInstallExtension) %s", result->GetError().c_str());
+	}
+	elog(NOTICE, "result: %s", result->ToString().c_str());
+	PG_RETURN_BOOL(true);
 }
 
 } // extern "C"

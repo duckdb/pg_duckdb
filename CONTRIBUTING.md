@@ -44,9 +44,25 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * To build the project, run `make -j$(nproc)`.
 
+## Python dependencies
+
+We have several python dependencies for testing and formatting code.
+You can install these dependencies like this:
+```bash
+# Needed only once
+pip -m venv env
+# Needed every time you open a new terminal
+source env/bin/activate
+# Needed only once, or when dependencies change
+pip install -r dev_requirements.txt
+```
+
+You can also install the dependencies globally if you prefer, but this is not
+recommended because they might cause conflicts with other projects.
+
 ## Testing
 
-* Tests use standard regression tests for Postgres extensions. To run tests, run `make installcheck`.
+* Tests use standard regression tests for Postgres extensions as well as a custom Python based testing framework. To run tests, run `make check`.
 * Write many tests.
 * Test with different types, especially numerics, strings and complex nested types.
 * Try to test unexpected/incorrect usage as well, instead of only the happy path.
@@ -57,8 +73,8 @@ This project and everyone participating in it is governed by a [Code of Conduct]
 
 * Use tabs for indentation, spaces for alignment.
 * Lines should not exceed 120 columns.
-* To make sure the formatting is consistent, please use version 18.1.3, installable through `python3 -m pip install clang-format==10.0.1.1`
-* `clang_format` and `black` enforce these rules automatically, use `make format-fix` to run the formatter.
+* To make sure the formatting is consistent, use the instructions in the [Python dependencies](#python-dependencies) section to install the correct versions of the dependencies.
+* `clang-format` and `ruff` enforce these rules automatically, use `make format` to run the formatter.
 * The project also comes with an [`.editorconfig` file](https://editorconfig.org/) that corresponds to these rules.
 
 ## C/C++ Guidelines
@@ -112,6 +128,11 @@ coding styles.
 ## Error Handling
 
 * Use exceptions **only** when an error is encountered that terminates a query (e.g. parser error, table not found). Exceptions should only be used for **exceptional** situations. For regular errors that do not break the execution flow (e.g. errors you **expect** might occur) use a return value instead.
+* There are two distinct parts of the code where error handling is done very differently: The code that executes before we enter DuckDB execution engine (e.g. initial part of the planner hook) and the part that gets executed inside the duckdb execution engine. Below are rules for how to handle errors in both parts of the code. Not following these guidelines can cause crashes, memory leaks and other unexpected problems.
+* Before we enter the DuckDB exection engine no exceptions should ever be thrown here. In cases where you would want to throw an exception here, use `elog(ERROR, ...)`. Any C++ code that might throw an exception is also problematic. Since C++ throws exceptions on allocation failures, this covers lots of C++ APIs. So try to use Postgres datastructures instead of C++ ones whenever possible (e.g. use `List` instead of `Vec`)
+* Inside the duckdb execution engine the opposite is true. `elog(ERROR, ...)` should never be used there, use exceptions instead.
+* Use PostgreSQL *elog* API can be used to report non-fatal messages back to user. Using *ERROR* is strictly forbiden to use in code that is executed inside the duckdb engine.
+* Calling PostgreSQL native functions from within DuckDB execution needs **extreme care**. Pretty much non of these functions are thread-safe, and they might throw errors using `elog(ERROR, ...)`. If you've solved the thread-safety issue by taking a lock (or by carefully asserting that the actual code is thread safe), then you can use *PostgresFunctionGuard* to solve the `elog(ERROR, ...) problem. *PostgresFunctionGuard* will correctly handle *ERROR* log messages that could be emmited from these functions.
 * Try to add test cases that trigger exceptions. If an exception cannot be easily triggered using a test case then it should probably be an assertion. This is not always true (e.g. out of memory errors are exceptions, but are very hard to trigger).
 * Use `D_ASSERT` to assert. Use **assert** only when failing the assert means a programmer error. Assert should never be triggered by user input. Avoid code like `D_ASSERT(a > b + 3);` without comments or context.
 * Assert liberally, but make it clear with comments next to the assert what went wrong when the assert is triggered.
