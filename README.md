@@ -2,20 +2,16 @@
 
 pg_duckdb is a Postgres extension that embeds DuckDB's columnar-vectorized analytics engine and features into Postgres. We recommend using pg_duckdb to build high performance analytics and data-intensive applications.
 
-Third party developers will be able to extend both DuckDB and the PostgreSQL integration by writing their own DuckDB extensions. Those extensions will be distributed through the DuckDB community extension repository.
 
 pg_duckdb was developed in collaboration with our partners, [Hydra](https://hydra.so) and [MotherDuck](https://motherduck.com).
 
-
 ## Goals
 
-* Create and manage analytical tables with good performance on analytical queries
 * Broad support for Postgres types and functions within analytical context
 * Query external datasets on S3, GCP and Azure (Parquet, Iceberg and Delta Lake)
-* Join native Postgres and analytical data efficiently
-* Seamlessly run read and write queries against native postgres and cloud tables stored in MotherDuck
-* Allow storing data in a columnar format using DuckDBs native files
-* Allow for easy configuration and deployment of DuckDB extensions to enable additional functionality from the DuckDB ecosystem
+* Join native Postgres and analytical data
+* Direct access to data stored in MotherDuck
+* Support installation of DuckDB extensions
 
 ## Installation
 
