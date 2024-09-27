@@ -70,7 +70,7 @@ $(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
 	BUILD_UNITTESTS=OFF \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake"
 
-install-duckdb: $(FULL_DUCKDB_LIB)
+install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
 	$(install_bin) -m 755 $(FULL_DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
 
 clean-duckdb:
