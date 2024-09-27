@@ -34,9 +34,10 @@ COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS)
 %.bc : %.cpp
 	$(COMPILE.cc.bc) $(SHLIB_LINK) -I$(INCLUDE_SERVER) -o $@ $<
 
-all: $(OBJS)
-
 include Makefile.global
+
+# shlib is the final output product - make duckdb and all .o dependencies
+$(shlib): $(FULL_DUCKDB_LIB) $(OBJS)
 
 NO_INSTALLCHECK = 1
 
@@ -57,8 +58,6 @@ pycheck: all install
 check: installcheck pycheck
 
 duckdb: $(FULL_DUCKDB_LIB)
-# make completing duckdb a dependency of linking
-$(shlib): $(FULL_DUCKDB_LIB)
 
 third_party/duckdb/Makefile:
 	git submodule update --init --recursive
