@@ -18,7 +18,6 @@ target "postgres" {
   inherits = ["shared"]
 
   contexts = {
-    // pg_duckdb = "target:pg_duckdb_${POSTGRES_VERSION}"
     postgres_base = "docker-image://postgres:${POSTGRES_VERSION}-bookworm"
   }
 
@@ -27,7 +26,7 @@ target "postgres" {
   }
 
   tags = [
-    "${REPO}:${POSTGRES_VERSION}",
+    "${REPO}:${POSTGRES_VERSION}-dev",
   ]
 }
 

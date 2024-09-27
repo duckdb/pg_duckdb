@@ -17,23 +17,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        postgres: ["16", "17"]
+        postgres: ['16', '17']
+        platform: ['linux/amd64', 'linux/arm64']
 
     steps:
       -
-        name: setup POSTGRES_IMAGE env
+        name: Checkout pg_duckdb extension code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+      -
+        name: Set POSTGRES_IMAGE env
         run: echo "POSTGRES_IMAGE=${{ format('wuputah/pg_duckdb:{0}-{1}', matrix.postgres, github.sha) }}" >> $GITHUB_ENV
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       -
-        name: Checkout
-        uses: actions/checkout@v3
-      -
         name: Set up Docker buildx
         uses: docker/setup-buildx-action@v3
         with:
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
       # -
       #   name: Login to DockerHub
       #   uses: docker/login-action@v3
@@ -44,5 +47,9 @@ jobs:
         name: docker bake
         uses: docker/bake-action@v5
         with:
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          targets: pg_duckdb_${{ matrix.postgres }}
+          set: |
+            *.platform=${{ matrix.platform }}
+            *.cache-to=type=gha,mode=max
+            *.cache-from=type=gha
+            postgres.tags=${{ env.POSTGRES_IMAGE }}
