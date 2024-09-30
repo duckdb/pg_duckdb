@@ -11,6 +11,7 @@ extern "C" {
 #include "executor/tuptable.h"
 #include "utils/builtins.h"
 #include "utils/numeric.h"
+#include "utils/catcache.h"
 #include "utils/uuid.h"
 #include "utils/array.h"
 #include "fmgr.h"
@@ -21,13 +22,19 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/types/pgduckdb_enum.hpp"
 
 namespace pgduckdb {
+
+using duckdb::EnumTypeInfo;
+using duckdb::LogicalTypeId;
+using duckdb::PhysicalType;
 
 struct BoolArray {
 public:
@@ -324,6 +331,14 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	slot->tts_values[col] = PointerGetDatum(arr);
 }
 
+void
+ConvertDuckToPostgresEnumValue(TupleTableSlot *slot, duckdb::Value &val, idx_t col) {
+	auto position = PGDuckDBEnum::GetDuckDBEnumPosition(val);
+	auto &enum_member_oids = PGDuckDBEnum::GetMemberOids(val.type());
+	auto enum_member_oid = duckdb::FlatVector::GetData<Oid>(enum_member_oids)[position];
+	slot->tts_values[col] = ObjectIdGetDatum(enum_member_oid);
+}
+
 bool
 ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
 	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
@@ -465,9 +480,18 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<PODArray<PostgresIntegerOIDMapping<INT8OID>>>(slot, value, col);
 		break;
 	}
-	default:
-		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
-		return false;
+	default: {
+		auto type_id = value.type().id();
+		switch (type_id) {
+		case LogicalTypeId::ENUM: {
+			ConvertDuckToPostgresEnumValue(slot, value, col);
+			break;
+		default:
+			elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
+			return false;
+		}
+		}
+	}
 	}
 	return true;
 }
@@ -496,6 +520,39 @@ ChildTypeFromArray(Oid array_type) {
 	default:
 		throw duckdb::NotImplementedException("No child type set for Postgres OID %d", array_type);
 	}
+}
+
+duckdb::LogicalType
+ConvertPostgresEnumToDuckEnum(Oid enum_type_oid) {
+	/* Get the list of existing members of the enum */
+	auto list =
+	    PostgresFunctionGuard<CatCList *>([](int cacheId, Datum key) { return SearchSysCacheList1(cacheId, key); },
+	                                      ENUMTYPOIDNAME, ObjectIdGetDatum(enum_type_oid));
+	auto nelems = list->n_members;
+
+	/* Sort the existing members by enumsortorder */
+	std::vector<HeapTuple> enum_members(nelems);
+	for (int i = 0; i < nelems; ++i) {
+		enum_members[i] = &list->members[i]->tuple;
+	}
+
+	auto sort_order_cmp = [](const HeapTuple &v1, const HeapTuple &v2) {
+		Form_pg_enum en1 = (Form_pg_enum)GETSTRUCT(v1);
+		Form_pg_enum en2 = (Form_pg_enum)GETSTRUCT(v2);
+
+		if (en1->enumsortorder < en2->enumsortorder) {
+			return true; // v1 < v2
+		} else if (en1->enumsortorder > en2->enumsortorder) {
+			return false; // v1 > v2
+		} else {
+			return false; // v1 == v2
+		}
+	};
+
+	std::sort(enum_members.begin(), enum_members.end(), sort_order_cmp);
+	auto enum_type = PGDuckDBEnum::CreateEnumType(enum_members);
+	PostgresFunctionGuard(ReleaseCatCacheList, list);
+	return enum_type;
 }
 
 duckdb::LogicalType
@@ -551,6 +608,9 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSOID:
 		return duckdb::LogicalTypeId::UINTEGER;
 	default: {
+		if (PGDuckDBEnum::IsEnumType(type)) {
+			return ConvertPostgresEnumToDuckEnum(type);
+		}
 		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
 		return duckdb::LogicalType::USER(name);
 	}
@@ -617,6 +677,10 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 			return InvalidOid;
 		}
 		}
+	}
+	case duckdb::LogicalTypeId::ENUM: {
+		auto &member_oids = PGDuckDBEnum::GetMemberOids(type);
+		return PGDuckDBEnum::GetEnumTypeOid(member_oids);
 	}
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
@@ -924,6 +988,24 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 				continue;
 			}
 			ConvertPostgresToDuckValue(elems[i], *vec, dest_idx);
+		}
+		break;
+	}
+	case LogicalTypeId::ENUM: {
+		auto enum_position = PGDuckDBEnum::GetEnumPosition(value, result.GetType());
+		auto physical_type = result.GetType().InternalType();
+		switch (physical_type) {
+		case PhysicalType::UINT8:
+			Append(result, static_cast<uint8_t>(enum_position), offset);
+			break;
+		case PhysicalType::UINT16:
+			Append(result, static_cast<uint16_t>(enum_position), offset);
+			break;
+		case PhysicalType::UINT32:
+			Append(result, static_cast<uint32_t>(enum_position), offset);
+			break;
+		default:
+			throw duckdb::InternalException("Invalid Physical Type for ENUMs");
 		}
 		break;
 	}

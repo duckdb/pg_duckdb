@@ -1,8 +1,11 @@
 #include "pgduckdb/catalog/pgduckdb_catalog.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
+#include "pgduckdb/catalog/pgduckdb_type.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_type_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
@@ -10,6 +13,7 @@ extern "C" {
 #include "postgres.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
+#include "catalog/pg_type.h"
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
 #include "utils/builtins.h"
@@ -23,6 +27,7 @@ extern "C" {
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "parser/parsetree.h"
+#include "parser/parse_type.h"
 #include "utils/rel.h"
 }
 
@@ -66,6 +71,56 @@ IsIndexScan(const Path *nodePath) {
 	}
 
 	return false;
+}
+
+optional_ptr<CatalogEntry>
+SchemaItems::GetType(const string &entry_name) {
+	auto it = types.find(entry_name);
+	if (it != types.end()) {
+		return it->second.get();
+	}
+
+	auto &catalog = schema->catalog;
+
+	List *name_list = NIL;
+	name_list = lappend(name_list, makeString(pstrdup(name.c_str())));
+	name_list = lappend(name_list, makeString(pstrdup(entry_name.c_str())));
+
+	TypeName *type_name = makeTypeNameFromNameList(name_list);
+
+	// Try to look up the type by name
+	Oid type_oid = InvalidOid;
+	HeapTuple type_entry = LookupTypeName(NULL, type_name, NULL, false);
+
+	if (HeapTupleIsValid(type_entry)) {
+		// Cast to the correct form to access the fields
+		Form_pg_type type_form = (Form_pg_type)GETSTRUCT(type_entry);
+
+		// Extract the OID from the type entry
+		type_oid = type_form->oid;
+
+		// Release the system cache entry
+		ReleaseSysCache(type_entry);
+	}
+
+	// If the type could not be found, handle it here
+	if (type_oid == InvalidOid) {
+		return nullptr;
+	}
+
+	FormData_pg_attribute dummy_attr;
+	dummy_attr.atttypid = type_oid;
+	dummy_attr.atttypmod = 0;
+	dummy_attr.attndims = 0;
+	Form_pg_attribute attribute = &dummy_attr;
+
+	CreateTypeInfo info;
+	info.name = entry_name;
+	info.type = pgduckdb::ConvertPostgresToDuckColumnType(attribute);
+
+	auto type = make_uniq<PostgresType>(catalog, *schema, info);
+	types[entry_name] = std::move(type);
+	return types[entry_name].get();
 }
 
 optional_ptr<CatalogEntry>
@@ -157,23 +212,27 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 		throw InternalException("Could not find 'postgres_state' in 'PostgresTransaction::GetCatalogEntry'");
 	}
 	auto planner_info = scan_data->m_query_planner_info;
-	switch (type) {
-	case CatalogType::TABLE_ENTRY: {
-		auto it = schemas.find(schema);
-		if (it == schemas.end()) {
-			return nullptr;
-		}
-		auto &schema_entry = it->second;
-		return schema_entry.GetTable(name, planner_info);
-	}
-	case CatalogType::SCHEMA_ENTRY: {
+	if (type == CatalogType::SCHEMA_ENTRY) {
 		return GetSchema(schema);
 	}
+
+	auto it = schemas.find(schema);
+	if (it == schemas.end()) {
+		return nullptr;
+	}
+	auto &schema_entry = it->second;
+
+	switch (type) {
+	case CatalogType::TABLE_ENTRY: {
+		return schema_entry.GetTable(name, planner_info);
+	}
+	case CatalogType::TYPE_ENTRY: {
+		return schema_entry.GetType(name);
+	}
 	default:
+		D_ASSERT(type != CatalogType::SCHEMA_ENTRY);
 		return nullptr;
 	}
 }
 
 } // namespace duckdb
-
-// namespace duckdb

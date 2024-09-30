@@ -2,6 +2,7 @@
 
 #include "duckdb/transaction/transaction.hpp"
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
+#include "pgduckdb/catalog/pgduckdb_type.hpp"
 #include "pgduckdb/catalog/pgduckdb_schema.hpp"
 
 namespace duckdb {
@@ -15,11 +16,13 @@ public:
 
 public:
 	optional_ptr<CatalogEntry> GetTable(const string &name, PlannerInfo *planner_info);
+	optional_ptr<CatalogEntry> GetType(const string &name);
 
 public:
 	string name;
 	unique_ptr<PostgresSchema> schema;
 	case_insensitive_map_t<unique_ptr<PostgresTable>> tables;
+	case_insensitive_map_t<unique_ptr<PostgresType>> types;
 };
 
 class PostgresTransaction : public Transaction {
