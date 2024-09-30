@@ -3,7 +3,9 @@
 extern "C" {
 #include "postgres.h"
 #include "pg_config.h"
+#if PG_VERSION_NUM >= 160000
 #include "varatt.h"
+#endif
 
 #ifdef USE_LZ4
 #include <lz4.h>

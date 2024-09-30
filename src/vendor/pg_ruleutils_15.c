@@ -1,19 +1,17 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils.c
+ * pg_ruleutils_15.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
  * Portions Copyright (c) 1996-2022, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- *
- * IDENTIFICATION
- *	  src/backend/utils/adt/ruleutils.c
- *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
+#if PG_VERSION_NUM >= 150000 && PG_VERSION_NUM < 160000
 
 #include <ctype.h>
 #include <unistd.h>
@@ -67,12 +65,17 @@
 #include "utils/lsyscache.h"
 #include "utils/partcache.h"
 #include "utils/rel.h"
-#include "utils/ruleutils.h"
+#include "pgduckdb/vendor/pg_ruleutils.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 #include "utils/varlena.h"
 #include "utils/xml.h"
+
+#include "pgduckdb/pgduckdb_ruleutils.h"
+
+#include "pgduckdb/utility/rename_ruleutils.h"
+
 
 /* ----------
  * Pretty formatting constants
@@ -94,7 +97,7 @@
 /* Standard conversion of a "bool pretty" option to detailed flags */
 #define GET_PRETTY_FLAGS(pretty) \
 	((pretty) ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) \
-	 : PRETTYFLAG_INDENT)
+	 : 0)
 
 /* Default line length for pretty-print wrapping: 0 means wrap always */
 #define WRAP_COLUMN_DEFAULT		0
@@ -11994,6 +11997,10 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 	Oid		   *p_true_typeids;
 	bool		force_qualify = false;
 
+	result = pgduckdb_function_name(funcid);
+	if (result)
+		return result;
+
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(proctup))
 		elog(ERROR, "cache lookup failed for function %u", funcid);
@@ -12429,3 +12436,5 @@ get_range_partbound_string(List *bound_datums)
 
 	return buf->data;
 }
+
+#endif

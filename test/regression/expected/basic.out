@@ -16,28 +16,6 @@ SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
  9 |   100
 (4 rows)
 
-select COUNT(*) from t \bind \g
- count 
--------
-  1000
-(1 row)
-
-select a, COUNT(*) from t WHERE a > $1 GROUP BY a ORDER BY a \bind 5 \g
- a | count 
----+-------
- 6 |   100
- 7 |   100
- 8 |   100
- 9 |   100
-(4 rows)
-
-\bind 7 \g
- a | count 
----+-------
- 8 |   100
- 9 |   100
-(2 rows)
-
 SET duckdb.max_threads_per_query to 4;
 SELECT COUNT(*) FROM t;
  count 

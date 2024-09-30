@@ -52,7 +52,11 @@ ContainsDuckdbFunctions(Node *node, void *context) {
 
 	if (IsA(node, Query)) {
 		Query *query = (Query *)node;
+	#if PG_VERSION_NUM >= 160000
 		return query_tree_walker(query, ContainsDuckdbFunctions, context, 0);
+	#else
+		return query_tree_walker(query, (bool (*)()) ((void *) ContainsDuckdbFunctions), context, 0);
+	#endif
 	}
 
 	if (IsA(node, FuncExpr)) {
@@ -62,12 +66,20 @@ ContainsDuckdbFunctions(Node *node, void *context) {
 		}
 	}
 
+#if PG_VERSION_NUM >= 160000
 	return expression_tree_walker(node, ContainsDuckdbFunctions, context);
+#else
+	return expression_tree_walker(node, (bool (*)()) ((void *) ContainsDuckdbFunctions), context);
+#endif
 }
 
 static bool
 NeedsDuckdbExecution(Query *query) {
+#if PG_VERSION_NUM >= 160000
 	return query_tree_walker(query, ContainsDuckdbFunctions, NULL, 0);
+#else
+	return query_tree_walker(query, (bool (*)()) ((void *) ContainsDuckdbFunctions), NULL, 0);
+#endif
 }
 
 static bool
