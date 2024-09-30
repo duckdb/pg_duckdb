@@ -93,10 +93,21 @@ Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) 
 }
 
 static void
+InterruptQuery(duckdb::Connection &connection) {
+	try {
+		connection.Interrupt();
+		auto &executor = duckdb::Executor::Get(*connection.context);
+		// Wait for all tasks to terminate
+		executor.CancelTasks();
+	} catch (std::exception &e) {
+		elog(ERROR, "DuckDB interrupt failed: %s", e.what());
+	}
+}
+
+static void
 ExecuteQuery(DuckdbScanState *state) {
 	auto &prepared = *state->prepared_statement;
 	auto &query_results = state->query_results;
-	auto &connection = state->duckdb_connection;
 	auto pg_params = state->params;
 	const auto num_params = pg_params ? pg_params->numParams : 0;
 	duckdb::vector<duckdb::Value> duckdb_params;
@@ -122,6 +133,7 @@ ExecuteQuery(DuckdbScanState *state) {
 		}
 	}
 
+	// PendingQuery will never throw an exception
 	auto pending = prepared.PendingQuery(duckdb_params, true);
 	if (pending->HasError()) {
 		return pending->ThrowError();
@@ -132,10 +144,7 @@ ExecuteQuery(DuckdbScanState *state) {
 		execution_result = pending->ExecuteTask();
 		if (QueryCancelPending) {
 			// Send an interrupt
-			connection->Interrupt();
-			auto &executor = duckdb::Executor::Get(*connection->context);
-			// Wait for all tasks to terminate
-			executor.CancelTasks();
+			InterruptQuery(*state->duckdb_connection);
 			// Delete the scan state
 			// Process the interrupt on the Postgres side
 			ProcessInterrupts();
@@ -168,7 +177,8 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 	}
 
 	if (duckdb_scan_state->fetch_next) {
-		duckdb_scan_state->current_data_chunk = duckdb_scan_state->query_results->Fetch();
+		duckdb_scan_state->current_data_chunk = pgduckdb::DuckDBFunctionGuard<duckdb::unique_ptr<duckdb::DataChunk>>(
+		    "Fetch", [&]() { return duckdb_scan_state->query_results->Fetch(); });
 		duckdb_scan_state->current_row = 0;
 		duckdb_scan_state->fetch_next = false;
 		if (!duckdb_scan_state->current_data_chunk || duckdb_scan_state->current_data_chunk->size() == 0) {
@@ -234,6 +244,7 @@ Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *e
 	if (!chunk || chunk->size() == 0) {
 		return;
 	}
+
 	/* Is it safe to hardcode this as result of DuckDB explain? */
 	auto value = chunk->GetValue(1, 0);
 	std::string explain_output = "\n\n";
