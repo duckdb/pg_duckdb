@@ -48,6 +48,7 @@ jobs:
         run: ruff check --output-format=github .
       - name: Run ruff format
         run: ruff format --diff
+
   build-and-test:
     name: 'Build and test'
     strategy:
@@ -73,6 +74,7 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
+          key: ${{ matrix.os }}
           create-symlink: true
 
       - name: Checkout pg_duckdb extension code
@@ -81,26 +83,34 @@ jobs:
           submodules: 'recursive'
           path: duckdb
 
-      - name: Compute DuckDB SHA
+      - name: Checkout PostgreSQL code
+        run: |
+          rm -rf postgres
+          git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
+
+      - name: Compute Version SHAs
         id: versions
         run: |
-          pushd duckdb
-          DUCKDB_SHA=`git ls-tree HEAD third_party/duckdb --format='%(objectname)'`
+          pushd duckdb/third_party/duckdb
+          DUCKDB_SHA=`git rev-parse HEAD`
           echo "duckdb_sha=${DUCKDB_SHA}" >> "$GITHUB_OUTPUT"
           echo "Got DUCKDB_SHA='${DUCKDB_SHA}'"
+          popd
+          pushd postgres
+          POSTGRES_SHA=`git rev-parse HEAD`
+          echo "postgres_sha=${POSTGRES_SHA}" >> "$GITHUB_OUTPUT"
+          echo "Got POSTGRES_SHA='${POSTGRES_SHA}'"
 
       - name: Setup PG build cache
         id: cache-pg-build
         uses: actions/cache@v4
         with:
           path: postgres/inst
-          key: pg-build-${{ matrix.version }}
+          key: pg-build-${{ matrix.os }}-${{ steps.versions.outputs.postgres_sha }}
 
-      - name: Checkout and build PostgreSQL code
+      - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
         run: |
-          rm -rf postgres
-          git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
           pushd postgres
           git branch
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml
@@ -115,7 +125,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: duckdb/third_party/duckdb/build/
-          key: duckdb-build-${{ steps.versions.outputs.duckdb_sha }}
+          key: duckdb-build-${{ matrix.os }}-${{ steps.versions.outputs.duckdb_sha }}
 
       - name: Install pytest and other test requirements
         run: python3 -m pip install -r duckdb/requirements.txt
@@ -124,8 +134,7 @@ jobs:
         id: build
         run: |
           pushd duckdb
-          make
-          make install
+          make -j8 install
 
       - name: Run make installcheck
         id: installcheck
