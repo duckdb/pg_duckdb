@@ -179,7 +179,15 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 				appendStringInfoString(&buffer, " NOT NULL");
 			}
 
-			if (column->attcollation != InvalidOid && column->attcollation != DEFAULT_COLLATION_OID) {
+			/*
+			 * XXX: default collation is actually probably not supported by
+			 * DuckDB, unless it's C or POSIX. But failing unless people
+			 * provide C or POSIX seems pretty annoying. How should we handle
+			 * this?
+			 */
+			Oid collation = column->attcollation;
+			if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && collation != C_COLLATION_OID &&
+			    collation != POSIX_COLLATION_OID) {
 				elog(ERROR, "DuckDB does not support column collations");
 			}
 		}
