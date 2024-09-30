@@ -3,28 +3,7 @@ on:
   push:
     branches: ["main"]
     tags: ["v*"]
-    paths:
-      - 'src/**'
-      - 'test/**'
-      - 'include/**'
-      - 'sql/**'
-      - Makefile
-      - Makefile.global
-      - duckdb.control
-      - third_party/duckdb
-      - '.github/workflows/**'
   pull_request:
-    paths:
-      - 'src/**'
-      - 'test/**'
-      - 'include/**'
-      - 'sql/**'
-      - Makefile
-      - Makefile.global
-      - duckdb.control
-      - third_party/duckdb
-      - '.github/workflows/**'
-      - .clang-format
 
 jobs:
   format:
@@ -54,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [REL_16_STABLE, REL_17_STABLE]
+        version: [REL_15_STABLE, REL_16_STABLE, REL_17_STABLE]
     runs-on: ubuntu-24.04
 
     steps:
