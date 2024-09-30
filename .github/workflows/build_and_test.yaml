@@ -103,7 +103,7 @@ jobs:
           git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
           pushd postgres
           git branch
-          ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml
+          ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml --with-lz4
           make -j8 install
 
       - uses: actions/setup-python@v5
