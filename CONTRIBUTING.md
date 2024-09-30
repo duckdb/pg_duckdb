@@ -86,8 +86,8 @@ coding styles.
 ### Postgres C Guidelines
 
 * Use memory contexts to allocate memory, e.g. `palloc` or `palloc0`.
-* Casing is very inconsistent in Postgres, we use `CamelCase` for function names and `snake_case` for variables.
-* If you copied code from Postgres, try to keep the Postgres style and prefer to keep it in a separate function so that it is easy to update when the Postgres code changes.
+* Casing is very inconsistent in Postgres, we use `CamelCase` for function names and `snake_case` for variables. For the C implementation of a SQL function (e.g. `duckdb.install_extension(...)`, use snake_case.
+* If you copied code from Postgres, try to keep the Postgres style and prefer to keep it in a separate function/file so that it is easy to update when the Postgres code changes.
 * TODO: Add more guidelines here.
 
 ### DuckDB C++ Guidelines
