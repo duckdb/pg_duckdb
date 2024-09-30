@@ -18,12 +18,21 @@ extern "C" {
 #include "executor/spi.h"
 #include "miscadmin.h"
 
+#include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
+
+/*
+ * ctas_skip_data stores the original value of the skipData field of the
+ * CreateTableAsStmt of the query that's currently being executed. For duckdb
+ * tables we force this value to false.
+ */
+static bool ctas_skip_data = false;
 
 /*
  * Truncates the given table in DuckDB.
@@ -49,7 +58,14 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 			return;
 		}
 
-		elog(ERROR, "DuckDB does not support CREATE TABLE AS yet");
+		/*
+		 * Force skipData to false for duckdb tables, so that Postgres does
+		 * not execute the query, and save the original value in ctas_skip_data
+		 * so we can use it later in duckdb_create_table_trigger to choose
+		 * whether to execute the query in DuckDB or not.
+		 */
+		ctas_skip_data = stmt->into->skipData;
+		stmt->into->skipData = true;
 	}
 }
 
@@ -83,8 +99,8 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
-	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
-	Node *parsetree = trigdata->parsetree;
+	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
+	Node *parsetree = trigger_data->parsetree;
 
 	SPI_connect();
 
@@ -160,13 +176,46 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(parsetree));
 	}
 
-	std::string query_string(pgduckdb_get_tabledef(relid));
+	std::string create_table_string(pgduckdb_get_tabledef(relid));
 
 	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
 	auto &context = *connection->context;
-	auto result = context.Query(query_string, false);
+	Query *ctas_query = nullptr;
+
+	if (IsA(parsetree, CreateTableAsStmt) && !ctas_skip_data) {
+		auto stmt = castNode(CreateTableAsStmt, parsetree);
+		ctas_query = (Query *)stmt->query;
+	}
+
+	if (ctas_query) {
+		auto result = context.Query("BEGIN TRANSACTION", false);
+		if (result->HasError()) {
+			elog(ERROR, "(PGDuckDB/duckdb_create_table_trigger) Could not start transaction: %s",
+			     result->GetError().c_str());
+		}
+	}
+
+	auto result = context.Query(create_table_string, false);
 	if (result->HasError()) {
 		elog(ERROR, "(PGDuckDB/duckdb_create_table_trigger) Could not create table: %s", result->GetError().c_str());
+	}
+	if (ctas_query) {
+
+		const char *ctas_query_string = pgduckdb_pg_get_querydef(ctas_query, false);
+
+		std::string insert_string =
+		    std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
+		result = context.Query(insert_string, false);
+
+		if (result->HasError()) {
+			elog(ERROR, "(PGDuckDB/duckdb_create_table_trigger) Could not insert data: %s", result->GetError().c_str());
+		}
+
+		result = context.Query("COMMIT", false);
+		if (result->HasError()) {
+			elog(ERROR, "(PGDuckDB/duckdb_create_table_trigger) Could not commit transaction: %s",
+			     result->GetError().c_str());
+		}
 	}
 
 	PG_RETURN_NULL();

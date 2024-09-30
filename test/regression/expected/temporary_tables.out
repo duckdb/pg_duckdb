@@ -206,8 +206,47 @@ DROP TABLE t;
 -- unsupported
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 ERROR:  DuckDB does not support ON COMMIT DROP
+-- CTAS fully in Duckdb
 CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
-ERROR:  DuckDB does not support CREATE TABLE AS yet
+SELECT * FROM webpages ORDER BY column00 LIMIT 2;
+ column00 |     column01     |  column02  
+----------+------------------+------------
+        1 | AAAAAAAABAAAAAAA | 1997-09-03
+        2 | AAAAAAAACAAAAAAA | 1997-09-03
+(2 rows)
+
+CREATE TEMP TABLE t_heap(a int) USING heap;
+INSERT INTO t_heap VALUES (1);
+-- CTAS from postgres table to duckdb table
+CREATE TEMP TABLE t(b) USING duckdb AS SELECT * FROM t_heap;
+SELECT * FROM t;
+ b 
+---
+ 1
+(1 row)
+
+-- CTAS from DuckDB table to postgres table
+CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t_heap;
+SELECT * FROM t_heap2;
+ c 
+---
+ 1
+(1 row)
+
+SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
+NOTICE:  result: database_name	schema_name	sql	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 2]
+memory	pg_temp	CREATE TABLE pg_temp.t(b INTEGER);
+memory	pg_temp	CREATE TABLE pg_temp.webpages(column00 INTEGER, column01 VARCHAR, column02 DATE);
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+DROP TABLE webpages, t, t_heap, t_heap2;
 CREATE TEMP TABLE t(a int);
 ALTER TABLE t ADD COLUMN b int;
 ERROR:  DuckDB does not support ALTER TABLE yet

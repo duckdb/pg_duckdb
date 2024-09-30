@@ -130,3 +130,29 @@ def test_prepared_pipeline(conn: Connection):
             p.sync()
         assert cur.sql("SELECT * FROM duckt ORDER BY id") == [1, 3, 4]
         assert cur.sql("SELECT * FROM heapt ORDER BY id") == []
+
+
+def test_prepared_ctas(cur: Cursor):
+    cur.sql("CREATE TABLE heapt (id int, number int)")
+    cur.sql("INSERT INTO heapt VALUES (1, 2), (2, 4), (3, 6)")
+    cur.sql("CREATE TEMP TABLE t USING duckdb AS SELECT * FROM heapt")
+    assert cur.sql("SELECT * FROM t ORDER BY id") == [(1, 2), (2, 4), (3, 6)]
+
+    # We don't support CTAS with parameters yet. The error message and code
+    # could be better, but this is what we have right now. At least we don't
+    # crash.
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="Expected 1 parameters, but none were supplied",
+    ):
+        cur.sql(
+            "CREATE TEMP TABLE t2 USING duckdb AS SELECT * FROM heapt where id = %s",
+            (2,),
+        )
+
+    prepared_query = "CREATE TEMP TABLE t3 USING duckdb AS SELECT * FROM heapt"
+    cur.sql(prepared_query, prepare=True)
+    assert cur.sql("SELECT count(*) FROM t3") == 3
+    cur.sql("DROP TABLE t3")
+    cur.sql(prepared_query)
+    assert cur.sql("SELECT count(*) FROM t3") == 3
