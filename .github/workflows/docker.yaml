@@ -1,0 +1,48 @@
+name: Build Docker
+
+on:
+  push:
+     tags: ["v*"]
+     branches: ['main']
+  pull_request:
+    paths:
+      - Dockerfile
+      - docker-bake.hcl
+      - '.github/workflows/docker.yaml'
+
+jobs:
+  docker:
+    name: Build Docker
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        postgres: ["16", "17"]
+
+    steps:
+      -
+        name: setup POSTGRES_IMAGE env
+        run: echo "POSTGRES_IMAGE=${{ format('wuputah/pg_duckdb:{0}-{1}', matrix.postgres, github.sha) }}" >> $GITHUB_ENV
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up Docker buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          platforms: linux/amd64,linux/arm64
+      # -
+      #   name: Login to DockerHub
+      #   uses: docker/login-action@v3
+      #   with:
+      #     username: ${{ secrets.DOCKERHUB_USERNAME }}
+      #     password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: docker bake
+        uses: docker/bake-action@v5
+        with:
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,15 +1,16 @@
-FROM postgres:16-bookworm AS base
+FROM postgres_base AS base
 
 ###
 ### BUILDER
 ###
 FROM base AS builder
 
-RUN --mount=type=cache,target=/var/cache/apt \
-  apt-get update -qq && \
-  apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
-  libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo5 cmake \
-  libstdc++-12-dev postgresql-server-dev-16 liblz4-dev ccache
+RUN apt-get update -qq && \
+  apt-get install -y \
+    build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
+    libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev \
+    libtinfo5 cmake libstdc++-12-dev postgresql-server-dev-16 liblz4-dev ccache && \
+  rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -20,7 +21,7 @@ ENV CCACHE_DIR=/ccache
 # Instead, use .dockerignore to not copy files here.
 COPY . .
 
-RUN make clean
+RUN make clean-all
 
 # permissions so we can run as `postgres` (uid=999,gid=999)
 RUN mkdir /out
