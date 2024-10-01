@@ -25,7 +25,7 @@ DUCKDB_LIB = libduckdb$(DLSUFFIX)
 FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
 
 override PG_CPPFLAGS += -Iinclude -Ithird_party/duckdb/src/include -Ithird_party/duckdb/third_party/re2
-override PG_CXXFLAGS += -std=c++17 -Wno-sign-compare ${DUCKDB_BUILD_CXX_FLAGS}
+override PG_CXXFLAGS += -std=c++17 -Wno-sign-compare -Wno-register ${DUCKDB_BUILD_CXX_FLAGS}
 
 SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lduckdb -lstdc++ -llz4
 

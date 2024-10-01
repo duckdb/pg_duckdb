@@ -113,7 +113,7 @@ jobs:
         id: build
         run: |
           pushd duckdb
-          make -j8 install
+          make -j8 install CFLAGS=-Werror CXXFLAGS=-Werror
 
       - name: Run make installcheck
         id: installcheck
