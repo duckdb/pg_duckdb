@@ -35,6 +35,14 @@ target "pg_duckdb" {
   target = "output"
 }
 
+target "pg_duckdb_15" {
+  inherits = ["pg_duckdb"]
+
+  args = {
+    POSTGRES_VERSION = 15
+  }
+}
+
 target "pg_duckdb_16" {
   inherits = ["pg_duckdb"]
 

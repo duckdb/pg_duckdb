@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        postgres: ['16', '17']
+        postgres: ['15', '16', '17']
         platform: ['linux/amd64', 'linux/arm64']
 
     steps:

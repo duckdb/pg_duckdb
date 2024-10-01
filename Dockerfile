@@ -4,12 +4,14 @@ FROM postgres_base AS base
 ### BUILDER
 ###
 FROM base AS builder
+ARG POSTGRES_VERSION
 
 RUN apt-get update -qq && \
   apt-get install -y \
+    postgresql-server-dev-${POSTGRES_VERSION} \
     build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
     libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev \
-    libtinfo5 cmake libstdc++-12-dev postgresql-server-dev-16 liblz4-dev ccache && \
+    libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache && \
   rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
