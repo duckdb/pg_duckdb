@@ -31,14 +31,13 @@ typedef struct DuckdbScanState {
 	duckdb::unique_ptr<duckdb::QueryResult> query_results;
 	duckdb::idx_t column_count;
 	duckdb::unique_ptr<duckdb::DataChunk> current_data_chunk;
-	duckdb::unique_ptr<duckdb::PendingQueryResult> pending_query;
 	duckdb::idx_t current_row;
 } DuckdbScanState;
 
 static void
 CleanupDuckdbScanState(DuckdbScanState *state) {
 	state->query_results.reset();
-	state->pending_query.reset();
+	state->current_data_chunk.reset();
 	delete state->prepared_statement;
 	delete state->duckdb_connection;
 }
@@ -109,14 +108,11 @@ ExecuteQuery(DuckdbScanState *state) {
 		}
 	}
 
-	state->pending_query = prepared.PendingQuery(duckdb_params, true);
-
-	auto& pending = state->pending_query;
+	auto pending = prepared.PendingQuery(duckdb_params, true);
 	if (pending->HasError()) {
-		auto error = pending->GetError();
-		CleanupDuckdbScanState(state);
-		elog(ERROR, "(PGDuckDB/ExecuteQuery) DuckDB query returned an error: %s", error.c_str());
+		throw std::runtime_error(pending->GetError());
 	}
+
 	duckdb::PendingExecutionResult execution_result;
 	do {
 		execution_result = pending->ExecuteTask();
@@ -127,21 +123,17 @@ ExecuteQuery(DuckdbScanState *state) {
 			// Wait for all tasks to terminate
 			executor.CancelTasks();
 			// Delete the scan state
-			CleanupDuckdbScanState(state);
 			// Process the interrupt on the Postgres side
 			ProcessInterrupts();
-			elog(ERROR, "Query cancelled");
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Query cancelled");
 		}
 	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
 
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
-		auto error = pending->GetError();
-		CleanupDuckdbScanState(state);
-		elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", error.c_str());
+		throw std::runtime_error(pending->GetError());
 	}
 
 	query_results = pending->Execute();
-	pending.reset(); // not needed anymore
 	state->column_count = query_results->ColumnCount();
 	state->is_executed = true;
 }
@@ -154,7 +146,12 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 
 	bool already_executed = duckdb_scan_state->is_executed;
 	if (!already_executed) {
-		ExecuteQuery(duckdb_scan_state);
+		try {
+			ExecuteQuery(duckdb_scan_state);
+		} catch (std::exception &ex) {
+			Duckdb_EndCustomScan(node);
+			elog(ERROR, "(PGDuckDB/Duckdb_ExecCustomScan) %s", ex.what());
+		}
 	}
 
 	if (duckdb_scan_state->fetch_next) {
@@ -214,7 +211,13 @@ Duckdb_ReScanCustomScan(CustomScanState *node) {
 void
 Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
-	ExecuteQuery(duckdb_scan_state);
+	try {
+		ExecuteQuery(duckdb_scan_state);
+	} catch (std::exception &ex) {
+		Duckdb_EndCustomScan(node);
+		elog(ERROR, "(PGDuckDB/Duckdb_ExplainCustomScan) %s", ex.what());
+	}
+
 	auto chunk = duckdb_scan_state->query_results->Fetch();
 	if (!chunk || chunk->size() == 0) {
 		return;
