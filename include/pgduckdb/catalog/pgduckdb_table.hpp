@@ -26,11 +26,15 @@ public:
 	}
 
 public:
-	static bool PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot);
+	static bool PopulateHeapColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot);
+	static bool PopulateIndexColumns(CreateTableInfo &info, Oid relid, Path *path, bool indexonly);
 
 protected:
 	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Cardinality cardinality,
 	              Snapshot snapshot);
+
+private:
+	static TupleDesc ExecTypeFromTLWithNames(List *target_list, TupleDesc tuple_desc);
 
 protected:
 	Cardinality cardinality;
@@ -55,7 +59,7 @@ private:
 class PostgresIndexTable : public PostgresTable {
 public:
 	PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Cardinality cardinality,
-	                   Snapshot snapshot, Path *path, PlannerInfo *planner_info);
+	                   Snapshot snapshot, bool is_indexonly_scan, Path *path, PlannerInfo *planner_info, Oid oid);
 
 public:
 	// -- Table API --
@@ -66,6 +70,8 @@ public:
 private:
 	Path *path;
 	PlannerInfo *planner_info;
+	bool indexonly_scan;
+	Oid oid;
 };
 
 } // namespace duckdb

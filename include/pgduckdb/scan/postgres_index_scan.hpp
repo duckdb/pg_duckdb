@@ -17,8 +17,8 @@ namespace pgduckdb {
 // Global State
 
 struct PostgresIndexScanGlobalState : public duckdb::GlobalTableFunctionState {
-	explicit PostgresIndexScanGlobalState(IndexScanState *index_scan_state, Relation relation,
-	                                      duckdb::TableFunctionInitInput &input);
+	explicit PostgresIndexScanGlobalState(IndexOptInfo *index, IndexScanState *index_scan_state, bool indexonly,
+	                                      Relation relation, duckdb::TableFunctionInitInput &input);
 	~PostgresIndexScanGlobalState();
 	idx_t
 	MaxThreads() const override {
@@ -27,7 +27,9 @@ struct PostgresIndexScanGlobalState : public duckdb::GlobalTableFunctionState {
 
 public:
 	duckdb::shared_ptr<PostgresScanGlobalState> m_global_state;
+	IndexOptInfo *m_index;
 	IndexScanState *m_index_scan;
+	bool m_indexonly;
 	Relation m_relation;
 };
 
@@ -35,7 +37,7 @@ public:
 
 struct PostgresIndexScanLocalState : public duckdb::LocalTableFunctionState {
 public:
-	PostgresIndexScanLocalState(IndexScanDesc index_scan_desc, Relation relation);
+	PostgresIndexScanLocalState(IndexScanDesc index_scan_desc, TupleDesc desc, Relation relation);
 	~PostgresIndexScanLocalState() override;
 
 public:
@@ -43,18 +45,20 @@ public:
 	IndexScanDesc m_index_scan_desc;
 	Relation m_relation;
 	TupleTableSlot *m_slot;
+	TupleTableSlot *m_index_only_slot;
 };
 
 // PostgresIndexScanFunctionData
 
 struct PostgresIndexScanFunctionData : public duckdb::TableFunctionData {
 public:
-	PostgresIndexScanFunctionData(uint64_t cardinality, Path *path, PlannerInfo *planner_info, Oid relation_oid,
-	                              Snapshot snapshot);
+	PostgresIndexScanFunctionData(uint64_t cardinality, bool indexonly, Path *path, PlannerInfo *planner_info,
+	                              Oid relation_oid, Snapshot Snapshot);
 	~PostgresIndexScanFunctionData() override;
 
 public:
 	uint64_t m_cardinality;
+	bool m_indexonly;
 	Path *m_path;
 	PlannerInfo *m_planner_info;
 	Snapshot m_snapshot;
@@ -68,10 +72,6 @@ public:
 	PostgresIndexScanFunction();
 
 public:
-	static duckdb::unique_ptr<duckdb::FunctionData>
-	PostgresIndexScanBind(duckdb::ClientContext &context, duckdb::TableFunctionBindInput &input,
-	                      duckdb::vector<duckdb::LogicalType> &return_types, duckdb::vector<duckdb::string> &names);
-
 	static duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 	PostgresIndexScanInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input);
 

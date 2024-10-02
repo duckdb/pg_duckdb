@@ -1,6 +1,96 @@
+/*
+ *
+ */
+
+extern "C"{
+#include "postgres.h"
+#include "optimizer/paramassign.h"
+#include "optimizer/placeholder.h"
+}
+
 #include "pgduckdb/scan/index_scan_utils.hpp"
 
+
 namespace pgduckdb {
+
+static Node *
+replace_nestloop_params_mutator(Node *node, PlannerInfo *root);
+
+/*
+ * replace_nestloop_params
+ *	  Replace outer-relation Vars and PlaceHolderVars in the given expression
+ *	  with nestloop Params
+ *
+ * All Vars and PlaceHolderVars belonging to the relation(s) identified by
+ * root->curOuterRels are replaced by Params, and entries are added to
+ * root->curOuterParams if not already present.
+ */
+static Node *
+replace_nestloop_params(PlannerInfo *root, Node *expr)
+{
+	/* No setup needed for tree walk, so away we go */
+	return replace_nestloop_params_mutator(expr, root);
+}
+
+static Node *
+replace_nestloop_params_mutator(Node *node, PlannerInfo *root)
+{
+	if (node == NULL)
+		return NULL;
+	if (IsA(node, Var))
+	{
+		Var		   *var = (Var *) node;
+
+		/* Upper-level Vars should be long gone at this point */
+		Assert(var->varlevelsup == 0);
+		/* If not to be replaced, we can just return the Var unmodified */
+		if (IS_SPECIAL_VARNO(var->varno) ||
+			!bms_is_member(var->varno, root->curOuterRels))
+			return node;
+		/* Replace the Var with a nestloop Param */
+		return (Node *) replace_nestloop_param_var(root, var);
+	}
+	if (IsA(node, PlaceHolderVar))
+	{
+		PlaceHolderVar *phv = (PlaceHolderVar *) node;
+
+		/* Upper-level PlaceHolderVars should be long gone at this point */
+		Assert(phv->phlevelsup == 0);
+
+		/* Check whether we need to replace the PHV */
+		if (!bms_is_subset(find_placeholder_info(root, phv)->ph_eval_at,
+						   root->curOuterRels))
+		{
+			/*
+			 * We can't replace the whole PHV, but we might still need to
+			 * replace Vars or PHVs within its expression, in case it ends up
+			 * actually getting evaluated here.  (It might get evaluated in
+			 * this plan node, or some child node; in the latter case we don't
+			 * really need to process the expression here, but we haven't got
+			 * enough info to tell if that's the case.)  Flat-copy the PHV
+			 * node and then recurse on its expression.
+			 *
+			 * Note that after doing this, we might have different
+			 * representations of the contents of the same PHV in different
+			 * parts of the plan tree.  This is OK because equal() will just
+			 * match on phid/phlevelsup, so setrefs.c will still recognize an
+			 * upper-level reference to a lower-level copy of the same PHV.
+			 */
+			PlaceHolderVar *newphv = makeNode(PlaceHolderVar);
+
+			memcpy(newphv, phv, sizeof(PlaceHolderVar));
+			newphv->phexpr = (Expr *)
+				replace_nestloop_params_mutator((Node *) phv->phexpr,
+												root);
+			return (Node *) newphv;
+		}
+		/* Replace the PlaceHolderVar with a nestloop Param */
+		return (Node *) replace_nestloop_param_placeholdervar(root, phv);
+	}
+	return expression_tree_mutator(node,
+								   replace_nestloop_params_mutator,
+								   (void *) root);
+}
 
 /*
  * fix_indexqual_operand
@@ -81,7 +171,7 @@ FixIndexQualClause(PlannerInfo *root, IndexOptInfo *index, int indexcol, Node *c
 	 * This also makes a copy of the clause, so it's safe to modify it
 	 * in-place below.
 	 */
-	// clause = replace_nestloop_params(root, clause);
+	clause = replace_nestloop_params(root, clause);
 
 	if (IsA(clause, OpExpr)) {
 		OpExpr *op = (OpExpr *)clause;

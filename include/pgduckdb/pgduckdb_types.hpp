@@ -24,5 +24,9 @@ void ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offse
 bool ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col);
 void InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scan_global_state,
                           duckdb::shared_ptr<PostgresScanLocalState> scan_local_state, HeapTupleData *tuple);
+void InsertTupleValuesIntoChunk(duckdb::DataChunk &output,
+                                duckdb::shared_ptr<PostgresScanGlobalState> scan_global_state,
+                                duckdb::shared_ptr<PostgresScanLocalState> scan_local_state, Datum *values,
+                                bool *nulls);
 
 } // namespace pgduckdb
