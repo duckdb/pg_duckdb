@@ -31,12 +31,14 @@ typedef struct DuckdbScanState {
 	duckdb::unique_ptr<duckdb::QueryResult> query_results;
 	duckdb::idx_t column_count;
 	duckdb::unique_ptr<duckdb::DataChunk> current_data_chunk;
+	duckdb::unique_ptr<duckdb::PendingQueryResult> pending_query;
 	duckdb::idx_t current_row;
 } DuckdbScanState;
 
 static void
 CleanupDuckdbScanState(DuckdbScanState *state) {
 	state->query_results.reset();
+	state->pending_query.reset();
 	delete state->prepared_statement;
 	delete state->duckdb_connection;
 }
@@ -107,9 +109,13 @@ ExecuteQuery(DuckdbScanState *state) {
 		}
 	}
 
-	auto pending = prepared.PendingQuery(duckdb_params, true);
+	state->pending_query = prepared.PendingQuery(duckdb_params, true);
+
+	auto& pending = state->pending_query;
 	if (pending->HasError()) {
-		elog(ERROR, "DuckDB execute returned an error: %s", pending->GetError().c_str());
+		auto error = pending->GetError();
+		CleanupDuckdbScanState(state);
+		elog(ERROR, "(PGDuckDB/ExecuteQuery) DuckDB query returned an error: %s", error.c_str());
 	}
 	duckdb::PendingExecutionResult execution_result;
 	do {
@@ -127,11 +133,15 @@ ExecuteQuery(DuckdbScanState *state) {
 			elog(ERROR, "Query cancelled");
 		}
 	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
+
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
+		auto error = pending->GetError();
 		CleanupDuckdbScanState(state);
-		elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", pending->GetError().c_str());
+		elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", error.c_str());
 	}
+
 	query_results = pending->Execute();
+	pending.reset(); // not needed anymore
 	state->column_count = query_results->ColumnCount();
 	state->is_executed = true;
 }
