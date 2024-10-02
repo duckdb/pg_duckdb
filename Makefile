@@ -36,6 +36,11 @@ COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS)
 
 include Makefile.global
 
+# We need the DuckDB header files to build the .o files. We depend on the
+# duckdb Makefile, because that target pulls in the submodule which includes
+# those header files.
+$(OBJS): third_party/duckdb/Makefile
+
 # shlib is the final output product - make duckdb and all .o dependencies
 $(shlib): $(FULL_DUCKDB_LIB) $(OBJS)
 
