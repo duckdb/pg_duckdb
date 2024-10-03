@@ -46,8 +46,6 @@ SELECT * FROM t2 ORDER BY a;
 TRUNCATE t2;
 SELECT * FROM t2 ORDER BY a;
 
-CREATE INDEX ON t2(a);
-
 -- We shouldn't be able to run DuckDB queries in transactions (yet).
 BEGIN;
     INSERT INTO t2 VALUES (1), (2), (3);
@@ -86,8 +84,15 @@ SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_ta
 
 CREATE TABLE t(a int);
 
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE TEMP TABLE t(a int PRIMARY KEY);
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE TEMP TABLE t(a int UNIQUE);
 CREATE TEMP TABLE t(a int, b int GENERATED ALWAYS AS (a + 1) STORED);
 CREATE TEMP TABLE t(a int GENERATED ALWAYS AS IDENTITY);
+CREATE TEMP TABLE theap(b int PRIMARY KEY) USING heap;
+CREATE TEMP TABLE t(a int REFERENCES theap(b));
+DROP TABLE theap;
 -- allowed but all other collations are not supported
 CREATE TEMP TABLE t(a text COLLATE "default");
 DROP TABLE t;
@@ -115,6 +120,9 @@ CREATE TEMP TABLE t(a int);
 ALTER TABLE t ADD COLUMN b int;
 -- XXX: A better error message would be nice here, but for now this is acceptable.
 ALTER TABLE t SET ACCESS METHOD heap;
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE INDEX ON t(a);
+
 DROP TABLE t;
 CREATE TEMP TABLE t(a int) USING heap;
 ALTER TABLE t ADD COLUMN b int;

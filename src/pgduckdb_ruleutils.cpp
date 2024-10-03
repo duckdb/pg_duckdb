@@ -98,6 +98,10 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 
 	appendStringInfo(&buffer, "TABLE %s (", relation_name);
 
+	if (list_length(RelationGetFKeyList(relation)) > 0) {
+		elog(ERROR, "DuckDB tables do not support foreign keys");
+	}
+
 	List *relation_context = pgduckdb_deparse_context_for(relation_name, relation_oid);
 
 	/*

@@ -102,7 +102,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	 */
 	int ret = SPI_exec(R"(
                 INSERT INTO duckdb.tables(relid)
-                SELECT objid
+                SELECT DISTINCT objid
                 FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
                 JOIN pg_catalog.pg_class
                 ON cmds.objid = pg_class.oid

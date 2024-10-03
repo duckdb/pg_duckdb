@@ -68,8 +68,6 @@ SELECT * FROM t2 ORDER BY a;
 ---
 (0 rows)
 
-CREATE INDEX ON t2(a);
-ERROR:  duckdb does not implement duckdb_index_build_range_scan
 -- We shouldn't be able to run DuckDB queries in transactions (yet).
 BEGIN;
     INSERT INTO t2 VALUES (1), (2), (3);
@@ -135,10 +133,20 @@ VARCHAR	VARCHAR	VARCHAR
 
 CREATE TABLE t(a int);
 ERROR:  Only TEMP tables are supported in DuckDB
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE TEMP TABLE t(a int PRIMARY KEY);
+ERROR:  duckdb does not implement duckdb_index_build_range_scan
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE TEMP TABLE t(a int UNIQUE);
+ERROR:  duckdb does not implement duckdb_index_build_range_scan
 CREATE TEMP TABLE t(a int, b int GENERATED ALWAYS AS (a + 1) STORED);
 ERROR:  DuckDB does not support STORED generated columns
 CREATE TEMP TABLE t(a int GENERATED ALWAYS AS IDENTITY);
 ERROR:  Identity columns are not supported in DuckDB
+CREATE TEMP TABLE theap(b int PRIMARY KEY) USING heap;
+CREATE TEMP TABLE t(a int REFERENCES theap(b));
+ERROR:  DuckDB tables do not support foreign keys
+DROP TABLE theap;
 -- allowed but all other collations are not supported
 CREATE TEMP TABLE t(a text COLLATE "default");
 DROP TABLE t;
@@ -178,6 +186,9 @@ ERROR:  DuckDB does not support ALTER TABLE yet
 -- XXX: A better error message would be nice here, but for now this is acceptable.
 ALTER TABLE t SET ACCESS METHOD heap;
 ERROR:  duckdb does not implement duckdb_slot_callbacks
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE INDEX ON t(a);
+ERROR:  duckdb does not implement duckdb_index_build_range_scan
 DROP TABLE t;
 CREATE TEMP TABLE t(a int) USING heap;
 ALTER TABLE t ADD COLUMN b int;
