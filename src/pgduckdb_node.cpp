@@ -36,10 +36,21 @@ typedef struct DuckdbScanState {
 
 static void
 CleanupDuckdbScanState(DuckdbScanState *state) {
+	MemoryContextReset(state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
+	ExecClearTuple(state->css.ss.ss_ScanTupleSlot);
+
 	state->query_results.reset();
 	state->current_data_chunk.reset();
-	delete state->prepared_statement;
-	delete state->duckdb_connection;
+
+	if (state->prepared_statement) {
+		delete state->prepared_statement;
+		state->prepared_statement = nullptr;
+	}
+
+	if (state->duckdb_connection) {
+		delete state->duckdb_connection;
+		state->duckdb_connection = nullptr;
+	}
 }
 
 /* static callbacks */
@@ -152,6 +163,7 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 			ExecuteQuery(duckdb_scan_state);
 		} catch (std::exception &ex) {
 			Duckdb_EndCustomScan(node);
+			pfree(duckdb_scan_state);
 			elog(ERROR, "(PGDuckDB/Duckdb_ExecCustomScan) %s", ex.what());
 		}
 	}
