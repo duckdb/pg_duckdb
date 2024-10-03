@@ -36,8 +36,8 @@ include Makefile.global
 # those header files.
 $(OBJS): third_party/duckdb/Makefile
 
-COMPILE.cc.bc += $(PG_CPPFLAGS) $(PG_CXXFLAGS)
-COMPILE.cxx.bc += $(PG_CPPFLAGS) $(PG_CXXFLAGS)
+COMPILE.cc.bc += $(PG_CPPFLAGS)
+COMPILE.cxx.bc += $(PG_CXXFLAGS)
 
 # shlib is the final output product - make duckdb and all .o dependencies
 $(shlib): $(FULL_DUCKDB_LIB) $(OBJS)
