@@ -8,7 +8,6 @@
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
-#include "pgduckdb/scan/postgres_index_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
@@ -98,15 +97,11 @@ DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
 	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);
 
-	pgduckdb::PostgresIndexScanFunction index_scan_fun;
-	duckdb::CreateTableFunctionInfo index_scan_info(index_scan_fun);
-
 	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	catalog.CreateTableFunction(context, &seq_scan_info);
-	catalog.CreateTableFunction(context, &index_scan_info);
 	context.transaction.Commit();
 }
 

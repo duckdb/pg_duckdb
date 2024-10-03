@@ -4,7 +4,6 @@
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
-#include "pgduckdb/scan/postgres_index_scan.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -77,34 +76,6 @@ PostgresHeapTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionDa
 
 TableStorageInfo
 PostgresHeapTable::GetStorageInfo(ClientContext &context) {
-	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
-}
-
-//===--------------------------------------------------------------------===//
-// PostgresIndexTable
-//===--------------------------------------------------------------------===//
-
-PostgresIndexTable::PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-                                       Cardinality cardinality, Snapshot snapshot, Path *path,
-                                       PlannerInfo *planner_info)
-    : PostgresTable(catalog, schema, info, cardinality, snapshot), path(path), planner_info(planner_info) {
-}
-
-unique_ptr<BaseStatistics>
-PostgresIndexTable::GetStatistics(ClientContext &context, column_t column_id) {
-	throw duckdb::NotImplementedException("GetStatistics not supported yet");
-}
-
-TableFunction
-PostgresIndexTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
-	RangeTblEntry *rte = planner_rt_fetch(path->parent->relid, planner_info);
-	bind_data = duckdb::make_uniq<pgduckdb::PostgresIndexScanFunctionData>(cardinality, path, planner_info, rte->relid,
-	                                                                       snapshot);
-	return pgduckdb::PostgresIndexScanFunction();
-}
-
-TableStorageInfo
-PostgresIndexTable::GetStorageInfo(ClientContext &context) {
 	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
 }
 

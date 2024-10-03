@@ -55,19 +55,6 @@ FindMatchingRelEntry(Oid relid, PlannerInfo *planner_info) {
 	return nullptr;
 }
 
-static bool
-IsIndexScan(const Path *nodePath) {
-	if (nodePath == nullptr) {
-		return false;
-	}
-
-	if (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan) {
-		return true;
-	}
-
-	return false;
-}
-
 optional_ptr<CatalogEntry>
 SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
 	auto it = tables.find(entry_name);
@@ -118,20 +105,10 @@ SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
 	CreateTableInfo info;
 	info.table = entry_name;
 	Cardinality cardinality = node_path ? node_path->rows : 1;
-	if (IsIndexScan(node_path)) {
-		RangeTblEntry *rte = planner_rt_fetch(node_path->parent->relid, planner_info);
-		rel_oid = rte->relid;
-		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
-			return nullptr;
-		}
-		table = make_uniq<PostgresIndexTable>(catalog, *schema, info, cardinality, snapshot, node_path, planner_info);
-	} else {
-		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
-			return nullptr;
-		}
-		table = make_uniq<PostgresHeapTable>(catalog, *schema, info, cardinality, snapshot, rel_oid);
+	if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
+		return nullptr;
 	}
-
+	table = make_uniq<PostgresHeapTable>(catalog, *schema, info, cardinality, snapshot, rel_oid);
 	tables[entry_name] = std::move(table);
 	return tables[entry_name].get();
 }

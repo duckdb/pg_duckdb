@@ -52,20 +52,4 @@ private:
 	Oid oid;
 };
 
-class PostgresIndexTable : public PostgresTable {
-public:
-	PostgresIndexTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Cardinality cardinality,
-	                   Snapshot snapshot, Path *path, PlannerInfo *planner_info);
-
-public:
-	// -- Table API --
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
-	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
-	TableStorageInfo GetStorageInfo(ClientContext &context) override;
-
-private:
-	Path *path;
-	PlannerInfo *planner_info;
-};
-
 } // namespace duckdb
