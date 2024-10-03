@@ -29,15 +29,15 @@ override PG_CXXFLAGS += -std=c++17 -Wno-sign-compare -Wno-register ${DUCKDB_BUIL
 
 SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lduckdb -lstdc++ -llz4
 
-COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) $(PG_CXXFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
-COMPILE.cxx.bc = $(CLANG) -xc++ -Wno-ignored-attributes $(BITCODE_CXXFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) $(PG_CXXFLAGS) -flto=thin -emit-llvm -c
-
 include Makefile.global
 
 # We need the DuckDB header files to build the .o files. We depend on the
 # duckdb Makefile, because that target pulls in the submodule which includes
 # those header files.
 $(OBJS): third_party/duckdb/Makefile
+
+COMPILE.cc.bc += $(PG_CPPFLAGS) $(PG_CXXFLAGS)
+COMPILE.cxx.bc += $(PG_CPPFLAGS) $(PG_CXXFLAGS)
 
 # shlib is the final output product - make duckdb and all .o dependencies
 $(shlib): $(FULL_DUCKDB_LIB) $(OBJS)
