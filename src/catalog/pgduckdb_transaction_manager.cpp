@@ -3,16 +3,15 @@
 
 namespace duckdb {
 
-PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog,
-                                                       Snapshot snapshot)
-    : TransactionManager(db_p), catalog(catalog), snapshot(snapshot) {
+PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog)
+    : TransactionManager(db_p), catalog(catalog) {
 }
 
 Transaction &
 PostgresTransactionManager::StartTransaction(ClientContext &context) {
-	auto transaction = make_uniq<PostgresTransaction>(*this, context, catalog, snapshot);
-	auto &result = *transaction;
 	lock_guard<mutex> l(transaction_lock);
+	auto transaction = make_uniq<PostgresTransaction>(*this, context, catalog, GetActiveSnapshot());
+	auto &result = *transaction;
 	transactions[result] = std::move(transaction);
 	return result;
 }

@@ -9,7 +9,7 @@ namespace duckdb {
 
 class PostgresTransactionManager : public TransactionManager {
 public:
-	PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog, Snapshot snapshot);
+	PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog);
 
 	Transaction &StartTransaction(ClientContext &context) override;
 	ErrorData CommitTransaction(ClientContext &context, Transaction &transaction) override;
@@ -19,7 +19,6 @@ public:
 
 private:
 	PostgresCatalog &catalog;
-	Snapshot snapshot;
 	mutex transaction_lock;
 	reference_map_t<Transaction, unique_ptr<Transaction>> transactions;
 };

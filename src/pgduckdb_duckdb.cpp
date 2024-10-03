@@ -80,7 +80,7 @@ DuckDBManager::DuckDBManager() {
 
 	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
 	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
-	    duckdb::make_uniq<duckdb::PostgresStorageExtension>(GetActiveSnapshot());
+	    duckdb::make_uniq<duckdb::PostgresStorageExtension>();
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
