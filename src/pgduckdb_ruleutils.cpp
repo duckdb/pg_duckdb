@@ -78,8 +78,8 @@ pgduckdb_relation_name(Oid relation_oid) {
 char *
 pgduckdb_get_tabledef(Oid relation_oid) {
 	Relation relation = relation_open(relation_oid, AccessShareLock);
-	char *relation_name = pgduckdb_relation_name(relation_oid);
-	char *schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
+	const char *relation_name = pgduckdb_relation_name(relation_oid);
+	const char *schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
 
 	StringInfoData buffer;
 	initStringInfo(&buffer);
