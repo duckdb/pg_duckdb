@@ -19,6 +19,7 @@ public:
 	~PostgresScanGlobalState() {
 	}
 	void InitGlobalState(duckdb::TableFunctionInitInput &input);
+	void InitRelationMissingAttrs(TupleDesc tuple_desc);
 	Snapshot m_snapshot;
 	TupleDesc m_tuple_desc;
 	std::mutex m_lock; // Lock for one replacement scan
@@ -27,6 +28,7 @@ public:
 	duckdb::map<duckdb::idx_t, duckdb::column_t> m_output_columns_ids;
 	duckdb::TableFilterSet *m_filters = nullptr;
 	std::atomic<std::uint32_t> m_total_row_count;
+	duckdb::map<int, Datum> m_relation_missing_attrs;
 };
 
 class PostgresScanLocalState {

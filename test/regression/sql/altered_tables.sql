@@ -1,14 +1,21 @@
--- Using aclitem as a type that we wil not support in pg_duckdb any time soon.
-CREATE TABLE ddl_table(id int, myacl aclitem);
-INSERT INTO ddl_table VALUES (1, NULL);
--- Should fail because aclitem is not supported.
-SELECT * from ddl_table;
--- Should succed because we don't actually query aclitem
-SELECT id from ddl_table;
-ALTER TABLE ddl_table ADD COLUMN a int DEFAULT 10;
-ALTER TABLE ddl_table ADD COLUMN b int DEFAULT 20;
-ALTER TABLE ddl_table ADD COLUMN c int DEFAULT NULL;
-ALTER TABLE ddl_table ADD COLUMN d int DEFAULT 30;
-ALTER TABLE ddl_table DROP COLUMN myacl;
-select * from ddl_table;
-select a, c, d id from ddl_table;
+CREATE TABLE table_missing_attrs(id int);
+INSERT INTO table_missing_attrs VALUES (1);
+
+SELECT * FROM table_missing_attrs;
+SELECT id from table_missing_attrs;
+
+ALTER TABLE table_missing_attrs ADD COLUMN a int DEFAULT 10;
+ALTER TABLE table_missing_attrs ADD COLUMN b int DEFAULT 20;
+ALTER TABLE table_missing_attrs ADD COLUMN c int DEFAULT NULL;
+ALTER TABLE table_missing_attrs ADD COLUMN d int DEFAULT 30;
+
+SELECT * FROM table_missing_attrs;
+SELECT a, c, d id FROM table_missing_attrs;
+
+INSERT INTO table_missing_attrs(id, a, b) VALUES (2, 100, 200);
+ALTER TABLE table_missing_attrs ADD COLUMN f TEXT DEFAULT 'abcdefghijklmnopqrstuvwxyz';
+
+SELECT * FROM table_missing_attrs;
+SELECT a, c, d, f id FROM table_missing_attrs;
+
+DROP TABLE table_missing_attrs;
