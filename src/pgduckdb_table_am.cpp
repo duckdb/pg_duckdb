@@ -35,7 +35,8 @@ extern "C" {
 
 extern "C" {
 
-#define NOT_IMPLEMENTED() elog(ERROR, "duckdb does not implement %s", __func__)
+#define NOT_IMPLEMENTED()                                                                                              \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("duckdb does not implement %s", __func__)))
 
 PG_FUNCTION_INFO_V1(duckdb_am_handler);
 
