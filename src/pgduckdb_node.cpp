@@ -93,18 +93,20 @@ ExecuteQuery(DuckdbScanState *state) {
 		ParamExternData tmp_workspace;
 
 		/* give hook a chance in case parameter is dynamic */
-		if (pg_params->paramFetch != NULL)
+		if (pg_params->paramFetch != NULL) {
 			pg_param = pg_params->paramFetch(pg_params, i + 1, false, &tmp_workspace);
-		else
+		} else {
 			pg_param = &pg_params->params[i];
+		}
 
 		if (pg_param->isnull) {
 			duckdb_params.push_back(duckdb::Value());
-		} else {
-			if (!OidIsValid(pg_param->ptype)) {
-				elog(ERROR, "parameter with invalid type during execution");
-			}
+		} else if (OidIsValid(pg_param->ptype)) {
 			duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype));
+		} else {
+			std::ostringstream oss;
+			oss << "parameter " << i << " has an invalid type (" << pg_param->ptype << ") during query execution";
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
 		}
 	}
 
