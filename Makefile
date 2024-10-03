@@ -32,9 +32,6 @@ SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUI
 COMPILE.cc.bc = $(CXX) -Wno-ignored-attributes -Wno-register $(BITCODE_CXXFLAGS) $(CXXFLAGS) $(PG_CPPFLAGS) $(PG_CXXFLAGS) -I$(INCLUDEDIR_SERVER) -emit-llvm -c
 COMPILE.cxx.bc = $(CLANG) -xc++ -Wno-ignored-attributes $(BITCODE_CXXFLAGS) $(CPPFLAGS) $(PG_CPPFLAGS) $(PG_CXXFLAGS) -flto=thin -emit-llvm -c
 
-%.bc : %.cpp
-	$(COMPILE.cc.bc) $(SHLIB_LINK) -I$(INCLUDE_SERVER) -o $@ $<
-
 include Makefile.global
 
 # We need the DuckDB header files to build the .o files. We depend on the
