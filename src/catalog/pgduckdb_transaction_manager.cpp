@@ -1,5 +1,6 @@
 #include "pgduckdb/catalog/pgduckdb_transaction_manager.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "pgduckdb/pgduckdb_process_lock.hpp"
 
 namespace duckdb {
 
@@ -9,9 +10,15 @@ PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, P
 
 Transaction &
 PostgresTransactionManager::StartTransaction(ClientContext &context) {
-	lock_guard<mutex> l(transaction_lock);
-	auto transaction = make_uniq<PostgresTransaction>(*this, context, catalog, GetActiveSnapshot());
+	Snapshot snapshot;
+	{
+		std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
+		snapshot = GetActiveSnapshot();
+	}
+
+	auto transaction = make_uniq<PostgresTransaction>(*this, context, catalog, snapshot);
 	auto &result = *transaction;
+	lock_guard<mutex> l(transaction_lock);
 	transactions[result] = std::move(transaction);
 	return result;
 }
