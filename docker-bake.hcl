@@ -39,7 +39,7 @@ target "pg_duckdb_15" {
   inherits = ["pg_duckdb"]
 
   args = {
-    POSTGRES_VERSION = 15
+    POSTGRES_VERSION = "15"
   }
 }
 
@@ -47,7 +47,7 @@ target "pg_duckdb_16" {
   inherits = ["pg_duckdb"]
 
   args = {
-    POSTGRES_VERSION = 16
+    POSTGRES_VERSION = "16"
   }
 }
 
@@ -55,7 +55,7 @@ target "pg_duckdb_17" {
   inherits = ["pg_duckdb"]
 
   args = {
-    POSTGRES_VERSION = 17
+    POSTGRES_VERSION = "17"
   }
 }
 

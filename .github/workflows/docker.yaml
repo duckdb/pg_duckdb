@@ -2,38 +2,36 @@ name: Build Docker
 
 on:
   push:
-     tags: ["v*"]
-     branches: ['main']
+    tags: ["v*"]
+    branches: ["main"]
   pull_request:
     paths:
       - Dockerfile
       - docker-bake.hcl
-      - '.github/workflows/docker.yaml'
+      - ".github/workflows/docker.yaml"
 
 jobs:
   docker:
     name: Build Docker
     runs-on: ubuntu-24.04
     strategy:
-      fail-fast: false
+      # fail-fast: false
       matrix:
-        postgres: ['15', '16', '17']
-        platform: ['linux/amd64', 'linux/arm64']
+        postgres: ["15", "16", "17"]
+        platform: ["linux/amd64", "linux/arm64"]
 
     steps:
-      -
-        name: Checkout pg_duckdb extension code
+      - name: Checkout pg_duckdb extension code
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
-      -
-        name: Set POSTGRES_IMAGE env
-        run: echo "POSTGRES_IMAGE=${{ format('wuputah/pg_duckdb:{0}-{1}', matrix.postgres, github.sha) }}" >> $GITHUB_ENV
-      -
-        name: Set up QEMU
+          submodules: "recursive"
+      - name: Set env
+        run: |
+          echo "POSTGRES_IMAGE=${{ format('wuputah/pg_duckdb:{0}-{1}', matrix.postgres, github.sha) }}" >> $GITHUB_ENV
+          echo "POSTGRES_VERSION=${{ matrix.postgres }}" >> $GITHUB_ENV
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker buildx
+      - name: Set up Docker buildx
         uses: docker/setup-buildx-action@v3
         with:
           platforms: ${{ matrix.platform }}
@@ -43,8 +41,7 @@ jobs:
       #   with:
       #     username: ${{ secrets.DOCKERHUB_USERNAME }}
       #     password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: docker bake
+      - name: docker bake
         uses: docker/bake-action@v5
         with:
           targets: pg_duckdb_${{ matrix.postgres }}
