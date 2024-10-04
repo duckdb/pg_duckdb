@@ -13,6 +13,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
@@ -159,12 +160,10 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 
 	bool already_executed = duckdb_scan_state->is_executed;
 	if (!already_executed) {
-		try {
-			ExecuteQuery(duckdb_scan_state);
-		} catch (std::exception &ex) {
+		auto err_msg = pgduckdb::DuckDBFunctionGuard(ExecuteQuery, duckdb_scan_state);
+		if (err_msg) {
 			Duckdb_EndCustomScan(node);
-			pfree(duckdb_scan_state);
-			elog(ERROR, "(PGDuckDB/Duckdb_ExecCustomScan) %s", ex.what());
+			elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", err_msg);
 		}
 	}
 
@@ -225,11 +224,10 @@ Duckdb_ReScanCustomScan(CustomScanState *node) {
 void
 Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
-	try {
-		ExecuteQuery(duckdb_scan_state);
-	} catch (std::exception &ex) {
+	auto err_msg = pgduckdb::DuckDBFunctionGuard(ExecuteQuery, duckdb_scan_state);
+	if (err_msg) {
 		Duckdb_EndCustomScan(node);
-		elog(ERROR, "(PGDuckDB/Duckdb_ExplainCustomScan) %s", ex.what());
+		elog(ERROR, "(PGDuckDB/Duckdb_ExecCustomScan) %s", err_msg);
 	}
 
 	auto chunk = duckdb_scan_state->query_results->Fetch();

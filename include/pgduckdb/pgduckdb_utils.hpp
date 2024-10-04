@@ -74,4 +74,16 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	}
 }
 
+template <typename FuncType, typename... FuncArgs>
+const char*
+DuckDBFunctionGuard(FuncType duckdb_function, FuncArgs... args) {
+	try {
+		duckdb_function(args...);
+	} catch (std::exception &ex) {
+		return pstrdup(ex.what());
+	}
+
+	return nullptr;
+}
+
 } // namespace pgduckdb
