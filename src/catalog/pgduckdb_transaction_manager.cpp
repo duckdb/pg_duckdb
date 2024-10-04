@@ -10,13 +10,7 @@ PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, P
 
 Transaction &
 PostgresTransactionManager::StartTransaction(ClientContext &context) {
-	Snapshot snapshot;
-	{
-		std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
-		snapshot = GetActiveSnapshot();
-	}
-
-	auto transaction = make_uniq<PostgresTransaction>(*this, context, catalog, snapshot);
+	auto transaction = make_uniq<PostgresTransaction>(*this, context, catalog, GetActiveSnapshot());
 	auto &result = *transaction;
 	lock_guard<mutex> l(transaction_lock);
 	transactions[result] = std::move(transaction);
