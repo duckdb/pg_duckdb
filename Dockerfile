@@ -30,10 +30,12 @@ RUN mkdir /out
 RUN chown -R postgres:postgres . /usr/lib/postgresql /usr/share/postgresql /out
 
 USER postgres
+# build
+RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 make -j$(nproc)
 # install into location specified by pg_config for tests
-RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 make -j$(nproc) install
+RUN make install
 # install into /out for packaging
-RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 DESTDIR=/out make install
+RUN DESTDIR=/out make install
 
 ###
 ### CHECKER
@@ -41,7 +43,7 @@ RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 DESTDIR=/out make install
 FROM builder AS checker
 
 USER postgres
-RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 make installcheck
+RUN make installcheck
 
 ###
 ### OUTPUT
