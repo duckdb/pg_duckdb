@@ -7,6 +7,7 @@ extern "C" {
 #include "postgres.h"
 #include "fmgr.h"
 #include "miscadmin.h"
+#include "access/tupdesc_details.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
 #include "utils/builtins.h"
@@ -942,15 +943,26 @@ typedef struct HeapTupleReadState {
 
 static Datum
 HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heap_tuple_read_state,
-                              int att_num, bool *is_null) {
+                              int att_num, bool *is_null, const duckdb::map<int, Datum> &missing_attrs) {
 	HeapTupleHeader tup = tuple->t_data;
 	bool hasnulls = HeapTupleHasNulls(tuple);
+	int natts = HeapTupleHeaderGetNatts(tup);
 	int attnum;
 	char *tp;
 	uint32 off;
 	bits8 *bp = tup->t_bits;
 	bool slow = false;
 	Datum value = (Datum)0;
+
+	if (natts < att_num) {
+		if (auto missing_attr = missing_attrs.find(att_num - 1); missing_attr != missing_attrs.end()) {
+			*is_null = false;
+			return missing_attr->second;
+		} else {
+			*is_null = true;
+			return PointerGetDatum(NULL);
+		}
+	}
 
 	attnum = heap_tuple_read_state.m_last_tuple_att;
 
@@ -1038,8 +1050,9 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 
 	/* Read heap tuple with all required columns. */
 	for (auto const &[columnIdx, valueIdx] : scan_global_state->m_read_columns_ids) {
-		values[valueIdx] = HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state,
-		                                                 columnIdx + 1, &nulls[valueIdx]);
+		values[valueIdx] =
+		    HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state, columnIdx + 1,
+		                                  &nulls[valueIdx], scan_global_state->m_relation_missing_attrs);
 		if (scan_global_state->m_filters &&
 		    (scan_global_state->m_filters->filters.find(valueIdx) != scan_global_state->m_filters->filters.end())) {
 			auto &filter = scan_global_state->m_filters->filters[valueIdx];

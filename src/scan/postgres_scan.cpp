@@ -24,6 +24,7 @@ extern "C" {
 #include "utils/syscache.h"
 }
 
+#include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -60,6 +61,19 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 	}
 
 	m_filters = input.filters.get();
+}
+
+void
+PostgresScanGlobalState::InitRelationMissingAttrs(TupleDesc tuple_desc) {
+	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	for(int attnum = 0; attnum < tuple_desc->natts; attnum++) {
+		bool is_null = false;
+		Datum attr = getmissingattr(tuple_desc, attnum + 1, &is_null);
+		/* Add missing attr datum if not null*/
+		if (!is_null) {
+			m_relation_missing_attrs[attnum] = attr;
+		}
+	}
 }
 
 static Oid

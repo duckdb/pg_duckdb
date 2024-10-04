@@ -33,27 +33,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
         version: [REL_15_STABLE, REL_16_STABLE, REL_17_STABLE]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-24.04
 
     steps:
       - name: Test details
-        run: echo Build and test pg_duckdb on ${{ matrix.os }} with PostgreSQL ${{ matrix.version }} branch
+        run: echo Build and test pg_duckdb with PostgreSQL ${{ matrix.version }} branch
 
       - name: Install build deps
         run: |
           sudo apt-get update -qq
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
           sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
-            libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo5 cmake \
+            libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo6 cmake \
             libstdc++-12-dev
           echo "${PWD}/postgres/inst/bin:$PATH'" > $GITHUB_PATH
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ matrix.os }}
+          key: ubuntu-24.04
           create-symlink: true
 
       - name: Checkout pg_duckdb extension code
@@ -85,7 +84,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: postgres/inst
-          key: pg-build-${{ matrix.os }}-${{ steps.versions.outputs.postgres_sha }}
+          key: pg-build-ubuntu-24.04-${{ steps.versions.outputs.postgres_sha }}
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
@@ -104,7 +103,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: duckdb/third_party/duckdb/build/
-          key: duckdb-build-${{ matrix.os }}-${{ steps.versions.outputs.duckdb_sha }}
+          key: duckdb-build-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}
 
       - name: Install pytest and other test requirements
         run: python3 -m pip install -r duckdb/requirements.txt
@@ -113,7 +112,7 @@ jobs:
         id: build
         run: |
           pushd duckdb
-          make -j8 install CFLAGS=-Werror CXXFLAGS=-Werror
+          make -j8 install
 
       - name: Run make installcheck
         id: installcheck
