@@ -14,6 +14,7 @@ extern "C" {
 #include "catalog/pg_class.h"
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
+#include "optimizer/plancat.h"
 #include "utils/builtins.h"
 #include "utils/regproc.h"
 #include "utils/snapmgr.h"
@@ -30,12 +31,12 @@ PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, Creat
 }
 
 bool
-PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot) {
+PostgresTable::SetTableInfo(CreateTableInfo &info, Oid relid, Snapshot snapshot) {
 	auto rel = RelationIdGetRelation(relid);
 	auto tupleDesc = RelationGetDescr(rel);
 
 	if (!tupleDesc) {
-		elog(ERROR, "Failed to get tuple descriptor for relation with OID %u", relid);
+		elog(WARNING, "Failed to get tuple descriptor for relation with OID %u", relid);
 		RelationClose(rel);
 		return false;
 	}
@@ -46,12 +47,23 @@ PostgresTable::PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapsh
 		auto duck_type = pgduckdb::ConvertPostgresToDuckColumnType(attr);
 		info.columns.AddColumn(duckdb::ColumnDefinition(col_name, duck_type));
 		/* Log column name and type */
-		elog(DEBUG3, "-- (DuckDB/PostgresHeapBind) Column name: %s, Type: %s --", col_name.c_str(),
+		elog(DEBUG3, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
 
 	RelationClose(rel);
 	return true;
+}
+
+Cardinality
+PostgresTable::GetTableCardinality(Oid relid) {
+	auto rel = RelationIdGetRelation(relid);
+	Cardinality cardinality;
+	BlockNumber n_pages;
+	double allvisfrac;
+	estimate_rel_size(rel, NULL, &n_pages, &cardinality, &allvisfrac);
+	RelationClose(rel);
+	return cardinality;
 }
 
 //===--------------------------------------------------------------------===//

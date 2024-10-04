@@ -26,7 +26,8 @@ public:
 	}
 
 public:
-	static bool PopulateColumns(CreateTableInfo &info, Oid relid, Snapshot snapshot);
+	static bool SetTableInfo(CreateTableInfo &info, Oid relid, Snapshot snapshot);
+	static Cardinality GetTableCardinality(Oid relid);
 
 protected:
 	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, Cardinality cardinality,

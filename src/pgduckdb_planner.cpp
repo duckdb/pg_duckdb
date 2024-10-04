@@ -23,46 +23,9 @@ extern "C" {
 
 bool duckdb_explain_analyze = false;
 
-static PlannerInfo *
-PlanQuery(Query *parse, ParamListInfo bound_params) {
-
-	PlannerGlobal *glob = makeNode(PlannerGlobal);
-
-	glob->boundParams = bound_params;
-	glob->subplans = NIL;
-	glob->subroots = NIL;
-	glob->rewindPlanIDs = NULL;
-	glob->finalrtable = NIL;
-#if PG_VERSION_NUM >= 160000
-	glob->finalrteperminfos = NIL;
-#endif
-	glob->finalrowmarks = NIL;
-	glob->resultRelations = NIL;
-	glob->appendRelations = NIL;
-	glob->relationOids = NIL;
-	glob->invalItems = NIL;
-	glob->paramExecTypes = NIL;
-	glob->lastPHId = 0;
-	glob->lastRowMarkId = 0;
-	glob->lastPlanNodeId = 0;
-	glob->transientPlan = false;
-	glob->dependsOnRole = false;
-
-	return subquery_planner(glob, parse, NULL, false, 0.0
-#if PG_VERSION_NUM >= 170000
-	                        ,
-	                        NULL
-#endif
-	);
-}
-
 std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
 DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
 
-	/*
-	 * Copy the query, so the original one is not modified by the
-	 * subquery_planner call that PlanQuery does.
-	 */
 	Query *copied_query = (Query *)copyObjectImpl(query);
 	/*
 	    Temporarily clear search_path so that the query will contain only fully qualified tables.
@@ -91,8 +54,7 @@ DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
 	int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
 	List *vars = list_concat(pull_var_clause((Node *)copied_query->targetList, flags),
 	                         pull_var_clause((Node *)copied_query->jointree->quals, flags));
-	PlannerInfo *query_planner_info = PlanQuery(copied_query, bound_params);
-	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, query_planner_info, vars, query_string);
+	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, vars, query_string);
 	auto context = duckdb_connection->context;
 	auto prepared_query = context->Prepare(query_string);
 	return {std::move(prepared_query), std::move(duckdb_connection)};

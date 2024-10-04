@@ -14,7 +14,7 @@ public:
 	}
 
 public:
-	optional_ptr<CatalogEntry> GetTable(const string &name, PlannerInfo *planner_info);
+	optional_ptr<CatalogEntry> GetTable(const string &name);
 
 public:
 	string name;
