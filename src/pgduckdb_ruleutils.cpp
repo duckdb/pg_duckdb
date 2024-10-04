@@ -118,78 +118,80 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	for (int i = 0; i < tuple_descriptor->natts; i++) {
 		Form_pg_attribute column = TupleDescAttr(tuple_descriptor, i);
 
-		/*
-		 * We disregard the inherited attributes (i.e., attinhcount > 0) here.
-		 * The reasoning behind this is that Citus implements declarative
-		 * partitioning by creating the partitions first and then sending
-		 * "ALTER TABLE parent_table ATTACH PARTITION .." command. This may
-		 * not play well with regular inherited tables, which isn't a big
-		 * concern from Citus' perspective.
-		 */
-		if (!column->attisdropped) {
-			const char *column_name = NameStr(column->attname);
+		if (column->attisdropped) {
+			continue;
+		}
 
-			const char *column_type_name = format_type_with_typemod(column->atttypid, column->atttypmod);
+		const char *column_name = NameStr(column->attname);
 
-			if (first_column_printed) {
-				appendStringInfoString(&buffer, ", ");
-			}
-			first_column_printed = true;
+		const char *column_type_name = format_type_with_typemod(column->atttypid, column->atttypmod);
 
-			appendStringInfo(&buffer, "%s ", quote_identifier(column_name));
-			appendStringInfoString(&buffer, column_type_name);
+		if (first_column_printed) {
+			appendStringInfoString(&buffer, ", ");
+		}
+		first_column_printed = true;
 
-			if (column->attcompression) {
-				elog(ERROR, "Column compression is not supported in DuckDB");
-			}
+		appendStringInfo(&buffer, "%s ", quote_identifier(column_name));
+		appendStringInfoString(&buffer, column_type_name);
 
-			if (column->attidentity) {
-				elog(ERROR, "Identity columns are not supported in DuckDB");
-			}
+		if (column->attcompression) {
+			elog(ERROR, "Column compression is not supported in DuckDB");
+		}
 
-			/* if this column has a default value, append the default value */
-			if (column->atthasdef) {
-				Assert(tuple_constraints != NULL);
-				Assert(default_value_list != NULL);
+		if (column->attidentity) {
+			elog(ERROR, "Identity columns are not supported in DuckDB");
+		}
 
-				AttrDefault *default_value = &(default_value_list[default_value_index]);
-				default_value_index++;
+		/* if this column has a default value, append the default value */
+		if (column->atthasdef) {
+			Assert(tuple_constraints != NULL);
+			Assert(default_value_list != NULL);
 
-				Assert(default_value->adnum == (i + 1));
-				Assert(default_value_index <= tuple_constraints->num_defval);
+			AttrDefault *default_value = &(default_value_list[default_value_index]);
+			default_value_index++;
 
-				/*
-				 * convert expression to node tree, and prepare deparse
-				 * context
-				 */
-				Node *default_node = (Node *)stringToNode(default_value->adbin);
-
-				/* deparse default value string */
-				char *default_string = pgduckdb_deparse_expression(default_node, relation_context, false, false);
-
-				if (column->attgenerated == ATTRIBUTE_GENERATED_STORED) {
-					elog(ERROR, "DuckDB does not support STORED generated columns");
-				} else {
-					appendStringInfo(&buffer, " DEFAULT %s", default_string);
-				}
-			}
-
-			/* if this column has a not null constraint, append the constraint */
-			if (column->attnotnull) {
-				appendStringInfoString(&buffer, " NOT NULL");
-			}
+			Assert(default_value->adnum == (i + 1));
+			Assert(default_value_index <= tuple_constraints->num_defval);
 
 			/*
-			 * XXX: default collation is actually probably not supported by
-			 * DuckDB, unless it's C or POSIX. But failing unless people
-			 * provide C or POSIX seems pretty annoying. How should we handle
-			 * this?
+			 * convert expression to node tree, and prepare deparse
+			 * context
 			 */
-			Oid collation = column->attcollation;
-			if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && collation != C_COLLATION_OID &&
-			    collation != POSIX_COLLATION_OID) {
-				elog(ERROR, "DuckDB does not support column collations");
+			Node *default_node = (Node *)stringToNode(default_value->adbin);
+
+			/* deparse default value string */
+			char *default_string = pgduckdb_deparse_expression(default_node, relation_context, false, false);
+
+			/*
+			 * DuckDB does not support STORED generated columns, it does
+			 * support VIRTUAL generated columns though. Howevever, Postgres
+			 * currently does not support those, so for now there's no overlap
+			 * in generated column support between the two databases.
+			 */
+			if (!column->attgenerated) {
+				appendStringInfo(&buffer, " DEFAULT %s", default_string);
+			} else if (column->attgenerated == ATTRIBUTE_GENERATED_STORED) {
+				elog(ERROR, "DuckDB does not support STORED generated columns");
+			} else {
+				elog(ERROR, "Unkown generated column type");
 			}
+		}
+
+		/* if this column has a not null constraint, append the constraint */
+		if (column->attnotnull) {
+			appendStringInfoString(&buffer, " NOT NULL");
+		}
+
+		/*
+		 * XXX: default collation is actually probably not supported by
+		 * DuckDB, unless it's C or POSIX. But failing unless people
+		 * provide C or POSIX seems pretty annoying. How should we handle
+		 * this?
+		 */
+		Oid collation = column->attcollation;
+		if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && collation != C_COLLATION_OID &&
+		    collation != POSIX_COLLATION_OID) {
+			elog(ERROR, "DuckDB does not support column collations");
 		}
 	}
 

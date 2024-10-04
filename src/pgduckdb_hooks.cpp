@@ -108,7 +108,7 @@ NeedsDuckdbExecution(Query *query) {
 }
 
 static bool
-IsAllowedStatement(Query *query, bool throw_error) {
+IsAllowedStatement(Query *query, bool throw_error = false) {
 	int elevel = throw_error ? ERROR : DEBUG4;
 	/* DuckDB does not support modifying CTEs INSERT/UPDATE/DELETE */
 	if (query->hasModifyingCTE) {
@@ -166,7 +166,7 @@ IsAllowedStatement(Query *query, bool throw_error) {
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
-		if (duckdb_execution && IsAllowedStatement(parse, false)) {
+		if (duckdb_execution && IsAllowedStatement(parse)) {
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
 			if (duckdbPlan) {
 				return duckdbPlan;

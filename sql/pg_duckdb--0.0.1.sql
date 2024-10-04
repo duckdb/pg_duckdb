@@ -139,6 +139,9 @@ CREATE TABLE extensions (
     enabled BOOL DEFAULT TRUE
 );
 
+-- The following might seem unnecesasry, but it's needed to know if a dropped
+-- table was a DuckDB table or not. See the comments and code in
+-- duckdb_drop_table_trigger for details.
 CREATE TABLE tables (
     relid regclass PRIMARY KEY
 );

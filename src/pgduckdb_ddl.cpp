@@ -59,7 +59,8 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
  * not support ON COMMIT DROP, and it's difficult to emulate because Postgres
  * does not call any hooks or event triggers when dropping a table due to an ON
  * COMMIT DROP clause. We could simplify the below check to only check for
- * ONCOMMIT_DROP, but this semes safer in case
+ * ONCOMMIT_DROP, but this will also handle any new ON COMMIT clauses that
+ * might be added to Postgres in future releases.
  */
 void
 CheckOnCommitSupport(OnCommitAction on_commit) {
@@ -88,7 +89,13 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 
 	SPI_connect();
 
-	/* Temporarily escalate privileges to superuser so we can insert into duckdb.tables */
+	/*
+	 * Temporarily escalate privileges to superuser so we can insert into
+	 * duckdb.tables. We temporarily clear the search_path to protect against
+	 * search_path confusion attacks. See guidance on SECURITY DEFINER
+	 * functions in postgres for details:
+	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
+	 */
 	Oid saved_userid;
 	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
@@ -101,14 +108,14 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	 * method. See the code comment in that function for more details.
 	 */
 	int ret = SPI_exec(R"(
-                INSERT INTO duckdb.tables(relid)
-                SELECT DISTINCT objid
-                FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
-                JOIN pg_catalog.pg_class
-                ON cmds.objid = pg_class.oid
-                WHERE cmds.object_type = 'table'
-                AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
-				RETURNING relid)",
+		INSERT INTO duckdb.tables(relid)
+		SELECT DISTINCT objid
+		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
+		JOIN pg_catalog.pg_class
+		ON cmds.objid = pg_class.oid
+		WHERE cmds.object_type = 'table'
+		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
+		RETURNING relid)",
 	                   0);
 
 	/* Revert back to original privileges */
@@ -119,12 +126,12 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	/* if we inserted a row it was a duckdb table */
-	auto isDuckdbTable = SPI_processed > 0;
-
-	if (!isDuckdbTable) {
+	auto is_duckdb_table = SPI_processed > 0;
+	if (!is_duckdb_table) {
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
+
 	if (SPI_processed != 1) {
 		elog(ERROR, "Expected single table to be created, but found %" PRIu64, SPI_processed);
 	}
@@ -176,7 +183,13 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 
 	SPI_connect();
 
-	/* Temporarily escalate privileges to superuser so we can delete from duckdb.tables */
+	/*
+	 * Temporarily escalate privileges to superuser so we can insert into
+	 * duckdb.tables. We temporarily clear the search_path to protect against
+	 * search_path confusion attacks. See guidance on SECURITY DEFINER
+	 * functions in postgres for details:
+	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
+	 */
 	Oid saved_userid;
 	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
@@ -189,15 +202,15 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	// instead we keep our own metadata table that also tracks which tables are
 	// duckdb tables.
 	int ret = SPI_exec(R"(
-                DELETE FROM duckdb.tables
-                USING (
-                    SELECT objid, object_name, object_identity
-                    FROM pg_catalog.pg_event_trigger_dropped_objects()
-                    WHERE object_type = 'table'
-                ) objs
-                WHERE relid = objid
-                RETURNING objs.object_identity
-                )",
+		DELETE FROM duckdb.tables
+		USING (
+			SELECT objid, object_name, object_identity
+			FROM pg_catalog.pg_event_trigger_dropped_objects()
+			WHERE object_type = 'table'
+		) objs
+		WHERE relid = objid
+		RETURNING objs.object_identity
+		)",
 	                   0);
 
 	/* Revert back to original privileges */
@@ -259,7 +272,13 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 
 	SPI_connect();
 
-	/* Temporarily escalate privileges to superuser so we can read from duckdb.tables */
+	/*
+	 * Temporarily escalate privileges to superuser so we can insert into
+	 * duckdb.tables. We temporarily clear the search_path to protect against
+	 * search_path confusion attacks. See guidance on SECURITY DEFINER
+	 * functions in postgres for details:
+	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
+	 */
 	Oid saved_userid;
 	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
@@ -273,19 +292,19 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	 * SET ACCESS METHOD command.
 	 */
 	int ret = SPI_exec(R"(
-                SELECT objid as relid
-                FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
-                JOIN pg_catalog.pg_class
-                ON cmds.objid = pg_class.oid
-                WHERE cmds.object_type = 'table'
-                AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
-				UNION ALL
-                SELECT objid as relid
-                FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
-                JOIN duckdb.tables AS ddbtables
-                ON cmds.objid = ddbtables.relid
-                WHERE cmds.object_type = 'table'
-				)",
+		SELECT objid as relid
+		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
+		JOIN pg_catalog.pg_class
+		ON cmds.objid = pg_class.oid
+		WHERE cmds.object_type = 'table'
+		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
+		UNION ALL
+		SELECT objid as relid
+		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
+		JOIN duckdb.tables AS ddbtables
+		ON cmds.objid = ddbtables.relid
+		WHERE cmds.object_type = 'table'
+		)",
 	                   0);
 
 	/* Revert back to original privileges */
@@ -296,8 +315,8 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	/* if we inserted a row it was a duckdb table */
-	auto isDuckdbTable = SPI_processed > 0;
-	if (!isDuckdbTable) {
+	auto is_duckdb_table = SPI_processed > 0;
+	if (!is_duckdb_table) {
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
