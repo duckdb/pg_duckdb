@@ -106,6 +106,35 @@ CREATE TEMP TABLE t(A text COMPRESSION "pglz");
 
 CREATE TEMP TABLE t(a int) WITH (fillfactor = 50);
 
+CREATE TEMP TABLE cities_duckdb (
+  name       text,
+  population real,
+  elevation  int
+);
+
+CREATE TEMP TABLE cities_heap (
+  name       text,
+  population real,
+  elevation  int
+) USING heap;
+
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE TEMP TABLE capitals_duckdb (
+  state      char(2) UNIQUE NOT NULL
+) INHERITS (cities_duckdb);
+
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE TEMP TABLE capitals_duckdb (
+  state      char(2) UNIQUE NOT NULL
+) INHERITS (cities_heap);
+
+-- XXX: A better error message would be nice here, but for now this is acceptable.
+CREATE TEMP TABLE capitals_heap (
+  state      char(2) UNIQUE NOT NULL
+) INHERITS (cities_duckdb);
+
+DROP TABLE cities_heap, cities_duckdb;
+
 CREATE TEMP TABLE t(a int) ON COMMIT PRESERVE ROWS;
 INSERT INTO t VALUES (1);
 SELECT * FROM t;
