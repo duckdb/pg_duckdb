@@ -161,8 +161,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(parsetree));
 	}
 
-	const char *query_cstr = pgduckdb_get_tabledef(relid);
-	std::string query_string(query_cstr);
+	std::string query_string(pgduckdb_get_tabledef(relid));
 
 	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
