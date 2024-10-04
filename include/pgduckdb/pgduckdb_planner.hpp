@@ -11,6 +11,6 @@ extern "C" {
 
 extern bool duckdb_explain_analyze;
 
-PlannedStmt *DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params);
+PlannedStmt *DuckdbPlanNode(Query *parse, int cursor_options);
 std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
-DuckdbPrepare(const Query *query, ParamListInfo bound_params);
+DuckdbPrepare(const Query *query);

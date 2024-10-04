@@ -24,7 +24,7 @@ extern "C" {
 bool duckdb_explain_analyze = false;
 
 std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
-DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
+DuckdbPrepare(const Query *query) {
 
 	Query *copied_query = (Query *)copyObjectImpl(query);
 	/*
@@ -61,11 +61,11 @@ DuckdbPrepare(const Query *query, ParamListInfo bound_params) {
 }
 
 static Plan *
-CreatePlan(Query *query, ParamListInfo bound_params) {
+CreatePlan(Query *query) {
 	/*
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
-	auto prepare_result = DuckdbPrepare(query, bound_params);
+	auto prepare_result = DuckdbPrepare(query);
 	auto prepared_query = std::move(std::get<0>(prepare_result));
 
 	if (prepared_query->HasError()) {
@@ -114,9 +114,9 @@ CreatePlan(Query *query, ParamListInfo bound_params) {
 }
 
 PlannedStmt *
-DuckdbPlanNode(Query *parse, int cursor_options, ParamListInfo bound_params) {
+DuckdbPlanNode(Query *parse, int cursor_options) {
 	/* We need to check can we DuckDB create plan */
-	Plan *duckdb_plan = (Plan *)castNode(CustomScan, CreatePlan(parse, bound_params));
+	Plan *duckdb_plan = (Plan *)castNode(CustomScan, CreatePlan(parse));
 
 	if (!duckdb_plan) {
 		return nullptr;
