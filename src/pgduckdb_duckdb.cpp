@@ -84,13 +84,18 @@ DuckDBManager::DuckDBManager() {
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
 	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
 	LoadFunctions(context);
 	LoadSecrets(context);
 	LoadExtensions(context);
+
+	auto res = context.Query("set search_path='pgduckdb.main'", false);
+	if (res->HasError()) {
+		elog(WARNING, "(DuckDB) %s", res->GetError().c_str());
+	}
 }
 
 void
@@ -164,20 +169,13 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	}
 }
 
-duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
-	auto &db = DuckDBManager::Get().GetDatabase();
-	/* Add DuckDB replacement scan to read PG data */
-	auto con = duckdb::make_uniq<duckdb::Connection>(db);
-	auto &context = *con->context;
-
-	context.registered_state->Insert(
+duckdb::Connection *
+DuckDBManager::GetConnection(List *rtables, PlannerInfo *planner_info, List *needed_columns, const char *query) {
+	connection->context->registered_state->Remove("postgres_state");
+	connection->context->registered_state->Insert(
 	    "postgres_state", duckdb::make_shared_ptr<PostgresContextState>(rtables, planner_info, needed_columns, query));
-	auto res = context.Query("set search_path='pgduckdb.main'", false);
-	if (res->HasError()) {
-		elog(WARNING, "(DuckDB) %s", res->GetError().c_str());
-	}
-	return con;
+
+	return connection.get();
 }
 
 } // namespace pgduckdb
