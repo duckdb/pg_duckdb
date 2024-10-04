@@ -21,31 +21,6 @@ extern "C" {
 
 namespace pgduckdb {
 
-/* constants for duckdb.secrets */
-#define Natts_duckdb_secret              7
-#define Anum_duckdb_secret_type          1
-#define Anum_duckdb_secret_id            2
-#define Anum_duckdb_secret_secret        3
-#define Anum_duckdb_secret_region        4
-#define Anum_duckdb_secret_endpoint      5
-#define Anum_duckdb_secret_r2_account_id 6
-#define Anum_duckdb_secret_use_ssl       7
-
-typedef struct DuckdbSecret {
-	std::string type;
-	std::string id;
-	std::string secret;
-	std::string region;
-	std::string endpoint;
-	std::string r2_account_id;
-	bool use_ssl;
-} DuckdbSecret;
-
-/* constants for duckdb.extensions */
-#define Natts_duckdb_extension       2
-#define Anum_duckdb_extension_name   1
-#define Anum_duckdb_extension_enable 2
-
 static Oid
 GetDuckdbNamespace(void) {
 	return get_namespace_oid("duckdb", false);
@@ -70,8 +45,8 @@ DatumToString(Datum datum) {
 	return column_value;
 }
 
-static std::vector<DuckdbSecret>
-DuckdbReadSecrets() {
+std::vector<DuckdbSecret>
+ReadDuckdbSecrets() {
 	HeapTuple tuple = NULL;
 	Oid duckdb_secret_table_relation_id = SecretsTableRelationId();
 	Relation duckdb_secret_relation = table_open(duckdb_secret_table_relation_id, AccessShareLock);
@@ -111,35 +86,6 @@ DuckdbReadSecrets() {
 	systable_endscan(scan);
 	table_close(duckdb_secret_relation, NoLock);
 	return duckdb_secrets;
-}
-
-void
-AddSecretsToDuckdbContext(duckdb::ClientContext &context) {
-	auto duckdb_secrets = DuckdbReadSecrets();
-	int secret_id = 0;
-	for (auto &secret : duckdb_secrets) {
-		StringInfo secret_key = makeStringInfo();
-		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
-		appendStringInfo(secret_key, "CREATE SECRET pg_duckdb_secret_%d ", secret_id);
-		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
-		                 secret.secret.c_str());
-		if (secret.region.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
-		}
-		if (secret.endpoint.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
-		}
-		if (is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
-		}
-		if (!secret.use_ssl) {
-			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
-		}
-		appendStringInfo(secret_key, ");");
-		context.Query(secret_key->data, false);
-		pfree(secret_key->data);
-		secret_id++;
-	}
 }
 
 std::vector<DuckdbExtension>
@@ -212,43 +158,38 @@ CanCacheRemoteObject(std::string remote_object) {
 
 static bool
 DuckdbCacheObject(Datum object, Datum type) {
-	auto db = DuckdbOpenDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*db);
-	auto &context = *connection->context;
-
+	auto con = DuckDBManager::Get().GetConnection();
+	auto &context = *con->context;
 	auto object_type = DatumToString(type);
 
 	if (object_type != "parquet" && object_type != "csv") {
-		elog(WARNING, "(DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
 		return false;
 	}
 
 	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
 
 	context.Query("SET enable_http_file_cache TO true;", false);
-	auto http_file_cache_set_dir_query =
-	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
-	context.Query(http_file_cache_set_dir_query, false);
-
-	AddSecretsToDuckdbContext(context);
 
 	auto object_path = DatumToString(object);
 
 	if (!CanCacheRemoteObject(object_path)) {
-		elog(WARNING, "(DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
 		return false;
 	}
 
 	auto cache_object_query =
 	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
 	auto res = context.Query(cache_object_query, false);
+	auto query_has_errors = res->HasError();
 
-	if (res->HasError()) {
-		elog(WARNING, "(DuckdbCacheObject) %s", res->GetError().c_str());
-		return false;
+	if (query_has_errors) {
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) %s", res->GetError().c_str());
 	}
 
-	return true;
+	context.Query("SET enable_http_file_cache TO false;", false);
+
+	return query_has_errors;
 }
 
 } // namespace pgduckdb

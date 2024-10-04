@@ -2,6 +2,7 @@
 extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
+#include "lib/stringinfo.h"
 #include "storage/fd.h"
 }
 
@@ -62,7 +63,3 @@ CreateOrGetDirectoryPath(std::string directory_name) {
 
 } // namespace pgduckdb
 
-void
-DuckdbCreateCacheDirectory() {
-	pgduckdb::CreateOrGetDirectoryPath("duckdb_cache");
-}

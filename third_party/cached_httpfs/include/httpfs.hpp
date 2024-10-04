@@ -13,6 +13,10 @@ namespace duckdb_httplib_openssl {
 struct Response;
 class Result;
 class Client;
+namespace detail {
+struct ci;
+}
+using Headers = std::multimap<std::string, std::string, duckdb_httplib_openssl::detail::ci>;
 } // namespace duckdb_httplib_openssl
 
 namespace duckdb {
@@ -45,23 +49,27 @@ struct HTTPParams {
 	static constexpr const char *DEFAULT_HTTP_FILE_CACHE_DIR = "/tmp";
 	static constexpr bool DEFAULT_HTTP_CACHE = false;
 
-	uint64_t timeout;
-	uint64_t retries;
-	uint64_t retry_wait_ms;
-	float retry_backoff;
-	bool force_download;
-	bool keep_alive;
-	bool enable_server_cert_verification;
-	std::string ca_cert_file;
+	uint64_t timeout = DEFAULT_TIMEOUT;
+	uint64_t retries = DEFAULT_RETRIES;
+	uint64_t retry_wait_ms = DEFAULT_RETRY_WAIT_MS;
+	float retry_backoff = DEFAULT_RETRY_BACKOFF;
+	bool force_download = DEFAULT_FORCE_DOWNLOAD;
+	bool keep_alive = DEFAULT_KEEP_ALIVE;
+	bool enable_server_cert_verification = DEFAULT_ENABLE_SERVER_CERT_VERIFICATION;
+	idx_t hf_max_per_page = DEFAULT_HF_MAX_PER_PAGE;
+	bool enable_http_file_cache = DEFAULT_HTTP_CACHE;
+	std::string http_file_cache_dir = DEFAULT_HTTP_FILE_CACHE_DIR;
 
+	string ca_cert_file;
+	string http_proxy;
+	idx_t http_proxy_port;
+	string http_proxy_username;
+	string http_proxy_password;
 	string bearer_token;
 
-	idx_t hf_max_per_page;
+	unordered_map<string, string> extra_headers;
 
-	bool enable_http_file_cache;
-	std::string http_file_cache_dir;
-
-	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener);
+	static HTTPParams ReadFrom(optional_ptr<FileOpener> opener, optional_ptr<FileOpenerInfo> info);
 };
 
 class HTTPClientCache {
@@ -137,6 +145,8 @@ public:
 	static void ParseUrl(string &url, string &path_out, string &proto_host_port_out);
 	duckdb::unique_ptr<FileHandle> OpenFile(const string &path, FileOpenFlags flags,
 	                                        optional_ptr<FileOpener> opener = nullptr) final;
+	static duckdb::unique_ptr<duckdb_httplib_openssl::Headers> InitializeHeaders(HeaderMap &header_map,
+	                                                                             const HTTPParams &http_params);
 
 	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
 		return {path}; // FIXME

@@ -17,7 +17,6 @@ PG_MODULE_MAGIC;
 void
 _PG_init(void) {
 	DuckdbInitGUC();
-	DuckdbCreateCacheDirectory();
 	DuckdbInitHooks();
 	DuckdbInitNode();
 }

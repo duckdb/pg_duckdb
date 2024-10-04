@@ -101,6 +101,6 @@ DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArg
 	std::abort(); // Cannot reach.
 }
 
-} // namespace pgduckdb
+std::string CreateOrGetDirectoryPath(std::string directory_name);
 
-void DuckdbCreateCacheDirectory(void);
+} // namespace pgduckdb
