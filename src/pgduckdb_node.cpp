@@ -13,7 +13,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
@@ -37,21 +36,9 @@ typedef struct DuckdbScanState {
 
 static void
 CleanupDuckdbScanState(DuckdbScanState *state) {
-	MemoryContextReset(state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
-	ExecClearTuple(state->css.ss.ss_ScanTupleSlot);
-
 	state->query_results.reset();
-	state->current_data_chunk.reset();
-
-	if (state->prepared_statement) {
-		delete state->prepared_statement;
-		state->prepared_statement = nullptr;
-	}
-
-	if (state->duckdb_connection) {
-		delete state->duckdb_connection;
-		state->duckdb_connection = nullptr;
-	}
+	delete state->prepared_statement;
+	delete state->duckdb_connection;
 }
 
 /* static callbacks */
@@ -105,28 +92,25 @@ ExecuteQuery(DuckdbScanState *state) {
 		ParamExternData tmp_workspace;
 
 		/* give hook a chance in case parameter is dynamic */
-		if (pg_params->paramFetch != NULL) {
+		if (pg_params->paramFetch != NULL)
 			pg_param = pg_params->paramFetch(pg_params, i + 1, false, &tmp_workspace);
-		} else {
+		else
 			pg_param = &pg_params->params[i];
-		}
 
 		if (pg_param->isnull) {
 			duckdb_params.push_back(duckdb::Value());
-		} else if (OidIsValid(pg_param->ptype)) {
-			duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype));
 		} else {
-			std::ostringstream oss;
-			oss << "parameter " << i << " has an invalid type (" << pg_param->ptype << ") during query execution";
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
+			if (!OidIsValid(pg_param->ptype)) {
+				elog(ERROR, "parameter with invalid type during execution");
+			}
+			duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype));
 		}
 	}
 
 	auto pending = prepared.PendingQuery(duckdb_params, true);
 	if (pending->HasError()) {
-		return pending->ThrowError();
+		elog(ERROR, "DuckDB execute returned an error: %s", pending->GetError().c_str());
 	}
-
 	duckdb::PendingExecutionResult execution_result;
 	do {
 		execution_result = pending->ExecuteTask();
@@ -137,16 +121,16 @@ ExecuteQuery(DuckdbScanState *state) {
 			// Wait for all tasks to terminate
 			executor.CancelTasks();
 			// Delete the scan state
+			CleanupDuckdbScanState(state);
 			// Process the interrupt on the Postgres side
 			ProcessInterrupts();
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Query cancelled");
+			elog(ERROR, "Query cancelled");
 		}
 	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
-
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
-		return pending->ThrowError();
+		CleanupDuckdbScanState(state);
+		elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", pending->GetError().c_str());
 	}
-
 	query_results = pending->Execute();
 	state->column_count = query_results->ColumnCount();
 	state->is_executed = true;
@@ -160,11 +144,7 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 
 	bool already_executed = duckdb_scan_state->is_executed;
 	if (!already_executed) {
-		auto err_msg = pgduckdb::DuckDBFunctionGuard(ExecuteQuery, duckdb_scan_state);
-		if (err_msg) {
-			Duckdb_EndCustomScan(node);
-			elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", err_msg);
-		}
+		ExecuteQuery(duckdb_scan_state);
 	}
 
 	if (duckdb_scan_state->fetch_next) {
@@ -224,12 +204,7 @@ Duckdb_ReScanCustomScan(CustomScanState *node) {
 void
 Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
-	auto err_msg = pgduckdb::DuckDBFunctionGuard(ExecuteQuery, duckdb_scan_state);
-	if (err_msg) {
-		Duckdb_EndCustomScan(node);
-		elog(ERROR, "(PGDuckDB/Duckdb_ExecCustomScan) %s", err_msg);
-	}
-
+	ExecuteQuery(duckdb_scan_state);
 	auto chunk = duckdb_scan_state->query_results->Fetch();
 	if (!chunk || chunk->size() == 0) {
 		return;
