@@ -15,3 +15,4 @@ test: standard_conforming_strings
 test: query_filter
 test: altered_tables
 test: transaction_errors
+test: secrets

@@ -5,6 +5,13 @@
 #include "duckdb/catalog/catalog_search_path.hpp"
 #include "duckdb/main/extension_install_info.hpp"
 
+extern "C" {
+#include "postgres.h"
+#include "catalog/namespace.h"
+#include "utils/lsyscache.h"
+#include "utils/fmgrprotos.h"
+}
+
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
@@ -69,7 +76,7 @@ GetExtensionDirectory() {
 	return duckdb_extension_directory;
 }
 
-DuckDBManager::DuckDBManager() {
+DuckDBManager::DuckDBManager() : secret_table_num_rows(0), secret_table_current_seq(0) {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
 	duckdb::DBConfig config;
@@ -88,7 +95,6 @@ DuckDBManager::DuckDBManager() {
 	auto &context = *connection->context;
 	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
 	LoadFunctions(context);
-	LoadSecrets(context);
 	LoadExtensions(context);
 }
 
@@ -105,6 +111,19 @@ DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	context.transaction.Commit();
 }
 
+bool
+DuckDBManager::CheckSecretsSeq() {
+	Oid duckdb_namespace = get_namespace_oid("duckdb", false);
+	Oid secret_table_seq_oid = get_relname_relid("secret_table_seq", duckdb_namespace);
+	int64 seq =
+	    PostgresFunctionGuard<int64>(DirectFunctionCall1Coll, pg_sequence_last_value, InvalidOid, secret_table_seq_oid);
+	if (secret_table_current_seq < seq) {
+		secret_table_current_seq = seq;
+		return true;
+	}
+	return false;
+}
+
 void
 DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	auto duckdb_secrets = ReadDuckdbSecrets();
@@ -113,7 +132,7 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	for (auto &secret : duckdb_secrets) {
 		StringInfo secret_key = makeStringInfo();
 		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
-		appendStringInfo(secret_key, "CREATE SECRET duckdbSecret_%d ", secret_id);
+		appendStringInfo(secret_key, "CREATE SECRET pgduckb_secret_%d ", secret_id);
 		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
 		                 secret.secret.c_str());
 		if (secret.region.length() && !is_r2_cloud_secret) {
@@ -140,6 +159,21 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		pfree(secret_key->data);
 		secret_id++;
 	}
+
+	secret_table_num_rows = secret_id;
+}
+
+void
+DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
+
+	for (auto secret_id = 0; secret_id < secret_table_num_rows; secret_id++) {
+		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
+		auto res = context.Query(drop_secret_cmd, false);
+		if (res->HasError()) {
+			elog(ERROR, "(PGDuckDB/DropSecrets) secret `%d` could not be dropped.", secret_id);
+		}
+	}
+	secret_table_num_rows = 0;
 }
 
 void

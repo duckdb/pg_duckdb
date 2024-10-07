@@ -12,25 +12,34 @@ namespace pgduckdb {
 
 class DuckDBManager {
 public:
-	static inline const DuckDBManager &
+	static inline DuckDBManager &
 	Get() {
 		static DuckDBManager instance;
 		return instance;
 	}
 
 	inline duckdb::DuckDB &
-	GetDatabase() const {
+	GetDatabase() {
+		if(CheckSecretsSeq()) {
+			auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+			auto &context = *connection->context;
+			DropSecrets(context);
+			LoadSecrets(context);
+		}
 		return *database;
 	}
 
 private:
 	DuckDBManager();
 	void InitializeDatabase();
-
+	bool CheckSecretsSeq();
 	void LoadSecrets(duckdb::ClientContext &);
+	void DropSecrets(duckdb::ClientContext &);
 	void LoadExtensions(duckdb::ClientContext &);
 	void LoadFunctions(duckdb::ClientContext &);
 
+	int secret_table_num_rows;
+	int secret_table_current_seq;
 	duckdb::unique_ptr<duckdb::DuckDB> database;
 };
 
