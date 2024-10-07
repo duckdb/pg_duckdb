@@ -1,9 +1,11 @@
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/catalog/pgduckdb_schema.hpp"
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -25,21 +27,26 @@ extern "C" {
 
 namespace duckdb {
 
-PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
+PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, ::Relation rel,
                              Cardinality cardinality, Snapshot snapshot)
-    : TableCatalogEntry(catalog, schema, info), cardinality(cardinality), snapshot(snapshot) {
+    : TableCatalogEntry(catalog, schema, info), rel(rel), cardinality(cardinality), snapshot(snapshot) {
+}
+
+PostgresTable::~PostgresTable() {
+	std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
+	RelationClose(rel);
+}
+
+::Relation
+PostgresTable::OpenRelation(Oid relid) {
+	std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
+	auto rel = pgduckdb::PostgresFunctionGuard<::Relation>(RelationIdGetRelation, relid);
+	return rel;
 }
 
 bool
-PostgresTable::SetTableInfo(CreateTableInfo &info, Oid relid, Snapshot snapshot) {
-	auto rel = RelationIdGetRelation(relid);
+PostgresTable::SetTableInfo(CreateTableInfo &info, ::Relation rel) {
 	auto tupleDesc = RelationGetDescr(rel);
-
-	if (!tupleDesc) {
-		elog(WARNING, "Failed to get tuple descriptor for relation with OID %u", relid);
-		RelationClose(rel);
-		return false;
-	}
 
 	for (int i = 0; i < tupleDesc->natts; i++) {
 		Form_pg_attribute attr = &tupleDesc->attrs[i];
@@ -47,22 +54,19 @@ PostgresTable::SetTableInfo(CreateTableInfo &info, Oid relid, Snapshot snapshot)
 		auto duck_type = pgduckdb::ConvertPostgresToDuckColumnType(attr);
 		info.columns.AddColumn(duckdb::ColumnDefinition(col_name, duck_type));
 		/* Log column name and type */
-		elog(DEBUG3, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
+		elog(DEBUG2, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
 
-	RelationClose(rel);
 	return true;
 }
 
 Cardinality
-PostgresTable::GetTableCardinality(Oid relid) {
-	auto rel = RelationIdGetRelation(relid);
+PostgresTable::GetTableCardinality(::Relation rel) {
 	Cardinality cardinality;
 	BlockNumber n_pages;
 	double allvisfrac;
 	estimate_rel_size(rel, NULL, &n_pages, &cardinality, &allvisfrac);
-	RelationClose(rel);
 	return cardinality;
 }
 
@@ -71,8 +75,8 @@ PostgresTable::GetTableCardinality(Oid relid) {
 //===--------------------------------------------------------------------===//
 
 PostgresHeapTable::PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-                                     Cardinality cardinality, Snapshot snapshot, Oid oid)
-    : PostgresTable(catalog, schema, info, cardinality, snapshot), oid(oid) {
+                                     ::Relation rel, Cardinality cardinality, Snapshot snapshot)
+    : PostgresTable(catalog, schema, info, rel, cardinality, snapshot) {
 }
 
 unique_ptr<BaseStatistics>
@@ -82,7 +86,7 @@ PostgresHeapTable::GetStatistics(ClientContext &context, column_t column_id) {
 
 TableFunction
 PostgresHeapTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
-	bind_data = duckdb::make_uniq<pgduckdb::PostgresSeqScanFunctionData>(cardinality, oid, snapshot);
+	bind_data = duckdb::make_uniq<pgduckdb::PostgresSeqScanFunctionData>(rel, cardinality, snapshot);
 	return pgduckdb::PostgresSeqScanFunction();
 }
 

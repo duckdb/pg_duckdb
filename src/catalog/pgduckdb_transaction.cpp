@@ -73,15 +73,17 @@ SchemaItems::GetTable(const string &entry_name) {
 	}
 	ReleaseSysCache(tuple);
 
+	::Relation rel = PostgresTable::OpenRelation(rel_oid);
+
 	unique_ptr<PostgresTable> table;
 	CreateTableInfo info;
 	info.table = entry_name;
 	Cardinality cardinality = 1;
-	if (!PostgresTable::SetTableInfo(info, rel_oid, snapshot)) {
+	if (!PostgresTable::SetTableInfo(info, rel)) {
 		return nullptr;
 	}
-	cardinality = PostgresTable::GetTableCardinality(rel_oid);
-	table = make_uniq<PostgresHeapTable>(catalog, *schema, info, cardinality, snapshot, rel_oid);
+	cardinality = PostgresTable::GetTableCardinality(rel);
+	table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
 	tables[entry_name] = std::move(table);
 	return tables[entry_name].get();
 }

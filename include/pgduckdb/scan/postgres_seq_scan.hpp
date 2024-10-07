@@ -21,7 +21,7 @@ namespace pgduckdb {
 // Global State
 
 struct PostgresSeqScanGlobalState : public duckdb::GlobalTableFunctionState {
-	explicit PostgresSeqScanGlobalState(Relation relation, duckdb::TableFunctionInitInput &input);
+	explicit PostgresSeqScanGlobalState(Relation rel, duckdb::TableFunctionInitInput &input);
 	~PostgresSeqScanGlobalState();
 	idx_t
 	MaxThreads() const override {
@@ -31,15 +31,14 @@ struct PostgresSeqScanGlobalState : public duckdb::GlobalTableFunctionState {
 public:
 	duckdb::shared_ptr<PostgresScanGlobalState> m_global_state;
 	duckdb::shared_ptr<HeapReaderGlobalState> m_heap_reader_global_state;
-	Relation m_relation;
-	Oid m_relid;
+	Relation m_rel;
 };
 
 // Local State
 
 struct PostgresSeqScanLocalState : public duckdb::LocalTableFunctionState {
 public:
-	PostgresSeqScanLocalState(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
+	PostgresSeqScanLocalState(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
 	                          duckdb::shared_ptr<PostgresScanGlobalState> global_state);
 	~PostgresSeqScanLocalState() override;
 
@@ -52,12 +51,12 @@ public:
 
 struct PostgresSeqScanFunctionData : public duckdb::TableFunctionData {
 public:
-	PostgresSeqScanFunctionData(uint64_t cardinality, Oid relid, Snapshot snapshot);
+	PostgresSeqScanFunctionData(::Relation rel, uint64_t cardinality, Snapshot snapshot);
 	~PostgresSeqScanFunctionData() override;
 
 public:
+	::Relation m_rel;
 	uint64_t m_cardinality;
-	Oid m_relid;
 	Snapshot m_snapshot;
 };
 
@@ -68,9 +67,6 @@ public:
 	PostgresSeqScanFunction();
 
 public:
-	static duckdb::unique_ptr<duckdb::FunctionData>
-	PostgresSeqScanBind(duckdb::ClientContext &context, duckdb::TableFunctionBindInput &input,
-	                    duckdb::vector<duckdb::LogicalType> &return_types, duckdb::vector<duckdb::string> &names);
 	static duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 	PostgresSeqScanInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input);
 	static duckdb::unique_ptr<duckdb::LocalTableFunctionState>
