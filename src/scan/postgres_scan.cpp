@@ -126,15 +126,6 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 
 	auto &schema_name = input.schema_name;
 	auto &table_name = input.table_name;
-	auto scan_data = context.registered_state->Get<PostgresContextState>("postgres_state");
-	if (!scan_data) {
-		/* There is no scan data provided by postgres so we cannot access any
-		 * of postgres tables. This is the case for queries that are not
-		 * directly based on a Postgres query, such as queries that pg_duckdb
-		 * executes internally like CREATE SECRET.
-		 */
-		return nullptr;
-	}
 
 	auto relid = FindMatchingRelation(schema_name, table_name);
 
