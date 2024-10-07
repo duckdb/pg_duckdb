@@ -65,12 +65,15 @@ duckdb: $(FULL_DUCKDB_LIB)
 third_party/duckdb/Makefile:
 	git submodule update --init --recursive
 
+duckdb_cmake_vars = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
 $(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_BUILD_TYPE) \
+	OVERRIDE_GIT_DESCRIBE=v1.1.1 \
+	GEN=ninja \
+	CMAKE_VARS="$(duckdb_cmake_vars)"
 	DISABLE_SANITIZER=1 \
-	ENABLE_UBSAN=0 \
-	BUILD_UNITTESTS=OFF \
+	DISABLE_UBSAN=1 \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake"
 
 install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
