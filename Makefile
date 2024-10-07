@@ -1,7 +1,5 @@
 .PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression
 
-DUCKDB_VERSION = v1.1.1
-
 MODULE_big = pg_duckdb
 EXTENSION = pg_duckdb
 DATA = pg_duckdb.control $(wildcard sql/pg_duckdb--*.sql)
@@ -12,9 +10,15 @@ OBJS = $(subst .cpp,.o, $(SRCS))
 C_SRCS = $(wildcard src/*.c src/*/*.c)
 OBJS += $(subst .c,.o, $(C_SRCS))
 
+# set to `make` to disable ninja
+DUCKDB_GEN ?= ninja
+# used to know what version of extensions to download
+DUCKDB_VERSION = v1.1.1
+# duckdb build tweaks
+DUCKDB_CMAKE_VARS = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
+
 DUCKDB_BUILD_CXX_FLAGS=
 DUCKDB_BUILD_TYPE=
-
 ifeq ($(DUCKDB_BUILD), Debug)
 	DUCKDB_BUILD_CXX_FLAGS = -g -O0
 	DUCKDB_BUILD_TYPE = debug
@@ -67,14 +71,12 @@ duckdb: $(FULL_DUCKDB_LIB)
 third_party/duckdb/Makefile:
 	git submodule update --init --recursive
 
-duckdb_gen ?= ninja
-duckdb_cmake_vars = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
 $(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_BUILD_TYPE) \
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
-	GEN=$(duckdb_gen) \
-	CMAKE_VARS="$(duckdb_cmake_vars)"
+	GEN=$(DUCKDB_GEN) \
+	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)"
 	DISABLE_SANITIZER=1 \
 	DISABLE_UBSAN=1 \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake"
