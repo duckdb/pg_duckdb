@@ -5,6 +5,7 @@ extern "C" {
 }
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/error_data.hpp"
 
 #include <vector>
 #include <string>
@@ -30,7 +31,6 @@ template <typename T, typename FuncType, typename... FuncArgs>
 T
 PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	T return_value;
-	bool error = false;
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
 	// clang-format off
@@ -43,11 +43,10 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 		MemoryContextSwitchTo(ctx);
 		edata = CopyErrorData();
 		FlushErrorState();
-		error = true;
 	}
 	PG_END_TRY();
 	// clang-format on
-	if (error) {
+	if (edata) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
 	}
 	return return_value;
@@ -56,7 +55,6 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 template <typename FuncType, typename... FuncArgs>
 void
 PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
-	bool error = false;
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
 	// clang-format off
@@ -69,13 +67,33 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 		MemoryContextSwitchTo(ctx);
 		edata = CopyErrorData();
 		FlushErrorState();
-		error = true;
 	}
 	PG_END_TRY();
 	// clang-format on
-	if (error) {
+	if (edata) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
 	}
+}
+
+template <typename FuncType, typename... FuncArgs>
+const char*
+DuckDBFunctionGuard(FuncType duckdb_function, FuncArgs... args) {
+	try {
+		duckdb_function(args...);
+	} catch (duckdb::Exception &ex) {
+		duckdb::ErrorData edata(ex.what());
+		return pstrdup(edata.Message().c_str());
+	} catch (std::exception &ex) {
+		const auto msg = ex.what();
+		if (msg[0] == '{') {
+			duckdb::ErrorData edata(ex.what());
+			return pstrdup(edata.Message().c_str());
+		} else {
+			return pstrdup(ex.what());
+		}
+	}
+
+	return nullptr;
 }
 
 } // namespace pgduckdb
