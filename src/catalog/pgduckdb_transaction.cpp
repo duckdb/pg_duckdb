@@ -42,6 +42,7 @@ SchemaItems::GetTable(const string &entry_name) {
 	if (it != tables.end()) {
 		return it->second.get();
 	}
+
 	auto snapshot = schema->snapshot;
 	auto &catalog = schema->catalog;
 
@@ -59,7 +60,7 @@ SchemaItems::GetTable(const string &entry_name) {
 	// Check if the Relation is a VIEW
 	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(rel_oid));
 	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "Cache lookup failed for relation %u", rel_oid);
+		throw std::runtime_error("Cache lookup failed for relation " + std::to_string(rel_oid));
 	}
 
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
@@ -71,6 +72,7 @@ SchemaItems::GetTable(const string &entry_name) {
 		// will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
 		return nullptr;
 	}
+
 	ReleaseSysCache(tuple);
 
 	::Relation rel = PostgresTable::OpenRelation(rel_oid);

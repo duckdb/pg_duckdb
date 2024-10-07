@@ -46,7 +46,7 @@ DuckdbPrepare(const Query *query) {
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
-	auto duckdb_connection = pgduckdb::DuckDBManager::Get().GetConnection();
+	auto duckdb_connection = pgduckdb::DuckDBManager::CreateConnection();
 	auto context = duckdb_connection->context;
 	auto prepared_query = context->Prepare(query_string);
 	return {std::move(prepared_query), std::move(duckdb_connection)};

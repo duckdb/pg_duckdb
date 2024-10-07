@@ -30,30 +30,35 @@ extern "C" {
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include <filesystem>
 
 namespace pgduckdb {
 
 static bool
-CheckDataDirectory(const char *data_directory) {
+CheckDataDirectory(const std::string &data_directory) {
 	struct stat info;
 
-	if (lstat(data_directory, &info) != 0) {
+	std::ostringstream oss;
+	if (lstat(data_directory.c_str(), &info) != 0) {
 		if (errno == ENOENT) {
-			elog(DEBUG2, "(PGDuckDB/CheckDataDirectory) Directory `%s` doesn't exists", data_directory);
+			elog(DEBUG2, "(PGDuckDB/CheckDataDirectory) Directory `%s` doesn't exists", data_directory.c_str());
 			return false;
-		} else if (errno == EACCES) {
-			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Can't access `%s` directory", data_directory);
-		} else {
-			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Other error when reading `%s`", data_directory);
 		}
-	}
 
-	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "(PGDuckDB/CheckDataDirectory) `%s` is not directory", data_directory);
-	}
+		oss << "(PGDuckDB/CheckDataDirectory) ";
+		if (errno == EACCES) {
+			oss << "Can't access `" << data_directory << "` directory";
+		} else {
+			oss << "Other error when reading `" << data_directory << "`: (" << errno << ") " << strerror(errno);
+		}
 
-	if (access(data_directory, R_OK | W_OK)) {
-		elog(ERROR, "(PGDuckDB/CheckDataDirectory) Directory `%s` permission problem", data_directory);
+		throw std::runtime_error(oss.str());
+	} else if (!S_ISDIR(info.st_mode)) {
+		oss << "(PGDuckDB/CheckDataDirectory) `" << data_directory << "` is not directory";
+		throw std::runtime_error(oss.str());
+	} else if (access(data_directory.c_str(), R_OK | W_OK)) {
+		oss << "(PGDuckDB/CheckDataDirectory) Directory `" << data_directory << "` permission problem";
+		throw std::runtime_error(oss.str());
 	}
 
 	return true;
@@ -61,27 +66,23 @@ CheckDataDirectory(const char *data_directory) {
 
 static std::string
 GetExtensionDirectory() {
-	StringInfo duckdb_extension_data_directory = makeStringInfo();
-	appendStringInfo(duckdb_extension_data_directory, "%s/duckdb_extensions", DataDir);
+	std::ostringstream oss;
+	oss << DataDir << "/duckdb_extensions";
+	std::string data_directory = oss.str();
 
-	if (!CheckDataDirectory(duckdb_extension_data_directory->data)) {
-		if (mkdir(duckdb_extension_data_directory->data, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
-			int error = errno;
-			pfree(duckdb_extension_data_directory->data);
-			elog(ERROR,
-			     "(PGDuckDB/GetExtensionDirectory) Creating duckdb extensions directory failed with reason `%s`\n",
-			     strerror(error));
-		}
-		elog(DEBUG2, "(PGDuckDB/GetExtensionDirectory) Created %s as `duckdb.data_dir`",
-		     duckdb_extension_data_directory->data);
-	};
+	if (!CheckDataDirectory(data_directory)) {
+		std::filesystem::create_directories(data_directory);
+		elog(DEBUG2, "(PGDuckDB/GetExtensionDirectory) Created %s as `duckdb.data_dir`", data_directory.c_str());
+	}
 
-	std::string duckdb_extension_directory(duckdb_extension_data_directory->data);
-	pfree(duckdb_extension_data_directory->data);
-	return duckdb_extension_directory;
+	return data_directory;
 }
 
 DuckDBManager::DuckDBManager() : secret_table_num_rows(0), secret_table_current_seq(0) {
+}
+
+void
+DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
 	duckdb::DBConfig config;
@@ -135,34 +136,30 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 	int secret_id = 0;
 	for (auto &secret : duckdb_secrets) {
-		StringInfo secret_key = makeStringInfo();
+		std::ostringstream query;
 		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
-		appendStringInfo(secret_key, "CREATE SECRET pgduckb_secret_%d ", secret_id);
-		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
-		                 secret.secret.c_str());
+		query << "CREATE SECRET pgduckb_secret_" << std::to_string(secret_id) << " ";
+		query << "(TYPE " << secret.type << ", KEY_ID '" << secret.id << "', SECRET '" << secret.secret << "'";
 		if (secret.region.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
+			query << ", REGION '" << secret.region << "'";
 		}
 		if (secret.session_token.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", SESSION_TOKEN '%s'", secret.session_token.c_str());
+			query << ", SESSION_TOKEN '" << secret.session_token << "'";
 		}
 		if (secret.endpoint.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
+			query << ", ENDPOINT '" << secret.endpoint << "'";
 		}
 		if (is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
+			query << ", ACCOUNT_ID '" << secret.endpoint << "'";
 		}
 		if (!secret.use_ssl) {
-			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
+			query << ", USE_SSL 'FALSE'";
 		}
-		appendStringInfo(secret_key, ");");
-		auto res = context.Query(secret_key->data, false);
-		if (res->HasError()) {
-			elog(ERROR, "(PGDuckDB/LoadSecrets) secret `%s` could not be loaded with DuckDB", secret.id.c_str());
-		}
+		query << ");";
 
-		pfree(secret_key->data);
-		secret_id++;
+		DuckDBQueryOrThrow(context, query.str());
+
+		++secret_id;
 	}
 
 	secret_table_num_rows = secret_id;
@@ -186,25 +183,20 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
-		StringInfo duckdb_extension = makeStringInfo();
 		if (extension.enabled) {
-			appendStringInfo(duckdb_extension, "LOAD %s;", extension.name.c_str());
-			auto res = context.Query(duckdb_extension->data, false);
-			if (res->HasError()) {
-				elog(ERROR, "(PGDuckDB/LoadExtensions) `%s` could not be loaded with DuckDB", extension.name.c_str());
-			}
+			DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 		}
-		pfree(duckdb_extension->data);
 	}
 }
 
 duckdb::unique_ptr<duckdb::Connection>
-DuckDBManager::GetConnection() {
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
-	if (CheckSecretsSeq()) {
+DuckDBManager::CreateConnection() {
+	auto& instance = Get();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(GetDatabase());
+	if (instance.CheckSecretsSeq()) {
 		auto &context = *connection->context;
-		DropSecrets(context);
-		LoadSecrets(context);
+		instance.DropSecrets(context);
+		instance.LoadSecrets(context);
 	}
 	return connection;
 }

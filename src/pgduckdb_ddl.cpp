@@ -30,7 +30,7 @@ extern "C" {
  */
 void
 DuckdbTruncateTable(Oid relation_oid) {
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
+	auto connection = pgduckdb::DuckDBManager::CreateConnection();
 	auto &context = *connection->context;
 	auto query = std::string("TRUNCATE ") + pgduckdb_relation_name(relation_oid);
 	auto result = context.Query(query, false);
@@ -162,7 +162,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 
 	std::string query_string(pgduckdb_get_tabledef(relid));
 
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
+	auto connection = pgduckdb::DuckDBManager::CreateConnection();
 	auto &context = *connection->context;
 	auto result = context.Query(query_string, false);
 	if (result->HasError()) {
@@ -230,7 +230,7 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	 */
 	PreventInTransactionBlock(true, "DuckDB queries");
 
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
+	auto connection = pgduckdb::DuckDBManager::CreateConnection();
 	auto &context = *connection->context;
 
 	auto result = context.Query("BEGIN TRANSACTION", false);

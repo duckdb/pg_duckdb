@@ -1,5 +1,6 @@
 
 #include "duckdb.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -73,14 +74,16 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 }
 
 void
-Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) {
+Duckdb_BeginCustomScan_Unsafe(CustomScanState *cscanstate, EState *estate, int eflags) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
 	auto prepare_result = DuckdbPrepare(duckdb_scan_state->query);
 	auto prepared_query = std::move(std::get<0>(prepare_result));
 	auto duckdb_connection = std::move(std::get<1>(prepare_result));
 
 	if (prepared_query->HasError()) {
-		elog(ERROR, "DuckDB re-planning failed %s", prepared_query->GetError().c_str());
+		std::ostringstream oss;
+		oss << "DuckDB re-planning failed " << prepared_query->GetError();
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
 	}
 
 	duckdb_scan_state->duckdb_connection = duckdb_connection.release();
@@ -90,6 +93,11 @@ Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) 
 	duckdb_scan_state->fetch_next = true;
 	duckdb_scan_state->css.ss.ps.ps_ResultTupleDesc = duckdb_scan_state->css.ss.ss_ScanTupleSlot->tts_tupleDescriptor;
 	HOLD_CANCEL_INTERRUPTS();
+}
+
+void
+Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) {
+	pgduckdb::DuckDBFunctionGuard<void>(Duckdb_BeginCustomScan_Unsafe, __FUNCTION__, cscanstate, estate, eflags);
 }
 
 static void
@@ -153,14 +161,14 @@ ExecuteQuery(DuckdbScanState *state) {
 }
 
 static TupleTableSlot *
-Duckdb_ExecCustomScan(CustomScanState *node) {
+Duckdb_ExecCustomScan_Unsafe(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
 	MemoryContext old_context;
 
 	bool already_executed = duckdb_scan_state->is_executed;
 	if (!already_executed) {
-		pgduckdb::DuckDBFunctionGuard<void>(ExecuteQuery, "ExecuteQuery", duckdb_scan_state);
+		ExecuteQuery(duckdb_scan_state);
 	}
 
 	if (duckdb_scan_state->fetch_next) {
@@ -189,7 +197,7 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 			slot->tts_isnull[col] = false;
 			if (!pgduckdb::ConvertDuckToPostgresValue(slot, value, col)) {
 				CleanupDuckdbScanState(duckdb_scan_state);
-				elog(ERROR, "(PGDuckDB/Duckdb_ExecCustomScan) Value conversion failed");
+				throw duckdb::ConversionException("Value conversion failed");
 			}
 		}
 	}
@@ -206,11 +214,21 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 	return slot;
 }
 
+static TupleTableSlot *
+Duckdb_ExecCustomScan(CustomScanState *node) {
+	return pgduckdb::DuckDBFunctionGuard<TupleTableSlot *>(Duckdb_ExecCustomScan_Unsafe, __FUNCTION__, node);
+}
+
 void
-Duckdb_EndCustomScan(CustomScanState *node) {
+Duckdb_EndCustomScan_Unsafe(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
 	RESUME_CANCEL_INTERRUPTS();
+}
+
+void
+Duckdb_EndCustomScan(CustomScanState *node) {
+	pgduckdb::DuckDBFunctionGuard<void>(Duckdb_EndCustomScan_Unsafe, __FUNCTION__, node);
 }
 
 void
@@ -218,20 +236,26 @@ Duckdb_ReScanCustomScan(CustomScanState *node) {
 }
 
 void
-Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
+Duckdb_ExplainCustomScan_Unsafe(CustomScanState *node, List *ancestors, ExplainState *es) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
-	pgduckdb::DuckDBFunctionGuard<void>(ExecuteQuery, "ExecuteQuery", duckdb_scan_state);
+	ExecuteQuery(duckdb_scan_state);
 
 	auto chunk = duckdb_scan_state->query_results->Fetch();
 	if (!chunk || chunk->size() == 0) {
 		return;
 	}
+
 	/* Is it safe to hardcode this as result of DuckDB explain? */
 	auto value = chunk->GetValue(1, 0);
 	std::string explain_output = "\n\n";
 	explain_output += value.GetValue<duckdb::string>();
 	explain_output += "\n";
 	ExplainPropertyText("DuckDB Execution Plan", explain_output.c_str(), es);
+}
+
+void
+Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
+	pgduckdb::DuckDBFunctionGuard<void>(Duckdb_ExplainCustomScan_Unsafe, __FUNCTION__, node, ancestors, es);
 }
 
 extern "C" void
