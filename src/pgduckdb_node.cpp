@@ -124,7 +124,7 @@ ExecuteQuery(DuckdbScanState *state) {
 
 	auto pending = prepared.PendingQuery(duckdb_params, true);
 	if (pending->HasError()) {
-		throw std::runtime_error(pending->GetError());
+		return pending->ThrowError();
 	}
 
 	duckdb::PendingExecutionResult execution_result;
@@ -144,7 +144,7 @@ ExecuteQuery(DuckdbScanState *state) {
 	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
 
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
-		throw std::runtime_error(pending->GetError());
+		return pending->ThrowError();
 	}
 
 	query_results = pending->Execute();

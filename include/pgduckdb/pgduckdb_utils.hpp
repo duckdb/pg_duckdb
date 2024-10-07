@@ -5,6 +5,7 @@ extern "C" {
 }
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/error_data.hpp"
 
 #include <vector>
 #include <string>
@@ -79,8 +80,17 @@ const char*
 DuckDBFunctionGuard(FuncType duckdb_function, FuncArgs... args) {
 	try {
 		duckdb_function(args...);
+	} catch (duckdb::Exception &ex) {
+		duckdb::ErrorData edata(ex.what());
+		return pstrdup(edata.Message().c_str());
 	} catch (std::exception &ex) {
-		return pstrdup(ex.what());
+		const auto msg = ex.what();
+		if (msg[0] == '{') {
+			duckdb::ErrorData edata(ex.what());
+			return pstrdup(edata.Message().c_str());
+		} else {
+			return pstrdup(ex.what());
+		}
 	}
 
 	return nullptr;
