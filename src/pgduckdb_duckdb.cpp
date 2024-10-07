@@ -166,8 +166,6 @@ DuckdbCreateConnection(List *rtables, List *needed_columns, const char *query) {
 	auto con = duckdb::make_uniq<duckdb::Connection>(db);
 	auto &context = *con->context;
 
-	context.registered_state->Insert("postgres_state",
-	                                 duckdb::make_shared_ptr<PostgresContextState>(rtables, needed_columns, query));
 	auto res = context.Query("set search_path='pgduckdb.main'", false);
 	if (res->HasError()) {
 		elog(WARNING, "(DuckDB) %s", res->GetError().c_str());

@@ -104,10 +104,6 @@ PostgresTransaction::GetSchema(const string &name) {
 
 optional_ptr<CatalogEntry>
 PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, const string &name) {
-	auto scan_data = context.lock()->registered_state->Get<pgduckdb::PostgresContextState>("postgres_state");
-	if (!scan_data) {
-		throw InternalException("Could not find 'postgres_state' in 'PostgresTransaction::GetCatalogEntry'");
-	}
 	switch (type) {
 	case CatalogType::TABLE_ENTRY: {
 		auto it = schemas.find(schema);
