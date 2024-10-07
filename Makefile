@@ -1,5 +1,7 @@
 .PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression
 
+DUCKDB_VERSION = v1.1.1
+
 MODULE_big = pg_duckdb
 EXTENSION = pg_duckdb
 DATA = pg_duckdb.control $(wildcard sql/pg_duckdb--*.sql)
@@ -69,7 +71,7 @@ duckdb_cmake_vars = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
 $(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_BUILD_TYPE) \
-	OVERRIDE_GIT_DESCRIBE=v1.1.1 \
+	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
 	GEN=ninja \
 	CMAKE_VARS="$(duckdb_cmake_vars)"
 	DISABLE_SANITIZER=1 \
