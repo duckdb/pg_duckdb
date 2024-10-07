@@ -103,7 +103,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: duckdb/third_party/duckdb/build/
-          key: duckdb-build-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}
+          key: duckdb-build-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}-ninja
 
       - name: Install pytest and other test requirements
         run: python3 -m pip install -r duckdb/requirements.txt
