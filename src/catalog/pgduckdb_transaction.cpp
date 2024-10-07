@@ -36,40 +36,8 @@ PostgresTransaction::PostgresTransaction(TransactionManager &manager, ClientCont
 PostgresTransaction::~PostgresTransaction() {
 }
 
-static RelOptInfo *
-FindMatchingRelEntry(Oid relid, PlannerInfo *planner_info) {
-	int i = 1;
-	RelOptInfo *node = nullptr;
-	for (; i < planner_info->simple_rel_array_size; i++) {
-		if (planner_info->simple_rte_array[i]->rtekind == RTE_SUBQUERY && planner_info->simple_rel_array[i]) {
-			node = FindMatchingRelEntry(relid, planner_info->simple_rel_array[i]->subroot);
-			if (node) {
-				return node;
-			}
-		} else if (planner_info->simple_rte_array[i]->rtekind == RTE_RELATION) {
-			if (relid == planner_info->simple_rte_array[i]->relid) {
-				return planner_info->simple_rel_array[i];
-			}
-		};
-	}
-	return nullptr;
-}
-
-static bool
-IsIndexScan(const Path *nodePath) {
-	if (nodePath == nullptr) {
-		return false;
-	}
-
-	if (nodePath->pathtype == T_IndexScan || nodePath->pathtype == T_IndexOnlyScan) {
-		return true;
-	}
-
-	return false;
-}
-
 optional_ptr<CatalogEntry>
-SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
+SchemaItems::GetTable(const string &entry_name) {
 	auto it = tables.find(entry_name);
 	if (it != tables.end()) {
 		return it->second.get();
@@ -105,33 +73,17 @@ SchemaItems::GetTable(const string &entry_name, PlannerInfo *planner_info) {
 	}
 	ReleaseSysCache(tuple);
 
-	Path *node_path = nullptr;
-
-	if (planner_info) {
-		auto node = FindMatchingRelEntry(rel_oid, planner_info);
-		if (node) {
-			node_path = get_cheapest_fractional_path(node, 0.0);
-		}
-	}
+	::Relation rel = PostgresTable::OpenRelation(rel_oid);
 
 	unique_ptr<PostgresTable> table;
 	CreateTableInfo info;
 	info.table = entry_name;
-	Cardinality cardinality = node_path ? node_path->rows : 1;
-	if (IsIndexScan(node_path)) {
-		RangeTblEntry *rte = planner_rt_fetch(node_path->parent->relid, planner_info);
-		rel_oid = rte->relid;
-		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
-			return nullptr;
-		}
-		table = make_uniq<PostgresIndexTable>(catalog, *schema, info, cardinality, snapshot, node_path, planner_info);
-	} else {
-		if (!PostgresTable::PopulateColumns(info, rel_oid, snapshot)) {
-			return nullptr;
-		}
-		table = make_uniq<PostgresHeapTable>(catalog, *schema, info, cardinality, snapshot, rel_oid);
+	Cardinality cardinality = 1;
+	if (!PostgresTable::SetTableInfo(info, rel)) {
+		return nullptr;
 	}
-
+	cardinality = PostgresTable::GetTableCardinality(rel);
+	table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
 	tables[entry_name] = std::move(table);
 	return tables[entry_name].get();
 }
@@ -156,7 +108,6 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 	if (!scan_data) {
 		throw InternalException("Could not find 'postgres_state' in 'PostgresTransaction::GetCatalogEntry'");
 	}
-	auto planner_info = scan_data->m_query_planner_info;
 	switch (type) {
 	case CatalogType::TABLE_ENTRY: {
 		auto it = schemas.find(schema);
@@ -164,7 +115,7 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 			return nullptr;
 		}
 		auto &schema_entry = it->second;
-		return schema_entry.GetTable(name, planner_info);
+		return schema_entry.GetTable(name);
 	}
 	case CatalogType::SCHEMA_ENTRY: {
 		return GetSchema(schema);

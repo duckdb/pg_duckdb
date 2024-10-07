@@ -148,7 +148,7 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		rtables = pstate->p_rtable;
 	}
 
-	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, nullptr, vars, query_string);
+	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, vars, query_string);
 	auto res = duckdb_connection->context->Query(query_string, false);
 
 	if (res->HasError()) {

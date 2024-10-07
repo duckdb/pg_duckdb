@@ -39,14 +39,14 @@ HeapReaderGlobalState::AssignNextBlockNumber(std::mutex &lock) {
 // HeapReader
 //
 
-HeapReader::HeapReader(Relation relation, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
+HeapReader::HeapReader(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
                        duckdb::shared_ptr<PostgresScanGlobalState> global_state,
                        duckdb::shared_ptr<PostgresScanLocalState> local_state)
     : m_global_state(global_state), m_heap_reader_global_state(heap_reader_global_state), m_local_state(local_state),
-      m_relation(relation), m_inited(false), m_read_next_page(true), m_block_number(InvalidBlockNumber),
-      m_buffer(InvalidBuffer), m_current_tuple_index(InvalidOffsetNumber), m_page_tuples_left(0) {
+      m_rel(rel), m_inited(false), m_read_next_page(true), m_block_number(InvalidBlockNumber), m_buffer(InvalidBuffer),
+      m_current_tuple_index(InvalidOffsetNumber), m_page_tuples_left(0) {
 	m_tuple.t_data = NULL;
-	m_tuple.t_tableOid = RelationGetRelid(m_relation);
+	m_tuple.t_tableOid = RelationGetRelid(m_rel);
 	ItemPointerSetInvalid(&m_tuple.t_self);
 }
 
@@ -57,7 +57,7 @@ Page
 HeapReader::PreparePageRead() {
 	Page page = BufferGetPage(m_buffer);
 #if PG_VERSION_NUM < 170000
-	TestForOldSnapshot(m_global_state->m_snapshot, m_relation, page);
+	TestForOldSnapshot(m_global_state->m_snapshot, m_rel, page);
 #endif
 	m_page_tuples_all_visible = PageIsAllVisible(page) && !m_global_state->m_snapshot->takenDuringRecovery;
 	m_page_tuples_left = PageGetMaxOffsetNumber(page) - FirstOffsetNumber + 1;
@@ -90,7 +90,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 			block = m_block_number;
 
-			m_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_relation, MAIN_FORKNUM, block, RBM_NORMAL,
+			m_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_rel, MAIN_FORKNUM, block, RBM_NORMAL,
 			                                         GetAccessStrategy(BAS_BULKREAD));
 
 			PostgresFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE);
@@ -118,7 +118,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 					continue;
 			}
 
-			pgstat_count_heap_getnext(m_relation);
+			pgstat_count_heap_getnext(m_rel);
 			InsertTupleIntoChunk(output, m_global_state, m_local_state, &m_tuple);
 		}
 

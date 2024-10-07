@@ -43,15 +43,13 @@ public:
 
 struct PostgresContextState : public duckdb::ClientContextState {
 public:
-	PostgresContextState(List *rtables, PlannerInfo *query_planner_info, List *needed_columns, const char *query_string)
-	    : m_rtables(rtables), m_query_planner_info(query_planner_info), m_needed_columns(needed_columns),
-	      m_query_string(query_string) {
+	PostgresContextState(List *rtables, List *needed_columns, const char *query_string)
+	    : m_rtables(rtables), m_needed_columns(needed_columns), m_query_string(query_string) {
 	}
 	~PostgresContextState() override {};
 
 public:
 	List *m_rtables;
-	PlannerInfo *m_query_planner_info;
 	List *m_needed_columns;
 	std::string m_query_string;
 };

@@ -1,0 +1,12 @@
+CREATE TABLE foo AS SELECT 'bar' AS t;
+BEGIN; SET duckdb.execution = true; SELECT t::integer AS t1 FROM foo; ROLLBACK;
+ERROR:  (PGDuckDB/ExecuteQuery) Conversion Error: Could not convert string 'bar' to INT32
+LINE 1: SELECT (t)::integer AS t1 FROM public.foo
+                  ^
+SET duckdb.execution = true;
+SELECT 1 FROM foo;
+ ?column? 
+----------
+        1
+(1 row)
+

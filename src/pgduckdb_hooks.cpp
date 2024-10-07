@@ -167,7 +167,7 @@ static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (duckdb_execution && IsAllowedStatement(parse)) {
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}
@@ -176,7 +176,7 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
 
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, bound_params);
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}

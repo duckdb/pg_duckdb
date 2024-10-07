@@ -62,7 +62,7 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 void
 Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
-	auto prepare_result = DuckdbPrepare(duckdb_scan_state->query, estate->es_param_list_info);
+	auto prepare_result = DuckdbPrepare(duckdb_scan_state->query);
 	auto prepared_query = std::move(std::get<0>(prepare_result));
 	auto duckdb_connection = std::move(std::get<1>(prepare_result));
 
