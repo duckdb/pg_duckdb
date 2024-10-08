@@ -2,6 +2,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
@@ -25,19 +26,15 @@ bool duckdb_explain_analyze = false;
 
 std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
 DuckdbPrepare(const Query *query) {
+	/*
+	 * For now, we don't support DuckDB queries in transactions. To support
+	 * write queries in transactions we'll need to link Postgres and DuckdB
+	 * their transaction lifecycles.
+	 */
+	PreventInTransactionBlock(true, "DuckDB queries");
 
 	Query *copied_query = (Query *)copyObjectImpl(query);
-	/*
-	    Temporarily clear search_path so that the query will contain only fully qualified tables.
-	    If we don't do this tables are only fully-qualified if they are not part of the current search_path.
-	    NOTE: This still doesn't fully qualify tables in pg_catalog or temporary tables, for that we'd need to modify
-	   pgduckdb_pg_get_querydef
-	*/
-
-	auto save_nestlevel = NewGUCNestLevel();
-	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
 	const char *query_string = pgduckdb_pg_get_querydef(copied_query, false);
-	AtEOXact_GUC(false, save_nestlevel);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {

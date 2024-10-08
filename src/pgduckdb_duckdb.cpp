@@ -12,6 +12,11 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
+extern "C" {
+#include "postgres.h"
+
+#include "utils/elog.h"
+}
 #include <string>
 
 #include <sys/types.h>
@@ -164,12 +169,7 @@ DuckdbCreateConnection(List *rtables, List *needed_columns, const char *query) {
 	auto &db = DuckDBManager::Get().GetDatabase();
 	/* Add DuckDB replacement scan to read PG data */
 	auto con = duckdb::make_uniq<duckdb::Connection>(db);
-	auto &context = *con->context;
 
-	auto res = context.Query("set search_path='pgduckdb.main'", false);
-	if (res->HasError()) {
-		elog(WARNING, "(DuckDB) %s", res->GetError().c_str());
-	}
 	return con;
 }
 

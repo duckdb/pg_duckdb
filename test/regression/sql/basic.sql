@@ -2,8 +2,6 @@ CREATE TABLE t(a INT);
 
 INSERT INTO t SELECT g % 10 from generate_series(1,1000) g;
 
-SET client_min_messages to 'DEBUG1';
-
 SELECT COUNT(*) FROM t;
 SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
 
