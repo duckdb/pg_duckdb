@@ -10,9 +10,15 @@ OBJS = $(subst .cpp,.o, $(SRCS))
 C_SRCS = $(wildcard src/*.c src/*/*.c)
 OBJS += $(subst .c,.o, $(C_SRCS))
 
+# set to `make` to disable ninja
+DUCKDB_GEN ?= ninja
+# used to know what version of extensions to download
+DUCKDB_VERSION = v1.1.1
+# duckdb build tweaks
+DUCKDB_CMAKE_VARS = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
+
 DUCKDB_BUILD_CXX_FLAGS=
 DUCKDB_BUILD_TYPE=
-
 ifeq ($(DUCKDB_BUILD), Debug)
 	DUCKDB_BUILD_CXX_FLAGS = -g -O0
 	DUCKDB_BUILD_TYPE = debug
@@ -68,9 +74,11 @@ third_party/duckdb/Makefile:
 $(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_BUILD_TYPE) \
+	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
+	GEN=$(DUCKDB_GEN) \
+	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)"
 	DISABLE_SANITIZER=1 \
-	ENABLE_UBSAN=0 \
-	BUILD_UNITTESTS=OFF \
+	DISABLE_UBSAN=1 \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake"
 
 install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
