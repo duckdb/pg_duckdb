@@ -8,7 +8,7 @@ on:
 jobs:
   format:
     runs-on: ubuntu-24.04
-    name: 'Linting and formatting'
+    name: "Linting and formatting"
 
     steps:
       - name: Checkout pg_duckdb extension code
@@ -17,7 +17,7 @@ jobs:
         run: git fetch --depth=1 origin +main:refs/remotes/origin/main
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Install clang-format (11.0.1) and ruff
         run: python3 -m pip install "clang-format==11.0.1" ruff
@@ -29,7 +29,7 @@ jobs:
         run: ruff format --diff
 
   build-and-test:
-    name: 'Build and test'
+    name: "Build and test"
     strategy:
       fail-fast: false
       matrix:
@@ -46,7 +46,7 @@ jobs:
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
           sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
             libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo6 cmake \
-            libstdc++-12-dev
+            libstdc++-12-dev ninja-build
           echo "${PWD}/postgres/inst/bin:$PATH'" > $GITHUB_PATH
 
       - name: ccache
@@ -58,7 +58,7 @@ jobs:
       - name: Checkout pg_duckdb extension code
         uses: actions/checkout@v4
         with:
-          submodules: 'recursive'
+          submodules: "recursive"
           path: duckdb
 
       - name: Checkout PostgreSQL code
@@ -96,14 +96,14 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
       - name: Setup DuckDB build cache
         id: cache-duckdb-build
         uses: actions/cache@v4
         with:
           path: duckdb/third_party/duckdb/build/
-          key: duckdb-build-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}
+          key: duckdb-build-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}-ninja
 
       - name: Install pytest and other test requirements
         run: python3 -m pip install -r duckdb/requirements.txt
