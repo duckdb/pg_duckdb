@@ -41,19 +41,6 @@ public:
 	bool m_exhausted_scan;
 };
 
-struct PostgresContextState : public duckdb::ClientContextState {
-public:
-	PostgresContextState(List *rtables, List *needed_columns, const char *query_string)
-	    : m_rtables(rtables), m_needed_columns(needed_columns), m_query_string(query_string) {
-	}
-	~PostgresContextState() override {};
-
-public:
-	List *m_rtables;
-	List *m_needed_columns;
-	std::string m_query_string;
-};
-
 duckdb::unique_ptr<duckdb::TableRef> PostgresReplacementScan(duckdb::ClientContext &context,
                                                              duckdb::ReplacementScanInput &input,
                                                              duckdb::optional_ptr<duckdb::ReplacementScanData> data);
