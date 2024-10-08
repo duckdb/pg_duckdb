@@ -169,7 +169,6 @@ DuckdbCreateConnection(List *rtables, List *needed_columns, const char *query) {
 	auto &db = DuckDBManager::Get().GetDatabase();
 	/* Add DuckDB replacement scan to read PG data */
 	auto con = duckdb::make_uniq<duckdb::Connection>(db);
-	auto &context = *con->context;
 
 	return con;
 }
