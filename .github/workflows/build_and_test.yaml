@@ -52,8 +52,9 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ubuntu-24.04
+          key: ubuntu-24.04-${{ matrix.version }}
           create-symlink: true
+          append-timestamp: false
 
       - name: Checkout pg_duckdb extension code
         uses: actions/checkout@v4
