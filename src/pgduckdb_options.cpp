@@ -115,8 +115,7 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-	auto &db = DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
 	auto &context = *connection->context;
 
 	auto extension_name = DatumToString(name);
@@ -169,8 +168,7 @@ PG_FUNCTION_INFO_V1(pgduckdb_raw_query);
 Datum
 pgduckdb_raw_query(PG_FUNCTION_ARGS) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
 	auto &context = *connection->context;
 	auto result = context.Query(query, false);
 	if (result->HasError()) {

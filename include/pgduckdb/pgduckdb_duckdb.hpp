@@ -23,6 +23,8 @@ public:
 		return *database;
 	}
 
+	duckdb::unique_ptr<duckdb::Connection> GetConnection() const;
+
 private:
 	DuckDBManager();
 	void InitializeDatabase();
@@ -33,7 +35,5 @@ private:
 
 	duckdb::unique_ptr<duckdb::DuckDB> database;
 };
-
-duckdb::unique_ptr<duckdb::Connection> DuckdbCreateConnection(List *rtables, List *needed_columns, const char *query);
 
 } // namespace pgduckdb
