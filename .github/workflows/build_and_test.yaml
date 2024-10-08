@@ -54,7 +54,6 @@ jobs:
         with:
           key: ubuntu-24.04-${{ matrix.version }}
           create-symlink: true
-          append-timestamp: false
 
       - name: Checkout pg_duckdb extension code
         uses: actions/checkout@v4
