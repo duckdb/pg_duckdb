@@ -217,14 +217,6 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	if (ret != SPI_OK_DELETE_RETURNING)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
-
-	auto result = context.Query("BEGIN TRANSACTION", false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/duckdb_drop_table_trigger) Could not start transaction");
-	}
-
 	if (SPI_processed == 0) {
 		/* No duckdb tables were dropped */
 		SPI_finish();
@@ -237,6 +229,14 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	 * their transaction lifecycles.
 	 */
 	PreventInTransactionBlock(true, "DuckDB queries");
+
+	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
+	auto &context = *connection->context;
+
+	auto result = context.Query("BEGIN TRANSACTION", false);
+	if (result->HasError()) {
+		elog(ERROR, "(PGDuckDB/duckdb_drop_table_trigger) Could not start transaction");
+	}
 
 	for (auto proc = 0; proc < SPI_processed; proc++) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
