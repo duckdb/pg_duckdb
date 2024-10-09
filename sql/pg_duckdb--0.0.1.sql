@@ -108,6 +108,9 @@ $func$;
 CREATE SCHEMA duckdb;
 SET search_path TO duckdb;
 
+CREATE SEQUENCE secrets_table_seq START WITH 1 INCREMENT BY 1;
+SELECT setval('secrets_table_seq', 1);
+
 CREATE TABLE secrets (
     type TEXT NOT NULL,
     id TEXT NOT NULL,
@@ -119,6 +122,18 @@ CREATE TABLE secrets (
     use_ssl BOOLEAN DEFAULT true,
     CONSTRAINT type_constraint CHECK (type IN ('S3', 'GCS', 'R2'))
 );
+
+CREATE OR REPLACE FUNCTION duckdb_update_secrets_table_seq()
+RETURNS TRIGGER AS
+$$
+BEGIN
+    PERFORM nextval('duckdb.secrets_table_seq');
+    RETURN NEW;
+END;
+$$ LANGUAGE PLpgSQL;
+
+CREATE TRIGGER secrets_table_seq_tr AFTER INSERT OR UPDATE OR DELETE ON secrets
+EXECUTE FUNCTION duckdb_update_secrets_table_seq();
 
 CREATE OR REPLACE FUNCTION duckdb_secret_r2_check()
 RETURNS TRIGGER AS

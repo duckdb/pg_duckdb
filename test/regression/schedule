@@ -16,3 +16,4 @@ test: query_filter
 test: temporary_tables
 test: altered_tables
 test: transaction_errors
+test: secrets
