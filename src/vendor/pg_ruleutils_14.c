@@ -1,19 +1,17 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils.c
+ * pg_ruleutils_14.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
  * Portions Copyright (c) 1996-2021, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- *
- * IDENTIFICATION
- *	  src/backend/utils/adt/ruleutils.c
- *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
+#if PG_VERSION_NUM >= 140000 && PG_VERSION_NUM < 150000
 
 #include <ctype.h>
 #include <unistd.h>
@@ -12198,3 +12196,5 @@ get_range_partbound_string(List *bound_datums)
 
 	return buf->data;
 }
+
+#endif
