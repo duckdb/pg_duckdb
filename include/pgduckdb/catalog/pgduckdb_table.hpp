@@ -16,6 +16,10 @@ extern "C" {
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "access/htup_details.h"
+
+#if PG_VERSION_NUM < 150000
+typedef double Cardinality;
+#endif
 }
 
 namespace duckdb {
