@@ -46,12 +46,7 @@ DuckdbPrepare(const Query *query) {
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
-	List *rtables = copied_query->rtable;
-	/* Extract required vars for table */
-	int flags = PVC_RECURSE_AGGREGATES | PVC_RECURSE_WINDOWFUNCS | PVC_RECURSE_PLACEHOLDERS;
-	List *vars = list_concat(pull_var_clause((Node *)copied_query->targetList, flags),
-	                         pull_var_clause((Node *)copied_query->jointree->quals, flags));
-	auto duckdb_connection = pgduckdb::DuckdbCreateConnection(rtables, vars, query_string);
+	auto duckdb_connection = pgduckdb::DuckDBManager::Get().GetConnection();
 	auto context = duckdb_connection->context;
 	auto prepared_query = context->Prepare(query_string);
 	return {std::move(prepared_query), std::move(duckdb_connection)};

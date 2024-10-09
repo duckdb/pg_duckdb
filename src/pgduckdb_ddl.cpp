@@ -30,8 +30,7 @@ extern "C" {
  */
 void
 DuckdbTruncateTable(Oid relation_oid) {
-	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
 	auto &context = *connection->context;
 	auto query = std::string("TRUNCATE ") + pgduckdb_relation_name(relation_oid);
 	auto result = context.Query(query, false);
@@ -163,8 +162,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 
 	std::string query_string(pgduckdb_get_tabledef(relid));
 
-	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
 	auto &context = *connection->context;
 	auto result = context.Query(query_string, false);
 	if (result->HasError()) {
@@ -219,8 +217,7 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	if (ret != SPI_OK_DELETE_RETURNING)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	auto db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(db);
+	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
 	auto &context = *connection->context;
 
 	auto result = context.Query("BEGIN TRANSACTION", false);

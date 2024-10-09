@@ -165,12 +165,8 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 }
 
 duckdb::unique_ptr<duckdb::Connection>
-DuckdbCreateConnection(List *rtables, List *needed_columns, const char *query) {
-	auto &db = DuckDBManager::Get().GetDatabase();
-	/* Add DuckDB replacement scan to read PG data */
-	auto con = duckdb::make_uniq<duckdb::Connection>(db);
-
-	return con;
+DuckDBManager::GetConnection() const {
+	return duckdb::make_uniq<duckdb::Connection>(*database);
 }
 
 } // namespace pgduckdb
