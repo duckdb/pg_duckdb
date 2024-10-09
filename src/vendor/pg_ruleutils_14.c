@@ -536,7 +536,7 @@ pg_get_ruledef_ext(PG_FUNCTION_ARGS)
 	int			prettyFlags;
 	char	   *res;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	res = pg_get_ruledef_worker(ruleoid, prettyFlags);
 
@@ -657,7 +657,7 @@ pg_get_viewdef_ext(PG_FUNCTION_ARGS)
 	int			prettyFlags;
 	char	   *res;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	res = pg_get_viewdef_worker(viewoid, prettyFlags, WRAP_COLUMN_DEFAULT);
 
@@ -677,7 +677,7 @@ pg_get_viewdef_wrap(PG_FUNCTION_ARGS)
 	char	   *res;
 
 	/* calling this implies we want pretty printing */
-	prettyFlags = PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA;
+	prettyFlags = GET_PRETTY_FLAGS(true);
 
 	res = pg_get_viewdef_worker(viewoid, prettyFlags, wrap);
 
@@ -723,7 +723,7 @@ pg_get_viewdef_name_ext(PG_FUNCTION_ARGS)
 	Oid			viewoid;
 	char	   *res;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	/* Look up view name.  Can't lock it - we might not have privileges. */
 	viewrel = makeRangeVarFromNameList(textToQualifiedNameList(viewname));
@@ -1066,7 +1066,7 @@ pg_get_triggerdef_worker(Oid trigid, bool pretty)
 		context.windowClause = NIL;
 		context.windowTList = NIL;
 		context.varprefix = true;
-		context.prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+		context.prettyFlags = GET_PRETTY_FLAGS(pretty);
 		context.wrapColumn = WRAP_COLUMN_DEFAULT;
 		context.indentLevel = PRETTYINDENT_STD;
 		context.special_exprkind = EXPR_KIND_NONE;
@@ -1156,7 +1156,7 @@ pg_get_indexdef_ext(PG_FUNCTION_ARGS)
 	int			prettyFlags;
 	char	   *res;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	res = pg_get_indexdef_worker(indexrelid, colno, NULL,
 								 colno != 0, false,
@@ -1189,7 +1189,7 @@ pg_get_indexdef_columns(Oid indexrelid, bool pretty)
 {
 	int			prettyFlags;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	return pg_get_indexdef_worker(indexrelid, 0, NULL,
 								  true, true,
@@ -1205,7 +1205,7 @@ pg_get_indexdef_columns_extended(Oid indexrelid, bits16 flags)
 	bool		keys_only = ((flags & RULE_INDEXDEF_KEYS_ONLY) != 0);
 	int			prettyFlags;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	return pg_get_indexdef_worker(indexrelid, 0, NULL,
 								  true, keys_only,
@@ -1890,7 +1890,7 @@ pg_get_partkeydef_columns(Oid relid, bool pretty)
 {
 	int			prettyFlags;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	return pg_get_partkeydef_worker(relid, prettyFlags, true, false);
 }
@@ -2137,7 +2137,7 @@ pg_get_constraintdef_ext(PG_FUNCTION_ARGS)
 	int			prettyFlags;
 	char	   *res;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	res = pg_get_constraintdef_worker(constraintId, false, prettyFlags, true);
 
@@ -2637,7 +2637,7 @@ pg_get_expr_ext(PG_FUNCTION_ARGS)
 	text	   *result;
 	int			prettyFlags;
 
-	prettyFlags = pretty ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) : PRETTYFLAG_INDENT;
+	prettyFlags = GET_PRETTY_FLAGS(pretty);
 
 	result = pg_get_expr_worker(expr, relid, prettyFlags);
 	if (result)
@@ -11695,6 +11695,10 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 	Oid			p_vatype;
 	Oid		   *p_true_typeids;
 	bool		force_qualify = false;
+
+	result = pgduckdb_function_name(funcid);
+	if (result)
+		return result;
 
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(proctup))
