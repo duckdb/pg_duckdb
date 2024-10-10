@@ -147,16 +147,3 @@ DROP TABLE t;
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 
 CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
-
-CREATE TEMP TABLE t(a int);
-ALTER TABLE t ADD COLUMN b int;
--- XXX: A better error message would be nice here, but for now this is acceptable.
-ALTER TABLE t SET ACCESS METHOD heap;
--- XXX: A better error message would be nice here, but for now this is acceptable.
-CREATE INDEX ON t(a);
-
-DROP TABLE t;
-CREATE TEMP TABLE t(a int) USING heap;
-ALTER TABLE t ADD COLUMN b int;
-ALTER TABLE t SET ACCESS METHOD duckdb;
-

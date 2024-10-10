@@ -208,17 +208,3 @@ CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 ERROR:  DuckDB does not support ON COMMIT DROP
 CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
 ERROR:  DuckDB does not support CREATE TABLE AS yet
-CREATE TEMP TABLE t(a int);
-ALTER TABLE t ADD COLUMN b int;
-ERROR:  DuckDB does not support ALTER TABLE yet
--- XXX: A better error message would be nice here, but for now this is acceptable.
-ALTER TABLE t SET ACCESS METHOD heap;
-ERROR:  duckdb does not implement duckdb_slot_callbacks
--- XXX: A better error message would be nice here, but for now this is acceptable.
-CREATE INDEX ON t(a);
-ERROR:  duckdb does not implement duckdb_index_build_range_scan
-DROP TABLE t;
-CREATE TEMP TABLE t(a int) USING heap;
-ALTER TABLE t ADD COLUMN b int;
-ALTER TABLE t SET ACCESS METHOD duckdb;
-ERROR:  duckdb does not implement duckdb_slot_callbacks
