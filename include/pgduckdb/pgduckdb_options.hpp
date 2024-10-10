@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb.hpp"
+
 #include <string>
 #include <vector>
 
@@ -37,8 +39,8 @@ extern std::vector<DuckdbSecret> ReadDuckdbSecrets();
 typedef struct DuckdbExension {
 	std::string name;
 	bool enabled;
-} DuckdbExension;
+} DuckdbExtension;
 
-extern std::vector<DuckdbExension> ReadDuckdbExtensions();
+extern std::vector<DuckdbExtension> ReadDuckdbExtensions();
 
 } // namespace pgduckdb

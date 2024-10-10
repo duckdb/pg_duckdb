@@ -19,73 +19,13 @@ extern "C" {
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
-extern "C" {
-#include "postgres.h"
-
-#include "utils/elog.h"
-}
-#include <string>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <errno.h>
-
 namespace pgduckdb {
 
-static bool
-CheckDataDirectory(const char *data_directory) {
-	struct stat info;
-
-	if (lstat(data_directory, &info) != 0) {
-		if (errno == ENOENT) {
-			elog(DEBUG2, "(PGDuckDB/CheckDataDirectory) Directory `%s` doesn't exists", data_directory);
-			return false;
-		} else if (errno == EACCES) {
-			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Can't access `%s` directory", data_directory);
-		} else {
-			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Other error when reading `%s`", data_directory);
-		}
-	}
-
-	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "(PGDuckDB/CheckDataDirectory) `%s` is not directory", data_directory);
-	}
-
-	if (access(data_directory, R_OK | W_OK)) {
-		elog(ERROR, "(PGDuckDB/CheckDataDirectory) Directory `%s` permission problem", data_directory);
-	}
-
-	return true;
-}
-
-static std::string
-GetExtensionDirectory() {
-	StringInfo duckdb_extension_data_directory = makeStringInfo();
-	appendStringInfo(duckdb_extension_data_directory, "%s/duckdb_extensions", DataDir);
-
-	if (!CheckDataDirectory(duckdb_extension_data_directory->data)) {
-		if (mkdir(duckdb_extension_data_directory->data, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
-			int error = errno;
-			pfree(duckdb_extension_data_directory->data);
-			elog(ERROR,
-			     "(PGDuckDB/GetExtensionDirectory) Creating duckdb extensions directory failed with reason `%s`\n",
-			     strerror(error));
-		}
-		elog(DEBUG2, "(PGDuckDB/GetExtensionDirectory) Created %s as `duckdb.data_dir`",
-		     duckdb_extension_data_directory->data);
-	};
-
-	std::string duckdb_extension_directory(duckdb_extension_data_directory->data);
-	pfree(duckdb_extension_data_directory->data);
-	return duckdb_extension_directory;
-}
-
-DuckDBManager::DuckDBManager() : secret_table_num_rows(0), secret_table_current_seq(0) {
+DuckDBManager::DuckDBManager() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
 	duckdb::DBConfig config;
-	config.SetOptionByName("extension_directory", GetExtensionDirectory());
+	config.SetOptionByName("extension_directory", CreateOrGetDirectoryPath("duckdb_extensions"));
 	// Transforms VIEWs into their view definition
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
 
@@ -99,6 +39,7 @@ DuckDBManager::DuckDBManager() : secret_table_num_rows(0), secret_table_current_
 
 	auto &context = *connection->context;
 	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
+
 	LoadFunctions(context);
 	LoadExtensions(context);
 }
@@ -201,11 +142,17 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 duckdb::unique_ptr<duckdb::Connection>
 DuckDBManager::GetConnection() {
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+	auto &context = *connection->context;
+
 	if (CheckSecretsSeq()) {
-		auto &context = *connection->context;
 		DropSecrets(context);
 		LoadSecrets(context);
 	}
+
+	auto http_file_cache_set_dir_query =
+	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
+	context.Query(http_file_cache_set_dir_query, false);
+
 	return connection;
 }
 
