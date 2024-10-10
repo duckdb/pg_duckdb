@@ -157,7 +157,8 @@ install_extension(PG_FUNCTION_ARGS) {
 	PG_RETURN_BOOL(result);
 }
 
-const char* pgduckdb_raw_query_unsafe(const char *query) {
+const char *
+pgduckdb_raw_query_unsafe(const char *query) {
 	auto connection = pgduckdb::DuckDBManager::CreateConnection();
 	auto result = pgduckdb::DuckDBQueryOrThrow(*connection->context, query);
 	return strdup(result->ToString().c_str());

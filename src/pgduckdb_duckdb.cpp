@@ -167,13 +167,9 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 void
 DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
-
 	for (auto secret_id = 0; secret_id < secret_table_num_rows; secret_id++) {
 		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
-		auto res = context.Query(drop_secret_cmd, false);
-		if (res->HasError()) {
-			elog(ERROR, "(PGDuckDB/DropSecrets) secret `%d` could not be dropped.", secret_id);
-		}
+		pgduckdb::DuckDBQueryOrThrow(drop_secret_cmd);
 	}
 	secret_table_num_rows = 0;
 }
@@ -191,7 +187,7 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 
 duckdb::unique_ptr<duckdb::Connection>
 DuckDBManager::CreateConnection() {
-	auto& instance = Get();
+	auto &instance = Get();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(GetDatabase());
 	if (instance.CheckSecretsSeq()) {
 		auto &context = *connection->context;

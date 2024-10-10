@@ -26,8 +26,8 @@ public:
 		return *Get().database;
 	}
 
-	static duckdb::unique_ptr<duckdb::Connection>
-	CreateConnection();
+	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
+
 private:
 	DuckDBManager();
 
