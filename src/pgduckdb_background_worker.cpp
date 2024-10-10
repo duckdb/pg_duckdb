@@ -247,6 +247,7 @@ SPI_oneShotUtilityCommand(const char *query) {
 		ThrowErrorData(edata);
 		FreeErrorData(edata);
 		FlushErrorState();
+		RollbackAndReleaseCurrentSubTransaction();
 		return false;
 	}
 	PG_END_TRY();
