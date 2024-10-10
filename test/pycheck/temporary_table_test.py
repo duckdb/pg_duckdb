@@ -9,7 +9,7 @@ def test_temporary_table(cur: Cursor):
         try:
             cur.sql("ALTER TABLE t SET ACCESS METHOD heap")
         except Exception as err:
-            eprint (err)
+            eprint(err)
 
         cur.sql("CREATE INDEX ON t(a)")
         cur.sql("DROP TABLE t")
@@ -19,4 +19,4 @@ def test_temporary_table(cur: Cursor):
         try:
             cur.sql("ALTER TABLE t SET ACCESS METHOD duckdb")
         except Exception as err:
-            eprint (err)
+            eprint(err)
