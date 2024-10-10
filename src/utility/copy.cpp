@@ -127,11 +127,14 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 
 	duckdb::string query_string_copy = std::string(query_string);
 
-	/* Quote filename so we can match it with query string*/
+	/*
+	 * Quote filename so we can match it with query string to reverse find location of
+	 * OPTION part of query.
+	 * This is temporary solution, concrete solution should be construct OPTION part string from
+	 * information provided in copy_stmt->options.
+	 */
 	auto filename_quoted = quote_literal_cstr(copy_stmt->filename);
-	auto filename_quoted_end_pos = query_string_copy.find(filename_quoted) + strlen(filename_quoted);
-
-	/* We have offset of end char of quoted filename so rest of query should be options parameters */
+	auto filename_quoted_end_pos = query_string_copy.rfind(filename_quoted) + strlen(filename_quoted);
 	duckdb::string options_part  = query_string_copy.substr(filename_quoted_end_pos + 1);
 
 	duckdb::string rewritten_query_string;
