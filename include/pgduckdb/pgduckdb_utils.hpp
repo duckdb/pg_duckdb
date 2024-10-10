@@ -5,6 +5,7 @@ extern "C" {
 }
 
 #include "duckdb/common/exception.hpp"
+#include "duckdb/common/error_data.hpp"
 
 #include <vector>
 #include <string>
@@ -72,6 +73,32 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	if (edata) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
 	}
+}
+
+template <typename FuncRetT, typename FuncType, typename... FuncArgs>
+FuncRetT
+DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArgs... args) {
+	const char *error_message = nullptr;
+	try {
+		return duckdb_function(args...);
+	} catch (duckdb::Exception &ex) {
+		duckdb::ErrorData edata(ex.what());
+		error_message = pstrdup(edata.Message().c_str());
+	} catch (std::exception &ex) {
+		const auto msg = ex.what();
+		if (msg[0] == '{') {
+			duckdb::ErrorData edata(ex.what());
+			error_message = pstrdup(edata.Message().c_str());
+		} else {
+			error_message = pstrdup(ex.what());
+		}
+	}
+
+	if (error_message) {
+		elog(ERROR, "(PGDuckDB/%s) %s", function_name, error_message);
+	}
+
+	std::abort(); // Cannot reach.
 }
 
 } // namespace pgduckdb
