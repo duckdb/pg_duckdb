@@ -76,7 +76,6 @@ $(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \
 	DISABLE_SANITIZER=1 \
-	DISABLE_UBSAN=1 \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake" \
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_BUILD_TYPE)
