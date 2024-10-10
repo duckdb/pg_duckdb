@@ -43,7 +43,7 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		return false;
 	}
 
-	auto duckdb_connection = pgduckdb::DuckDBManager::Get().GetConnection();
+	auto duckdb_connection = pgduckdb::DuckDBManager::CreateConnection();
 	auto res = duckdb_connection->context->Query(query_string, false);
 
 	if (res->HasError()) {

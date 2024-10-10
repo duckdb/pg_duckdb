@@ -6,6 +6,7 @@ extern "C" {
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/error_data.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
 
 #include <vector>
 #include <string>
@@ -77,7 +78,7 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 
 template <typename FuncRetT, typename FuncType, typename... FuncArgs>
 FuncRetT
-DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArgs... args) {
+DuckDBFunctionGuard(FuncType duckdb_function, const char *function_name, FuncArgs... args) {
 	const char *error_message = nullptr;
 	try {
 		return duckdb_function(args...);
@@ -99,6 +100,35 @@ DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArg
 	}
 
 	std::abort(); // Cannot reach.
+}
+
+inline duckdb::unique_ptr<duckdb::QueryResult>
+DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query) {
+	auto res = context.Query(query, false);
+	if (res->HasError()) {
+		res->ThrowError();
+	}
+	return res;
+}
+
+inline duckdb::unique_ptr<duckdb::QueryResult>
+DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query) {
+	auto res = connection.context->Query(query, false);
+	if (res->HasError()) {
+		res->ThrowError();
+	}
+	return res;
+}
+
+inline duckdb::unique_ptr<duckdb::QueryResult>
+DuckDBQueryOrThrow(const std::string &query) {
+	auto connection = pgduckdb::DuckDBManager::CreateConnection();
+	auto &context = *connection->context;
+	auto res = context.Query(query, false);
+	if (res->HasError()) {
+		res->ThrowError();
+	}
+	return res;
 }
 
 } // namespace pgduckdb

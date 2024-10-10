@@ -15,13 +15,24 @@ public:
 	static inline DuckDBManager &
 	Get() {
 		static DuckDBManager instance;
+		if (!instance.database) {
+			instance.Initialize();
+		}
 		return instance;
 	}
 
-	duckdb::unique_ptr<duckdb::Connection> GetConnection();
+	static inline duckdb::DuckDB &
+	GetDatabase() {
+		return *Get().database;
+	}
+
+	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
 
 private:
 	DuckDBManager();
+
+	void Initialize();
+
 	void InitializeDatabase();
 	bool CheckSecretsSeq();
 	void LoadSecrets(duckdb::ClientContext &);

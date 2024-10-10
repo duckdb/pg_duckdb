@@ -17,6 +17,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
 
@@ -115,18 +116,10 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
-
+	auto connection = DuckDBManager::CreateConnection();
 	auto extension_name = DatumToString(name);
 
-	StringInfo install_extension_command = makeStringInfo();
-	appendStringInfo(install_extension_command, "INSTALL %s;", extension_name.c_str());
-
-	auto res = context.Query(install_extension_command->data, false);
-
-	pfree(install_extension_command->data);
-
+	auto res = connection->context->Query("INSTALL " + extension_name, false);
 	if (res->HasError()) {
 		elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
 		return false;
@@ -160,21 +153,23 @@ PG_FUNCTION_INFO_V1(install_extension);
 Datum
 install_extension(PG_FUNCTION_ARGS) {
 	Datum extension_name = PG_GETARG_DATUM(0);
-	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
+	bool result = pgduckdb::DuckDBFunctionGuard<bool>(pgduckdb::DuckdbInstallExtension, __FUNCTION__, extension_name);
 	PG_RETURN_BOOL(result);
+}
+
+const char *
+pgduckdb_raw_query_unsafe(const char *query) {
+	auto connection = pgduckdb::DuckDBManager::CreateConnection();
+	auto result = pgduckdb::DuckDBQueryOrThrow(*connection->context, query);
+	return strdup(result->ToString().c_str());
 }
 
 PG_FUNCTION_INFO_V1(pgduckdb_raw_query);
 Datum
 pgduckdb_raw_query(PG_FUNCTION_ARGS) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
-	auto result = context.Query(query, false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/DuckdbInstallExtension) %s", result->GetError().c_str());
-	}
-	elog(NOTICE, "result: %s", result->ToString().c_str());
+	auto res = pgduckdb::DuckDBFunctionGuard<const char *>(pgduckdb_raw_query_unsafe, __FUNCTION__, query);
+	elog(NOTICE, "result: %s", res);
 	PG_RETURN_BOOL(true);
 }
 
