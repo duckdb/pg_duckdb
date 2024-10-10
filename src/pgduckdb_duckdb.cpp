@@ -199,8 +199,14 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 }
 
 duckdb::unique_ptr<duckdb::Connection>
-DuckDBManager::GetConnection() const {
-	return duckdb::make_uniq<duckdb::Connection>(*database);
+DuckDBManager::GetConnection() {
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+	if (CheckSecretsSeq()) {
+		auto &context = *connection->context;
+		DropSecrets(context);
+		LoadSecrets(context);
+	}
+	return connection;
 }
 
 } // namespace pgduckdb
