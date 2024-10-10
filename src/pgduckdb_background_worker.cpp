@@ -230,6 +230,10 @@ SPI_oneShotUtilityCommand(const char *query) {
 	MemoryContext old_context = MemoryContextSwitchTo(CurrentMemoryContext);
 	int ret;
 
+	/*
+	 * We create a subtransaction to be able to cleanly roll back in case of
+	 * any errors.
+	 */
 	BeginInternalSubTransaction(NULL);
 	PG_TRY();
 	{ ret = SPI_exec(query, 0); }
@@ -243,17 +247,19 @@ SPI_oneShotUtilityCommand(const char *query) {
 		ThrowErrorData(edata);
 		FreeErrorData(edata);
 		FlushErrorState();
-		RollbackAndReleaseCurrentSubTransaction();
 		return false;
 	}
 	PG_END_TRY();
-	ReleaseCurrentSubTransaction();
 
 	if (ret != SPI_OK_UTILITY) {
 		elog(WARNING, "SPI_execute failed: error code %d", ret);
+		RollbackAndReleaseCurrentSubTransaction();
 		return false;
 	}
-	/* Commit the transaction to release any locks that were necessary for it */
+	/* Success, so we commit the subtransaction */
+	ReleaseCurrentSubTransaction();
+	/* And then we also commit the actual transaction to release any locks that
+	 * were necessary to execute it. */
 	SPI_commit_that_works_in_bgworker();
 	return true;
 }
