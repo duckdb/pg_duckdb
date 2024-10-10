@@ -1,0 +1,8 @@
+.git
+*.o
+*.so
+*.dylib
+*.bc
+.deps
+Dockerfile
+third_party/duckdb/build
