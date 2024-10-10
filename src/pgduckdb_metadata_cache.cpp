@@ -14,6 +14,7 @@ extern "C" {
 #include "utils/catcache.h"
 #include "utils/inval.h"
 #include "utils/memutils.h"
+#include "utils/rel.h"
 #include "utils/syscache.h"
 }
 
@@ -183,6 +184,18 @@ Oid
 DuckdbTableAmOid() {
 	Assert(cache.valid);
 	return cache.table_am_oid;
+}
+
+Oid
+IsDuckdbTable(Relation relation) {
+	Assert(cache.valid);
+	return relation->rd_rel->relam == pgduckdb::DuckdbTableAmOid();
+}
+
+Oid
+IsMotherDuckTable(Relation relation) {
+	Assert(cache.valid);
+	return IsDuckdbTable(relation) && relation->rd_rel->relpersistence == RELPERSISTENCE_PERMANENT;
 }
 
 bool

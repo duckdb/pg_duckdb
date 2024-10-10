@@ -8,6 +8,7 @@ extern "C" {
 #include "commands/event_trigger.h"
 #include "fmgr.h"
 #include "catalog/pg_authid_d.h"
+#include "catalog/namespace.h"
 #include "funcapi.h"
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
@@ -23,6 +24,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
 
@@ -328,12 +330,47 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	PG_RETURN_NULL();
 }
 
+/*
+ * This event trigger is called when a GRANT statement is executed. We use it to
+ * block GRANTs on DuckDB tables. We allow grants on schemas though.
+ */
 PG_FUNCTION_INFO_V1(duckdb_grant_trigger);
 Datum
 duckdb_grant_trigger(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
-	elog(ERROR, "DuckDB does not support GRANT yet");
+	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
+	Node *parsetree = trigdata->parsetree;
+	if (!IsA(parsetree, GrantStmt)) {
+		/*
+		 * Not a GRANT statement, so don't mess with the query. This is not
+		 * expected though.
+		 */
+		PG_RETURN_NULL();
+	}
+
+	GrantStmt *stmt = castNode(GrantStmt, parsetree);
+	if (stmt->objtype != OBJECT_TABLE) {
+		/* We only care about blocking table grants */
+		PG_RETURN_NULL();
+	}
+
+	if (stmt->targtype != ACL_TARGET_OBJECT) {
+		/*
+		 * We only care about blocking exact object grants. We don't want to
+		 * block ALL IN SCHEMA or ALTER DEFAULT PRIVELEGES.
+		 */
+		PG_RETURN_NULL();
+	}
+
+	foreach_node(RangeVar, object, stmt->objects) {
+		Oid relation_oid = RangeVarGetRelid(object, AccessShareLock, true);
+		Relation relation = RelationIdGetRelation(relation_oid);
+		if (pgduckdb::IsMotherDuckTable(relation)) {
+			elog(ERROR, "MotherDuck tables do not support GRANT");
+		}
+		RelationClose(relation);
+	}
 
 	PG_RETURN_NULL();
 }
