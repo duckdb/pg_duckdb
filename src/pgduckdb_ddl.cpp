@@ -22,6 +22,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
 
@@ -126,7 +127,9 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
-	if (!is_duckdb_table) {
+	if (!is_duckdb_table || pgduckdb::doing_motherduck_sync) {
+		/* No DuckDB tables were created, or we don't want to forward DDL to
+		 * DuckDB because we're in the background worker */
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
@@ -217,8 +220,9 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	if (ret != SPI_OK_DELETE_RETURNING)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	if (SPI_processed == 0) {
-		/* No duckdb tables were dropped */
+	if (SPI_processed == 0 || pgduckdb::doing_motherduck_sync) {
+		/* No DuckDB tables were dropped, or we don't want to forward DDL to
+		 * DuckDB because if we're syncing with MotherDuck */
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
@@ -312,12 +316,24 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
-	if (!is_duckdb_table) {
+	if (!is_duckdb_table || pgduckdb::doing_motherduck_sync) {
+		/* No DuckDB tables were altered, or we don't want to forward DDL to
+		 * DuckDB because we're syncing with MotherDuck */
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
 
 	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
+
+	PG_RETURN_NULL();
+}
+
+PG_FUNCTION_INFO_V1(duckdb_grant_trigger);
+Datum
+duckdb_grant_trigger(PG_FUNCTION_ARGS) {
+	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
+		elog(ERROR, "not fired by event trigger manager");
+	elog(ERROR, "DuckDB does not support GRANT yet");
 
 	PG_RETURN_NULL();
 }

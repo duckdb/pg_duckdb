@@ -198,6 +198,16 @@ CREATE EVENT TRIGGER duckdb_alter_table_trigger ON ddl_command_end
     WHEN tag IN ('ALTER TABLE')
     EXECUTE FUNCTION duckdb_alter_table_trigger();
 
+CREATE FUNCTION duckdb_grant_trigger() RETURNS event_trigger
+    AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE EVENT TRIGGER duckdb_grant_trigger ON ddl_command_end
+    WHEN tag IN ('GRANT')
+    EXECUTE FUNCTION duckdb_grant_trigger();
+
+CREATE OR REPLACE PROCEDURE force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)
+    LANGUAGE C AS 'MODULE_PATHNAME';
+
 DO $$
 BEGIN
     RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';
