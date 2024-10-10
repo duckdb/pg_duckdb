@@ -146,7 +146,25 @@ DROP TABLE t;
 -- unsupported
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 
+-- CTAS fully in Duckdb
 CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
+SELECT * FROM webpages ORDER BY column00 LIMIT 2;
+
+CREATE TEMP TABLE t_heap(a int) USING heap;
+INSERT INTO t_heap VALUES (1);
+
+-- CTAS from postgres table to duckdb table
+CREATE TEMP TABLE t(b) USING duckdb AS SELECT * FROM t_heap;
+SELECT * FROM t;
+
+-- CTAS from DuckDB table to postgres table
+CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t_heap;
+SELECT * FROM t_heap2;
+
+SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
+
+DROP TABLE webpages, t, t_heap, t_heap2;
+
 
 CREATE TEMP TABLE t(a int);
 ALTER TABLE t ADD COLUMN b int;
