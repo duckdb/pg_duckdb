@@ -108,7 +108,8 @@ CreatePlan(Query *query) {
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options) {
 	/* We need to check can we DuckDB create plan */
-	Plan *duckdb_plan = (Plan *)castNode(CustomScan, CreatePlan(parse));
+	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan*>(CreatePlan, "CreatePlan", parse);
+	Plan *duckdb_plan = (Plan *)castNode(CustomScan, plan);
 
 	if (!duckdb_plan) {
 		return nullptr;
