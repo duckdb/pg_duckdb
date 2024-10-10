@@ -92,18 +92,20 @@ ExecuteQuery(DuckdbScanState *state) {
 		ParamExternData tmp_workspace;
 
 		/* give hook a chance in case parameter is dynamic */
-		if (pg_params->paramFetch != NULL)
+		if (pg_params->paramFetch != NULL) {
 			pg_param = pg_params->paramFetch(pg_params, i + 1, false, &tmp_workspace);
-		else
+		} else {
 			pg_param = &pg_params->params[i];
+		}
 
 		if (pg_param->isnull) {
 			duckdb_params.push_back(duckdb::Value());
-		} else {
-			if (!OidIsValid(pg_param->ptype)) {
-				elog(ERROR, "parameter with invalid type during execution");
-			}
+		} else if (OidIsValid(pg_param->ptype)) {
 			duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype));
+		} else {
+			std::ostringstream oss;
+			oss << "parameter '" << i << "' has an invalid type (" << pg_param->ptype << ") during query execution";
+			elog(ERROR, oss.str().c_str());
 		}
 	}
 
@@ -111,6 +113,7 @@ ExecuteQuery(DuckdbScanState *state) {
 	if (pending->HasError()) {
 		elog(ERROR, "DuckDB execute returned an error: %s", pending->GetError().c_str());
 	}
+
 	duckdb::PendingExecutionResult execution_result;
 	do {
 		execution_result = pending->ExecuteTask();
@@ -127,10 +130,12 @@ ExecuteQuery(DuckdbScanState *state) {
 			elog(ERROR, "Query cancelled");
 		}
 	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
+
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
 		CleanupDuckdbScanState(state);
 		elog(ERROR, "(PGDuckDB/ExecuteQuery) %s", pending->GetError().c_str());
 	}
+
 	query_results = pending->Execute();
 	state->column_count = query_results->ColumnCount();
 	state->is_executed = true;
