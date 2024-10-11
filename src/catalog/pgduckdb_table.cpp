@@ -21,6 +21,7 @@ extern "C" {
 #include "utils/regproc.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
+#include "utils/relcache.h"
 #include "access/htup_details.h"
 #include "parser/parsetree.h"
 }
@@ -40,8 +41,7 @@ PostgresTable::~PostgresTable() {
 ::Relation
 PostgresTable::OpenRelation(Oid relid) {
 	std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
-	auto rel = pgduckdb::PostgresFunctionGuard<::Relation>(RelationIdGetRelation, relid);
-	return rel;
+	return pgduckdb::PostgresFunctionGuard<::Relation>(RelationIdGetRelation, relid);
 }
 
 bool
