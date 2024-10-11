@@ -14,6 +14,7 @@ extern "C" {
 #include "nodes/makefuncs.h"
 #include "optimizer/optimizer.h"
 #include "tcop/utility.h"
+#include "utils/builtins.h"
 #include "utils/syscache.h"
 #include "commands/event_trigger.h"
 #include "executor/spi.h"
@@ -100,6 +101,19 @@ CheckOnCommitSupport(OnCommitAction on_commit) {
 
 extern "C" {
 
+/*
+ * Stores the oids of temporary DuckDB tables for this backend. We cannot store
+ * these Oids in the duckdb.tables table. This is because these tables are
+ * automatically dropped when the backend terminates, but for this type of drop
+ * no event trigger is fired. So if we would store these Oids in the
+ * duckdb.tables table, then the oids of temporary tables would stay in there
+ * after the backend terminates (which would be bad, because the table doesn't
+ * exist anymore). To solve this, we store the oids in this in-memory set
+ * instead, because that memory will automatically be cleared when the current
+ * backend terminates.
+ */
+static std::unordered_set<Oid> temporary_duckdb_tables;
+
 PG_FUNCTION_INFO_V1(duckdb_create_table_trigger);
 Datum
 duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
@@ -112,46 +126,37 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	SPI_connect();
 
 	/*
-	 * Temporarily escalate privileges to superuser so we can insert into
-	 * duckdb.tables. We temporarily clear the search_path to protect against
-	 * search_path confusion attacks. See guidance on SECURITY DEFINER
-	 * functions in postgres for details:
+	 * We temporarily escalate privileges to superuser for some of our queries
+	 * so we can insert into duckdb.tables. We temporarily clear the
+	 * search_path to protect against search_path confusion attacks. See
+	 * guidance on SECURITY DEFINER functions in postgres for details:
 	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
+	 *
+	 * We also temporarily force duckdb.execution to false, because
+	 * pg_catalog.pg_event_trigger_ddl_commands does not exist in DuckDB.
 	 */
-	Oid saved_userid;
-	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
-	GetUserIdAndSecContext(&saved_userid, &sec_context);
-	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
-	/*
-	 * We track the table oid in duckdb.tables so we can later check in our
-	 * delete event trigger if the table was created using the duckdb access
-	 * method. See the code comment in that function for more details.
-	 */
+	SetConfigOption("duckdb.execution", "false", PGC_USERSET, PGC_S_SESSION);
+
 	int ret = SPI_exec(R"(
-		INSERT INTO duckdb.tables(relid)
-		SELECT DISTINCT objid
+		SELECT DISTINCT objid AS relid, pg_class.relpersistence = 't' AS is_temporary
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
 		WHERE cmds.object_type = 'table'
 		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
-		RETURNING relid)",
+		)",
 	                   0);
 
-	/* Revert back to original privileges */
-	SetUserIdAndSecContext(saved_userid, sec_context);
-	AtEOXact_GUC(false, save_nestlevel);
-
-	if (ret != SPI_OK_INSERT_RETURNING)
+	if (ret != SPI_OK_SELECT)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	/* if we inserted a row it was a duckdb table */
+	/* if we selected a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
-	if (!is_duckdb_table || pgduckdb::doing_motherduck_sync) {
-		/* No DuckDB tables were created, or we don't want to forward DDL to
-		 * DuckDB because we're in the background worker */
+	if (!is_duckdb_table) {
+		/* No DuckDB tables were created so we don't need to do anything */
+		AtEOXact_GUC(false, save_nestlevel);
 		SPI_finish();
 		PG_RETURN_NULL();
 	}
@@ -166,9 +171,52 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	if (isnull) {
 		elog(ERROR, "Expected relid to be returned, but found NULL");
 	}
+	Datum is_temporary_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
+	if (isnull) {
+		elog(ERROR, "Expected temporary boolean to be returned, but found NULL");
+	}
 
 	Oid relid = DatumGetObjectId(relid_datum);
+	bool is_temporary = DatumGetBool(is_temporary_datum);
+
+	/*
+	 * We track the table oid in duckdb.tables so we can later check in our
+	 * duckdb_drop_trigger if the table was created using the duckdb access
+	 * method. See the code comment in that function and the one on
+	 * temporary_duckdb_tables for more details.
+	 */
+	if (is_temporary) {
+		temporary_duckdb_tables.insert(relid);
+	} else {
+		Oid saved_userid;
+		int sec_context;
+		GetUserIdAndSecContext(&saved_userid, &sec_context);
+		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+		Oid arg_types[] = {OIDOID};
+		ret = SPI_execute_with_args(R"(
+			INSERT INTO duckdb.tables (relid)
+			VALUES ($1)
+			)",
+		                            1, arg_types, &relid_datum, nullptr, false, 0);
+
+		/* Revert back to original privileges */
+		SetUserIdAndSecContext(saved_userid, sec_context);
+
+		if (ret != SPI_OK_INSERT)
+			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	}
+
+	AtEOXact_GUC(false, save_nestlevel);
 	SPI_finish();
+
+	if (pgduckdb::doing_motherduck_sync) {
+		/*
+		 * We don't want to forward DDL to DuckDB because we're syncing the
+		 * tables that are already there.
+		 */
+		PG_RETURN_NULL();
+	}
 
 	/*
 	 * For now, we don't support DuckDB queries in transactions. To support
@@ -191,6 +239,20 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	PG_RETURN_NULL();
 }
 
+/*
+ * We use the sql_drop event trigger to handle drops of DuckDB tables and
+ * schemas because drops might cascade to other objects, so just checking the
+ * DROP SCHEMA and DROP TABLE commands is not enough. We could ofcourse
+ * manually resolve the dependencies for every drop command, but by using the
+ * sql_drop trigger that is already done for us.
+ *
+ * The main downside of using the sql_drop trigger is that when this trigger is
+ * executed, the objects are already dropped. That means that it's not possible
+ * to query the Postgres catalogs for information about them, which means that
+ * we need to do some extra bookkeeping ourselves to be able to figure out if a
+ * dropped table was a DuckDB table or not (because we cannot check its access
+ * method anymore).
+ */
 PG_FUNCTION_INFO_V1(duckdb_drop_trigger);
 Datum
 duckdb_drop_trigger(PG_FUNCTION_ARGS) {
@@ -209,13 +271,9 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	 * We also temporarily force duckdb.execution to false, because
 	 * pg_catalog.pg_event_trigger_dropped_objects does not exist in DuckDB.
 	 */
-	Oid saved_userid;
-	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
 	SetConfigOption("duckdb.execution", "false", PGC_USERSET, PGC_S_SESSION);
-	GetUserIdAndSecContext(&saved_userid, &sec_context);
-	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 	if (!pgduckdb::doing_motherduck_sync) {
 		int ret = SPI_exec(R"(
@@ -233,10 +291,21 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 		}
 	}
 
-	// Because the table metadata is deleted from the postgres catalogs we
-	// cannot find out if the table was using the duckdb access method. So
-	// instead we keep our own metadata table that also tracks which tables are
-	// duckdb tables.
+	Oid saved_userid;
+	int sec_context;
+	GetUserIdAndSecContext(&saved_userid, &sec_context);
+	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	/*
+	 * Because the table metadata is deleted from the postgres catalogs we
+	 * cannot find out if the table was using the duckdb access method. So
+	 * instead we keep our own metadata table that also tracks which tables are
+	 * duckdb tables. We do the same for temporary tables, except we use an
+	 * in-memory set for that. See the comment on the temporary_duckdb_tables
+	 * global for details on why.
+	 *
+	 * Here we first handle the non-temporary tables.
+	 */
+
 	int ret = SPI_exec(R"(
 		DELETE FROM duckdb.tables
 		USING (
@@ -251,40 +320,88 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 
 	/* Revert back to original privileges */
 	SetUserIdAndSecContext(saved_userid, sec_context);
-	AtEOXact_GUC(false, save_nestlevel);
 
 	if (ret != SPI_OK_DELETE_RETURNING)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	if (SPI_processed == 0 || pgduckdb::doing_motherduck_sync) {
-		/* No DuckDB tables were dropped, or we don't want to forward DDL to
-		 * DuckDB because if we're syncing with MotherDuck */
-		SPI_finish();
-		PG_RETURN_NULL();
+	/*
+	 * We lazily create a connection to DuckDB when we need it. That's
+	 * important because we don't want to impose our "prevent in transaction
+	 * block" restriction unnecessarily. Otherwise users won't be able to drop
+	 * regular heap tables in transactions anymore.
+	 */
+	duckdb::unique_ptr<duckdb::Connection> connection;
+
+	if (!pgduckdb::doing_motherduck_sync) {
+		for (auto proc = 0; proc < SPI_processed; ++proc) {
+			if (!connection) {
+				/*
+				 * For now, we don't support DuckDB queries in transactions. To support
+				 * write queries in transactions we'll need to link Postgres and DuckdB
+				 * their transaction lifecycles.
+				 */
+				PreventInTransactionBlock(true, "DuckDB queries");
+				connection = pgduckdb::DuckDBManager::CreateConnection();
+				pgduckdb::DuckDBQueryOrThrow(*connection, "BEGIN TRANSACTION");
+			}
+			HeapTuple tuple = SPI_tuptable->vals[proc];
+
+			char *object_identity = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
+			// TODO: Handle std::string creation in a safe way for allocation failures
+			pgduckdb::DuckDBQueryOrThrow(*connection, "DROP TABLE IF EXISTS " + std::string(object_identity));
+		}
 	}
 
 	/*
-	 * For now, we don't support DuckDB queries in transactions. To support
-	 * write queries in transactions we'll need to link Postgres and DuckdB
-	 * their transaction lifecycles.
+	 * And now we basically do the same thing as above, but for TEMP tables.
+	 * For those we need to check our in-memory temporary_duckdb_tables set.
 	 */
-	PreventInTransactionBlock(true, "DuckDB queries");
+	ret = SPI_exec(R"(
+		SELECT objid, object_name
+		FROM pg_catalog.pg_event_trigger_dropped_objects()
+		WHERE object_type = 'table'
+			AND schema_name = 'pg_temp'
+		)",
+	               0);
 
-	auto connection = pgduckdb::DuckDBManager::CreateConnection();
-
-	pgduckdb::DuckDBQueryOrThrow(*connection, "BEGIN TRANSACTION");
+	if (ret != SPI_OK_SELECT)
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	for (auto proc = 0; proc < SPI_processed; ++proc) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
 
-		char *object_identity = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
-		// TODO: Handle std::string creation in a safe way for allocation failures
-		pgduckdb::DuckDBQueryOrThrow(*connection, "DROP TABLE IF EXISTS " + std::string(object_identity));
+		bool isnull;
+		Datum relid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
+		if (isnull) {
+			elog(ERROR, "Expected relid to be returned, but found NULL");
+		}
+		Oid relid = DatumGetObjectId(relid_datum);
+		if (temporary_duckdb_tables.count(relid) == 0) {
+			/* It was a regular temporary table, so this DROP is allowed */
+			continue;
+		}
+		if (!connection) {
+			/*
+			 * For now, we don't support DuckDB queries in transactions. To support
+			 * write queries in transactions we'll need to link Postgres and DuckdB
+			 * their transaction lifecycles.
+			 */
+			PreventInTransactionBlock(true, "DuckDB queries");
+			connection = pgduckdb::DuckDBManager::CreateConnection();
+			pgduckdb::DuckDBQueryOrThrow(*connection, "BEGIN TRANSACTION");
+		}
+		char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
+		pgduckdb::DuckDBQueryOrThrow(*connection,
+		                             std::string("DROP TABLE IF EXISTS pg_temp.main.") + quote_identifier(table_name));
+		temporary_duckdb_tables.erase(relid);
 	}
 
+	AtEOXact_GUC(false, save_nestlevel);
 	SPI_finish();
 
-	pgduckdb::DuckDBQueryOrThrow(*connection, "COMMIT");
+	if (connection) {
+		pgduckdb::DuckDBQueryOrThrow(*connection, "COMMIT");
+	}
 	PG_RETURN_NULL();
 }
 
@@ -303,31 +420,39 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	 * functions in postgres for details:
 	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
 	 */
-	Oid saved_userid;
-	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
+	Oid saved_userid;
+	int sec_context;
 	GetUserIdAndSecContext(&saved_userid, &sec_context);
 	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 	/*
-	 * Check if a table was altered that was created using the duckdb
-	 * access. This needs to check both pg_class and duckdb.tables, because the
-	 * access method might have been changed from/to duckdb by the ALTER TABLE
-	 * SET ACCESS METHOD command.
+	 * Check if a table was altered that was created using the duckdb access.
+	 * This needs to check both pg_class, duckdb.tables, and the
+	 * temporary_duckdb_tables set, because the access method might have been
+	 * changed from/to duckdb by the ALTER TABLE SET ACCESS METHOD command.
 	 */
 	int ret = SPI_exec(R"(
-		SELECT objid as relid
+		SELECT objid as relid, false AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
 		WHERE cmds.object_type = 'table'
 		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		UNION ALL
-		SELECT objid as relid
+		SELECT objid as relid, false AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN duckdb.tables AS ddbtables
 		ON cmds.objid = ddbtables.relid
 		WHERE cmds.object_type = 'table'
+		UNION ALL
+		SELECT objid as relid, true AS needs_to_check_temporary_set
+		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
+		JOIN pg_catalog.pg_class
+		ON cmds.objid = pg_class.oid
+		WHERE cmds.object_type = 'table'
+		AND pg_class.relam != (SELECT oid FROM pg_am WHERE amname = 'duckdb')
+		AND pg_class.relpersistence = 't'
 		)",
 	                   0);
 
@@ -339,12 +464,34 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	/* if we inserted a row it was a duckdb table */
-	auto is_duckdb_table = SPI_processed > 0;
-	if (!is_duckdb_table || pgduckdb::doing_motherduck_sync) {
+	auto is_possibly_duckdb_table = SPI_processed > 0;
+	if (!is_possibly_duckdb_table || pgduckdb::doing_motherduck_sync) {
 		/* No DuckDB tables were altered, or we don't want to forward DDL to
 		 * DuckDB because we're syncing with MotherDuck */
 		SPI_finish();
 		PG_RETURN_NULL();
+	}
+
+	HeapTuple tuple = SPI_tuptable->vals[0];
+	bool isnull;
+	Datum relid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
+	if (isnull) {
+		elog(ERROR, "Expected relid to be returned, but found NULL");
+	}
+	Datum needs_to_check_temporary_set_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
+	if (isnull) {
+		elog(ERROR, "Expected temporary boolean to be returned, but found NULL");
+	}
+
+	Oid relid = DatumGetObjectId(relid_datum);
+	bool needs_to_check_temporary_set = DatumGetBool(needs_to_check_temporary_set_datum);
+	SPI_finish();
+
+	if (needs_to_check_temporary_set) {
+		if (temporary_duckdb_tables.count(relid) == 0) {
+			/* It was a regular temporary table, so this ALTER is allowed */
+			PG_RETURN_NULL();
+		}
 	}
 
 	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
