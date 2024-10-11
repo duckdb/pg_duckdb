@@ -22,6 +22,7 @@ extern "C" {
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 static constexpr char s3_filename_prefix[] = "s3://";
 static constexpr char gcs_filename_prefix[] = "gs://";
@@ -43,14 +44,7 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		return false;
 	}
 
-	auto duckdb_connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto res = duckdb_connection->context->Query(query_string, false);
-
-	if (res->HasError()) {
-		elog(WARNING, "(PGDuckDB/DuckdbCopy) Execution failed with an error: %s", res->GetError().c_str());
-		return false;
-	}
-
+	auto res = pgduckdb::DuckDBQueryOrThrow(query_string);
 	auto chunk = res->Fetch();
 	*processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
 	return true;

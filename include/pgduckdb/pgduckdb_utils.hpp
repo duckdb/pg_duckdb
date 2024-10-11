@@ -1,11 +1,12 @@
 #pragma once
 
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 }
-
-#include "duckdb/common/exception.hpp"
-#include "duckdb/common/error_data.hpp"
 
 #include <vector>
 #include <string>
@@ -102,5 +103,11 @@ DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArg
 }
 
 std::string CreateOrGetDirectoryPath(std::string directory_name);
+
+duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
+
+duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query);
+
+duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(const std::string &query);
 
 } // namespace pgduckdb

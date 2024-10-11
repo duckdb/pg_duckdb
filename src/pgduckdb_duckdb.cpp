@@ -22,6 +22,10 @@ extern "C" {
 namespace pgduckdb {
 
 DuckDBManager::DuckDBManager() {
+}
+
+void
+DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
 	duckdb::DBConfig config;
@@ -97,10 +101,7 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
 		}
 		appendStringInfo(secret_key, ");");
-		auto res = context.Query(secret_key->data, false);
-		if (res->HasError()) {
-			elog(ERROR, "(PGDuckDB/LoadSecrets) secret `%s` could not be loaded with DuckDB", secret.id.c_str());
-		}
+		DuckDBQueryOrThrow(context, secret_key->data);
 
 		pfree(secret_key->data);
 		secret_id++;
@@ -111,13 +112,9 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 void
 DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
-
 	for (auto secret_id = 0; secret_id < secret_table_num_rows; secret_id++) {
 		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
-		auto res = context.Query(drop_secret_cmd, false);
-		if (res->HasError()) {
-			elog(ERROR, "(PGDuckDB/DropSecrets) secret `%d` could not be dropped.", secret_id);
-		}
+		pgduckdb::DuckDBQueryOrThrow(drop_secret_cmd);
 	}
 	secret_table_num_rows = 0;
 }
@@ -127,26 +124,20 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
-		StringInfo duckdb_extension = makeStringInfo();
 		if (extension.enabled) {
-			appendStringInfo(duckdb_extension, "LOAD %s;", extension.name.c_str());
-			auto res = context.Query(duckdb_extension->data, false);
-			if (res->HasError()) {
-				elog(ERROR, "(PGDuckDB/LoadExtensions) `%s` could not be loaded with DuckDB", extension.name.c_str());
-			}
+			DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 		}
-		pfree(duckdb_extension->data);
 	}
 }
 
 duckdb::unique_ptr<duckdb::Connection>
-DuckDBManager::GetConnection() {
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+DuckDBManager::CreateConnection() {
+	auto &instance = Get();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*instance.database);
 	auto &context = *connection->context;
-
-	if (CheckSecretsSeq()) {
-		DropSecrets(context);
-		LoadSecrets(context);
+	if (instance.CheckSecretsSeq()) {
+		instance.DropSecrets(context);
+		instance.LoadSecrets(context);
 	}
 
 	auto http_file_cache_set_dir_query =

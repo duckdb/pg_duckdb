@@ -46,9 +46,8 @@ DuckdbPrepare(const Query *query) {
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
-	auto duckdb_connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto context = duckdb_connection->context;
-	auto prepared_query = context->Prepare(query_string);
+	auto duckdb_connection = pgduckdb::DuckDBManager::CreateConnection();
+	auto prepared_query = duckdb_connection->context->Prepare(query_string);
 	return {std::move(prepared_query), std::move(duckdb_connection)};
 }
 
@@ -108,7 +107,7 @@ CreatePlan(Query *query) {
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options) {
 	/* We need to check can we DuckDB create plan */
-	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan*>(CreatePlan, "CreatePlan", parse);
+	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan *>(CreatePlan, "CreatePlan", parse);
 	Plan *duckdb_plan = (Plan *)castNode(CustomScan, plan);
 
 	if (!duckdb_plan) {

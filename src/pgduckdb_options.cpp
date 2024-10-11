@@ -116,16 +116,17 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
 
 	auto extension_name = DatumToString(name);
 	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
-	auto res = context.Query(install_extension_command, false);
+	{
+		auto connection = pgduckdb::DuckDBManager::CreateConnection();
+		auto res = connection->context->Query(install_extension_command, false);
 
-	if (res->HasError()) {
-		elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
-		return false;
+		if (res->HasError()) {
+			elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
+			return false;
+		}
 	}
 
 	bool nulls[Natts_duckdb_extension] = {0};
@@ -158,7 +159,7 @@ CanCacheRemoteObject(std::string remote_object) {
 
 static bool
 DuckdbCacheObject(Datum object, Datum type) {
-	auto con = DuckDBManager::Get().GetConnection();
+	auto con = DuckDBManager::CreateConnection();
 	auto &context = *con->context;
 	auto object_type = DatumToString(type);
 
@@ -208,12 +209,7 @@ PG_FUNCTION_INFO_V1(pgduckdb_raw_query);
 Datum
 pgduckdb_raw_query(PG_FUNCTION_ARGS) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
-	auto result = context.Query(query, false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/DuckdbInstallExtension) %s", result->GetError().c_str());
-	}
+	auto result = pgduckdb::DuckDBQueryOrThrow(query);
 	elog(NOTICE, "result: %s", result->ToString().c_str());
 	PG_RETURN_BOOL(true);
 }

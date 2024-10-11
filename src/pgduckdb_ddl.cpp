@@ -22,6 +22,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
 
@@ -30,13 +31,8 @@ extern "C" {
  */
 void
 DuckdbTruncateTable(Oid relation_oid) {
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
-	auto query = std::string("TRUNCATE ") + pgduckdb_relation_name(relation_oid);
-	auto result = context.Query(query, false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/DuckdbTruncateTable) Could not truncate table: %s", result->GetError().c_str());
-	}
+	auto name = pgduckdb::PostgresFunctionGuard<char *>(pgduckdb_relation_name, relation_oid);
+	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
 }
 
 void
@@ -134,12 +130,14 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	if (SPI_processed != 1) {
 		elog(ERROR, "Expected single table to be created, but found %" PRIu64, SPI_processed);
 	}
+
 	HeapTuple tuple = SPI_tuptable->vals[0];
 	bool isnull;
 	Datum relid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
 	if (isnull) {
 		elog(ERROR, "Expected relid to be returned, but found NULL");
 	}
+
 	Oid relid = DatumGetObjectId(relid_datum);
 	SPI_finish();
 
@@ -160,15 +158,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(parsetree));
 	}
 
-	std::string query_string(pgduckdb_get_tabledef(relid));
-
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
-	auto result = context.Query(query_string, false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/duckdb_create_table_trigger) Could not create table: %s", result->GetError().c_str());
-	}
-
+	pgduckdb::DuckDBQueryOrThrow(pgduckdb_get_tabledef(relid));
 	PG_RETURN_NULL();
 }
 
@@ -230,33 +220,21 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	 */
 	PreventInTransactionBlock(true, "DuckDB queries");
 
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
+	auto connection = pgduckdb::DuckDBManager::CreateConnection();
 
-	auto result = context.Query("BEGIN TRANSACTION", false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/duckdb_drop_table_trigger) Could not start transaction");
-	}
+	pgduckdb::DuckDBQueryOrThrow(*connection, "BEGIN TRANSACTION");
 
-	for (auto proc = 0; proc < SPI_processed; proc++) {
+	for (auto proc = 0; proc < SPI_processed; ++proc) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
 
 		char *object_identity = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
 		// TODO: Handle std::string creation in a safe way for allocation failures
-		auto result = context.Query("DROP TABLE IF EXISTS " + std::string(object_identity), false);
-		if (result->HasError()) {
-			elog(ERROR, "(PGDuckDB/duckdb_drop_table_trigger) Could not drop table %s: %s", object_identity,
-			     result->GetError().c_str());
-		}
+		pgduckdb::DuckDBQueryOrThrow(*connection, "DROP TABLE IF EXISTS " + std::string(object_identity));
 	}
 
 	SPI_finish();
 
-	result = context.Query("COMMIT", false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/duckdb_drop_table_trigger) Could not commit transaction");
-	}
-
+	pgduckdb::DuckDBQueryOrThrow(*connection, "COMMIT");
 	PG_RETURN_NULL();
 }
 

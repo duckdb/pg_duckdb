@@ -1,3 +1,4 @@
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -59,6 +60,36 @@ CreateOrGetDirectoryPath(std::string directory_name) {
 	std::string directory(duckdb_data_directory->data);
 	pfree(duckdb_data_directory->data);
 	return directory;
+}
+
+duckdb::unique_ptr<duckdb::QueryResult>
+DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query) {
+	const char *error_message = nullptr;
+	{
+		auto res = context.Query(query, false);
+		if (!res->HasError()) {
+			return res;
+		}
+
+		error_message = pstrdup(res->GetError().c_str());
+	}
+
+	if (error_message) {
+		elog(ERROR, "(PGDuckDB/DuckDBQuery) %s", error_message);
+	}
+
+	return nullptr; // unreachable
+}
+
+duckdb::unique_ptr<duckdb::QueryResult>
+DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query) {
+	return DuckDBQueryOrThrow(*connection.context, query);
+}
+
+duckdb::unique_ptr<duckdb::QueryResult>
+DuckDBQueryOrThrow(const std::string &query) {
+	auto connection = pgduckdb::DuckDBManager::CreateConnection();
+	return DuckDBQueryOrThrow(*connection, query);
 }
 
 } // namespace pgduckdb

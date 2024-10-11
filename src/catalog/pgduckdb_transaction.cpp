@@ -42,6 +42,7 @@ SchemaItems::GetTable(const string &entry_name) {
 	if (it != tables.end()) {
 		return it->second.get();
 	}
+
 	auto snapshot = schema->snapshot;
 	auto &catalog = schema->catalog;
 
@@ -71,6 +72,7 @@ SchemaItems::GetTable(const string &entry_name) {
 		// will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
 		return nullptr;
 	}
+
 	ReleaseSysCache(tuple);
 
 	::Relation rel = PostgresTable::OpenRelation(rel_oid);
