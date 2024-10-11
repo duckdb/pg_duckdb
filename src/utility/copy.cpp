@@ -7,6 +7,7 @@ extern "C" {
 #include "commands/copy.h"
 #include "commands/defrem.h"
 #include "executor/executor.h"
+#include "catalog/namespace.h"
 #include "parser/parse_relation.h"
 #include "utils/builtins.h"
 #include "utils/rel.h"
@@ -129,269 +130,51 @@ CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt, bool *allowed)
 	return relation_copy;
 }
 
-static void
-ReportConflictingCopyOption(DefElem *defel, bool *options_valid) {
-	elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) Conflicting \'%s\' copy option.", defel->defname);
-	*options_valid = false;
-}
-
 static duckdb::string
-CheckAndCreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
+CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
 	duckdb::string options_string;
-	bool format_specified = false;
-	bool header_specified = false;
 	duckdb::vector<duckdb::string> options_parts;
-	DuckdbCopyOptions duckdb_copy_options;
-	ListCell *lc;
 
-	memset(&duckdb_copy_options, 0, sizeof(DuckdbCopyOptions));
-
-	foreach (lc, copy_stmt->options) {
-		DefElem *defel = lfirst_node(DefElem, lc);
-
-		if (strcmp(defel->defname, "format") == 0) {
-			char *fmt = defGetString(defel);
-
-			if (format_specified) {
-				ReportConflictingCopyOption(defel, options_valid);
-				break;
-			}
-			if (strcmp(fmt, "csv") == 0) {
-				duckdb_copy_options.csv_mode = true;
-			} else {
-				elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY FORMAT \"%s\" not recognized", fmt);
-				*options_valid = false;
-				break;
-			}
-			format_specified = true;
-		} else if (strcmp(defel->defname, "delimiter") == 0) {
-			if (duckdb_copy_options.csv_options.delimiter) {
-				ReportConflictingCopyOption(defel, options_valid);
-				break;
-			}
-			duckdb_copy_options.csv_options.delimiter = defGetString(defel);
-		} else if (strcmp(defel->defname, "null") == 0) {
-			if (duckdb_copy_options.csv_options.null_str) {
-				ReportConflictingCopyOption(defel, options_valid);
-				break;
-			}
-			duckdb_copy_options.csv_options.null_str = defGetString(defel);
-		} else if (strcmp(defel->defname, "header") == 0) {
-			if (header_specified) {
-				ReportConflictingCopyOption(defel, options_valid);
-				break;
-			}
-			header_specified = true;
-			bool option_header_parse_error = false;
-			/* We need to catch ERROR that can be raised */
-			// clang-format off
-			PG_TRY();
-			{
-				duckdb_copy_options.csv_options.include_header = defGetBoolean(defel);
-			}
-			PG_CATCH();
-			{
-				option_header_parse_error = true;
-			}
-			PG_END_TRY();
-			// clang-format on
-			if (option_header_parse_error) {
-				elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) %s requires a Boolean value", defel->defname);
-				*options_valid = false;
-				break;
-			}
-		} else if (strcmp(defel->defname, "quote") == 0) {
-			if (duckdb_copy_options.csv_options.quote) {
-				ReportConflictingCopyOption(defel, options_valid);
-				break;
-			}
-			duckdb_copy_options.csv_options.quote = defGetString(defel);
-		} else if (strcmp(defel->defname, "escape") == 0) {
-			if (duckdb_copy_options.csv_options.escape) {
-				ReportConflictingCopyOption(defel, options_valid);
-				break;
-			}
-			duckdb_copy_options.csv_options.quote = defGetString(defel);
-		} else if (strcmp(defel->defname, "force_quote") == 0) {
-			if (duckdb_copy_options.csv_options.force_quote || duckdb_copy_options.csv_options.force_quote_all) {
-				ReportConflictingCopyOption(defel, options_valid);
-				break;
-			}
-			if (defel->arg && IsA(defel->arg, List)) {
-				duckdb_copy_options.csv_options.force_quote = castNode(List, defel->arg);
-			} else {
-				elog(WARNING,
-				     "(PGDuckDB/CheckAndCreateCopyOptions) Argument to option \"%s\" must be a "
-				     "list of column names",
-				     defel->defname);
-				*options_valid = false;
-				break;
-			}
-		} else {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) Option \"%s\" not recognized", defel->defname);
-			*options_valid = false;
-			break;
-		}
+	if (list_length(copy_stmt->options) == 0) {
+		return ";";
 	}
 
-	if (!*options_valid) {
-		return options_string;
-	}
+	options_string = "(";
 
-	/* FORMAT */
-
-	if (duckdb_copy_options.csv_mode) {
-		options_parts.push_back("FORMAT CSV");
-	}
-
-	/* DELIMITER */
-
-	if (!duckdb_copy_options.csv_mode && duckdb_copy_options.csv_options.delimiter != NULL) {
-		elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY delimiter available only in CSV mode");
-		*options_valid = false;
-		return options_string;
-	}
-
-	if (duckdb_copy_options.csv_options.delimiter) {
-		if (strlen(duckdb_copy_options.csv_options.delimiter) != 1) {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY delimiter must be a single one-byte character");
-			*options_valid = false;
-			return options_string;
+	bool first = true;
+	foreach_node(DefElem, defel, copy_stmt->options) {
+		if (!first) {
+			options_string += ", ";
 		}
 
-		if ((strchr(duckdb_copy_options.csv_options.delimiter, '\r') != NULL ||
-		     strchr(duckdb_copy_options.csv_options.delimiter, '\n') != NULL)) {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY delimiter cannot be newline or carriage return");
-			*options_valid = false;
-			return options_string;
-		}
-
-		if (duckdb_copy_options.csv_options.delimiter &&
-		    strchr("\\.abcdefghijklmnopqrstuvwxyz0123456789", duckdb_copy_options.csv_options.delimiter[0]) != NULL) {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY delimiter cannot be \"%s\"",
-			     duckdb_copy_options.csv_options.delimiter);
-			*options_valid = false;
-			return options_string;
-		}
-
-		options_parts.push_back(
-		    duckdb::StringUtil::Format("DELIMITER \'%c\'", duckdb_copy_options.csv_options.delimiter));
-	}
-
-	/* NULL STR */
-
-	if (!duckdb_copy_options.csv_mode && duckdb_copy_options.csv_options.null_str != NULL) {
-		elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY null available only in CSV mode");
-		*options_valid = false;
-		return options_string;
-	}
-
-	if (duckdb_copy_options.csv_options.null_str) {
-		if (strchr(duckdb_copy_options.csv_options.null_str, '\r') != NULL ||
-		    strchr(duckdb_copy_options.csv_options.null_str, '\n') != NULL) {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY null representation cannot use newline or "
-			              "carriage return");
-			*options_valid = false;
-			return options_string;
-		}
-
-		auto quoted_null_str = quote_literal_cstr(duckdb_copy_options.csv_options.null_str);
-		options_parts.push_back(duckdb::StringUtil::Format("NULLSTR %s", quoted_null_str));
-		pfree(quoted_null_str);
-	}
-
-	/* HEADER */
-
-	if (!duckdb_copy_options.csv_mode && duckdb_copy_options.csv_options.include_header) {
-		elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY header available only in CSV mode");
-		*options_valid = false;
-		return options_string;
-	}
-
-	if (duckdb_copy_options.csv_options.include_header) {
-		options_parts.push_back(
-		    duckdb::StringUtil::Format("HEADER %s", duckdb_copy_options.csv_options.include_header ? "true" : "false"));
-	}
-
-	/* QUOTE */
-
-	if (!duckdb_copy_options.csv_mode && duckdb_copy_options.csv_options.quote != NULL) {
-		elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY quote available only in CSV mode");
-		*options_valid = false;
-		return options_string;
-	}
-
-	if (duckdb_copy_options.csv_options.quote) {
-		if (duckdb_copy_options.csv_mode && strlen(duckdb_copy_options.csv_options.quote) != 1) {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY quote must be a single one-byte character");
-			*options_valid = false;
-			return options_string;
-		}
-
-		if (duckdb_copy_options.csv_mode && duckdb_copy_options.csv_options.delimiter &&
-		    duckdb_copy_options.csv_options.delimiter[0] == duckdb_copy_options.csv_options.quote[0]) {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY delimiter and quote must be different");
-			*options_valid = false;
-			return options_string;
-		}
-
-		options_parts.push_back(duckdb::StringUtil::Format("QUOTE \'%c\'", duckdb_copy_options.csv_options.quote));
-	}
-
-	/* ESCAPE  */
-
-	if (!duckdb_copy_options.csv_mode && duckdb_copy_options.csv_options.escape != NULL) {
-		elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY escape available only in CSV mode");
-		*options_valid = false;
-		return options_string;
-	}
-
-	if (duckdb_copy_options.csv_options.escape) {
-		if (duckdb_copy_options.csv_mode && strlen(duckdb_copy_options.csv_options.escape) != 1) {
-			elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY escape must be a single one-byte character");
-			*options_valid = false;
-			return options_string;
-		}
-
-		options_parts.push_back(duckdb::StringUtil::Format("ESCAPE \'%c\'", duckdb_copy_options.csv_options.escape));
-	}
-
-	/* FORCE_QUOTE*/
-
-	if (!duckdb_copy_options.csv_mode && (duckdb_copy_options.csv_options.force_quote)) {
-		elog(WARNING, "(PGDuckDB/CheckAndCreateCopyOptions) COPY force quote available only in CSV mode");
-		*options_valid = false;
-		return options_string;
-	}
-
-	if (duckdb_copy_options.csv_options.force_quote) {
-		std::string force_quote_str = "FORCE_QUOTE (";
-		bool first = true;
-		foreach (lc, duckdb_copy_options.csv_options.force_quote) {
-			if (!first) {
-				force_quote_str += ", ";
+		options_string += defel->defname;
+		if (defel->arg) {
+			options_string += " ";
+			switch (nodeTag(defel->arg)) {
+			case T_Integer:
+			case T_Float:
+			case T_Boolean:
+				options_string += defGetString(defel);
+				break;
+			case T_String:
+			case T_TypeName:
+				options_string += quote_literal_cstr(defGetString(defel));
+				break;
+			case T_List:
+				options_string += NameListToQuotedString((List *)defel->arg);
+				break;
+			case T_A_Star:
+				options_string += "*";
+				break;
+			default:
+				elog(ERROR, "unexpected node type in COPY: %d", (int)nodeTag(defel->arg));
 			}
-			first = false;
-			String *quote = lfirst_node(String, lc);
-			auto quoted_force_quote_val = quote_literal_cstr(quote->sval);
-			force_quote_str += quoted_force_quote_val;
-			pfree(quoted_force_quote_val);
-
 		}
-		force_quote_str += ")";
-		options_parts.push_back(force_quote_str);
+
+		first = false;
 	}
 
-	if (options_parts.size()) {
-
-		options_string = "(";
-		options_string +=
-		    std::accumulate(std::begin(options_parts), std::end(options_parts), duckdb::string(),
-		                    [](duckdb::string &acc, duckdb::string &s) { return acc.empty() ? s : acc + ", " + s; });
-		options_string += ")";
-	}
-
-	options_string += ";";
+	options_string += ");";
 
 	return options_string;
 }
@@ -422,7 +205,7 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 	}
 
 	bool options_valid = true;
-	duckdb::string options_string = CheckAndCreateCopyOptions(copy_stmt, &options_valid);
+	duckdb::string options_string = CreateCopyOptions(copy_stmt, &options_valid);
 	if (!options_valid) {
 		return false;
 	}
