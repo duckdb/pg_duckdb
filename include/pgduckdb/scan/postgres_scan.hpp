@@ -18,6 +18,7 @@ public:
 	}
 	~PostgresScanGlobalState() {
 	}
+
 	void InitGlobalState(duckdb::TableFunctionInitInput &input);
 	void InitRelationMissingAttrs(TupleDesc tuple_desc);
 	Snapshot m_snapshot;

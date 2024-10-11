@@ -110,4 +110,28 @@ duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &c
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(const std::string &query);
 
+template <class T>
+struct DuckDBMallocator {
+	typedef T value_type;
+
+	[[nodiscard]] T *
+	allocate(std::size_t n) {
+		if (n > std::numeric_limits<std::size_t>::max() / sizeof(T)) {
+			throw std::bad_array_new_length();
+		}
+
+		auto p = static_cast<T *>(duckdb_malloc(n * sizeof(T)));
+		if (p == nullptr) {
+			throw std::bad_alloc();
+		}
+
+		return p;
+	}
+
+	void
+	deallocate(T *p, std::size_t n) noexcept {
+		duckdb_free(p);
+	}
+};
+
 } // namespace pgduckdb
