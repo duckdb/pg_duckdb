@@ -116,17 +116,10 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name) {
-
 	auto extension_name = DatumToString(name);
 	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
-	{
-		auto connection = pgduckdb::DuckDBManager::CreateConnection();
-		auto res = connection->context->Query(install_extension_command, false);
-
-		if (res->HasError()) {
-			elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
-			return false;
-		}
+	if (!TryDuckDBQuery(install_extension_command)) {
+		return false;
 	}
 
 	bool nulls[Natts_duckdb_extension] = {0};
@@ -159,38 +152,31 @@ CanCacheRemoteObject(std::string remote_object) {
 
 static bool
 DuckdbCacheObject(Datum object, Datum type) {
-	auto con = DuckDBManager::CreateConnection();
-	auto &context = *con->context;
-	auto object_type = DatumToString(type);
-
-	if (object_type != "parquet" && object_type != "csv") {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
-		return false;
-	}
-
-	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
-
-	context.Query("SET enable_http_file_cache TO true;", false);
-
 	auto object_path = DatumToString(object);
-
 	if (!CanCacheRemoteObject(object_path)) {
 		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
 		return false;
 	}
 
+	auto object_type = DatumToString(type);
+	if (object_type != "parquet" && object_type != "csv") {
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
+		return false;
+	}
+
+	auto con = DuckDBManager::CreateConnection();
+	auto &context = *con->context;
+
+	context.Query("SET enable_http_file_cache TO true;", false);
+
+	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
 	auto cache_object_query =
 	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
-	auto res = context.Query(cache_object_query, false);
-	auto query_has_errors = res->HasError();
-
-	if (query_has_errors) {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) %s", res->GetError().c_str());
-	}
+	const auto res = TryDuckDBQuery(context, cache_object_query);
 
 	context.Query("SET enable_http_file_cache TO false;", false);
 
-	return query_has_errors;
+	return res;
 }
 
 } // namespace pgduckdb
@@ -201,16 +187,22 @@ PG_FUNCTION_INFO_V1(install_extension);
 Datum
 install_extension(PG_FUNCTION_ARGS) {
 	Datum extension_name = PG_GETARG_DATUM(0);
-	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
+	bool result = InvokeCPPFunc(pgduckdb::DuckdbInstallExtension, extension_name);
 	PG_RETURN_BOOL(result);
+}
+
+const char *
+pgduckdb_raw_query_unsafe(const char *query) {
+	auto result = pgduckdb::DuckDBQueryOrThrow(query);
+	return strdup(result->ToString().c_str());
 }
 
 PG_FUNCTION_INFO_V1(pgduckdb_raw_query);
 Datum
 pgduckdb_raw_query(PG_FUNCTION_ARGS) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	auto result = pgduckdb::DuckDBQueryOrThrow(query);
-	elog(NOTICE, "result: %s", result->ToString().c_str());
+	auto result = InvokeCPPFunc(pgduckdb_raw_query_unsafe, query);
+	elog(NOTICE, "result: %s", result);
 	PG_RETURN_BOOL(true);
 }
 

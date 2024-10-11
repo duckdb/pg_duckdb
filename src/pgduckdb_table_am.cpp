@@ -32,6 +32,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
 
@@ -372,68 +373,68 @@ duckdb_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate, Tu
 
 static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
 
-                                              .slot_callbacks = duckdb_slot_callbacks,
+                                              .slot_callbacks = WRAP_CPP_FUNC(duckdb_slot_callbacks),
 
-                                              .scan_begin = duckdb_scan_begin,
-                                              .scan_end = duckdb_scan_end,
-                                              .scan_rescan = duckdb_scan_rescan,
-                                              .scan_getnextslot = duckdb_scan_getnextslot,
+                                              .scan_begin = WRAP_CPP_FUNC(duckdb_scan_begin),
+                                              .scan_end = WRAP_CPP_FUNC(duckdb_scan_end),
+                                              .scan_rescan = WRAP_CPP_FUNC(duckdb_scan_rescan),
+                                              .scan_getnextslot = WRAP_CPP_FUNC(duckdb_scan_getnextslot),
 
                                               /* optional callbacks */
                                               .scan_set_tidrange = NULL,
                                               .scan_getnextslot_tidrange = NULL,
 
                                               /* these are common helper functions */
-                                              .parallelscan_estimate = table_block_parallelscan_estimate,
-                                              .parallelscan_initialize = table_block_parallelscan_initialize,
-                                              .parallelscan_reinitialize = table_block_parallelscan_reinitialize,
+                                              .parallelscan_estimate = WRAP_CPP_FUNC(table_block_parallelscan_estimate),
+                                              .parallelscan_initialize = WRAP_CPP_FUNC(table_block_parallelscan_initialize),
+                                              .parallelscan_reinitialize = WRAP_CPP_FUNC(table_block_parallelscan_reinitialize),
 
-                                              .index_fetch_begin = duckdb_index_fetch_begin,
-                                              .index_fetch_reset = duckdb_index_fetch_reset,
-                                              .index_fetch_end = duckdb_index_fetch_end,
-                                              .index_fetch_tuple = duckdb_index_fetch_tuple,
+                                              .index_fetch_begin = WRAP_CPP_FUNC(duckdb_index_fetch_begin),
+                                              .index_fetch_reset = WRAP_CPP_FUNC(duckdb_index_fetch_reset),
+                                              .index_fetch_end = WRAP_CPP_FUNC(duckdb_index_fetch_end),
+                                              .index_fetch_tuple = WRAP_CPP_FUNC(duckdb_index_fetch_tuple),
 
-                                              .tuple_fetch_row_version = duckdb_fetch_row_version,
-                                              .tuple_tid_valid = duckdb_tuple_tid_valid,
-                                              .tuple_get_latest_tid = duckdb_get_latest_tid,
-                                              .tuple_satisfies_snapshot = duckdb_tuple_satisfies_snapshot,
-                                              .index_delete_tuples = duckdb_index_delete_tuples,
+                                              .tuple_fetch_row_version = WRAP_CPP_FUNC(duckdb_fetch_row_version),
+                                              .tuple_tid_valid = WRAP_CPP_FUNC(duckdb_tuple_tid_valid),
+                                              .tuple_get_latest_tid = WRAP_CPP_FUNC(duckdb_get_latest_tid),
+                                              .tuple_satisfies_snapshot = WRAP_CPP_FUNC(duckdb_tuple_satisfies_snapshot),
+                                              .index_delete_tuples = WRAP_CPP_FUNC(duckdb_index_delete_tuples),
 
-                                              .tuple_insert = duckdb_tuple_insert,
-                                              .tuple_insert_speculative = duckdb_tuple_insert_speculative,
-                                              .tuple_complete_speculative = duckdb_tuple_complete_speculative,
-                                              .multi_insert = duckdb_multi_insert,
-                                              .tuple_delete = duckdb_tuple_delete,
-                                              .tuple_update = duckdb_tuple_update,
-                                              .tuple_lock = duckdb_tuple_lock,
-                                              .finish_bulk_insert = duckdb_finish_bulk_insert,
+                                              .tuple_insert = WRAP_CPP_FUNC(duckdb_tuple_insert),
+                                              .tuple_insert_speculative = WRAP_CPP_FUNC(duckdb_tuple_insert_speculative),
+                                              .tuple_complete_speculative = WRAP_CPP_FUNC(duckdb_tuple_complete_speculative),
+                                              .multi_insert = WRAP_CPP_FUNC(duckdb_multi_insert),
+                                              .tuple_delete = WRAP_CPP_FUNC(duckdb_tuple_delete),
+                                              .tuple_update = WRAP_CPP_FUNC(duckdb_tuple_update),
+                                              .tuple_lock = WRAP_CPP_FUNC(duckdb_tuple_lock),
+                                              .finish_bulk_insert = WRAP_CPP_FUNC(duckdb_finish_bulk_insert),
 
 #if PG_VERSION_NUM >= 160000
-                                              .relation_set_new_filelocator = duckdb_relation_set_new_filelocator,
+                                              .relation_set_new_filelocator = WRAP_CPP_FUNC(duckdb_relation_set_new_filelocator),
 #else
-                                              .relation_set_new_filenode = duckdb_relation_set_new_filenode,
+                                              .relation_set_new_filenode = WRAP_CPP_FUNC(duckdb_relation_set_new_filenode),
 #endif
                                               .relation_nontransactional_truncate =
                                                   duckdb_relation_nontransactional_truncate,
-                                              .relation_copy_data = duckdb_copy_data,
-                                              .relation_copy_for_cluster = duckdb_copy_for_cluster,
-                                              .relation_vacuum = duckdb_vacuum,
-                                              .scan_analyze_next_block = duckdb_scan_analyze_next_block,
-                                              .scan_analyze_next_tuple = duckdb_scan_analyze_next_tuple,
-                                              .index_build_range_scan = duckdb_index_build_range_scan,
-                                              .index_validate_scan = duckdb_index_validate_scan,
+                                              .relation_copy_data = WRAP_CPP_FUNC(duckdb_copy_data),
+                                              .relation_copy_for_cluster = WRAP_CPP_FUNC(duckdb_copy_for_cluster),
+                                              .relation_vacuum = WRAP_CPP_FUNC(duckdb_vacuum),
+                                              .scan_analyze_next_block = WRAP_CPP_FUNC(duckdb_scan_analyze_next_block),
+                                              .scan_analyze_next_tuple = WRAP_CPP_FUNC(duckdb_scan_analyze_next_tuple),
+                                              .index_build_range_scan = WRAP_CPP_FUNC(duckdb_index_build_range_scan),
+                                              .index_validate_scan = WRAP_CPP_FUNC(duckdb_index_validate_scan),
 
-                                              .relation_size = duckdb_relation_size,
-                                              .relation_needs_toast_table = duckdb_relation_needs_toast_table,
+                                              .relation_size = WRAP_CPP_FUNC(duckdb_relation_size),
+                                              .relation_needs_toast_table = WRAP_CPP_FUNC(duckdb_relation_needs_toast_table),
                                               /* can be null because relation_needs_toast_table returns false */
                                               .relation_fetch_toast_slice = NULL,
 
-                                              .relation_estimate_size = duckdb_estimate_rel_size,
+                                              .relation_estimate_size = WRAP_CPP_FUNC(duckdb_estimate_rel_size),
 
-                                              .scan_bitmap_next_block = duckdb_scan_bitmap_next_block,
-                                              .scan_bitmap_next_tuple = duckdb_scan_bitmap_next_tuple,
-                                              .scan_sample_next_block = duckdb_scan_sample_next_block,
-                                              .scan_sample_next_tuple = duckdb_scan_sample_next_tuple};
+                                              .scan_bitmap_next_block = WRAP_CPP_FUNC(duckdb_scan_bitmap_next_block),
+                                              .scan_bitmap_next_tuple = WRAP_CPP_FUNC(duckdb_scan_bitmap_next_tuple),
+                                              .scan_sample_next_block = WRAP_CPP_FUNC(duckdb_scan_sample_next_block),
+                                              .scan_sample_next_tuple = WRAP_CPP_FUNC(duckdb_scan_sample_next_tuple)};
 
 Datum
 duckdb_am_handler(PG_FUNCTION_ARGS) {

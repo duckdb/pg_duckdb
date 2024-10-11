@@ -31,7 +31,7 @@ extern "C" {
  */
 void
 DuckdbTruncateTable(Oid relation_oid) {
-	auto name = pgduckdb::PostgresFunctionGuard<char *>(pgduckdb_relation_name, relation_oid);
+	auto name = PostgresFunctionGuard(pgduckdb_relation_name, relation_oid);
 	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
 }
 
@@ -45,7 +45,7 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 			return;
 		}
 
-		elog(ERROR, "DuckDB does not support CREATE TABLE AS yet");
+		throw duckdb::NotImplementedException("DuckDB does not support CREATE TABLE AS yet");
 	}
 }
 
@@ -65,19 +65,20 @@ CheckOnCommitSupport(OnCommitAction on_commit) {
 	case ONCOMMIT_DELETE_ROWS:
 		break;
 	case ONCOMMIT_DROP:
-		elog(ERROR, "DuckDB does not support ON COMMIT DROP");
+		throw duckdb::NotImplementedException("DuckDB does not support ON COMMIT DROP");
 	default:
-		elog(ERROR, "Unsupported ON COMMIT clause: %d", on_commit);
+		throw duckdb::NotImplementedException("Unsupported ON COMMIT clause: ", on_commit);
 	}
 }
 
 extern "C" {
 
-PG_FUNCTION_INFO_V1(duckdb_create_table_trigger);
 Datum
-duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
-	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
-		elog(ERROR, "not fired by event trigger manager");
+duckdb_create_table_trigger_unsafe(PG_FUNCTION_ARGS) {
+	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) {
+		/* internal error */
+		throw std::runtime_error("not fired by event trigger manager");
+	}
 
 	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
 	Node *parsetree = trigdata->parsetree;
@@ -117,8 +118,9 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	SetUserIdAndSecContext(saved_userid, sec_context);
 	AtEOXact_GUC(false, save_nestlevel);
 
-	if (ret != SPI_OK_INSERT_RETURNING)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	if (ret != SPI_OK_INSERT_RETURNING) {
+		throw std::runtime_error(std::string("SPI_exec failed: error code ") + SPI_result_code_string(ret));
+	}
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
@@ -128,14 +130,14 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	}
 
 	if (SPI_processed != 1) {
-		elog(ERROR, "Expected single table to be created, but found %" PRIu64, SPI_processed);
+		throw std::runtime_error("Expected single table to be created, but found " + std::to_string(SPI_processed));
 	}
 
 	HeapTuple tuple = SPI_tuptable->vals[0];
 	bool isnull;
 	Datum relid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
 	if (isnull) {
-		elog(ERROR, "Expected relid to be returned, but found NULL");
+		throw std::runtime_error("Expected relid to be returned, but found NULL");
 	}
 
 	Oid relid = DatumGetObjectId(relid_datum);
@@ -162,11 +164,17 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	PG_RETURN_NULL();
 }
 
-PG_FUNCTION_INFO_V1(duckdb_drop_table_trigger);
+PG_FUNCTION_INFO_V1(duckdb_create_table_trigger);
 Datum
-duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
-	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
-		elog(ERROR, "not fired by event trigger manager");
+duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
+	return InvokeCPPFunc(duckdb_create_table_trigger_unsafe, fcinfo);
+}
+
+Datum
+duckdb_drop_table_trigger_unsafe(PG_FUNCTION_ARGS) {
+	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) { /* internal error */
+		throw std::runtime_error("not fired by event trigger manager");
+	}
 
 	SPI_connect();
 
@@ -204,8 +212,9 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	SetUserIdAndSecContext(saved_userid, sec_context);
 	AtEOXact_GUC(false, save_nestlevel);
 
-	if (ret != SPI_OK_DELETE_RETURNING)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	if (ret != SPI_OK_DELETE_RETURNING) {
+		throw std::runtime_error("SPI_exec failed: error code '" + std::string(SPI_result_code_string(ret)) + "'");
+	}
 
 	if (SPI_processed == 0) {
 		/* No duckdb tables were dropped */
@@ -238,11 +247,17 @@ duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
 	PG_RETURN_NULL();
 }
 
-PG_FUNCTION_INFO_V1(duckdb_alter_table_trigger);
+PG_FUNCTION_INFO_V1(duckdb_drop_table_trigger);
 Datum
-duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
-	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
-		elog(ERROR, "not fired by event trigger manager");
+duckdb_drop_table_trigger(PG_FUNCTION_ARGS) {
+	return InvokeCPPFunc(duckdb_drop_table_trigger_unsafe, fcinfo);
+}
+
+Datum
+duckdb_alter_table_trigger_unsafe(PG_FUNCTION_ARGS) {
+	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) { /* internal error */
+		throw std::runtime_error("not fired by event trigger manager");
+	}
 
 	SPI_connect();
 
@@ -286,7 +301,7 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	AtEOXact_GUC(false, save_nestlevel);
 
 	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+		throw std::runtime_error("SPI_exec failed: error code '" + std::string(SPI_result_code_string(ret)) + "'");
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
@@ -295,8 +310,15 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 		PG_RETURN_NULL();
 	}
 
-	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
+	throw duckdb::NotImplementedException("DuckDB does not support ALTER TABLE yet");
 
 	PG_RETURN_NULL();
 }
+
+PG_FUNCTION_INFO_V1(duckdb_alter_table_trigger);
+Datum
+duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
+	return InvokeCPPFunc(duckdb_alter_table_trigger_unsafe, fcinfo);
+}
+
 }
