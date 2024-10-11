@@ -77,7 +77,6 @@ pgduckdb_background_worker_main(Datum main_arg) {
 			 * means we essentially keep polling until the extension is
 			 * installed
 			 */
-			elog(LOG, "Syncing MotherDuck catalogs with Postgres");
 			pgduckdb::SyncMotherDuckCatalogsWithPg(false);
 		}
 
