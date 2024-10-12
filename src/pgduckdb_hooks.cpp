@@ -194,7 +194,7 @@ static void
 DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
-	if (duckdb_execution && pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
+	if (pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
 		uint64 processed;
 		if (DuckdbCopy(pstmt, query_string, query_env, &processed)) {
 			if (qc) {
