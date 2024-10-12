@@ -309,12 +309,12 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	int ret = SPI_exec(R"(
 		DELETE FROM duckdb.tables
 		USING (
-			SELECT objid, object_name, object_identity
+			SELECT objid, schema_name, object_name
 			FROM pg_catalog.pg_event_trigger_dropped_objects()
 			WHERE object_type = 'table'
 		) objs
 		WHERE relid = objid
-		RETURNING objs.object_identity
+		RETURNING objs.schema_name, objs.object_name
 		)",
 	                   0);
 
@@ -346,9 +346,11 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 			}
 			HeapTuple tuple = SPI_tuptable->vals[proc];
 
-			char *object_identity = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
-			// TODO: Handle std::string creation in a safe way for allocation failures
-			pgduckdb::DuckDBQueryOrThrow(*connection, "DROP TABLE IF EXISTS " + std::string(object_identity));
+			char *postgres_schema_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
+			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
+			char *drop_query = psprintf("DROP TABLE %s.%s", pgduckdb_db_and_schema(postgres_schema_name, true),
+			                            quote_identifier(table_name));
+			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 		}
 	}
 
@@ -392,7 +394,7 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 		}
 		char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
 		pgduckdb::DuckDBQueryOrThrow(*connection,
-		                             std::string("DROP TABLE IF EXISTS pg_temp.main.") + quote_identifier(table_name));
+		                             std::string("DROP TABLE pg_temp.main.") + quote_identifier(table_name));
 		temporary_duckdb_tables.erase(relid);
 	}
 
