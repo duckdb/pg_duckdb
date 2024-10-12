@@ -97,11 +97,39 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION iceberg_scan(path text)
+CREATE OR REPLACE FUNCTION iceberg_scan(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
+                                                   mode TEXT DEFAULT '',
+                                                   metadata_compression_codec TEXT DEFAULT 'none',
+                                                   skip_schema_inference BOOLEAN DEFAULT FALSE,
+                                                   version TEXT DEFAULT 'version-hint.text',
+                                                   version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `iceberg_scan(TEXT)` only works with Duckdb execution.';
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION iceberg_metadata(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
+                                                       metadata_compression_codec TEXT DEFAULT 'none',
+                                                       skip_schema_inference BOOLEAN DEFAULT FALSE,
+                                                       version TEXT DEFAULT 'version-hint.text',
+                                                       version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
+RETURNS SETOF record LANGUAGE 'plpgsql' AS
+$func$
+BEGIN
+    RAISE EXCEPTION 'Function `iceberg_metadata(TEXT)` only works with Duckdb execution.';
+END;
+$func$;
+
+CREATE OR REPLACE FUNCTION iceberg_snapshots(path text, metadata_compression_codec TEXT DEFAULT 'none',
+                                                        skip_schema_inference BOOLEAN DEFAULT FALSE,
+                                                        version TEXT DEFAULT 'version-hint.text',
+                                                        version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
+RETURNS SETOF record LANGUAGE 'plpgsql' AS
+$func$
+BEGIN
+    RAISE EXCEPTION 'Function `iceberg_snapshots(TEXT)` only works with Duckdb execution.';
 END;
 $func$;
 
