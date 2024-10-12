@@ -23,30 +23,9 @@ extern "C" {
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
-#include <functional>
-#include <iostream>
-#include <numeric>
-#include <string>
-#include <vector>
-
 static constexpr char s3_filename_prefix[] = "s3://";
 static constexpr char gcs_filename_prefix[] = "gs://";
 static constexpr char r2_filename_prefix[] = "r2://";
-
-typedef struct DuckdbCopyOptions {
-	bool csv_mode;
-	struct CSVOptions {
-		char *delimiter;
-		char *null_str;
-		int null_str_len;
-		bool include_header;
-		char *quote;
-		char *escape;
-		List *force_quote;
-		bool force_quote_all;
-		bool *force_quote_flags;
-	} csv_options;
-} DuckdbCopyOptions;
 
 /*
  * Returns the relation of the copy_stmt as a fully qualified DuckDB table reference. This is done
@@ -146,7 +125,6 @@ CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
 		if (!first) {
 			options_string += ", ";
 		}
-
 		options_string += defel->defname;
 		if (defel->arg) {
 			options_string += " ";
@@ -173,18 +151,13 @@ CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
 
 		first = false;
 	}
-
 	options_string += ");";
-
 	return options_string;
 }
 
 bool
-DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env, uint64 *processed,
-           bool *is_copy_to_cloud) {
+DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env, uint64 *processed) {
 	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
-
-	*is_copy_to_cloud = false;
 
 	if (!copy_stmt->filename) {
 		return false;
@@ -196,8 +169,6 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 	    duckdb::string(copy_stmt->filename).rfind(r2_filename_prefix, 0)) {
 		return false;
 	}
-
-	*is_copy_to_cloud = true;
 
 	/* We handle only COPY .. TO */
 	if (copy_stmt->is_from) {
