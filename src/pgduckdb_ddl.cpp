@@ -193,12 +193,20 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 		GetUserIdAndSecContext(&saved_userid, &sec_context);
 		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
-		Oid arg_types[] = {OIDOID};
+		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID};
+		Datum values[] = {relid_datum, 0, 0};
+		char nulls[] = {' ', 'n', 'n'};
+		if (pgduckdb::doing_motherduck_sync) {
+			values[1] = CStringGetTextDatum(pgduckdb::current_motherduck_database_name);
+			nulls[1] = ' ';
+			values[2] = CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version);
+			nulls[2] = ' ';
+		}
 		ret = SPI_execute_with_args(R"(
-			INSERT INTO duckdb.tables (relid)
-			VALUES ($1)
+			INSERT INTO duckdb.tables (relid, motherduck_database_name, motherduck_catalog_version)
+			VALUES ($1, $2, $3)
 			)",
-		                            1, arg_types, &relid_datum, nullptr, false, 0);
+		                            lengthof(arg_types), arg_types, values, nulls, false, 0);
 
 		/* Revert back to original privileges */
 		SetUserIdAndSecContext(saved_userid, sec_context);

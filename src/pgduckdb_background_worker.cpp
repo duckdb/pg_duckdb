@@ -37,6 +37,7 @@ extern "C" {
 #include "catalog/pg_extension.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
+#include "utils/palloc.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "catalog/objectaddress.h"
@@ -138,7 +139,11 @@ DuckdbInitBackgroundWorker(void) {
 }
 
 namespace pgduckdb {
+/* Global variables that are used to communicate with our event triggers so
+ * they handle DDL of syncing differently than user-initiated DDL */
 bool doing_motherduck_sync;
+char *current_motherduck_database_name;
+char *current_motherduck_catalog_version;
 
 static std::string
 PgSchemaName(std::string db_name, std::string schema_name, bool is_default_db) {
@@ -275,7 +280,7 @@ CreateTable(const char *postgres_schema_name, const char *table_name, std::strin
 		create_table_query = drop_query + create_table_query;
 	}
 
-	MemoryContext old_context = MemoryContextSwitchTo(CurrentMemoryContext);
+	MemoryContext old_context = CurrentMemoryContext;
 	int ret;
 
 	/*
@@ -316,6 +321,49 @@ CreateTable(const char *postgres_schema_name, const char *table_name, std::strin
 }
 
 static bool
+DropTable(const char *fully_qualified_table, bool drop_with_cascade) {
+	MemoryContext old_context = CurrentMemoryContext;
+	int ret;
+
+	const char *query = psprintf("DROP TABLE %s%s", fully_qualified_table, drop_with_cascade ? " CASCADE" : "");
+	/*
+	 * We create a subtransaction to be able to cleanly roll back in case of
+	 * any errors.
+	 */
+	PG_TRY();
+	{ ret = SPI_exec(query, 0); }
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(old_context);
+		ErrorData *edata = CopyErrorData();
+		ereport(WARNING, (errmsg("Failed to drop deleted MotherDuck table %s", fully_qualified_table),
+
+		                  errdetail("While executing command: %s", query), errhint("See next WARNING for details")));
+		edata->elevel = WARNING;
+		ThrowErrorData(edata);
+		FreeErrorData(edata);
+		FlushErrorState();
+		return false;
+	}
+	PG_END_TRY();
+
+	if (ret != SPI_OK_UTILITY) {
+		elog(WARNING, "SPI_execute failed: error code %d", ret);
+		return false;
+	}
+	/* Success, so we commit the subtransaction */
+
+	/*
+	 * We explicitely don't call SPI_commit_that_works_in_background_worker
+	 * here, because that makes transactional considerations easier. And when
+	 * deleting tables, it doesn't matter how long we keep locks on them,
+	 * because they are already deleted upstream so there can be no queries on
+	 * them anyway.
+	 */
+	return true;
+}
+
+static bool
 CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	Oid schema_oid = get_namespace_oid(postgres_schema_name, true);
 	if (schema_oid != InvalidOid) {
@@ -324,7 +372,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 
 	std::string create_schema_query = CreatePgSchemaString(postgres_schema_name);
 
-	MemoryContext old_context = MemoryContextSwitchTo(CurrentMemoryContext);
+	MemoryContext old_context = CurrentMemoryContext;
 	int ret;
 
 	/*
@@ -408,9 +456,30 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 			continue;
 		}
 		/* The catalog version has changed, we need to sync the catalog */
+		elog(LOG, "Syncing MotherDuck catalog for database %s: %s", motherduck_db.c_str(), catalog_version.c_str());
+
+		/*
+		 * Because of our SPI_commit_that_works_in_bgworker() workaround we need to
+		 * switch to TopMemoryContext before allocating any memory that
+		 * should survive a call to SPI_commit_that_works_in_bgworker(). To
+		 * avoid leaking unboundedly when errors occur we free the memory
+		 * that's already there if not already NULL.
+		 */
+		MemoryContext old_context = MemoryContextSwitchTo(TopMemoryContext);
+		if (current_motherduck_catalog_version) {
+			pfree(current_motherduck_catalog_version);
+		}
+		if (current_motherduck_database_name) {
+			pfree(current_motherduck_database_name);
+		}
+		current_motherduck_database_name = pstrdup(motherduck_db.c_str());
+		current_motherduck_catalog_version = pstrdup(catalog_version.c_str());
+		MemoryContextSwitchTo(old_context);
+
 		last_known_motherduck_catalog_versions[motherduck_db] = catalog_version;
 		auto schemas = duckdb::Catalog::GetSchemas(context, motherduck_db);
 		bool is_default_db = motherduck_db == default_db;
+		bool all_tables_synced_successfully = true;
 		for (duckdb::SchemaCatalogEntry &schema : schemas) {
 			if (schema.name == "information_schema" || schema.name == "pg_catalog") {
 				continue;
@@ -438,10 +507,76 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 
 				if (!CreateTable(postgres_schema_name.c_str(), table.name.c_str(), create_query.c_str(),
 				                 drop_with_cascade)) {
+					all_tables_synced_successfully = false;
 					return;
 				}
 			});
 		}
+
+		/*
+		 * Now we want drop all shell tables in this database that were not
+		 * updated by the current round. Since if they were not updated that
+		 * means they are not part of the MotherDuck database anymore,
+		 * except...
+		 */
+		if (!all_tables_synced_successfully) {
+			/*
+			 * ...if not all tables in this catalog were synced successfully,
+			 * then the user should fix that problem before we dare to clean
+			 * up. Otherwise we might accidentally cleanup a table that is
+			 * still there, but which failed to be updated for some reason.
+			 *
+			 * We
+			 * rely on the database operator to fix the syncing problem, and
+			 * after that's done we'll clean up the tables
+			 * We could do something smarter here, but for now this is okay.
+			 */
+			continue;
+		}
+
+		Oid arg_types[] = {TEXTOID, TEXTOID};
+		Datum values[] = {CStringGetTextDatum(pgduckdb::current_motherduck_database_name),
+		                  CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version)};
+
+		/*
+		 * We use a cursor here instead of plain SPI_execute, to put a limit on
+		 * the memory usage here in case many tables need to be deleted (e.g.
+		 * some big schema was deleted all at once). This is probably not
+		 * necessary in most cases.
+		 */
+		Portal deleted_tables_portal =
+		    SPI_cursor_open_with_args(nullptr, R"(
+			SELECT relid::text FROM duckdb.tables
+			WHERE motherduck_database_name = $1 AND motherduck_catalog_version != $2
+			)",
+		                              lengthof(arg_types), arg_types, values, NULL, false, 0);
+
+		const int deleted_tables_batch_size = 100;
+		int current_batch_size;
+		do {
+			SPI_cursor_fetch(deleted_tables_portal, true, deleted_tables_batch_size);
+			SPITupleTable *deleted_tables_batch = SPI_tuptable;
+			current_batch_size = SPI_processed;
+			for (auto i = 0; i < current_batch_size; i++) {
+				HeapTuple tuple = deleted_tables_batch->vals[i];
+				char *fully_qualified_table = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
+				/*
+				 * We need to create a new SPI context for the DROP command
+				 * otherwise our batch gets invalidated.
+				 */
+				SPI_connect();
+				DropTable(fully_qualified_table, drop_with_cascade);
+				SPI_finish();
+			}
+		} while (current_batch_size == deleted_tables_batch_size);
+		SPI_cursor_close(deleted_tables_portal);
+
+		SPI_commit_that_works_in_bgworker();
+
+		pfree(current_motherduck_database_name);
+		pfree(current_motherduck_catalog_version);
+		current_motherduck_database_name = nullptr;
+		current_motherduck_catalog_version = nullptr;
 	}
 	context.transaction.Commit();
 }

@@ -11,11 +11,17 @@
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
+extern "C" {
+#include "postgres.h"
+}
+
 void DuckdbInitBackgroundWorker(void);
 
 namespace pgduckdb {
 
 void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade);
 extern bool doing_motherduck_sync;
+extern char *current_motherduck_database_name;
+extern char *current_motherduck_catalog_version;
 
 } // namespace pgduckdb

@@ -158,7 +158,9 @@ CREATE TABLE extensions (
 -- table was a DuckDB table or not. See the comments and code in
 -- duckdb_drop_table_trigger for details.
 CREATE TABLE tables (
-    relid regclass PRIMARY KEY
+    relid regclass PRIMARY KEY,
+    motherduck_database_name TEXT,
+    motherduck_catalog_version TEXT
 );
 
 REVOKE ALL ON tables FROM PUBLIC;
