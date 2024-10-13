@@ -7,8 +7,8 @@ SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("s
 
 SELECT "sepal.length" FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT) ORDER BY "sepal.length"  LIMIT 5;
 
-SELECT "sepal.length", file_row_number, filename 
-    FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true) 
+SELECT "sepal.length", file_row_number, filename
+    FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true)
     AS ("sepal.length" FLOAT, file_row_number INT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
 
 -- read_csv
@@ -18,5 +18,7 @@ SELECT count("sepal.length") FROM read_csv('../../data/iris.csv') AS ("sepal.len
 SELECT "sepal.length" FROM read_csv('../../data/iris.csv') AS ("sepal.length" FLOAT) ORDER BY "sepal.length" LIMIT 5;
 
 SELECT "sepal.length", filename
-    FROM read_csv('../../data/iris.csv', filename => true, header => true) 
+    FROM read_csv('../../data/iris.csv', filename => true, header => true)
     AS ("sepal.length" FLOAT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
+
+SELECT * FROM read_csv('../../non-existing-file.csv') AS ("sepal.length" FLOAT);

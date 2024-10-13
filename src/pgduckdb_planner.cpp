@@ -52,7 +52,7 @@ DuckdbPrepare(const Query *query) {
 }
 
 static Plan *
-CreatePlan(Query *query) {
+CreatePlan(Query *query, int elevel) {
 	/*
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
@@ -60,8 +60,7 @@ CreatePlan(Query *query) {
 	auto prepared_query = std::move(std::get<0>(prepare_result));
 
 	if (prepared_query->HasError()) {
-		elog(WARNING, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s",
-		     prepared_query->GetError().c_str());
+		elog(elevel, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s", prepared_query->GetError().c_str());
 		return nullptr;
 	}
 
@@ -74,7 +73,7 @@ CreatePlan(Query *query) {
 		Oid postgresColumnOid = pgduckdb::GetPostgresDuckDBType(column);
 
 		if (!OidIsValid(postgresColumnOid)) {
-			elog(WARNING, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
+			elog(elevel, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
 			return nullptr;
 		}
 
@@ -83,7 +82,7 @@ CreatePlan(Query *query) {
 
 		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
 		if (!HeapTupleIsValid(tp)) {
-			elog(WARNING, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
+			elog(elevel, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
 			return nullptr;
 		}
 
@@ -105,9 +104,9 @@ CreatePlan(Query *query) {
 }
 
 PlannedStmt *
-DuckdbPlanNode(Query *parse, int cursor_options) {
+DuckdbPlanNode(Query *parse, int cursor_options, int elevel) {
 	/* We need to check can we DuckDB create plan */
-	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan *>(CreatePlan, "CreatePlan", parse);
+	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan *>(CreatePlan, "CreatePlan", parse, elevel);
 	Plan *duckdb_plan = (Plan *)castNode(CustomScan, plan);
 
 	if (!duckdb_plan) {

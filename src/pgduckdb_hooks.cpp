@@ -166,17 +166,13 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
-		if (duckdb_execution && IsAllowedStatement(parse)) {
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
-			if (duckdbPlan) {
-				return duckdbPlan;
-			}
-		}
-
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
 
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, ERROR);
+			return duckdbPlan;
+		} else if (duckdb_execution && IsAllowedStatement(parse)) {
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, WARNING);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}
