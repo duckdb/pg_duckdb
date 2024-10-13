@@ -2,7 +2,7 @@
 -- turned off
 SET duckdb.execution = false;
 
-\getenv pwd PWD
+\set pwd `pwd`
 
 select * from read_parquet(:'pwd' || '/data/unsigned_types.parquet') as (usmallint int);
 select * from read_parquet(ARRAY[:'pwd' || '/data/unsigned_types.parquet']) as (usmallint int);
