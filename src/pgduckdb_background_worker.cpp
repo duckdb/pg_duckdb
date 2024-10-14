@@ -145,7 +145,7 @@ bool doing_motherduck_sync;
 char *current_motherduck_catalog_version;
 
 static std::string
-PgSchemaName(std::string db_name, std::string schema_name, bool is_default_db) {
+PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is_default_db) {
 	if (is_default_db) {
 		return schema_name;
 	}
