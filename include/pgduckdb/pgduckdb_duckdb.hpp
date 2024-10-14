@@ -23,6 +23,10 @@ public:
 
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
 
+	void Reset() {
+		database.reset();
+	}
+
 private:
 	DuckDBManager();
 

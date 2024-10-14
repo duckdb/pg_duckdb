@@ -9,6 +9,7 @@ test: materialized_view
 test: hugeint_conversion
 test: read_functions
 test: duckdb_only_functions
+test: duckdb_recycle
 test: cte
 test: create_table_as
 test: standard_conforming_strings

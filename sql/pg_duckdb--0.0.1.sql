@@ -248,6 +248,9 @@ CREATE EVENT TRIGGER duckdb_alter_table_trigger ON ddl_command_end
     WHEN tag IN ('ALTER TABLE')
     EXECUTE FUNCTION duckdb_alter_table_trigger();
 
+CREATE OR REPLACE FUNCTION recycle_ddb() RETURNS void
+    LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_recycle_ddb';
+
 DO $$
 BEGIN
     RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';
