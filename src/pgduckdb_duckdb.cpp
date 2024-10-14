@@ -44,7 +44,7 @@ DuckDBManager::Initialize() {
 
 		connection_string = psprintf("md:?motherduck_token=%s", duckdb_motherduck_token);
 	}
-	database = duckdb::make_uniq<duckdb::DuckDB>(connection_string, &config);
+	database = duckdb::make_uniq<duckdb::DuckDB>(connection_string, &config).release();
 	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
 	    duckdb::make_uniq<duckdb::PostgresStorageExtension>();
 	duckdb::ExtensionInstallInfo extension_install_info;
