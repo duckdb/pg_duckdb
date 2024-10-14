@@ -1,7 +1,9 @@
 /*-------------------------------------------------------------------------
  *
  * pg_list.hpp
- *	  PG17 list macros from pg_list.h backported to lower versions
+ *	  PG17 list macros from pg_list.h backported to lower versions, with a
+ *	  small modification to make foreach_ptr work in C++ (which has stricter
+ *	  casting rules from void *)
  *
  * Portions Copyright (c) 1996-2024, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
@@ -14,14 +16,20 @@
 #include "c.h"
 
 #include "nodes/pg_list.h"
-
-#if PG_VERSION_NUM < 170000
-
 /*
  * Remove the original definition of foreach_delete_current so we can redefine
  * it below in a way that works for the easier to use foreach_* macros.
  */
 #undef foreach_delete_current
+
+#if PG_VERSION_NUM >= 170000
+#undef foreach_ptr
+#undef foreach_int
+#undef foreach_oid
+#undef foreach_xid
+#undef foreach_internal
+#undef foreach_node
+#endif
 
 // clang-format off
 /*
@@ -70,7 +78,7 @@
 		for (ForEachState var##__state = {(lst), 0}; \
 			 (var##__state.l != NIL && \
 			  var##__state.i < var##__state.l->length && \
-			 (var = func(&var##__state.l->elements[var##__state.i]), true)); \
+			 (var = (type pointer) func(&var##__state.l->elements[var##__state.i]), true)); \
 			 var##__state.i++)
 
 /*
@@ -88,4 +96,3 @@
 			 (var = lfirst_node(type, &var##__state.l->elements[var##__state.i]), true)); \
 			 var##__state.i++)
 // clang-format on
-#endif
