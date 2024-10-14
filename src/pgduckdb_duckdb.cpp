@@ -58,6 +58,17 @@ DuckDBManager::Initialize() {
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		/*
+		 * Workaround for MotherDuck catalog sync that turns off automatically,
+		 * in case of no queries being sent to MotherDuck. Since the background
+		 * worker never sends any query to MotherDuck we need to turn this off.
+		 * So we set the timeout to an arbitrary very large value.
+		 */
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET motherduck_background_catalog_refresh_inactivity_timeout='99 years'");
+	}
+
 	LoadFunctions(context);
 	LoadExtensions(context);
 }
