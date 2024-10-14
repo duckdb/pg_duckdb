@@ -284,7 +284,7 @@ SPI_run_utility_command(const char *query) {
 }
 
 static bool
-CreateTable(const char *postgres_schema_name, const char *table_name, std::string create_table_query,
+CreateTable(const char *postgres_schema_name, const char *table_name, const char *create_table_query,
             bool drop_with_cascade) {
 	/*
 	 * We need to fetch this over-and-over again, because we commit the
@@ -316,13 +316,13 @@ CreateTable(const char *postgres_schema_name, const char *table_name, std::strin
 		 * drop it and recreate it.
 		 */
 		auto drop_query = DropPgTableString(postgres_schema_name, table_name, drop_with_cascade);
-		create_table_query = drop_query + create_table_query;
+		create_table_query = psprintf("%s %s", drop_query.c_str(), create_table_query);
 	}
 
-	if (!SPI_run_utility_command(create_table_query.c_str())) {
+	if (!SPI_run_utility_command(create_table_query)) {
 		ereport(WARNING, (errmsg("Failed to sync MotherDuck table %s.%s", postgres_schema_name, table_name),
 
-		                  errdetail("While executing command: %s", create_table_query.c_str()),
+		                  errdetail("While executing command: %s", create_table_query),
 		                  errhint("See previous WARNING for details")));
 		return false;
 	}
