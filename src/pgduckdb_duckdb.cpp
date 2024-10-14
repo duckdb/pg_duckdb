@@ -55,11 +55,8 @@ DuckDBManager::Initialize() {
 	auto &context = *connection->context;
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	default_dbname = db_manager.GetDefaultDatabase(context);
-	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
-	auto result = context.Query("ATTACH DATABASE ':memory:' AS pg_temp;", false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/DuckDBManager) could not attach pg_temp: %s", result->GetError().c_str());
-	}
+	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
+	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
 	LoadFunctions(context);
 	LoadExtensions(context);
