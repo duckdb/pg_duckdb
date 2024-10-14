@@ -137,6 +137,14 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
+	if (!pgduckdb::IsExtensionRegistered()) {
+		/*
+		 * We're not installed, so don't mess with the query. Normally this
+		 * shouldn't happen, but better safe than sorry.
+		 */
+		PG_RETURN_NULL();
+	}
+
 	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
 	Node *parsetree = trigger_data->parsetree;
 
@@ -315,6 +323,14 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
+	if (!pgduckdb::IsExtensionRegistered()) {
+		/*
+		 * We're not installed, so don't mess with the query. Normally this
+		 * shouldn't happen, but better safe than sorry.
+		 */
+		PG_RETURN_NULL();
+	}
+
 	SPI_connect();
 
 	/*
@@ -469,6 +485,14 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
+	if (!pgduckdb::IsExtensionRegistered()) {
+		/*
+		 * We're not installed, so don't mess with the query. Normally this
+		 * shouldn't happen, but better safe than sorry.
+		 */
+		PG_RETURN_NULL();
+	}
+
 	SPI_connect();
 
 	/*
@@ -566,6 +590,15 @@ Datum
 duckdb_grant_trigger(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
+
+	if (!pgduckdb::IsExtensionRegistered()) {
+		/*
+		 * We're not installed, so don't mess with the query. Normally this
+		 * shouldn't happen, but better safe than sorry.
+		 */
+		PG_RETURN_NULL();
+	}
+
 	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
 	Node *parsetree = trigdata->parsetree;
 	if (!IsA(parsetree, GrantStmt)) {
