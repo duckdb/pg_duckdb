@@ -97,7 +97,7 @@ BEGIN
 END;
 $func$;
 
--- Iceberg* functions optional parameters are extract from source code;
+-- iceberg_* functions optional parameters are extract from source code;
 -- https://github.com/duckdb/duckdb_iceberg/tree/main/src/iceberg_functions
 
 CREATE OR REPLACE FUNCTION iceberg_scan(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
@@ -115,7 +115,7 @@ $func$;
 
 CREATE TYPE iceberg_metadata_record AS (
   manifest_path TEXT,
-  manifest_sequence_number BIGINT,
+  manifest_sequence_number NUMERIC,
   manifest_content  TEXT,
   status TEXT,
   content TEXT,
