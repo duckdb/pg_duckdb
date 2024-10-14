@@ -343,9 +343,10 @@ DropTable(const char *fully_qualified_table, bool drop_with_cascade) {
 	const char *query = psprintf("DROP TABLE %s%s", fully_qualified_table, drop_with_cascade ? " CASCADE" : "");
 
 	if (!SPI_run_utility_command(query)) {
-		ereport(WARNING, (errmsg("Failed to drop deleted MotherDuck table %s", fully_qualified_table),
+		ereport(WARNING,
+		        (errmsg("Failed to drop deleted MotherDuck table %s", fully_qualified_table),
 
-		                  errdetail("While executing command: %s", query), errhint("See next WARNING for details")));
+		         errdetail("While executing command: %s", query), errhint("See previous WARNING for details")));
 		return false;
 	}
 	/*
@@ -370,7 +371,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	if (!SPI_run_utility_command(create_schema_query.c_str())) {
 		ereport(WARNING, (errmsg("Failed to sync MotherDuck schema %s", postgres_schema_name),
 		                  errdetail("While executing command: %s", create_schema_query.c_str()),
-		                  errhint("See next WARNING for details")));
+		                  errhint("See previous WARNING for details")));
 		return false;
 	}
 
