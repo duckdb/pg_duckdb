@@ -485,10 +485,10 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 			 * up. Otherwise we might accidentally cleanup a table that is
 			 * still there, but which failed to be updated for some reason.
 			 *
-			 * We
-			 * rely on the database operator to fix the syncing problem, and
-			 * after that's done we'll clean up the tables
-			 * We could do something smarter here, but for now this is okay.
+			 * We rely on the database operator to fix the syncing problem, and
+			 * after that's done we'll clean up the tables during that first
+			 * working sync. We could do something smarter here, but for now
+			 * this is okay.
 			 */
 			continue;
 		}
