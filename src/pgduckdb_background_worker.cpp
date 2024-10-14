@@ -243,6 +243,46 @@ SPI_commit_that_works_in_bgworker() {
 	}
 }
 
+/*
+ * This function runs a utility command in the current SPI context. Instead of
+ * throwing an ERROR on failure this will throw a WARNING and return false. It
+ * does so in a way that preserves the current transaction state, so that other
+ * commands can still be run.
+ */
+static bool
+SPI_run_utility_command(const char *query) {
+	MemoryContext old_context = CurrentMemoryContext;
+	int ret;
+	/*
+	 * We create a subtransaction to be able to cleanly roll back in case of
+	 * any errors.
+	 */
+	BeginInternalSubTransaction(NULL);
+	PG_TRY();
+	{ ret = SPI_exec(query, 0); }
+	PG_CATCH();
+	{
+		MemoryContextSwitchTo(old_context);
+		ErrorData *edata = CopyErrorData();
+		edata->elevel = WARNING;
+		ThrowErrorData(edata);
+		FreeErrorData(edata);
+		FlushErrorState();
+		RollbackAndReleaseCurrentSubTransaction();
+		return false;
+	}
+	PG_END_TRY();
+
+	if (ret != SPI_OK_UTILITY) {
+		elog(WARNING, "SPI_execute failed: error code %d", ret);
+		RollbackAndReleaseCurrentSubTransaction();
+		return false;
+	}
+	/* Success, so we commit the subtransaction */
+	ReleaseCurrentSubTransaction();
+	return true;
+}
+
 static bool
 CreateTable(const char *postgres_schema_name, const char *table_name, std::string create_table_query,
             bool drop_with_cascade) {
@@ -279,40 +319,14 @@ CreateTable(const char *postgres_schema_name, const char *table_name, std::strin
 		create_table_query = drop_query + create_table_query;
 	}
 
-	MemoryContext old_context = CurrentMemoryContext;
-	int ret;
-
-	/*
-	 * We create a subtransaction to be able to cleanly roll back in case of
-	 * any errors.
-	 */
-	BeginInternalSubTransaction(NULL);
-	PG_TRY();
-	{ ret = SPI_exec(create_table_query.c_str(), 0); }
-	PG_CATCH();
-	{
-		MemoryContextSwitchTo(old_context);
-		ErrorData *edata = CopyErrorData();
+	if (!SPI_run_utility_command(create_table_query.c_str())) {
 		ereport(WARNING, (errmsg("Failed to sync MotherDuck table %s.%s", postgres_schema_name, table_name),
 
 		                  errdetail("While executing command: %s", create_table_query.c_str()),
-		                  errhint("See next WARNING for details")));
-		edata->elevel = WARNING;
-		ThrowErrorData(edata);
-		FreeErrorData(edata);
-		FlushErrorState();
-		RollbackAndReleaseCurrentSubTransaction();
+		                  errhint("See previous WARNING for details")));
 		return false;
 	}
-	PG_END_TRY();
 
-	if (ret != SPI_OK_UTILITY) {
-		elog(WARNING, "SPI_execute failed: error code %d", ret);
-		RollbackAndReleaseCurrentSubTransaction();
-		return false;
-	}
-	/* Success, so we commit the subtransaction */
-	ReleaseCurrentSubTransaction();
 	/* And then we also commit the actual transaction to release any locks that
 	 * were necessary to execute it. */
 	SPI_commit_that_works_in_bgworker();
@@ -321,37 +335,14 @@ CreateTable(const char *postgres_schema_name, const char *table_name, std::strin
 
 static bool
 DropTable(const char *fully_qualified_table, bool drop_with_cascade) {
-	MemoryContext old_context = CurrentMemoryContext;
-	int ret;
-
 	const char *query = psprintf("DROP TABLE %s%s", fully_qualified_table, drop_with_cascade ? " CASCADE" : "");
-	/*
-	 * We create a subtransaction to be able to cleanly roll back in case of
-	 * any errors.
-	 */
-	PG_TRY();
-	{ ret = SPI_exec(query, 0); }
-	PG_CATCH();
-	{
-		MemoryContextSwitchTo(old_context);
-		ErrorData *edata = CopyErrorData();
+
+	if (!SPI_run_utility_command(query)) {
 		ereport(WARNING, (errmsg("Failed to drop deleted MotherDuck table %s", fully_qualified_table),
 
 		                  errdetail("While executing command: %s", query), errhint("See next WARNING for details")));
-		edata->elevel = WARNING;
-		ThrowErrorData(edata);
-		FreeErrorData(edata);
-		FlushErrorState();
 		return false;
 	}
-	PG_END_TRY();
-
-	if (ret != SPI_OK_UTILITY) {
-		elog(WARNING, "SPI_execute failed: error code %d", ret);
-		return false;
-	}
-	/* Success, so we commit the subtransaction */
-
 	/*
 	 * We explicitely don't call SPI_commit_that_works_in_background_worker
 	 * here, because that makes transactional considerations easier. And when
@@ -371,39 +362,12 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 
 	std::string create_schema_query = CreatePgSchemaString(postgres_schema_name);
 
-	MemoryContext old_context = CurrentMemoryContext;
-	int ret;
-
-	/*
-	 * We create a subtransaction to be able to cleanly roll back in case of
-	 * any errors.
-	 */
-	BeginInternalSubTransaction(NULL);
-	PG_TRY();
-	{ ret = SPI_exec(create_schema_query.c_str(), 0); }
-	PG_CATCH();
-	{
-		MemoryContextSwitchTo(old_context);
-		ErrorData *edata = CopyErrorData();
+	if (!SPI_run_utility_command(create_schema_query.c_str())) {
 		ereport(WARNING, (errmsg("Failed to sync MotherDuck schema %s", postgres_schema_name),
 		                  errdetail("While executing command: %s", create_schema_query.c_str()),
 		                  errhint("See next WARNING for details")));
-		edata->elevel = WARNING;
-		ThrowErrorData(edata);
-		FreeErrorData(edata);
-		FlushErrorState();
-		RollbackAndReleaseCurrentSubTransaction();
 		return false;
 	}
-	PG_END_TRY();
-
-	if (ret != SPI_OK_UTILITY) {
-		elog(WARNING, "SPI_execute failed: error code %d", ret);
-		RollbackAndReleaseCurrentSubTransaction();
-		return false;
-	}
-	/* Success, so we commit the subtransaction */
-	ReleaseCurrentSubTransaction();
 
 	if (!is_default_db) {
 		/*
