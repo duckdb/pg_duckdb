@@ -16,6 +16,7 @@ extern "C" {
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
+#include "utils/lsyscache.h"
 #include "commands/event_trigger.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -206,20 +207,21 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	} else {
 		Oid saved_userid;
 		int sec_context;
+		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
+		const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
 		GetUserIdAndSecContext(&saved_userid, &sec_context);
 		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID};
-		Datum values[] = {relid_datum, 0, 0};
-		char nulls[] = {' ', 'n', 'n'};
+		Datum values[] = {relid_datum, CStringGetTextDatum(duckdb_db), 0};
+		char nulls[] = {' ', ' ', 'n'};
+
 		if (pgduckdb::doing_motherduck_sync) {
-			values[1] = CStringGetTextDatum(pgduckdb::current_motherduck_database_name);
-			nulls[1] = ' ';
 			values[2] = CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version);
 			nulls[2] = ' ';
 		}
 		ret = SPI_execute_with_args(R"(
-			INSERT INTO duckdb.tables (relid, motherduck_database_name, motherduck_catalog_version)
+			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version)
 			VALUES ($1, $2, $3)
 			)",
 		                            lengthof(arg_types), arg_types, values, nulls, false, 0);
@@ -402,7 +404,7 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 
 			char *postgres_schema_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
 			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
-			char *drop_query = psprintf("DROP TABLE %s.%s", pgduckdb_db_and_schema(postgres_schema_name, true),
+			char *drop_query = psprintf("DROP TABLE %s.%s", pgduckdb_db_and_schema_string(postgres_schema_name, true),
 			                            quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 		}

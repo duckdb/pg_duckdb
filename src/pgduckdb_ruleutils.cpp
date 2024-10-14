@@ -38,7 +38,15 @@ pgduckdb_function_name(Oid function_oid) {
  * are not escaped yet.
  */
 List *
-GetDuckdbCatalogAndSchema(const char *postgres_schema_name) {
+pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
+	if (!is_duckdb_table) {
+		return list_make2((void *)"pgduckdb", (void *)postgres_schema_name);
+	}
+
+	if (strcmp("pg_temp", postgres_schema_name) == 0) {
+		return list_make2((void *)"pg_temp", (void *)"main");
+	}
+
 	if (strncmp("ddb$", postgres_schema_name, 4) != 0) {
 		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
 		return list_make2((void *)dbname, (void *)postgres_schema_name);
@@ -89,21 +97,11 @@ GetDuckdbCatalogAndSchema(const char *postgres_schema_name) {
  * database are quoted if necessary.
  */
 const char *
-pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
-	if (is_duckdb_table && strcmp("pg_temp", postgres_schema_name) == 0) {
-		return "pg_temp.main";
-	}
-	const char *db_name;
-	const char *schema_name;
-	if (is_duckdb_table) {
-		List *db_and_schema = GetDuckdbCatalogAndSchema(postgres_schema_name);
-		db_name = (const char *)linitial(db_and_schema);
-		schema_name = (const char *)lsecond(db_and_schema);
-		return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
-	} else {
-		db_name = "pgduckdb";
-		schema_name = postgres_schema_name;
-	}
+pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table) {
+	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, is_duckdb_table);
+	const char *db_name = (const char *)linitial(db_and_schema);
+	const char *schema_name = (const char *)lsecond(db_and_schema);
+	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
 	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
 }
 
@@ -121,7 +119,7 @@ pgduckdb_relation_name(Oid relation_oid) {
 	Form_pg_class relation = (Form_pg_class)GETSTRUCT(tp);
 	const char *relname = NameStr(relation->relname);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
-	const char *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
 
 	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
@@ -147,7 +145,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	Relation relation = relation_open(relation_oid, AccessShareLock);
 	const char *relation_name = pgduckdb_relation_name(relation_oid);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
-	const char *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
 
 	StringInfoData buffer;
 	initStringInfo(&buffer);

@@ -142,7 +142,6 @@ namespace pgduckdb {
 /* Global variables that are used to communicate with our event triggers so
  * they handle DDL of syncing differently than user-initiated DDL */
 bool doing_motherduck_sync;
-char *current_motherduck_database_name;
 char *current_motherduck_catalog_version;
 
 static std::string
@@ -469,10 +468,6 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 		if (current_motherduck_catalog_version) {
 			pfree(current_motherduck_catalog_version);
 		}
-		if (current_motherduck_database_name) {
-			pfree(current_motherduck_database_name);
-		}
-		current_motherduck_database_name = pstrdup(motherduck_db.c_str());
 		current_motherduck_catalog_version = pstrdup(catalog_version.c_str());
 		MemoryContextSwitchTo(old_context);
 
@@ -535,7 +530,7 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 		}
 
 		Oid arg_types[] = {TEXTOID, TEXTOID};
-		Datum values[] = {CStringGetTextDatum(pgduckdb::current_motherduck_database_name),
+		Datum values[] = {CStringGetTextDatum(motherduck_db.c_str()),
 		                  CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version)};
 
 		/*
@@ -547,7 +542,7 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 		Portal deleted_tables_portal =
 		    SPI_cursor_open_with_args(nullptr, R"(
 			SELECT relid::text FROM duckdb.tables
-			WHERE motherduck_database_name = $1 AND motherduck_catalog_version != $2
+			WHERE duckdb_db = $1 AND motherduck_catalog_version != $2
 			)",
 		                              lengthof(arg_types), arg_types, values, NULL, false, 0);
 
@@ -573,9 +568,7 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 
 		SPI_commit_that_works_in_bgworker();
 
-		pfree(current_motherduck_database_name);
 		pfree(current_motherduck_catalog_version);
-		current_motherduck_database_name = nullptr;
 		current_motherduck_catalog_version = nullptr;
 	}
 	context.transaction.Commit();

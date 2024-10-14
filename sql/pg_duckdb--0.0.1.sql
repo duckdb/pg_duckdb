@@ -159,7 +159,7 @@ CREATE TABLE extensions (
 -- duckdb_drop_table_trigger for details.
 CREATE TABLE tables (
     relid regclass PRIMARY KEY,
-    motherduck_database_name TEXT,
+    duckdb_db TEXT NOT NULL,
     motherduck_catalog_version TEXT
 );
 
