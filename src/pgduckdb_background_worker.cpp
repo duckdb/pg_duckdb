@@ -180,21 +180,25 @@ CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 
 	bool first = true;
 	for (auto &column : info.columns.Logical()) {
+		Oid postgres_type = GetPostgresDuckDBType(column.Type());
+		if (postgres_type == InvalidOid) {
+			elog(WARNING, "Skipping column %s in table %s.%s.%s due to unsupported type", column.Name().c_str(),
+			     info.catalog.c_str(), info.schema.c_str(), info.table.c_str());
+			continue;
+		}
+
 		if (!first) {
 			ret += ", ";
 		}
+		first = false;
 		ret += duckdb::KeywordHelper::WriteQuoted(column.Name(), '"');
 		ret += " ";
-		Oid postgres_type = GetPostgresDuckDBType(column.Type());
-		if (postgres_type == InvalidOid) {
-			elog(WARNING, "Skipping table %s.%s.%s due to unsupported type", info.catalog.c_str(), info.schema.c_str(),
-			     info.table.c_str());
-
-			return "";
-		}
 		int32 typemod = GetPostgresDuckDBTypemod(column.Type());
 		ret += format_type_with_typemod(postgres_type, typemod);
-		first = false;
+	}
+	if (first) {
+		elog(WARNING, "Skipping table %s.%s.%s because non of its columns had supported types", info.catalog.c_str(),
+		     info.schema.c_str(), info.table.c_str());
 	}
 	ret += ") USING duckdb;";
 	return ret;
