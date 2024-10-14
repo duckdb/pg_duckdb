@@ -90,7 +90,7 @@ BuildDuckdbOnlyFunctions() {
 	 * each of the found functions is actually part of our extension before
 	 * caching its OID as a DuckDB-only function.
 	 */
-	const char *function_names[] = {"read_parquet", "read_csv", "iceberg_scan"};
+	const char *function_names[] = {"read_parquet", "read_csv", "iceberg_scan", "iceberg_metadata", "iceberg_snapshots"};
 
 	for (int i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
