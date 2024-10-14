@@ -237,8 +237,8 @@ SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_ta
 NOTICE:  result: database_name	schema_name	sql	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
-memory	pg_temp	CREATE TABLE pg_temp.t(b INTEGER);
-memory	pg_temp	CREATE TABLE pg_temp.webpages(column00 INTEGER, column01 VARCHAR, column02 DATE);
+pg_temp	main	CREATE TABLE t(b INTEGER);
+pg_temp	main	CREATE TABLE webpages(column00 INTEGER, column01 VARCHAR, column02 DATE);
 
 
  raw_query 
