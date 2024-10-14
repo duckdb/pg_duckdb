@@ -1,4 +1,5 @@
 [tool.pytest.ini_options]
+asyncio_default_fixture_loop_scope = "function"
 addopts = ["--import-mode=prepend", "--showlocals", "--tb=short"]
 pythonpath = ['tests/pyduck']
 timeout = 30

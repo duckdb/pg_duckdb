@@ -11,3 +11,4 @@ compile_commands.json
 *.o
 *.bc
 *.dylib
+*.pyc
