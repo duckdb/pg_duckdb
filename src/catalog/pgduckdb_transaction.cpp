@@ -82,8 +82,10 @@ SchemaItems::GetTable(const string &entry_name) {
 	info.table = entry_name;
 	Cardinality cardinality = 1;
 	if (!PostgresTable::SetTableInfo(info, rel)) {
+		RelationClose(rel);
 		return nullptr;
 	}
+
 	cardinality = PostgresTable::GetTableCardinality(rel);
 	table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
 	tables[entry_name] = std::move(table);
