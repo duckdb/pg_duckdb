@@ -191,6 +191,7 @@ CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 			ret += ", ";
 		}
 		first = false;
+
 		ret += duckdb::KeywordHelper::WriteQuoted(column.Name(), '"');
 		ret += " ";
 		int32 typemod = GetPostgresDuckDBTypemod(column.Type());
