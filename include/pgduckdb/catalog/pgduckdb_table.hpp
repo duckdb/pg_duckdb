@@ -26,7 +26,7 @@ public:
 
 public:
 	static ::Relation OpenRelation(Oid relid);
-	static bool SetTableInfo(CreateTableInfo &info, ::Relation rel);
+	static void SetTableInfo(CreateTableInfo &info, ::Relation rel);
 	static Cardinality GetTableCardinality(::Relation rel);
 
 protected:

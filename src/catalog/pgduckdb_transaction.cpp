@@ -77,17 +77,12 @@ SchemaItems::GetTable(const string &entry_name) {
 
 	::Relation rel = PostgresTable::OpenRelation(rel_oid);
 
-	unique_ptr<PostgresTable> table;
 	CreateTableInfo info;
 	info.table = entry_name;
-	Cardinality cardinality = 1;
-	if (!PostgresTable::SetTableInfo(info, rel)) {
-		RelationClose(rel);
-		return nullptr;
-	}
+	PostgresTable::SetTableInfo(info, rel);
 
-	cardinality = PostgresTable::GetTableCardinality(rel);
-	table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
+	auto cardinality = PostgresTable::GetTableCardinality(rel);
+	auto table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
 	tables[entry_name] = std::move(table);
 	return tables[entry_name].get();
 }
@@ -118,6 +113,7 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 		if (it == schemas.end()) {
 			return nullptr;
 		}
+
 		auto &schema_entry = it->second;
 		return schema_entry.GetTable(name);
 	}
