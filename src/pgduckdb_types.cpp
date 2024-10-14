@@ -404,7 +404,8 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		}
 		NumericVar numeric_var;
 		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::DECIMAL ||
-		         value.type().id() == duckdb::LogicalTypeId::HUGEINT);
+		         value.type().id() == duckdb::LogicalTypeId::HUGEINT ||
+				 value.type().id() == duckdb::LogicalTypeId::UBIGINT);
 		auto physical_type = value.type().InternalType();
 		const bool is_decimal = value.type().id() == duckdb::LogicalTypeId::DECIMAL;
 		uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
@@ -420,6 +421,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		}
 		case duckdb::PhysicalType::INT64: {
 			numeric_var = ConvertNumeric<int64_t>(value.GetValueUnsafe<int64_t>(), scale);
+			break;
+		}
+		case duckdb::PhysicalType::UINT64: {
+			numeric_var = ConvertNumeric<uint64_t>(value.GetValueUnsafe<uint64_t>(), scale);
 			break;
 		}
 		case duckdb::PhysicalType::INT128: {
@@ -577,6 +582,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		return INT4OID;
 	case duckdb::LogicalTypeId::BIGINT:
 		return INT8OID;
+	case duckdb::LogicalTypeId::UBIGINT:
 	case duckdb::LogicalTypeId::HUGEINT:
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::UTINYINT:

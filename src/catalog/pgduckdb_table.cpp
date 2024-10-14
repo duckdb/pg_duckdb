@@ -44,11 +44,11 @@ PostgresTable::OpenRelation(Oid relid) {
 	return pgduckdb::PostgresFunctionGuard<::Relation>(RelationIdGetRelation, relid);
 }
 
-bool
+void
 PostgresTable::SetTableInfo(CreateTableInfo &info, ::Relation rel) {
 	auto tupleDesc = RelationGetDescr(rel);
 
-	for (int i = 0; i < tupleDesc->natts; i++) {
+	for (int i = 0; i < tupleDesc->natts; ++i) {
 		Form_pg_attribute attr = &tupleDesc->attrs[i];
 		auto col_name = duckdb::string(NameStr(attr->attname));
 		auto duck_type = pgduckdb::ConvertPostgresToDuckColumnType(attr);
@@ -57,8 +57,6 @@ PostgresTable::SetTableInfo(CreateTableInfo &info, ::Relation rel) {
 		elog(DEBUG2, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
-
-	return true;
 }
 
 Cardinality

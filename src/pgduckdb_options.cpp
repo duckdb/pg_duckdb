@@ -223,4 +223,11 @@ cache(PG_FUNCTION_ARGS) {
 	PG_RETURN_BOOL(result);
 }
 
+PG_FUNCTION_INFO_V1(pgduckdb_recycle_ddb);
+Datum
+pgduckdb_recycle_ddb(PG_FUNCTION_ARGS) {
+	pgduckdb::DuckDBManager::Get().Reset();
+	PG_RETURN_BOOL(true);
+}
+
 } // extern "C"

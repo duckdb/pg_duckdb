@@ -26,7 +26,8 @@ PostgresTransactionManager::CommitTransaction(ClientContext &context, Transactio
 
 void
 PostgresTransactionManager::RollbackTransaction(Transaction &transaction) {
-	return;
+	lock_guard<mutex> l(transaction_lock);
+	transactions.erase(transaction);
 }
 
 void

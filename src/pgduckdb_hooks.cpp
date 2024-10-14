@@ -37,14 +37,14 @@ IsCatalogTable(List *tables) {
 				return true;
 			}
 		}
+
 		if (table->relid) {
 			auto rel = RelationIdGetRelation(table->relid);
 			auto namespace_oid = RelationGetNamespace(rel);
+			RelationClose(rel);
 			if (namespace_oid == PG_CATALOG_NAMESPACE || namespace_oid == PG_TOAST_NAMESPACE) {
-				RelationClose(rel);
 				return true;
 			}
-			RelationClose(rel);
 		}
 	}
 	return false;
@@ -55,6 +55,7 @@ IsDuckdbTable(Oid relid) {
 	if (relid == InvalidOid) {
 		return false;
 	}
+
 	auto rel = RelationIdGetRelation(relid);
 	bool result = pgduckdb::IsDuckdbTableAm(rel->rd_tableam);
 	RelationClose(rel);
@@ -166,20 +167,16 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
-		if (duckdb_execution && IsAllowedStatement(parse)) {
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
-			if (duckdbPlan) {
-				return duckdbPlan;
-			}
-		}
-
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
 
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
+			return DuckdbPlanNode(parse, cursor_options, true);
+		} else if (duckdb_execution && IsAllowedStatement(parse)) {
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}
+			/* If we can't create a plan, we'll fall back to Postgres */
 		}
 	}
 

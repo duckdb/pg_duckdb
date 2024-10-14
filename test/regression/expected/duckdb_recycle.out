@@ -1,0 +1,57 @@
+SET duckdb.execution = true;
+CREATE TABLE ta(a INT);
+EXPLAIN SELECT count(*) FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │    UNGROUPED_AGGREGATE    │
+ │    ────────────────────   │
+ │        Aggregates:        │
+ │        count_star()       │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │         ~2550 Rows        │
+ └───────────────────────────┘
+ 
+ 
+(19 rows)
+
+SELECT duckdb.recycle_ddb();
+ recycle_ddb 
+-------------
+ 
+(1 row)
+
+EXPLAIN SELECT count(*) FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │    UNGROUPED_AGGREGATE    │
+ │    ────────────────────   │
+ │        Aggregates:        │
+ │        count_star()       │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │         ~2550 Rows        │
+ └───────────────────────────┘
+ 
+ 
+(19 rows)
+
+DROP TABLE ta;

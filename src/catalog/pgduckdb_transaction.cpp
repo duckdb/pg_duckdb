@@ -77,31 +77,32 @@ SchemaItems::GetTable(const string &entry_name) {
 
 	::Relation rel = PostgresTable::OpenRelation(rel_oid);
 
-	unique_ptr<PostgresTable> table;
 	CreateTableInfo info;
 	info.table = entry_name;
-	Cardinality cardinality = 1;
-	if (!PostgresTable::SetTableInfo(info, rel)) {
-		return nullptr;
-	}
-	cardinality = PostgresTable::GetTableCardinality(rel);
-	table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
+	PostgresTable::SetTableInfo(info, rel);
+
+	auto cardinality = PostgresTable::GetTableCardinality(rel);
+	auto table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
 	tables[entry_name] = std::move(table);
 	return tables[entry_name].get();
+}
+
+optional_ptr<CatalogEntry> SchemaItems::GetSchema() const {
+	return schema.get();
 }
 
 optional_ptr<CatalogEntry>
 PostgresTransaction::GetSchema(const string &name) {
 	auto it = schemas.find(name);
 	if (it != schemas.end()) {
-		return it->second.schema.get();
+		return it->second.GetSchema();
 	}
 
 	CreateSchemaInfo create_schema;
 	create_schema.schema = name;
 	auto pg_schema = make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
 	schemas.emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
-	return schemas.at(name).schema.get();
+	return schemas.at(name).GetSchema();
 }
 
 optional_ptr<CatalogEntry>
@@ -112,6 +113,7 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 		if (it == schemas.end()) {
 			return nullptr;
 		}
+
 		auto &schema_entry = it->second;
 		return schema_entry.GetTable(name);
 	}

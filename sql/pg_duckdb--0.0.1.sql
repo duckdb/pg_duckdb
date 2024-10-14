@@ -97,11 +97,58 @@ BEGIN
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION iceberg_scan(path text)
+-- iceberg_* functions optional parameters are extract from source code;
+-- https://github.com/duckdb/duckdb_iceberg/tree/main/src/iceberg_functions
+
+CREATE OR REPLACE FUNCTION iceberg_scan(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
+                                                   mode TEXT DEFAULT '',
+                                                   metadata_compression_codec TEXT DEFAULT 'none',
+                                                   skip_schema_inference BOOLEAN DEFAULT FALSE,
+                                                   version TEXT DEFAULT 'version-hint.text',
+                                                   version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
 RETURNS SETOF record LANGUAGE 'plpgsql' AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `iceberg_scan(TEXT)` only works with Duckdb execution.';
+END;
+$func$;
+
+CREATE TYPE iceberg_metadata_record AS (
+  manifest_path TEXT,
+  manifest_sequence_number NUMERIC,
+  manifest_content  TEXT,
+  status TEXT,
+  content TEXT,
+  file_path TEXT
+);
+
+CREATE OR REPLACE FUNCTION iceberg_metadata(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
+                                                       metadata_compression_codec TEXT DEFAULT 'none',
+                                                       skip_schema_inference BOOLEAN DEFAULT FALSE,
+                                                       version TEXT DEFAULT 'version-hint.text',
+                                                       version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
+RETURNS SETOF iceberg_metadata_record LANGUAGE 'plpgsql' AS
+$func$
+BEGIN
+    RAISE EXCEPTION 'Function `iceberg_metadata(TEXT)` only works with Duckdb execution.';
+END;
+$func$;
+
+CREATE TYPE iceberg_snapshots_record AS (
+  sequence_number BIGINT,
+  snapshot_id BIGINT,
+  timestamp_ms TIMESTAMP,
+  manifest_list TEXT
+);
+
+CREATE OR REPLACE FUNCTION iceberg_snapshots(path text, metadata_compression_codec TEXT DEFAULT 'none',
+                                                        skip_schema_inference BOOLEAN DEFAULT FALSE,
+                                                        version TEXT DEFAULT 'version-hint.text',
+                                                        version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
+RETURNS SETOF iceberg_snapshots_record LANGUAGE 'plpgsql' AS
+$func$
+BEGIN
+    RAISE EXCEPTION 'Function `iceberg_snapshots(TEXT)` only works with Duckdb execution.';
 END;
 $func$;
 
@@ -212,6 +259,9 @@ CREATE EVENT TRIGGER duckdb_grant_trigger ON ddl_command_end
 
 CREATE OR REPLACE PROCEDURE force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)
     LANGUAGE C AS 'MODULE_PATHNAME';
+
+CREATE OR REPLACE FUNCTION recycle_ddb() RETURNS void
+    LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_recycle_ddb';
 
 DO $$
 BEGIN

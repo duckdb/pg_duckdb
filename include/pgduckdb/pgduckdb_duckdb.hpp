@@ -28,6 +28,12 @@ public:
 		return default_dbname;
 	}
 
+	void
+	Reset() {
+		delete database;
+		database = nullptr;
+	}
+
 private:
 	DuckDBManager();
 
