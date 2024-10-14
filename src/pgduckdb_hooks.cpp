@@ -169,13 +169,13 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
 
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, ERROR);
-			return duckdbPlan;
+			return DuckdbPlanNode(parse, cursor_options, true);
 		} else if (duckdb_execution && IsAllowedStatement(parse)) {
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, WARNING);
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}
+			/* If we can't create a plan, we'll fall back to Postgres */
 		}
 	}
 

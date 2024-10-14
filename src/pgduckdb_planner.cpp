@@ -52,7 +52,8 @@ DuckdbPrepare(const Query *query) {
 }
 
 static Plan *
-CreatePlan(Query *query, int elevel) {
+CreatePlan(Query *query, bool throw_error) {
+	int elevel = throw_error ? ERROR : WARNING;
 	/*
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
@@ -104,9 +105,9 @@ CreatePlan(Query *query, int elevel) {
 }
 
 PlannedStmt *
-DuckdbPlanNode(Query *parse, int cursor_options, int elevel) {
+DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 	/* We need to check can we DuckDB create plan */
-	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan *>(CreatePlan, "CreatePlan", parse, elevel);
+	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan *>(CreatePlan, "CreatePlan", parse, throw_error);
 	Plan *duckdb_plan = (Plan *)castNode(CustomScan, plan);
 
 	if (!duckdb_plan) {
