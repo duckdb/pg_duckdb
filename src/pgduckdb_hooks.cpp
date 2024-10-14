@@ -166,20 +166,16 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
-		if (duckdb_execution && IsAllowedStatement(parse)) {
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
-			if (duckdbPlan) {
-				return duckdbPlan;
-			}
-		}
-
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
 
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options);
+			return DuckdbPlanNode(parse, cursor_options, true);
+		} else if (duckdb_execution && IsAllowedStatement(parse)) {
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}
+			/* If we can't create a plan, we'll fall back to Postgres */
 		}
 	}
 

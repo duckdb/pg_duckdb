@@ -17,8 +17,8 @@ SELECT "sepal.length" FROM read_parquet('../../data/iris.parquet') AS ("sepal.le
           4.5
 (5 rows)
 
-SELECT "sepal.length", file_row_number, filename 
-    FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true) 
+SELECT "sepal.length", file_row_number, filename
+    FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true)
     AS ("sepal.length" FLOAT, file_row_number INT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
  sepal.length | file_row_number |        filename         
 --------------+-----------------+-------------------------
@@ -47,7 +47,7 @@ SELECT "sepal.length" FROM read_csv('../../data/iris.csv') AS ("sepal.length" FL
 (5 rows)
 
 SELECT "sepal.length", filename
-    FROM read_csv('../../data/iris.csv', filename => true, header => true) 
+    FROM read_csv('../../data/iris.csv', filename => true, header => true)
     AS ("sepal.length" FLOAT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
  sepal.length |      filename       
 --------------+---------------------
@@ -58,3 +58,5 @@ SELECT "sepal.length", filename
           4.5 | ../../data/iris.csv
 (5 rows)
 
+SELECT * FROM read_csv('../../non-existing-file.csv') AS ("sepal.length" FLOAT);
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'IO Error: No files found that match the pattern "../../non-existing-file.csv"
