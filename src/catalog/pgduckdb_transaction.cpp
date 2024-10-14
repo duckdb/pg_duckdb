@@ -90,18 +90,22 @@ SchemaItems::GetTable(const string &entry_name) {
 	return tables[entry_name].get();
 }
 
+optional_ptr<CatalogEntry> SchemaItems::GetSchema() const {
+	return schema.get();
+}
+
 optional_ptr<CatalogEntry>
 PostgresTransaction::GetSchema(const string &name) {
 	auto it = schemas.find(name);
 	if (it != schemas.end()) {
-		return it->second.schema.get();
+		return it->second.GetSchema();
 	}
 
 	CreateSchemaInfo create_schema;
 	create_schema.schema = name;
 	auto pg_schema = make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
 	schemas.emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
-	return schemas.at(name).schema.get();
+	return schemas.at(name).GetSchema();
 }
 
 optional_ptr<CatalogEntry>
