@@ -48,10 +48,6 @@ DuckDBManager::Initialize() {
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
 	}
 
-	if (duckdb_disabled_filesystems != NULL) {
-		config.SetOptionByName("disabled_filesystems", duckdb_disabled_filesystems);
-	}
-
 	if (duckdb_maximum_threads > -1) {
 		SET_DUCKDB_OPTION(maximum_threads);
 	}
