@@ -205,7 +205,9 @@ CREATE TABLE extensions (
 -- table was a DuckDB table or not. See the comments and code in
 -- duckdb_drop_table_trigger for details.
 CREATE TABLE tables (
-    relid regclass PRIMARY KEY
+    relid regclass PRIMARY KEY,
+    duckdb_db TEXT NOT NULL,
+    motherduck_catalog_version TEXT
 );
 
 REVOKE ALL ON tables FROM PUBLIC;
@@ -228,11 +230,11 @@ CREATE ACCESS METHOD duckdb
     TYPE TABLE
     HANDLER duckdb_am_handler;
 
-CREATE FUNCTION duckdb_drop_table_trigger() RETURNS event_trigger
+CREATE FUNCTION duckdb_drop_trigger() RETURNS event_trigger
     AS 'MODULE_PATHNAME' LANGUAGE C;
 
-CREATE EVENT TRIGGER duckdb_drop_table_trigger ON sql_drop
-    EXECUTE FUNCTION duckdb_drop_table_trigger();
+CREATE EVENT TRIGGER duckdb_drop_trigger ON sql_drop
+    EXECUTE FUNCTION duckdb_drop_trigger();
 
 CREATE FUNCTION duckdb_create_table_trigger() RETURNS event_trigger
     AS 'MODULE_PATHNAME' LANGUAGE C;
@@ -248,8 +250,26 @@ CREATE EVENT TRIGGER duckdb_alter_table_trigger ON ddl_command_end
     WHEN tag IN ('ALTER TABLE')
     EXECUTE FUNCTION duckdb_alter_table_trigger();
 
+CREATE FUNCTION duckdb_grant_trigger() RETURNS event_trigger
+    AS 'MODULE_PATHNAME' LANGUAGE C;
+
+CREATE EVENT TRIGGER duckdb_grant_trigger ON ddl_command_end
+    WHEN tag IN ('GRANT')
+    EXECUTE FUNCTION duckdb_grant_trigger();
+
+CREATE OR REPLACE PROCEDURE force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)
+    LANGUAGE C AS 'MODULE_PATHNAME';
+
 CREATE OR REPLACE FUNCTION recycle_ddb() RETURNS void
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_recycle_ddb';
+
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_catalog.pg_namespace WHERE nspname LIKE 'ddb$%') THEN
+        RAISE 'pg_duckdb can only be installed if there are no schemas with a ddb$ prefix';
+    END IF;
+END
+$$;
 
 DO $$
 BEGIN

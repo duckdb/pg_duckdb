@@ -23,8 +23,15 @@ public:
 
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
 
-	void Reset() {
-		database.reset();
+	inline const std::string &
+	GetDefaultDBName() const {
+		return default_dbname;
+	}
+
+	void
+	Reset() {
+		delete database;
+		database = nullptr;
 	}
 
 private:
@@ -41,7 +48,19 @@ private:
 
 	int secret_table_num_rows;
 	int secret_table_current_seq;
-	duckdb::unique_ptr<duckdb::DuckDB> database;
+	/*
+	 * FIXME: Use a unique_ptr instead of a raw pointer. For now this is not
+	 * possible though, as the MotherDuck extension causes an ABORT when the
+	 * DuckDB database its destructor is run at the exit of the process.  This
+	 * then in turn crashes Postgres, which we obviously dont't want. Not
+	 * running the destructor also doesn't really have any downsides, as the
+	 * process is going to die anyway. It's probably even a tiny bit more
+	 * efficient not to run the destructor at all. But we should still fix
+	 * this, because running the destructor is a good way to find bugs (such
+	 * as the one reported in #279).
+	 */
+	duckdb::DuckDB *database;
+	std::string default_dbname;
 };
 
 } // namespace pgduckdb

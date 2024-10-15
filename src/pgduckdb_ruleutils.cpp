@@ -1,3 +1,4 @@
+#include "duckdb.hpp"
 extern "C" {
 #include "postgres.h"
 
@@ -16,7 +17,9 @@ extern "C" {
 #include "pgduckdb/vendor/pg_ruleutils.h"
 }
 
+#include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_table_am.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
 extern "C" {
@@ -27,6 +30,79 @@ pgduckdb_function_name(Oid function_oid) {
 	}
 	auto func_name = get_func_name(function_oid);
 	return psprintf("system.main.%s", quote_identifier(func_name));
+}
+
+/*
+ * Given a postgres schema name, this returns a list of two elements: the first
+ * is the DuckDB database name and the second is the duckdb schema name. These
+ * are not escaped yet.
+ */
+List *
+pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
+	if (!is_duckdb_table) {
+		return list_make2((void *)"pgduckdb", (void *)postgres_schema_name);
+	}
+
+	if (strcmp("pg_temp", postgres_schema_name) == 0) {
+		return list_make2((void *)"pg_temp", (void *)"main");
+	}
+
+	if (strncmp("ddb$", postgres_schema_name, 4) != 0) {
+		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
+		return list_make2((void *)dbname, (void *)postgres_schema_name);
+	}
+	StringInfoData db_name;
+	StringInfoData schema_name;
+	initStringInfo(&db_name);
+	initStringInfo(&schema_name);
+	const char *saveptr = &postgres_schema_name[4];
+	const char *dollar;
+
+	while ((dollar = strchr(saveptr, '$'))) {
+		appendBinaryStringInfo(&db_name, saveptr, dollar - saveptr);
+		saveptr = dollar + 1;
+		if (saveptr[0] == '\0') {
+			elog(ERROR, "Schema name is invalid");
+		}
+
+		if (saveptr[0] == '$') {
+			appendStringInfoChar(&db_name, '$');
+		} else {
+			break;
+		}
+	}
+
+	if (!dollar) {
+		appendStringInfoString(&db_name, saveptr);
+		return list_make2((void *)db_name.data, (char *)"main");
+	}
+
+	while ((dollar = strchr(saveptr, '$'))) {
+		appendBinaryStringInfo(&schema_name, saveptr, dollar - saveptr);
+		saveptr = dollar + 1;
+
+		if (saveptr[0] == '$') {
+			appendStringInfoChar(&schema_name, '$');
+		} else {
+			break;
+		}
+	}
+	appendStringInfoString(&schema_name, saveptr);
+
+	return list_make2(db_name.data, schema_name.data);
+}
+
+/*
+ * Returns the fully qualified DuckDB database and schema. The schema and
+ * database are quoted if necessary.
+ */
+const char *
+pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table) {
+	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, is_duckdb_table);
+	const char *db_name = (const char *)linitial(db_and_schema);
+	const char *schema_name = (const char *)lsecond(db_and_schema);
+	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
+	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
 }
 
 /*
@@ -42,21 +118,10 @@ pgduckdb_relation_name(Oid relation_oid) {
 		elog(ERROR, "cache lookup failed for relation %u", relation_oid);
 	Form_pg_class relation = (Form_pg_class)GETSTRUCT(tp);
 	const char *relname = NameStr(relation->relname);
-	/*
-	 * XXX: Should this be using get_namespace_name instead, the difference is
-	 * that it will store temp tables in the pg_temp_123 style schemas instead
-	 * of plain pg_temp. I don't think this really matters.
-	 */
-	const char *nspname = get_namespace_name_or_temp(relation->relnamespace);
-	const char *dbname;
+	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
 
-	if (relation->relam == pgduckdb::DuckdbTableAmOid()) {
-		dbname = "memory";
-	} else {
-		dbname = "pgduckdb";
-	}
-
-	char *result = psprintf("%s.%s.%s", quote_identifier(dbname), quote_identifier(nspname), quote_identifier(relname));
+	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
 	ReleaseSysCache(tp);
 
@@ -79,7 +144,8 @@ char *
 pgduckdb_get_tabledef(Oid relation_oid) {
 	Relation relation = relation_open(relation_oid, AccessShareLock);
 	const char *relation_name = pgduckdb_relation_name(relation_oid);
-	const char *schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
+	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
 
 	StringInfoData buffer;
 	initStringInfo(&buffer);
@@ -88,12 +154,21 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		elog(ERROR, "Only regular tables are supported in DuckDB");
 	}
 
-	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", quote_identifier(schema_name));
+	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
 
 	appendStringInfoString(&buffer, "CREATE ");
 
-	if (relation->rd_rel->relpersistence != RELPERSISTENCE_TEMP) {
-		elog(ERROR, "Only TEMP tables are supported in DuckDB");
+	if (relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP) {
+		// allowed
+	} else if (!pgduckdb::IsMotherDuckEnabled()) {
+		elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
+	} else if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
+		elog(ERROR, "Only TEMP and non-UNLOGGED tables are supported in DuckDB");
+	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUser()) {
+		elog(ERROR, "MotherDuck tables must be created by the duckb.motherduck_postgres_user");
+	}
+
+	if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
 	}
 
 	appendStringInfo(&buffer, "TABLE %s (", relation_name);
