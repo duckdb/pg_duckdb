@@ -18,6 +18,12 @@ char *duckdb_background_worker_db = strdup("postgres");
 char *duckdb_motherduck_token = NULL;
 char *duckdb_motherduck_postgres_user = NULL;
 
+int duckdb_maximum_threads = -1;
+char *duckdb_maximum_memory = NULL;
+char *duckdb_disabled_filesystems = NULL;
+bool duckdb_enable_external_access = true;
+bool duckdb_allow_unsigned_extensions = false;
+
 extern "C" {
 PG_MODULE_MAGIC;
 
@@ -27,6 +33,7 @@ _PG_init(void) {
 		ereport(ERROR, (errmsg("pg_duckdb needs to be loaded via shared_preload_libraries"),
 		                errhint("Add pg_duckdb to shared_preload_libraries.")));
 	}
+
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
@@ -77,6 +84,20 @@ static void
 DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.execution", "Is DuckDB query execution enabled.", &duckdb_execution);
 
+	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
+	                     &duckdb_enable_external_access);
+
+	DefineCustomVariable("duckdb.allow_unsigned_extensions",
+	                     "Allow DuckDB to load extensions with invalid or missing signatures",
+	                     &duckdb_allow_unsigned_extensions);
+
+	DefineCustomVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)", &duckdb_maximum_memory);
+
+	DefineCustomVariable("duckdb.disabled_filesystems",
+	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
+	                     &duckdb_disabled_filesystems);
+
+	DefineCustomVariable("duckdb.threads", "DuckDB max number of threads.", &duckdb_maximum_threads, -1, 1024);
 
 	DefineCustomVariable("duckdb.max_threads_per_query", "DuckDB max number of thread(s) per query.",
 	                     &duckdb_max_threads_per_query, 1, 64);

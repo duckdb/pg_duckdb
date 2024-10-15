@@ -25,6 +25,14 @@ namespace pgduckdb {
 DuckDBManager::DuckDBManager() {
 }
 
+#define SET_DUCKDB_OPTION(ddb_option_name)                                                                             \
+	config.options.ddb_option_name = duckdb_##ddb_option_name;                                                         \
+	{                                                                                                                  \
+		std::ostringstream oss;                                                                                        \
+		oss << "[PGDuckDB] Set DuckDB option: '" << #ddb_option_name << "'=" << duckdb_##ddb_option_name;              \
+		elog(INFO, "%s", oss.str().c_str());                                                                           \
+	}
+
 void
 DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
@@ -33,6 +41,21 @@ DuckDBManager::Initialize() {
 	config.SetOptionByName("extension_directory", CreateOrGetDirectoryPath("duckdb_extensions"));
 	// Transforms VIEWs into their view definition
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
+	SET_DUCKDB_OPTION(allow_unsigned_extensions);
+	SET_DUCKDB_OPTION(enable_external_access);
+
+	if (duckdb_maximum_memory != NULL) {
+		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
+		elog(INFO, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
+	}
+
+	if (duckdb_disabled_filesystems != NULL) {
+		config.SetOptionByName("disabled_filesystems", duckdb_disabled_filesystems);
+	}
+
+	if (duckdb_maximum_threads > -1) {
+		SET_DUCKDB_OPTION(maximum_threads);
+	}
 
 	const char *connection_string = nullptr;
 
