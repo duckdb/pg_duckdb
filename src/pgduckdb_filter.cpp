@@ -78,7 +78,7 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 		return StringFilterOperation<OP>(value, constant, type_oid == BPCHAROID);
 	default:
 		throw duckdb::InvalidTypeException(
-		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid));
+		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: " + std::to_string(type_oid)));
 	}
 }
 
