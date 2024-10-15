@@ -15,7 +15,6 @@ jobs:
     name: Build Docker
     runs-on: ubuntu-24.04
     strategy:
-      # fail-fast: false
       matrix:
         postgres: ["15", "16", "17"]
         platform: ["linux/amd64", "linux/arm64"]
@@ -38,7 +37,7 @@ jobs:
           submodules: "recursive"
       - name: Set env
         run: |
-          echo "POSTGRES_IMAGE=${{ format('wuputah/pg_duckdb:{0}-{1}', matrix.postgres, github.sha) }}" >> $GITHUB_ENV
+          echo "POSTGRES_IMAGE="pgduckdb/pgduckdb:${{matrix.postgres}}-${{github.sha}}" >> $GITHUB_ENV
           echo "POSTGRES_VERSION=${{ matrix.postgres }}" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -50,6 +49,7 @@ jobs:
         uses: docker/bake-action@v5
         with:
           targets: pg_duckdb_${{ matrix.postgres }}
+          push: true
           set: |
             *.platform=${{ matrix.platform }}
             *.cache-to=type=gha,mode=max

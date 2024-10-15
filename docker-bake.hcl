@@ -1,6 +1,5 @@
 variable "REPO" {
-  # temp repo on dockerhub
-  default = "wuputah/pg_duckdb"
+  default = "pgduckdb/pgduckdb"
 }
 
 variable "POSTGRES_VERSION" {
