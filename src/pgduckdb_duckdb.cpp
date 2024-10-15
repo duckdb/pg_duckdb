@@ -27,11 +27,10 @@ DuckDBManager::DuckDBManager() {
 
 #define SET_DUCKDB_OPTION(ddb_option_name)                                                                             \
 	config.options.ddb_option_name = duckdb_##ddb_option_name;                                                         \
-	{                                                                                                                  \
-		std::ostringstream oss;                                                                                        \
-		oss << "[PGDuckDB] Set DuckDB option: '" << #ddb_option_name << "'=" << duckdb_##ddb_option_name;              \
-		elog(DEBUG2, "%s", oss.str().c_str());                                                                           \
-	}
+	elog(DEBUG2,                                                                                                       \
+	     "[PGDuckDB] Set DuckDB option: '" #ddb_option_name "'="                                                       \
+	     "%s",                                                                                                         \
+	     std::to_string(duckdb_##ddb_option_name).c_str());
 
 void
 DuckDBManager::Initialize() {
