@@ -59,18 +59,25 @@ DuckDBManager::Initialize() {
 	 * its default database will be set to the default MotherDuck database.
 	 */
 	if (pgduckdb::IsMotherDuckEnabled()) {
-
 		connection_string = psprintf("md:?motherduck_token=%s", duckdb_motherduck_token);
 	}
+
 	database = duckdb::make_uniq<duckdb::DuckDB>(connection_string, &config).release();
-	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
-	    duckdb::make_uniq<duckdb::PostgresStorageExtension>();
+
+	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
+	dbconfig.storage_extensions["pgduckdb"] = duckdb::make_uniq<duckdb::PostgresStorageExtension>();
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
+
+	if (duckdb_disabled_filesystems != NULL) {
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
+	}
+
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	default_dbname = db_manager.GetDefaultDatabase(context);
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
