@@ -54,6 +54,7 @@ def test_extended(cur: Cursor):
             t3 BPCHAR,
             d DATE,
             ts TIMESTAMP,
+            tstz TIMESTAMP WITH TIME ZONE,
             json_obj JSON);
         """)
 
@@ -69,10 +70,11 @@ def test_extended(cur: Cursor):
         "t3",
         datetime.date(2024, 5, 4),
         datetime.datetime(2020, 1, 1, 1, 2, 3),
+        datetime.datetime(2020, 1, 1, 1, 2, 3, tzinfo=datetime.timezone.utc),
         psycopg.types.json.Json({"a": 1}),
     )
     cur.sql(
-        "INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", row
+        "INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)", row
     )
 
     assert (True,) * len(row) == cur.sql(
@@ -89,6 +91,7 @@ def test_extended(cur: Cursor):
             t3 = %s,
             d = %s,
             ts = %s,
+            tstz = %s,
             json_obj::text = %s::text
         FROM t;
         """,
