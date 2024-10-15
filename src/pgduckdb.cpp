@@ -20,6 +20,7 @@ char *duckdb_motherduck_postgres_user = strdup("");
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = NULL;
+char *duckdb_disabled_filesystems = NULL;
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_unsigned_extensions = false;
 
@@ -87,16 +88,21 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.execution", "Is DuckDB query execution enabled.", &duckdb_execution);
 
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
-	                     &duckdb_enable_external_access);
+	                     &duckdb_enable_external_access, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.allow_unsigned_extensions",
 	                     "Allow DuckDB to load extensions with invalid or missing signatures",
-	                     &duckdb_allow_unsigned_extensions);
+	                     &duckdb_allow_unsigned_extensions, PGC_SUSET);
 
-	DefineCustomVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)", &duckdb_maximum_memory);
+	DefineCustomVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)", &duckdb_maximum_memory,
+	                     PGC_SUSET);
+
+	DefineCustomVariable("duckdb.disabled_filesystems",
+	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
+	                     &duckdb_disabled_filesystems, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.threads", "Maximum number of DuckDB threads per Postgres backend.",
-	                     &duckdb_maximum_threads, -1, 1024);
+	                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.max_threads_per_query",
 	                     "Maximum number of DuckDB threads used for a single Postgres scan",
