@@ -384,6 +384,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 		break;
 	}
+	case TIMESTAMPTZOID: {
+		duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
+		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		break;
+	}
 	case FLOAT4OID: {
 		auto result_float = value.GetValue<float>();
 		slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT4OID;
@@ -405,7 +410,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		NumericVar numeric_var;
 		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::DECIMAL ||
 		         value.type().id() == duckdb::LogicalTypeId::HUGEINT ||
-				 value.type().id() == duckdb::LogicalTypeId::UBIGINT);
+		         value.type().id() == duckdb::LogicalTypeId::UBIGINT);
 		auto physical_type = value.type().InternalType();
 		const bool is_decimal = value.type().id() == duckdb::LogicalTypeId::DECIMAL;
 		uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
@@ -533,6 +538,8 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalTypeId::DATE;
 	case TIMESTAMPOID:
 		return duckdb::LogicalTypeId::TIMESTAMP;
+	case TIMESTAMPTZOID:
+		return duckdb::LogicalTypeId::TIMESTAMP_TZ;
 	case FLOAT4OID:
 		return duckdb::LogicalTypeId::FLOAT;
 	case FLOAT8OID:
@@ -601,6 +608,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		return DATEOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		return TIMESTAMPOID;
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+		return TIMESTAMPTZOID;
 	case duckdb::LogicalTypeId::FLOAT:
 		return FLOAT4OID;
 	case duckdb::LogicalTypeId::DOUBLE:
@@ -766,6 +775,9 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::DATE(duckdb::date_t(DatumGetDateADT(value) + PGDUCKDB_DUCK_DATE_OFFSET));
 	case TIMESTAMPOID:
 		return duckdb::Value::TIMESTAMP(duckdb::timestamp_t(DatumGetTimestamp(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
+	case TIMESTAMPTZOID:
+		return duckdb::Value::TIMESTAMPTZ(
+		    duckdb::timestamp_t(DatumGetTimestampTz(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
 	case FLOAT4OID: {
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
 	}
@@ -824,10 +836,13 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		Append<duckdb::timestamp_t>(
 		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
 		break;
-	case duckdb::LogicalTypeId::FLOAT: {
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+		Append<duckdb::timestamp_t>(
+		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
+		break;
+	case duckdb::LogicalTypeId::FLOAT:
 		Append<float>(result, DatumGetFloat4(value), offset);
 		break;
-	}
 	case duckdb::LogicalTypeId::DOUBLE: {
 		auto aux_info = type.GetAuxInfoShrPtr();
 		if (aux_info && dynamic_cast<NumericAsDouble *>(aux_info.get())) {

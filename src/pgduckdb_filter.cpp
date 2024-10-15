@@ -72,6 +72,10 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 		int64_t timestamp = DatumGetTimestamp(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 		return TemplatedFilterOperation<int64_t, OP>(timestamp, constant);
 	}
+	case TIMESTAMPTZOID: {
+		int64_t timestamptz = DatumGetTimestampTz(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		return TemplatedFilterOperation<int64_t, OP>(timestamptz, constant);
+	}
 	case BPCHAROID:
 	case TEXTOID:
 	case VARCHAROID:
