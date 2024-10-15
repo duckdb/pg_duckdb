@@ -31,7 +31,7 @@ RUN chown -R postgres:postgres . /usr/lib/postgresql /usr/share/postgresql /out
 
 USER postgres
 # build
-RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 make -j$(nproc)
+RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 echo "Available CPUs=$(nproc)" && make -j$(nproc)
 # install into location specified by pg_config for tests
 RUN make install
 # install into /out for packaging
