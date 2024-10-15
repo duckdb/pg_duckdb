@@ -159,8 +159,9 @@ CREATE SEQUENCE secrets_table_seq START WITH 1 INCREMENT BY 1;
 SELECT setval('secrets_table_seq', 1);
 
 CREATE TABLE secrets (
+    name TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     type TEXT NOT NULL,
-    id TEXT NOT NULL,
+    key_id TEXT NOT NULL,
     secret TEXT NOT NULL,
     region TEXT,
     session_token TEXT,
@@ -197,7 +198,7 @@ CREATE TRIGGER duckdb_secret_r2_tr BEFORE INSERT OR UPDATE ON secrets
 FOR EACH ROW EXECUTE PROCEDURE duckdb_secret_r2_check();
 
 CREATE TABLE extensions (
-    name TEXT NOT NULL,
+    name TEXT NOT NULL PRIMARY KEY,
     enabled BOOL DEFAULT TRUE
 );
 

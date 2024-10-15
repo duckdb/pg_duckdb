@@ -108,7 +108,7 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		StringInfo secret_key = makeStringInfo();
 		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
 		appendStringInfo(secret_key, "CREATE SECRET pgduckb_secret_%d ", secret_id);
-		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
+		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.key_id.c_str(),
 		                 secret.secret.c_str());
 		if (secret.region.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
@@ -130,9 +130,8 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 		pfree(secret_key->data);
 		secret_id++;
+		secret_table_num_rows = secret_id;
 	}
-
-	secret_table_num_rows = secret_id;
 }
 
 void

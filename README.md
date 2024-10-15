@@ -79,7 +79,7 @@ The best way to get started is to connect Postgres to a new or existing object s
 	```sql
 	-- Session Token is Optional
 	INSERT INTO duckdb.secrets
-	(type, id, secret, session_token, region)
+	(type, key_id, secret, session_token, region)
 	VALUES ('S3', 'access_key_id', 'secret_access_key', 'session_token', 'us-east-1');
 	```
 
