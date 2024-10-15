@@ -24,10 +24,17 @@ INSERT INTO bool_tbl SELECT CAST(a AS BOOL) from (VALUES (False), (NULL), (True)
 SELECT * FROM bool_tbl;
 
 --- VARCHAR
+CREATE TABLE bpchar_tbl(a CHAR(25) NOT NULL);
+INSERT INTO bpchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), ('test'), ('this is a long string')) t(a);
+SELECT * FROM bpchar_tbl;
+SELECT * FROM bpchar_tbl WHERE a = 'test';
+
+--- VARCHAR
 CREATE TABLE varchar_tbl(a VARCHAR);
 INSERT INTO varchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), (NULL), ('test'), ('this is a long string')) t(a);
 SELECT * FROM varchar_tbl;
 SELECT * FROM varchar_tbl WHERE a = 'test';
+
 
 --- TEXT
 CREATE TABLE text_tbl(a TEXT);
@@ -140,6 +147,7 @@ DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
 DROP TABLE big;
+DROP TABLE bpchar_tbl;
 DROP TABLE varchar_tbl;
 DROP TABLE text_tbl;
 DROP TABLE date_tbl;

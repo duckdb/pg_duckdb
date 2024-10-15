@@ -23,16 +23,21 @@ TemplatedFilterOperation(T value, const duckdb::Value &constant) {
 
 template <class OP>
 bool
-StringFilterOperation(Datum &value, const duckdb::Value &constant) {
-	if (value == (Datum) 0 || constant.IsNull()) {
+StringFilterOperation(Datum &value, const duckdb::Value &constant, bool is_bpchar) {
+	if (value == (Datum)0 || constant.IsNull()) {
 		return false; // Comparison to NULL always returns false.
 	}
 
 	bool should_free = false;
 	const auto detoasted_value = DetoastPostgresDatum(reinterpret_cast<varlena *>(value), &should_free);
-	const auto datum_sv =  std::string_view((const char*)VARDATA_ANY(detoasted_value), VARSIZE_ANY_EXHDR(detoasted_value));
+
+	/* bpchar adds zero padding so we need to read true len of bpchar */
+	auto detoasted_val_len = is_bpchar ? bpchartruelen(VARDATA_ANY(detoasted_value), VARSIZE_ANY_EXHDR(detoasted_value))
+	                                   : VARSIZE_ANY_EXHDR(detoasted_value);
+
+	const auto datum_sv = std::string_view((const char *)VARDATA_ANY(detoasted_value), detoasted_val_len);
 	const auto val = duckdb::StringValue::Get(constant);
-	const auto val_sv =  std::string_view(val);
+	const auto val_sv = std::string_view(val);
 	const bool res = OP::Operation(datum_sv, val_sv);
 
 	if (should_free) {
@@ -67,9 +72,10 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 		int64_t timestamp = DatumGetTimestamp(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 		return TemplatedFilterOperation<int64_t, OP>(timestamp, constant);
 	}
+	case BPCHAROID:
 	case TEXTOID:
 	case VARCHAROID:
-		return StringFilterOperation<OP>(value, constant);
+		return StringFilterOperation<OP>(value, constant, type_oid == BPCHAROID);
 	default:
 		throw duckdb::InvalidTypeException(
 		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid));
