@@ -30,7 +30,7 @@ DuckDBManager::DuckDBManager() {
 	{                                                                                                                  \
 		std::ostringstream oss;                                                                                        \
 		oss << "[PGDuckDB] Set DuckDB option: '" << #ddb_option_name << "'=" << duckdb_##ddb_option_name;              \
-		elog(INFO, "%s", oss.str().c_str());                                                                           \
+		elog(DEBUG2, "%s", oss.str().c_str());                                                                           \
 	}
 
 void
@@ -46,7 +46,7 @@ DuckDBManager::Initialize() {
 
 	if (duckdb_maximum_memory != NULL) {
 		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
-		elog(INFO, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
 	}
 
 	if (duckdb_disabled_filesystems != NULL) {
