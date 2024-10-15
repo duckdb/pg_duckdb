@@ -23,3 +23,16 @@ DROP TABLE empty;
 
 DROP EXTENSION pg_duckdb;
 CREATE EXTENSION pg_duckdb;
+
+
+-- Verify that all pages that are fetched are closed before execution ends.
+-- Table with smaller number of tuples (if nothing is matched) will terminate execution
+-- before second table is read to the end.
+
+CREATE TABLE rt(a INT);
+CREATE TABLE lt(a INT);
+INSERT INTO rt SELECT g FROM generate_series(1,100) g;
+INSERT INTO lt SELECT g % 10 FROM generate_series(1,100000) g;
+SELECT lt.a * rt.a FROM lt, rt WHERE lt.a % 2 = 0 AND rt.a = 0;
+DROP TABLE lt;
+DROP TABLE rt;

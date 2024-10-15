@@ -1,7 +1,8 @@
-create table int_as_varchar(a varchar);
-insert into int_as_varchar SELECT * from (
+CREATE TABLE int_as_varchar(a varchar);
+INSERT INTO int_as_varchar SELECT * from (
 	VALUES
 		('abc')
 ) t(a);
 
-select a::INTEGER from int_as_varchar;
+SELECT a::INTEGER FROM int_as_varchar;
+DROP TABLE int_as_varchar;

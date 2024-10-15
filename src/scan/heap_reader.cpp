@@ -51,6 +51,12 @@ HeapReader::HeapReader(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> h
 }
 
 HeapReader::~HeapReader() {
+	/* If execution is interrupted and buffer is still opened close it now */
+	if (m_buffer != InvalidBuffer) {
+		DuckdbProcessLock::GetLock().lock();
+		UnlockReleaseBuffer(m_buffer);
+		DuckdbProcessLock::GetLock().unlock();
+	}
 }
 
 Page
