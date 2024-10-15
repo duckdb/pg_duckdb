@@ -17,11 +17,6 @@ CREATE TEMP TABLE t(
 ) USING duckdb;
 
 
--- FIXME: This should not be necessary to make this test work, we should always
--- send ISO dates to duckdb or even better would be to make DuckDB respect
--- postgres its datestyle
-SET DateStyle = 'ISO, YMD';
-
 INSERT INTO t VALUES (true, 2, 4, 8, 4.0, 8.0, 't1', 't2', 't3', '2024-05-04', '2020-01-01T01:02:03', '{"a": 1}');
 SELECT * FROM t;
 

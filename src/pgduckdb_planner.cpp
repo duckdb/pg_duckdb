@@ -12,7 +12,7 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/guc.h"
 
-#include "pgduckdb/vendor/pg_ruleutils.h"
+#include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -34,7 +34,7 @@ DuckdbPrepare(const Query *query) {
 	PreventInTransactionBlock(true, "DuckDB queries");
 
 	Query *copied_query = (Query *)copyObjectImpl(query);
-	const char *query_string = pgduckdb_pg_get_querydef(copied_query, false);
+	const char *query_string = pgduckdb_get_querydef(copied_query);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {

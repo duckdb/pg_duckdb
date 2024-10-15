@@ -8,6 +8,7 @@ extern "C" {
 #include "catalog/pg_collation.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/rel.h"
@@ -125,6 +126,26 @@ pgduckdb_relation_name(Oid relation_oid) {
 
 	ReleaseSysCache(tp);
 
+	return result;
+}
+
+/*
+ * pgduckdb_get_querydef returns the definition of a given query in DuckDB
+ * syntax. This definition includes the query's SQL string, but does not
+ * include the query's parameters.
+ *
+ * It's a small wrapper around pgduckdb_pg_get_querydef_internal to ensure that
+ * dates are always formatted in ISO format (which is the only format that
+ * DuckDB understands). The reason this is not part of
+ * pgduckdb_pg_get_querydef_internal is because we want to avoid changing that
+ * vendored in function as much as possible to keep updates easy.
+ */
+char *
+pgduckdb_get_querydef(Query *query) {
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("DateStyle", "ISO, YMD", PGC_USERSET, PGC_S_SESSION);
+	char *result = pgduckdb_pg_get_querydef_internal(query, false);
+	AtEOXact_GUC(false, save_nestlevel);
 	return result;
 }
 

@@ -291,7 +291,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
 	if (ctas_query) {
 
-		const char *ctas_query_string = pgduckdb_pg_get_querydef(ctas_query, false);
+		const char *ctas_query_string = pgduckdb_get_querydef(ctas_query);
 
 		std::string insert_string =
 		    std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
