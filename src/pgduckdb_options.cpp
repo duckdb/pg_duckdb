@@ -61,7 +61,7 @@ ReadDuckdbSecrets() {
 		DuckdbSecret secret;
 
 		secret.type = DatumToString(datum_array[Anum_duckdb_secret_type - 1]);
-		secret.id = DatumToString(datum_array[Anum_duckdb_secret_id - 1]);
+		secret.key_id = DatumToString(datum_array[Anum_duckdb_secret_key_id - 1]);
 		secret.secret = DatumToString(datum_array[Anum_duckdb_secret_secret - 1]);
 
 		if (!is_null_array[Anum_duckdb_secret_region - 1])
