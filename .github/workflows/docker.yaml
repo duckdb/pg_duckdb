@@ -37,7 +37,7 @@ jobs:
           submodules: "recursive"
       - name: Set env
         run: |
-          echo "POSTGRES_IMAGE="pgduckdb/pgduckdb:${{matrix.postgres}}-${{github.sha}}" >> $GITHUB_ENV
+          echo "POSTGRES_IMAGE=pgduckdb/pgduckdb:${{matrix.postgres}}-${{github.sha}}" >> $GITHUB_ENV
           echo "POSTGRES_VERSION=${{ matrix.postgres }}" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
