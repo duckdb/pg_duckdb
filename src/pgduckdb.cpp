@@ -15,8 +15,8 @@ static void DuckdbInitGUC(void);
 bool duckdb_execution = false;
 int duckdb_max_threads_per_query = 1;
 char *duckdb_background_worker_db = strdup("postgres");
-char *duckdb_motherduck_token = NULL;
-char *duckdb_motherduck_postgres_user = NULL;
+char *duckdb_motherduck_token = strdup("");
+char *duckdb_motherduck_postgres_user = strdup("");
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = NULL;
@@ -42,18 +42,21 @@ _PG_init(void) {
 } // extern "C"
 
 static void
-DefineCustomVariable(const char *name, const char *short_desc, bool *var) {
-	DefineCustomBoolVariable(name, gettext_noop(short_desc), NULL, var, *var, PGC_USERSET, 0, NULL, NULL, NULL);
+DefineCustomVariable(const char *name, const char *short_desc, bool *var, GucContext context = PGC_USERSET,
+                     int flags = 0) {
+	DefineCustomBoolVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, NULL, NULL, NULL);
 }
 
 static void
-DefineCustomVariable(const char *name, const char *short_desc, char **var) {
-	DefineCustomStringVariable(name, gettext_noop(short_desc), NULL, var, *var, PGC_USERSET, 0, NULL, NULL, NULL);
+DefineCustomVariable(const char *name, const char *short_desc, char **var, GucContext context = PGC_USERSET,
+                     int flags = 0) {
+	DefineCustomStringVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, NULL, NULL, NULL);
 }
 
 template <typename T>
 static void
-DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T max) {
+DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T max, GucContext context = PGC_USERSET,
+                     int flags = 0) {
 	/* clang-format off */
 	void (*func)(
 			const char *name,
@@ -77,7 +80,7 @@ DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T 
 	} else {
 		static_assert("Unsupported type");
 	}
-	func(name, gettext_noop(short_desc), NULL, var, *var, min, max, PGC_USERSET, 0, NULL, NULL, NULL);
+	func(name, gettext_noop(short_desc), NULL, var, *var, min, max, context, flags, NULL, NULL, NULL);
 }
 
 static void
@@ -97,35 +100,21 @@ DuckdbInitGUC(void) {
 	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                     &duckdb_disabled_filesystems);
 
-	DefineCustomVariable("duckdb.threads", "DuckDB max number of threads.", &duckdb_maximum_threads, -1, 1024);
+	DefineCustomVariable("duckdb.threads", "Maximum number of DuckDB threads per Postgres backend.",
+	                     &duckdb_maximum_threads, -1, 1024);
 
-	DefineCustomVariable("duckdb.max_threads_per_query", "DuckDB max number of thread(s) per query.",
+	DefineCustomVariable("duckdb.max_threads_per_query",
+	                     "Maximum number of DuckDB threads used for a single Postgres scan",
 	                     &duckdb_max_threads_per_query, 1, 64);
 
-	DefineCustomVariable("duckdb.background_worker_db", "Which database run the backgorund worker in",
+	DefineCustomVariable("duckdb.background_worker_db", "Which database run the background worker in",
 	                     &duckdb_background_worker_db);
 
-	/* clang-format off */
-    DefineCustomStringVariable("duckdb.motherduck_token",
-                            gettext_noop("The token to use for MotherDuck"),
-                            NULL,
-                            &duckdb_motherduck_token,
-                            "",
-                            PGC_POSTMASTER,
-                            GUC_SUPERUSER_ONLY,
-                            NULL,
-                            NULL,
-                            NULL);
+	DefineCustomVariable("duckdb.motherduck_token", "The token to use for MotherDuck", &duckdb_motherduck_token,
+	                     PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 
-    DefineCustomStringVariable("duckdb.motherduck_postgres_user",
-                            gettext_noop("As which Postgres user to create the MotherDuck tables in Postgres, empty string means the bootstrap superuser"),
-                            NULL,
-                            &duckdb_motherduck_postgres_user,
-                            "",
-                            PGC_POSTMASTER,
-                            GUC_SUPERUSER_ONLY,
-                            NULL,
-                            NULL,
-                            NULL);
-	/* clang-format on */
+	DefineCustomVariable("duckdb.motherduck_postgres_user",
+	                     "As which Postgres user to create the MotherDuck tables in Postgres, empty string means the "
+	                     "bootstrap superuser",
+	                     &duckdb_motherduck_postgres_user, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 }
