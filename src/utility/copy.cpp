@@ -14,7 +14,6 @@ extern "C" {
 #include "utils/rls.h"
 #include "tcop/tcopprot.h"
 
-#include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
@@ -197,8 +196,8 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 
 		rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
 		query = linitial_node(Query, rewritten);
-		rewritten_query_string = duckdb::StringUtil::Format(
-		    "COPY (%s) TO %s %s", pgduckdb_pg_get_querydef(query, false), filename_quoted, options_string);
+		rewritten_query_string = duckdb::StringUtil::Format("COPY (%s) TO %s %s", pgduckdb_get_querydef(query),
+		                                                    filename_quoted, options_string);
 	} else {
 		bool copy_allowed = true;
 		ParseState *pstate = make_parsestate(NULL);

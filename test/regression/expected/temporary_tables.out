@@ -15,23 +15,19 @@ CREATE TEMP TABLE t(
     json_obj JSON,
     CHECK (i4 > i2)
 ) USING duckdb;
--- FIXME: This should not be necessary to make this test work, we should always
--- send ISO dates to duckdb or even better would be to make DuckDB respect
--- postgres its datestyle
-SET DateStyle = 'ISO, YMD';
 INSERT INTO t VALUES (true, 2, 4, 8, 4.0, 8.0, 't1', 't2', 't3', '2024-05-04', '2020-01-01T01:02:03', '{"a": 1}');
 SELECT * FROM t;
- bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |         ts          | json_obj 
-------+----+----+----+-----+-----+----+----+----+------------+---------------------+----------
- t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 2024-05-04 | 2020-01-01 01:02:03 | {"a": 1}
+ bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |            ts            | json_obj 
+------+----+----+----+-----+-----+----+----+----+------------+--------------------------+----------
+ t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 05-04-2024 | Wed Jan 01 01:02:03 2020 | {"a": 1}
 (1 row)
 
 CREATE TEMP TABLE t_heap (a int);
 INSERT INTO t_heap VALUES (2);
 SELECT * FROM t JOIN t_heap ON i2 = a;
- bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |         ts          | json_obj | a 
-------+----+----+----+-----+-----+----+----+----+------------+---------------------+----------+---
- t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 2024-05-04 | 2020-01-01 01:02:03 | {"a": 1} | 2
+ bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |            ts            | json_obj | a 
+------+----+----+----+-----+-----+----+----+----+------------+--------------------------+----------+---
+ t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 05-04-2024 | Wed Jan 01 01:02:03 2020 | {"a": 1} | 2
 (1 row)
 
 -- The default_table_access_method GUC should be honored.
@@ -211,8 +207,8 @@ CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/we
 SELECT * FROM webpages ORDER BY column00 LIMIT 2;
  column00 |     column01     |  column02  
 ----------+------------------+------------
-        1 | AAAAAAAABAAAAAAA | 1997-09-03
-        2 | AAAAAAAACAAAAAAA | 1997-09-03
+        1 | AAAAAAAABAAAAAAA | 09-03-1997
+        2 | AAAAAAAACAAAAAAA | 09-03-1997
 (2 rows)
 
 CREATE TEMP TABLE t_heap(a int) USING heap;

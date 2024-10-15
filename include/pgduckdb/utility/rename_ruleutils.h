@@ -6,7 +6,7 @@
 #define pg_get_indexdef_string           pgduckdb_pg_get_indexdef_string
 #define pg_get_indexdef_columns          pgduckdb_pg_get_indexdef_columns
 #define pg_get_indexdef_columns_extended pgduckdb_pg_get_indexdef_columns_extended
-#define pg_get_querydef                  pgduckdb_pg_get_querydef
+#define pg_get_querydef                  pgduckdb_pg_get_querydef_internal
 #define pg_get_partkeydef_columns        pgduckdb_pg_get_partkeydef_columns
 #define pg_get_partconstrdef_string      pgduckdb_pg_get_partconstrdef_string
 #define pg_get_constraintdef_command     pgduckdb_pg_get_constraintdef_command
