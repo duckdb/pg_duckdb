@@ -6,6 +6,7 @@ extern "C" {
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_collation.h"
+#include "commands/dbcommands.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -181,15 +182,14 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 
 	if (relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP) {
 		// allowed
-	} else if (!pgduckdb::IsMotherDuckEnabled()) {
+	} else if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
 		elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
 	} else if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
 		elog(ERROR, "Only TEMP and non-UNLOGGED tables are supported in DuckDB");
+	} else if (!pgduckdb::IsMotherDuckPostgresDatabase()) {
+		elog(ERROR, "MotherDuck tables must be created in the duckb.motherduck_postgres_database");
 	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUser()) {
 		elog(ERROR, "MotherDuck tables must be created by the duckb.motherduck_postgres_user");
-	}
-
-	if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
 	}
 
 	appendStringInfo(&buffer, "TABLE %s (", relation_name);

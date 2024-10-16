@@ -9,6 +9,8 @@ extern "C" {
 #include "catalog/pg_type.h"
 #include "catalog/pg_proc.h"
 #include "commands/extension.h"
+#include "commands/dbcommands.h"
+#include "miscadmin.h"
 #include "nodes/bitmapset.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -20,6 +22,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/vendor/pg_list.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
 namespace pgduckdb {
 struct {
@@ -45,7 +48,9 @@ struct {
 	Oid extension_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
-	/* The OID of the duckdb.motherduck_postrges_user */
+	/* The OID of the duckdb.motherduck_postgres_database */
+	Oid motherduck_postgres_database_oid;
+	/* The OID of the duckdb.motherduck_postgres_user */
 	Oid motherduck_postgres_user_oid;
 	/*
 	 * A list of Postgres OIDs of functions that can only be executed by DuckDB.
@@ -100,7 +105,8 @@ BuildDuckdbOnlyFunctions() {
 	 * each of the found functions is actually part of our extension before
 	 * caching its OID as a DuckDB-only function.
 	 */
-	const char *function_names[] = {"read_parquet", "read_csv", "iceberg_scan", "iceberg_metadata", "iceberg_snapshots"};
+	const char *function_names[] = {"read_parquet", "read_csv", "iceberg_scan", "iceberg_metadata",
+	                                "iceberg_snapshots"};
 
 	for (int i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
@@ -157,6 +163,8 @@ IsExtensionRegistered() {
 		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();
 		cache.table_am_oid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum("duckdb"));
+
+		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
 
 		if (duckdb_motherduck_postgres_user[0] != '\0') {
 			cache.motherduck_postgres_user_oid =
@@ -230,7 +238,22 @@ IsMotherDuckTable(Relation relation) {
 
 bool
 IsMotherDuckEnabled() {
-	return duckdb_motherduck_token[0] != '\0';
+	return IsMotherDuckEnabledAnywhere() && IsMotherDuckPostgresDatabase();
+}
+
+bool
+IsMotherDuckEnabledAnywhere() {
+	if (duckdb_motherduck_enabled == MotherDuckEnabled::MOTHERDUCK_ON)
+		return true;
+	if (duckdb_motherduck_enabled == MotherDuckEnabled::MOTHERDUCK_AUTO)
+		return duckdb_motherduck_token[0] != '\0';
+	return false;
+}
+
+bool
+IsMotherDuckPostgresDatabase() {
+	Assert(cache.valid);
+	return MyDatabaseId == cache.motherduck_postgres_database_oid;
 }
 
 Oid

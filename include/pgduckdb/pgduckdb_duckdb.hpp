@@ -7,6 +7,7 @@ extern "C" {
 #include "nodes/pg_list.h"
 #include "optimizer/optimizer.h"
 }
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
 

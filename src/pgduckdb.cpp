@@ -14,8 +14,9 @@ static void DuckdbInitGUC(void);
 
 bool duckdb_execution = false;
 int duckdb_max_threads_per_query = 1;
-char *duckdb_background_worker_db = strdup("postgres");
+int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
+char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_motherduck_postgres_user = strdup("");
 
 int duckdb_maximum_threads = -1;
@@ -53,6 +54,13 @@ DefineCustomVariable(const char *name, const char *short_desc, char **var, GucCo
 	DefineCustomStringVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, NULL, NULL, NULL);
 }
 
+static void
+DefineCustomVariable(const char *name, const char *short_desc, int *var, const struct config_enum_entry *options,
+                     GucContext context = PGC_USERSET, int flags = 0) {
+	DefineCustomEnumVariable(name, gettext_noop(short_desc), NULL, var, *var, options, context, flags, NULL, NULL,
+	                         NULL);
+}
+
 template <typename T>
 static void
 DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T max, GucContext context = PGC_USERSET,
@@ -83,6 +91,26 @@ DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T 
 	func(name, gettext_noop(short_desc), NULL, var, *var, min, max, context, flags, NULL, NULL, NULL);
 }
 
+/*
+ * Although only "true", "false", and "auto" are documented, we
+ * accept all the likely variants of "true" and "false" that Postgres users are
+ * used to.
+ */
+/* clang-format off */
+static const struct config_enum_entry motherduck_enabled_options[] = {
+    {"auto", MOTHERDUCK_AUTO, false},
+    {"on", MOTHERDUCK_ON, true},
+    {"off", MOTHERDUCK_OFF, true},
+    {"true", MOTHERDUCK_ON, false},
+    {"false", MOTHERDUCK_OFF, false},
+    {"yes", MOTHERDUCK_ON, true},
+    {"no", MOTHERDUCK_OFF, true},
+    {"1", MOTHERDUCK_ON, true},
+    {"0", MOTHERDUCK_OFF, true},
+    {NULL, 0, false}
+};
+/* clang-format on */
+
 static void
 DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.execution", "Is DuckDB query execution enabled.", &duckdb_execution);
@@ -108,11 +136,15 @@ DuckdbInitGUC(void) {
 	                     "Maximum number of DuckDB threads used for a single Postgres scan",
 	                     &duckdb_max_threads_per_query, 1, 64);
 
-	DefineCustomVariable("duckdb.background_worker_db", "Which database run the background worker in",
-	                     &duckdb_background_worker_db);
+	DefineCustomVariable("duckdb.motherduck_enabled",
+	                     "If motherduck support should enabled. 'auto' means enabled if motherduck_token is set",
+	                     &duckdb_motherduck_enabled, motherduck_enabled_options, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 
 	DefineCustomVariable("duckdb.motherduck_token", "The token to use for MotherDuck", &duckdb_motherduck_token,
 	                     PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.motherduck_postgres_database", "Which database to enable MotherDuck support in",
+	                     &duckdb_motherduck_postgres_database);
 
 	DefineCustomVariable("duckdb.motherduck_postgres_user",
 	                     "As which Postgres user to create the MotherDuck tables in Postgres, empty string means the "

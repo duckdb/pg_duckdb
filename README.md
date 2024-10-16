@@ -101,18 +101,49 @@ The best way to get started is to connect Postgres to a new or existing object s
 	LIMIT 100;
 	```
 
+### Connect with MotherDuck
+
+pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token] and then add the following line to your `postgresql.conf` file:
+
+```ini
+duckdb.motherduck_token = 'your_access_token';
+```
+
+NOTE: If you don't want to store the token in your `postgresql.conf`file can also store the token in the `motherduck_token` environment variable and then explicitly enable MotherDuck support in your `postgresql.conf` file:
+
+```ini
+duckdb.motherduck_enabled = true;
+```
+
+If you installed `pg_duckdb` in a different Postgres database than the default one named `postgres`, then you also need to add the following line to your `postgresql.conf` file:
+
+```ini
+duckdb.motherduck_postgres_database = 'your_database_name';
+```
+
+After doing this (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
+```sql
+CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
+CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
+```
+
+[tam]: https://www.postgresql.org/docs/current/tableam.html
+
+
+Any tables that you already had in MotherDuck are automatically available in Postgres. Since MotherDuck allows creating multiple databases these databases are. The tables stored in the `my_db` are stored together in schemas together with your Postgres tables. Tables in other databases can be accessed using dedicated schemas which are prefixed with `ddb$`.
+
+```sql
+INSERT INTO main.my_table VALUES (1, 'abc'); -- inserts into my_db.main.my_table
+SELECT COUNT(*) FROM ddb$my_shared_db.aggregated_order_data; -- reads from my_shared_db.main.aggregated_order_data
+SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.hn.hacker_news
+```
+
+[md]: https://motherduck.com/
+[md-access-token]: https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/authenticating-to-motherduck/#authentication-using-an-access-token
+
 ## Roadmap
 
 Please see the [project roadmap][roadmap] for upcoming planned tasks and features.
-
-### Connect with MotherDuck
-
-pg_duckdb integration with MotherDuck will enable dual execution with Differential Storage.
-
-* Zero-copy snapshots and forks
-* Time travel
-* Data tiering
-* Improved concurrency and cacheability
 
 ## Contributing
 

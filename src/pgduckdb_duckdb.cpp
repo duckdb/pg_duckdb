@@ -59,7 +59,19 @@ DuckDBManager::Initialize() {
 	 * its default database will be set to the default MotherDuck database.
 	 */
 	if (pgduckdb::IsMotherDuckEnabled()) {
-		connection_string = psprintf("md:?motherduck_token=%s", duckdb_motherduck_token);
+		/*
+		 * Disable web login for MotherDuck. Having support for web login could
+		 * be nice for demos, but because the received token is not shared
+		 * between backends you will get browser windows popped up. Sharing the
+		 * token across backends could be made to work but the implementing it
+		 * is not trivial, so for now we simply disable the web login.
+		 */
+		setenv("motherduck_disable_web_login", "1", 1);
+		if (duckdb_motherduck_token[0] == '\0') {
+			connection_string = "md:";
+		} else {
+			connection_string = psprintf("md:?motherduck_token=%s", duckdb_motherduck_token);
+		}
 	}
 
 	database = duckdb::make_uniq<duckdb::DuckDB>(connection_string, &config).release();
