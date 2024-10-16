@@ -74,7 +74,7 @@ DuckDBManager::Initialize() {
 		}
 	}
 
-	database = duckdb::make_uniq<duckdb::DuckDB>(connection_string, &config).release();
+	database = new duckdb::DuckDB(connection_string, &config);
 
 	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
 	dbconfig.storage_extensions["pgduckdb"] = duckdb::make_uniq<duckdb::PostgresStorageExtension>();
