@@ -51,6 +51,3 @@ RUN make installcheck
 # this creates a usable postgres image but without the packages needed to build
 FROM base AS output
 COPY --from=builder /out /
-
-# set default config
-RUN echo shared_preload_libraries = \'pg_duckdb\' >> /var/lib/postgresql/data/postgresql.conf
