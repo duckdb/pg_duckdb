@@ -3,12 +3,14 @@ name: Build Docker
 on:
   push:
     tags: ["v*"]
-    branches: ["main"]
   pull_request:
     paths:
       - Dockerfile
       - docker-bake.hcl
       - ".github/workflows/docker.yaml"
+  schedule:
+    - cron: "44 4 * * *"
+  workflow_dispatch:
 
 jobs:
   docker:
@@ -20,12 +22,6 @@ jobs:
         platform: ["linux/amd64", "linux/arm64"]
 
     steps:
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
@@ -37,7 +33,11 @@ jobs:
           submodules: "recursive"
       - name: Set env
         run: |
-          echo "POSTGRES_IMAGE=pgduckdb/pgduckdb:${{matrix.postgres}}-${{github.sha}}" >> $GITHUB_ENV
+          # find the first tag for this commit starting with 'v'
+          tag=$(git tag --points-at HEAD | grep ^v | head -n 1)
+          # if no tag is found, use the sha
+          if [ "$tag" = "" ]; then tag="${{ github.sha }}"; fi
+          echo "POSTGRES_TAGS=pgduckdb/pgduckdb:${{ matrix.postgres }}-$tag" >> $GITHUB_ENV
           echo "POSTGRES_VERSION=${{ matrix.postgres }}" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -54,4 +54,4 @@ jobs:
             *.platform=${{ matrix.platform }}
             *.cache-to=type=gha,mode=max
             *.cache-from=type=gha
-            postgres.tags=${{ env.POSTGRES_IMAGE }}
+            postgres.tags=${{ env.POSTGRES_TAGS }}
