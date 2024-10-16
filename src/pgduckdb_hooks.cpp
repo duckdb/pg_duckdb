@@ -5,6 +5,7 @@ extern "C" {
 
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
+#include "nodes/print.h"
 #include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/primnodes.h"
@@ -109,6 +110,28 @@ NeedsDuckdbExecution(Query *query) {
 }
 
 static bool
+ReplaceUnknownType(Node *node, void *context) {
+	if (node == NULL) {
+		return false;
+	}
+
+	if (IsA(node, Query)) {
+		Query *query = (Query *)node;
+		return query_tree_walker(query, ReplaceUnknownType, context, 0);
+	}
+
+	if (IsA(node, FuncExpr)) {
+		FuncExpr *func = castNode(FuncExpr, node);
+		if (func->funcresulttype == LAZYOID) {
+			func->funcresulttype = BOOLOID;
+			return false;
+		}
+	}
+
+	return expression_tree_walker(node, ReplaceUnknownType, context);
+}
+
+static bool
 IsAllowedStatement(Query *query, bool throw_error = false) {
 	int elevel = throw_error ? ERROR : DEBUG4;
 	/* DuckDB does not support modifying CTEs INSERT/UPDATE/DELETE */
@@ -166,6 +189,9 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 
 static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+	elog(WARNING, "DuckDB Planner Hook");
+	pprint(parse);
+	ReplaceUnknownType((Node *)parse, NULL);
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);

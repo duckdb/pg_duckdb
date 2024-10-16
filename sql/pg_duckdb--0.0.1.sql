@@ -12,6 +12,11 @@ BEGIN
 END;
 $func$;
 
+CREATE OR REPLACE FUNCTION read_unknown(a int)
+RETURNS SETOF lazy
+    LANGUAGE C AS 'MODULE_PATHNAME';
+
+
 CREATE OR REPLACE FUNCTION read_parquet(path text[], binary_as_string BOOLEAN DEFAULT FALSE,
                                                      filename BOOLEAN DEFAULT FALSE,
                                                      file_row_number BOOLEAN DEFAULT FALSE,

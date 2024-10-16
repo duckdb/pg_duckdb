@@ -230,4 +230,11 @@ pgduckdb_recycle_ddb(PG_FUNCTION_ARGS) {
 	PG_RETURN_BOOL(true);
 }
 
+PG_FUNCTION_INFO_V1(read_unknown);
+Datum
+read_unknown(PG_FUNCTION_ARGS) {
+	elog(NOTICE, "RUNNING read_unknown");
+	PG_RETURN_BOOL(true);
+}
+
 } // extern "C"

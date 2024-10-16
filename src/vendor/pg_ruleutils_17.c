@@ -11,7 +11,7 @@
  */
 #include "postgres.h"
 
-#if PG_VERSION_NUM >= 170000 && PG_VERSION_NUM < 180000
+#if PG_VERSION_NUM >= 170000 && PG_VERSION_NUM < 190000
 
 #include <ctype.h>
 #include <unistd.h>

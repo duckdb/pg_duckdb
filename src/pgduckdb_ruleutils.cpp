@@ -23,6 +23,10 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
+#if PG_VERSION_NUM >= 180000
+#define POSIX_COLLATION_OID C_COLLATION_OID
+#endif
+
 extern "C" {
 char *
 pgduckdb_function_name(Oid function_oid) {
