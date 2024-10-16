@@ -404,7 +404,22 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	 */
 	duckdb::unique_ptr<duckdb::Connection> connection;
 
-	if (!pgduckdb::doing_motherduck_sync) {
+	/*
+	 * Now forward the DROP to DuckDB... but only if MotherDuck is actually
+	 * enabled. It's possible for MotherDuck tables to exist in Postgres exist
+	 * even if MotherDuck is disabled. This can happen when people reconfigure
+	 * their Postgres settings to disable MotherDuck after first having it
+	 * enabled. In that case we don't automatically drop the orphan tables in
+	 * Postgres. By not forwarding the DROP to DuckDB we allow people to
+	 * manually clean them up.
+	 *
+	 * It's also extremely important that we don't forward the DROP to DuckDB
+	 * if we're currently syncing the MotherDuck catalog. Otherwise we would
+	 * actually cause the tables to be dropped in MotherDuck as well, even if
+	 * the DROP is only meant to replace the existing Postgres shell table with
+	 * a new version.
+	 */
+	if (pgduckdb::IsMotherDuckEnabled() && !pgduckdb::doing_motherduck_sync) {
 		for (auto proc = 0; proc < SPI_processed; ++proc) {
 			if (!connection) {
 				/*

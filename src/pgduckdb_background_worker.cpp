@@ -55,12 +55,12 @@ static uint64 initial_cache_version = 0;
 extern "C" {
 PGDLLEXPORT void
 pgduckdb_background_worker_main(Datum main_arg) {
-	elog(LOG, "started pgduckdb background worker");
+	elog(LOG, "started pg_duckdb background worker");
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
 	BackgroundWorkerUnblockSignals();
 
-	BackgroundWorkerInitializeConnection(duckdb_background_worker_db, NULL, 0);
+	BackgroundWorkerInitializeConnection(duckdb_motherduck_postgres_database, NULL, 0);
 
 	pgduckdb::doing_motherduck_sync = true;
 	is_background_worker = true;
@@ -119,7 +119,7 @@ force_motherduck_sync(PG_FUNCTION_ARGS) {
 
 void
 DuckdbInitBackgroundWorker(void) {
-	if (!pgduckdb::IsMotherDuckEnabled()) {
+	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
 		return;
 	}
 
