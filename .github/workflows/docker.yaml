@@ -52,4 +52,4 @@ jobs:
             *.cache-to=type=gha,mode=max
             *.cache-from=type=gha
             postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
-            postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.ref_name }}
+            ${{ !contains(github.ref_name, '/') && format('postgres.tags=pgduckdb/pgduckdb:{0}-{1}', matrix.postgres, github.ref_name) || '' }}
