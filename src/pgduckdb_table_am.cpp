@@ -47,7 +47,12 @@ PG_FUNCTION_INFO_V1(duckdb_am_handler);
 
 static const TupleTableSlotOps *
 duckdb_slot_callbacks(Relation relation) {
-	NOT_IMPLEMENTED();
+	/*
+	 * Here we would most likely want to invent your own set of slot
+	 * callbacks for our AM. For now we just use the minimal tuple slot, we
+	 * only implement this function to make sure ANALYZE does not fail.
+	 */
+	return &TTSOpsMinimalTuple;
 }
 
 /* ------------------------------------------------------------------------
@@ -55,15 +60,32 @@ duckdb_slot_callbacks(Relation relation) {
  * ------------------------------------------------------------------------
  */
 
+typedef struct DuckdbScanDescData {
+	TableScanDescData rs_base; /* AM independent part of the descriptor */
+
+	/* Add more fields here as needed by the AM. */
+} DuckdbScanDescData;
+typedef struct DuckdbScanDescData *DuckdbScanDesc;
+
 static TableScanDesc
 duckdb_scan_begin(Relation relation, Snapshot snapshot, int nkeys, ScanKey key, ParallelTableScanDesc parallel_scan,
                   uint32 flags) {
-	NOT_IMPLEMENTED();
+	DuckdbScanDesc scan = (DuckdbScanDesc)palloc(sizeof(DuckdbScanDescData));
+
+	scan->rs_base.rs_rd = relation;
+	scan->rs_base.rs_snapshot = snapshot;
+	scan->rs_base.rs_nkeys = nkeys;
+	scan->rs_base.rs_flags = flags;
+	scan->rs_base.rs_parallel = parallel_scan;
+
+	return (TableScanDesc)scan;
 }
 
 static void
 duckdb_scan_end(TableScanDesc sscan) {
-	NOT_IMPLEMENTED();
+	DuckdbScanDesc scan = (DuckdbScanDesc)sscan;
+
+	pfree(scan);
 }
 
 static void
@@ -272,14 +294,16 @@ duckdb_vacuum(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrat
 
 static bool
 duckdb_scan_analyze_next_block(TableScanDesc scan, ReadStream *stream) {
-	NOT_IMPLEMENTED();
+	/* no data in postgres, so no point to analyze next block */
+	return false;
 }
 
 #else
 
 static bool
 duckdb_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno, BufferAccessStrategy bstrategy) {
-	NOT_IMPLEMENTED();
+	/* no data in postgres, so no point to analyze next block */
+	return false;
 }
 #endif
 
@@ -309,7 +333,11 @@ duckdb_index_validate_scan(Relation tableRelation, Relation indexRelation, Index
 
 static uint64
 duckdb_relation_size(Relation rel, ForkNumber forkNumber) {
-	NOT_IMPLEMENTED();
+	/*
+	 * For now we just return 0. We should probably want return something more
+	 * useful in the future though.
+	 */
+	return 0;
 }
 
 /*

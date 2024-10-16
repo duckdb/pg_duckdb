@@ -102,6 +102,10 @@ BEGIN;
 
     DROP TABLE t4;
 END;
+-- ANALYZE should not fail on our tables. For now it doesn't do anything
+-- though. But it should not fail, otherwise a plain "ANALYZE" of all tables
+-- will error.
+ANALYZE t;
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 NOTICE:  result: database_name	schema_name	sql	
 VARCHAR	VARCHAR	VARCHAR	
@@ -248,7 +252,7 @@ ALTER TABLE t ADD COLUMN b int;
 ERROR:  DuckDB does not support ALTER TABLE yet
 -- XXX: A better error message would be nice here, but for now this is acceptable.
 ALTER TABLE t SET ACCESS METHOD heap;
-ERROR:  duckdb does not implement duckdb_slot_callbacks
+ERROR:  duckdb does not implement duckdb_scan_getnextslot
 -- XXX: A better error message would be nice here, but for now this is acceptable.
 CREATE INDEX ON t(a);
 ERROR:  duckdb does not implement duckdb_index_build_range_scan
@@ -256,4 +260,4 @@ DROP TABLE t;
 CREATE TEMP TABLE t(a int) USING heap;
 ALTER TABLE t ADD COLUMN b int;
 ALTER TABLE t SET ACCESS METHOD duckdb;
-ERROR:  duckdb does not implement duckdb_slot_callbacks
+ERROR:  duckdb does not implement duckdb_finish_bulk_insert
