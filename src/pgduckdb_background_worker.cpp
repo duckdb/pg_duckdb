@@ -47,6 +47,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 static bool is_background_worker = false;
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
@@ -399,13 +400,21 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 }
 
 void
+SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade);
+
+void
 SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
+	pgduckdb::DuckDBFunctionGuard<void>(SyncMotherDuckCatalogsWithPg_Unsafe, "SyncMotherDuckCatalogsWithPg", drop_with_cascade);
+}
+
+void
+SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade) {
 	initial_cache_version = pgduckdb::CacheVersion();
 
 	auto connection = pgduckdb::DuckDBManager::Get().CreateConnection();
 	auto &context = *connection->context;
 	if (!pgduckdb::IsMotherDuckEnabled()) {
-		elog(ERROR, "MotherDuck support is not enabled");
+		throw std::runtime_error("MotherDuck support is not enabled");
 	}
 
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
@@ -416,6 +425,7 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 		elog(WARNING, "Failed to fetch MotherDuck database metadata: %s", result->GetError().c_str());
 		return;
 	}
+
 	context.transaction.BeginTransaction();
 	for (auto &row : *result) {
 		auto motherduck_db = row.GetValue<std::string>(0);
@@ -424,6 +434,7 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 			/* The catalog version has not changed, we can skip this database */
 			continue;
 		}
+
 		/* The catalog version has changed, we need to sync the catalog */
 		elog(LOG, "Syncing MotherDuck catalog for database %s: %s", motherduck_db.c_str(), catalog_version.c_str());
 
