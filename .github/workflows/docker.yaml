@@ -34,10 +34,6 @@ jobs:
       - name: Set env
         run: |
           # find the first tag for this commit starting with 'v'
-          tag=$(git tag --points-at HEAD | grep ^v | head -n 1)
-          # if no tag is found, use the sha
-          if [ "$tag" = "" ]; then tag="${{ github.sha }}"; fi
-          echo "POSTGRES_TAGS=pgduckdb/pgduckdb:${{ matrix.postgres }}-$tag" >> $GITHUB_ENV
           echo "POSTGRES_VERSION=${{ matrix.postgres }}" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -54,4 +50,5 @@ jobs:
             *.platform=${{ matrix.platform }}
             *.cache-to=type=gha,mode=max
             *.cache-from=type=gha
-            postgres.tags=${{ env.POSTGRES_TAGS }}
+            postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
+            postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.ref_name }}
