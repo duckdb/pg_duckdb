@@ -30,7 +30,6 @@ body:
           ````
         * Remove all prompts from the scripts. This include DuckDB's 'D' prompt and Python's `>>>` prompt. Removing these prompts makes reproduction attempts quicker.
         * Make sure that the script and its outputs are provided in separate code blocks.
-        * If applicable, please check whether the issue is reproducible via running plain SQL queries from the DuckDB CLI client.
     validations:
       required: true
 
