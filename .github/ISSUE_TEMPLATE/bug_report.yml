@@ -45,8 +45,8 @@ body:
       required: true
   - type: input
     attributes:
-      label: "DuckDB Version:"
-      placeholder: e.g., 22
+      label: "pg_duckdb Version:"
+      placeholder: e.g., 0.1.0
     validations:
       required: true
   - type: input
