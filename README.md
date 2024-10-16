@@ -106,19 +106,19 @@ The best way to get started is to connect Postgres to a new or existing object s
 pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token] and then add the following line to your `postgresql.conf` file:
 
 ```ini
-duckdb.motherduck_token = 'your_access_token';
+duckdb.motherduck_token = 'your_access_token'
 ```
 
 NOTE: If you don't want to store the token in your `postgresql.conf`file can also store the token in the `motherduck_token` environment variable and then explicitly enable MotherDuck support in your `postgresql.conf` file:
 
 ```ini
-duckdb.motherduck_enabled = true;
+duckdb.motherduck_enabled = true
 ```
 
 If you installed `pg_duckdb` in a different Postgres database than the default one named `postgres`, then you also need to add the following line to your `postgresql.conf` file:
 
 ```ini
-duckdb.motherduck_postgres_database = 'your_database_name';
+duckdb.motherduck_postgres_database = 'your_database_name'
 ```
 
 After doing this (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
