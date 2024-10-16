@@ -33,7 +33,6 @@ jobs:
           submodules: "recursive"
       - name: Set env
         run: |
-          # find the first tag for this commit starting with 'v'
           echo "POSTGRES_VERSION=${{ matrix.postgres }}" >> $GITHUB_ENV
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -45,7 +44,6 @@ jobs:
         uses: docker/bake-action@v5
         with:
           targets: pg_duckdb_${{ matrix.postgres }}
-          # push: ${{ github.event_name != 'pull_request' }}
           push: true
           set: |
             *.platform=${{ matrix.platform }}
