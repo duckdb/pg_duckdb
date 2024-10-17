@@ -7,12 +7,12 @@ FROM base AS builder
 ARG POSTGRES_VERSION
 
 RUN apt-get update -qq && \
-  apt-get install -y \
+    apt-get install -y \
     postgresql-server-dev-${POSTGRES_VERSION} \
     build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
     libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev \
     libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache ninja-build && \
-  rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -50,4 +50,9 @@ RUN make installcheck
 ###
 # this creates a usable postgres image but without the packages needed to build
 FROM base AS output
+
+# Automatically enable pg_duckdb
+RUN echo "shared_preload_libraries='pg_duckdb'" >> /usr/share/postgresql/postgresql.conf.sample
+RUN echo "CREATE EXTENSION IF NOT EXISTS pg_duckdb;" >> /docker-entrypoint-initdb.d/0001-install-pg_duckdb.sql
+
 COPY --from=builder /out /
