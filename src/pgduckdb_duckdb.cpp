@@ -37,6 +37,7 @@ DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
 	duckdb::DBConfig config;
+	config.SetOptionByName("custom_user_agent", "pg_duckdb");
 	config.SetOptionByName("extension_directory", CreateOrGetDirectoryPath("duckdb_extensions"));
 	// Transforms VIEWs into their view definition
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
