@@ -19,17 +19,23 @@ WORKDIR /build
 ENV PATH=/usr/lib/ccache:$PATH
 ENV CCACHE_DIR=/ccache
 
-# A more selective copy might be nice, but the git submodules are not cooperative.
-# Instead, use .dockerignore to not copy files here.
-COPY . .
-
-RUN make clean-all
-
 # permissions so we can run as `postgres` (uid=999,gid=999)
 RUN mkdir /out
 RUN chown -R postgres:postgres . /usr/lib/postgresql /usr/share/postgresql /out
-
 USER postgres
+
+# Selectively copy the files that we need. Sadly we need separate COPY commands
+# for each directory, because docker puts only the contents of the source
+# directory into the target directory, and not the directory itself too.
+COPY --chown=postgres:postgres Makefile Makefile.global pg_duckdb.control .
+COPY --chown=postgres:postgres sql sql
+COPY --chown=postgres:postgres src src
+COPY --chown=postgres:postgres include include
+COPY --chown=postgres:postgres third_party third_party
+COPY --chown=postgres:postgres test test
+
+RUN make clean-all
+
 # build
 RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 echo "Available CPUs=$(nproc)" && make -j$(nproc)
 # install into location specified by pg_config for tests
