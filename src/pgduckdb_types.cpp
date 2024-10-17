@@ -671,6 +671,7 @@ Append(duckdb::Vector &result, T value, idx_t offset) {
 static void
 AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) {
 	const char *text = VARDATA_ANY(value);
+	/* Remove the padding of a BPCHAR type. DuckDB expects unpadded value. */
 	auto len = is_bpchar ? bpchartruelen(VARDATA_ANY(value), VARSIZE_ANY_EXHDR(value)) : VARSIZE_ANY_EXHDR(value);
 	duckdb::string_t str(text, len);
 
