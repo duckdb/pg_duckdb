@@ -3,7 +3,7 @@ services:
     container_name: pgduckdb
     image: pgduckdb/pgduckdb:16-main
     ports:
-      - 5432:5432
+      - ${PORT:-5432}:5432
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: duckdb
@@ -30,7 +30,7 @@ services:
     tty: true
     environment:
       PGPASSWORD: duckdb
-    command: psql -h 127.0.0.1 -d postgres -U postgres -p 5432
+    command: psql -h 127.0.0.1 -d postgres -U postgres -p ${PORT:-5432}
     restart: always
     networks:
       - pgduckdb_net
