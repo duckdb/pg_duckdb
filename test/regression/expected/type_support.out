@@ -57,17 +57,17 @@ SELECT * FROM bool_tbl;
 CREATE TABLE bpchar_tbl(a CHAR(25) NOT NULL);
 INSERT INTO bpchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), ('test'), ('this is a long string')) t(a);
 SELECT * FROM bpchar_tbl;
-             a             
----------------------------
-                          
- test                     
- this is a long string    
+           a           
+-----------------------
+ 
+ test
+ this is a long string
 (3 rows)
 
 SELECT * FROM bpchar_tbl WHERE a = 'test';
-             a             
----------------------------
- test                     
+  a   
+------
+ test
 (1 row)
 
 --- VARCHAR

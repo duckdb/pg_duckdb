@@ -669,9 +669,9 @@ Append(duckdb::Vector &result, T value, idx_t offset) {
 }
 
 static void
-AppendString(duckdb::Vector &result, Datum value, idx_t offset) {
+AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) {
 	const char *text = VARDATA_ANY(value);
-	int len = VARSIZE_ANY_EXHDR(value);
+	auto len = is_bpchar ? bpchartruelen(VARDATA_ANY(value), VARSIZE_ANY_EXHDR(value)) : VARSIZE_ANY_EXHDR(value);
 	duckdb::string_t str(text, len);
 
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
@@ -790,7 +790,7 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 }
 
 void
-ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
+ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, idx_t offset) {
 	auto &type = result.GetType();
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
@@ -826,7 +826,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	case duckdb::LogicalTypeId::VARCHAR: {
 		// NOTE: This also handles JSON
-		AppendString(result, value, offset);
+		AppendString(result, value, offset, attr_type == BPCHAROID);
 		break;
 	}
 	case duckdb::LogicalTypeId::DATE:
@@ -902,17 +902,18 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 
 		auto ndims = ARR_NDIM(array);
 		int *dims = ARR_DIMS(array);
+		auto elem_type = ARR_ELEMTYPE(array);
 
 		int16 typlen;
 		bool typbyval;
 		char typalign;
-		get_typlenbyvalalign(ARR_ELEMTYPE(array), &typlen, &typbyval, &typalign);
+		get_typlenbyvalalign(elem_type, &typlen, &typbyval, &typalign);
 
 		int nelems;
 		Datum *elems;
 		bool *nulls;
 		// Deconstruct the array into Datum elements
-		deconstruct_array(array, ARR_ELEMTYPE(array), typlen, typbyval, typalign, &elems, &nulls, &nelems);
+		deconstruct_array(array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
 
 		if (ndims == -1) {
 			throw duckdb::InternalException("Array type has an ndims of -1, so it's actually not an array??");
@@ -964,7 +965,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 				array_mask.SetInvalid(dest_idx);
 				continue;
 			}
-			ConvertPostgresToDuckValue(elems[i], *vec, dest_idx);
+			ConvertPostgresToDuckValue(elem_type, elems[i], *vec, dest_idx);
 		}
 		break;
 	}
@@ -1114,16 +1115,19 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		} else {
 			idx_t output_column_idx =
 			    scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
-			if (scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]].attlen == -1) {
+			auto attr = scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]];
+			if (attr.attlen == -1) {
 				bool should_free = false;
 				values[output_column_idx] =
 				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[output_column_idx]), &should_free);
-				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
+				ConvertPostgresToDuckValue(attr.atttypid, values[output_column_idx], result,
+				                           scan_local_state->m_output_vector_size);
 				if (should_free) {
 					duckdb_free(reinterpret_cast<void *>(values[output_column_idx]));
 				}
 			} else {
-				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
+				ConvertPostgresToDuckValue(attr.atttypid, values[output_column_idx], result,
+				                           scan_local_state->m_output_vector_size);
 			}
 		}
 	}
