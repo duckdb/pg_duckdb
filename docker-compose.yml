@@ -6,7 +6,7 @@ services:
       - ${PORT:-5432}:5432
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: duckdb
+      POSTGRES_PASSWORD: ${PASSWORD:-duckdb}
     volumes:
       - pgduckdb_data:/var/lib/postgresql/data
       - ./docker/postgresql.conf:/etc/postgresql/postgresql.conf
@@ -29,7 +29,7 @@ services:
     stdin_open: true
     tty: true
     environment:
-      PGPASSWORD: duckdb
+      PGPASSWORD: ${PASSWORD:-duckdb}
     command: psql -h 127.0.0.1 -d postgres -U postgres -p ${PORT:-5432}
     restart: always
     networks:
