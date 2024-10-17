@@ -71,6 +71,11 @@ BEGIN;
     DROP TABLE t4;
 END;
 
+-- ANALYZE should not fail on our tables. For now it doesn't do anything
+-- though. But it should not fail, otherwise a plain "ANALYZE" of all tables
+-- will error.
+ANALYZE t;
+
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
 DROP TABLE t, t_heap, t2;
