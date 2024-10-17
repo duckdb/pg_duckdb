@@ -9,7 +9,8 @@ services:
       POSTGRES_PASSWORD: duckdb
     volumes:
       - pgduckdb_data:/var/lib/postgresql/data
-    command: postgres -c 'shared_preload_libraries=pg_duckdb'
+      - ./docker/postgresql.conf:/etc/postgresql/postgresql.conf
+    command: postgres -c 'config_file=/etc/postgresql/postgresql.conf'
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d postgres"]
       interval: 2s
