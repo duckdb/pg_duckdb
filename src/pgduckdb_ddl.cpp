@@ -111,6 +111,7 @@ CheckOnCommitSupport(OnCommitAction on_commit) {
 		break;
 	case ONCOMMIT_DROP:
 		elog(ERROR, "DuckDB does not support ON COMMIT DROP");
+		break;
 	default:
 		elog(ERROR, "Unsupported ON COMMIT clause: %d", on_commit);
 	}
