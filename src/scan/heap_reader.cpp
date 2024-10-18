@@ -118,6 +118,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			ItemPointerSet(&(m_tuple.t_self), block, m_current_tuple_index);
 
 			if (!m_page_tuples_all_visible) {
+				std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 				visible = HeapTupleSatisfiesVisibility(&m_tuple, m_global_state->m_snapshot, m_buffer);
 				/* skip tuples not visible to this snapshot */
 				if (!visible)
