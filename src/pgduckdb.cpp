@@ -124,12 +124,18 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)", &duckdb_maximum_memory,
 	                     PGC_SUSET);
+	DefineCustomVariable("duckdb.memory_limit",
+	                     "The maximum memory DuckDB can use (e.g., 1GB), alias for duckdb.max_memory",
+	                     &duckdb_maximum_memory, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.disabled_filesystems",
 	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                     &duckdb_disabled_filesystems, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.threads", "Maximum number of DuckDB threads per Postgres backend.",
+	                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
+	DefineCustomVariable("duckdb.worker_threads",
+	                     "Maximum number of DuckDB threads per Postgres backend, alias for duckdb.threads",
 	                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.max_threads_per_query",
