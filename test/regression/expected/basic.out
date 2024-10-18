@@ -45,7 +45,6 @@ DROP TABLE empty;
 -- Check that DROP / CREATE extension works
 DROP EXTENSION pg_duckdb;
 CREATE EXTENSION pg_duckdb;
-WARNING:  To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"
 -- Verify that all pages that are fetched are closed before execution ends.
 -- Table with smaller number of tuples (if nothing is matched) will terminate execution
 -- before second table is read to the end.

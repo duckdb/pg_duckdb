@@ -157,12 +157,12 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	 * guidance on SECURITY DEFINER functions in postgres for details:
 	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
 	 *
-	 * We also temporarily force duckdb.execution to false, because
+	 * We also temporarily force duckdb.force_execution to false, because
 	 * pg_catalog.pg_event_trigger_ddl_commands does not exist in DuckDB.
 	 */
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
-	SetConfigOption("duckdb.execution", "false", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
 	int ret = SPI_exec(R"(
 		SELECT DISTINCT objid AS relid, pg_class.relpersistence = 't' AS is_temporary
@@ -340,12 +340,12 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	 * functions in postgres for details:
 	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
 	 *
-	 * We also temporarily force duckdb.execution to false, because
+	 * We also temporarily force duckdb.force_execution to false, because
 	 * pg_catalog.pg_event_trigger_dropped_objects does not exist in DuckDB.
 	 */
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
-	SetConfigOption("duckdb.execution", "false", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
 	if (!pgduckdb::doing_motherduck_sync) {
 		int ret = SPI_exec(R"(
@@ -516,9 +516,13 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	 * search_path confusion attacks. See guidance on SECURITY DEFINER
 	 * functions in postgres for details:
 	 * https://www.postgresql.org/docs/current/sql-createfunction.html#SQL-CREATEFUNCTION-SECURITY
+	 *
+	 * We also temporarily force duckdb.force_execution to false, because
+	 * pg_catalog.pg_event_trigger_dropped_objects does not exist in DuckDB.
 	 */
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 	Oid saved_userid;
 	int sec_context;
 	GetUserIdAndSecContext(&saved_userid, &sec_context);

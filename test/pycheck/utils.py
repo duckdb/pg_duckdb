@@ -592,7 +592,7 @@ class Postgres:
 
             # And finally, enable pg_duckdb
             pgconf.write("shared_preload_libraries = pg_duckdb\n")
-            pgconf.write("duckdb.execution = 'true'\n")
+            pgconf.write("duckdb.force_execution = 'true'\n")
 
     def pgctl(self, command, **kwargs):
         run(f"pg_ctl -w --pgdata {self.pgdata} {command}", **kwargs)

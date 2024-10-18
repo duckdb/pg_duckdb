@@ -147,7 +147,7 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 
 	/*
 	 * We don't support multi-statement transactions yet, so don't try to
-	 * execute queries in them even if duckdb.execution is enabled.
+	 * execute queries in them even if duckdb.force_execution is enabled.
 	 */
 	if (IsInTransactionBlock(true)) {
 		if (throw_error) {
@@ -171,7 +171,7 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 			IsAllowedStatement(parse, true);
 
 			return DuckdbPlanNode(parse, cursor_options, true);
-		} else if (duckdb_execution && IsAllowedStatement(parse)) {
+		} else if (duckdb_force_execution && IsAllowedStatement(parse)) {
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, false);
 			if (duckdbPlan) {
 				return duckdbPlan;

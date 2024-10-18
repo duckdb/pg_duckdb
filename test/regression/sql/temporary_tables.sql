@@ -1,5 +1,5 @@
--- All the queries below should work even if duckdb.execution is turned off.
-SET duckdb.execution = false;
+-- All the queries below should work even if duckdb.force_execution is turned off.
+SET duckdb.force_execution = false;
 CREATE TEMP TABLE t(
     bool BOOLEAN,
     i2 SMALLINT,
@@ -62,9 +62,9 @@ BEGIN;
     DROP TABLE t4;
 END;
 
--- Even if duckdb.execution is turned on
+-- Even if duckdb.force_execution is turned on
 BEGIN;
-    SET LOCAL duckdb.execution = true;
+    SET LOCAL duckdb.force_execution = true;
     CREATE TEMP TABLE t4(a int) USING heap;
     INSERT INTO t4 VALUES (1);
     SELECT * FROM t4;
