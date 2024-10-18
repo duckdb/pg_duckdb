@@ -8,7 +8,7 @@ typedef enum {
 } MotherDuckEnabled;
 
 // pgduckdb.c
-extern bool duckdb_execution;
+extern bool duckdb_force_execution;
 extern int duckdb_maximum_threads;
 extern char *duckdb_maximum_memory;
 extern char *duckdb_disabled_filesystems;
