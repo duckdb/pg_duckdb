@@ -44,6 +44,11 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
 	SET_DUCKDB_OPTION(enable_external_access);
 
+	if (duckdb_temp_directory[0] == '\0') {
+		config.temp_directory = CreateOrGetDirectoryPath("duckdb_temp");
+	} else {
+	}
+
 	if (duckdb_maximum_memory != NULL) {
 		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
