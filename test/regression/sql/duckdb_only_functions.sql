@@ -1,6 +1,6 @@
--- We should be able to use duckdb-only functions even when duckdb.execution is
--- turned off
-SET duckdb.execution = false;
+-- We should be able to use duckdb-only functions even when
+-- duckdb.force_execution is turned off
+SET duckdb.force_execution = false;
 
 \getenv pwd PWD
 

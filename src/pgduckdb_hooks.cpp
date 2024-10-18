@@ -147,7 +147,7 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 
 	/*
 	 * We don't support multi-statement transactions yet, so don't try to
-	 * execute queries in them even if duckdb.execution is enabled.
+	 * execute queries in them even if duckdb.force_execution is enabled.
 	 */
 	if (IsInTransactionBlock(true)) {
 		if (throw_error) {

@@ -1,5 +1,5 @@
 
-SET duckdb.execution TO false;
+SET duckdb.force_execution TO false;
 
 SELECT * FROM duckdb.raw_query($$ SELECT name FROM duckdb_secrets() $$);
 
@@ -28,4 +28,4 @@ SELECT last_value FROM duckdb.secrets_table_seq;
 
 SELECT * FROM duckdb.raw_query($$ SELECT name FROM duckdb_secrets() $$);
 
-SET duckdb.execution TO true;
+SET duckdb.force_execution TO true;
