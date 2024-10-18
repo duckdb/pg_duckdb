@@ -124,17 +124,11 @@ DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	context.transaction.Commit();
 }
 
-bool
-DuckDBManager::CheckSecretsSeq() {
+int64
+GetSeqLastValue(const char *seq_name) {
 	Oid duckdb_namespace = get_namespace_oid("duckdb", false);
-	Oid secret_table_seq_oid = get_relname_relid("secrets_table_seq", duckdb_namespace);
-	int64 seq =
-	    PostgresFunctionGuard<int64>(DirectFunctionCall1Coll, pg_sequence_last_value, InvalidOid, secret_table_seq_oid);
-	if (secret_table_current_seq < seq) {
-		secret_table_current_seq = seq;
-		return true;
-	}
-	return false;
+	Oid table_seq_oid = get_relname_relid(seq_name, duckdb_namespace);
+	return PostgresFunctionGuard<int64>(DirectFunctionCall1Coll, pg_sequence_last_value, InvalidOid, table_seq_oid);
 }
 
 void
@@ -167,17 +161,19 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		DuckDBQueryOrThrow(context, secret_key->data);
 
 		pfree(secret_key->data);
-		secret_id++;
-		secret_table_num_rows = secret_id;
+		++secret_id;
 	}
+
+	secret_table_num_rows = secret_id;
 }
 
 void
 DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
-	for (auto secret_id = 0; secret_id < secret_table_num_rows; secret_id++) {
+	for (auto secret_id = 0; secret_id < secret_table_num_rows; ++secret_id) {
 		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
 		pgduckdb::DuckDBQueryOrThrow(drop_secret_cmd);
 	}
+
 	secret_table_num_rows = 0;
 }
 
@@ -202,6 +198,8 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 		if (extension.name == "httpfs") {
 			continue;
 		}
+
+		DuckDBQueryOrThrow(context, "INSTALL " + extension.name);
 		DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 	}
 }
@@ -211,9 +209,18 @@ DuckDBManager::CreateConnection() {
 	auto &instance = Get();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*instance.database);
 	auto &context = *connection->context;
-	if (instance.CheckSecretsSeq()) {
+
+	const auto secret_table_last_seq = GetSeqLastValue("secrets_table_seq");
+	if (instance.IsSecretSeqLessThan(secret_table_last_seq)) {
 		instance.DropSecrets(context);
 		instance.LoadSecrets(context);
+		instance.UpdateSecretSeq(secret_table_last_seq);
+	}
+
+	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");
+	if (instance.IsExtensionsSeqLessThan(extensions_table_last_seq)) {
+		instance.LoadExtensions(context);
+		instance.UpdateExtensionsSeq(extensions_table_last_seq);
 	}
 
 	auto http_file_cache_set_dir_query =

@@ -2,6 +2,7 @@ test: basic
 test: concurrency
 test: search_path
 test: execution_error
+test: extensions
 test: type_support
 test: array_type_support
 test: views
