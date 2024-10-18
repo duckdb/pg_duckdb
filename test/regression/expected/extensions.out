@@ -1,5 +1,5 @@
 SET duckdb.execution TO false;
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded $$);
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
 [ Rows: 4]
@@ -28,7 +28,7 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           2
 (1 row)
 
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded $$);
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
 [ Rows: 5]
@@ -51,7 +51,7 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           3
 (1 row)
 
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded $$);
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
 [ Rows: 6]
@@ -77,7 +77,7 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           4
 (1 row)
 
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded $$);
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
 [ Rows: 6]
