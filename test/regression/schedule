@@ -1,4 +1,5 @@
 test: basic
+test: concurrency
 test: search_path
 test: execution_error
 test: type_support
