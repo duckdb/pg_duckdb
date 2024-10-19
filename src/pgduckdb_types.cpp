@@ -547,7 +547,6 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case NUMERICOID: {
 		auto precision = numeric_typmod_precision(typmod);
 		auto scale = numeric_typmod_scale(typmod);
-		elog(WARNING, "typemod: %d NUMERIC precision: %d, scale: %d", typmod, precision, scale);
 		if (typmod == -1) {
 			precision = 18;
 			scale = 3;
