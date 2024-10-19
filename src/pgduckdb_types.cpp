@@ -547,10 +547,20 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case NUMERICOID: {
 		auto precision = numeric_typmod_precision(typmod);
 		auto scale = numeric_typmod_scale(typmod);
-		if (typmod == -1 || precision < 0 || scale < 0 || precision > 38) {
-			auto extra_type_info = duckdb::make_shared_ptr<NumericAsDouble>();
-			return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
+		elog(WARNING, "typemod: %d NUMERIC precision: %d, scale: %d", typmod, precision, scale);
+		if (typmod == -1) {
+			precision = 18;
+			scale = 3;
 		}
+
+		if (precision > 38) {
+			precision = 38;
+		}
+
+		if (scale < 0) {
+			scale = -scale;
+		}
+
 		return duckdb::LogicalType::DECIMAL(precision, scale);
 	}
 	case UUIDOID:
