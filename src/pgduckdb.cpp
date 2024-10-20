@@ -12,7 +12,7 @@ extern "C" {
 
 static void DuckdbInitGUC(void);
 
-bool duckdb_execution = false;
+bool duckdb_force_execution = false;
 int duckdb_max_threads_per_query = 1;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
@@ -113,7 +113,7 @@ static const struct config_enum_entry motherduck_enabled_options[] = {
 
 static void
 DuckdbInitGUC(void) {
-	DefineCustomVariable("duckdb.execution", "Is DuckDB query execution enabled.", &duckdb_execution);
+	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
 
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
 	                     &duckdb_enable_external_access, PGC_SUSET);

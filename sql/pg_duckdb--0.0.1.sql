@@ -272,10 +272,4 @@ BEGIN
 END
 $$;
 
-DO $$
-BEGIN
-    RAISE WARNING 'To actually execute queries using DuckDB you need to run "SET duckdb.execution TO true;"';
-END
-$$;
-
 RESET search_path;
