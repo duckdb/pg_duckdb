@@ -29,7 +29,13 @@ To build and install, run:
 make install
 ```
 
-Next, load the pg_duckdb extension:
+Add `pg_duckdb` to the `shared_preload_libraries` in your `postgresql.conf` file:
+
+```ini
+shared_preload_libraries = 'pg_duckdb'
+```
+
+Next, create the `pg_duckdb` extension:
 
 ```sql
 CREATE EXTENSION pg_duckdb;
