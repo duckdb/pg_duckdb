@@ -1,5 +1,6 @@
 test: basic
 test: concurrency
+test: correct_null_conversions
 test: search_path
 test: execution_error
 test: type_support
