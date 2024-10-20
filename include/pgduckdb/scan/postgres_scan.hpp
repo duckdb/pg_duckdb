@@ -24,36 +24,30 @@ public:
 	TupleDesc m_tuple_desc;
 	std::mutex m_lock; // Lock for one replacement scan
 	bool m_count_tuples_only;
-	duckdb::map<duckdb::idx_t, duckdb::column_t> m_read_columns_ids;
-	duckdb::map<duckdb::idx_t, duckdb::column_t> m_output_columns_ids;
-	duckdb::TableFilterSet *m_filters = nullptr;
+	/* Postgres column id to duckdb output vector idx */
+	std::vector<duckdb::pair<duckdb::column_t, duckdb::idx_t>> m_input_columns;
+	std::vector<duckdb::TableFilter *> m_column_filters;
+	/* Duckdb output vector idx with information about postgres column id */
+	duckdb::vector<duckdb::pair<duckdb::idx_t, duckdb::column_t>> m_output_columns;
 	std::atomic<std::uint32_t> m_total_row_count;
 	duckdb::map<int, Datum> m_relation_missing_attrs;
 };
 
 class PostgresScanLocalState {
 public:
-	PostgresScanLocalState(const PostgresScanGlobalState *psgs) : m_output_vector_size(0), m_exhausted_scan(false) {
-		if (psgs->m_count_tuples_only) {
-			values = nullptr;
-			nulls = nullptr;
-		} else {
+	PostgresScanLocalState(const PostgresScanGlobalState *psgs)
+	    : m_output_vector_size(0), m_exhausted_scan(false), values(nullptr), nulls(nullptr) {
+		if (!psgs->m_count_tuples_only) {
 			/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
-			const auto s = psgs->m_read_columns_ids.size();
+			const auto s = psgs->m_input_columns.size();
 			values = (Datum *)duckdb_malloc(sizeof(Datum) * s);
 			nulls = (bool *)duckdb_malloc(sizeof(bool) * s);
 		}
 	}
 
 	~PostgresScanLocalState() {
-		if (values) {
-			duckdb_free(values);
-			values = nullptr;
-		}
-		if (nulls) {
-			duckdb_free(nulls);
-			nulls = nullptr;
-		}
+		duckdb_free(values);
+		duckdb_free(nulls);
 	}
 
 	int m_output_vector_size;
