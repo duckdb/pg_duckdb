@@ -141,10 +141,19 @@ CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
 [tam]: https://www.postgresql.org/docs/current/tableam.html
 
 
-Any tables that you already had in MotherDuck are automatically available in Postgres. Since MotherDuck allows creating multiple databases these databases are. The tables stored in the `my_db` are stored together in schemas together with your Postgres tables. Tables in other databases can be accessed using dedicated schemas which are prefixed with `ddb$`.
+Any tables that you already had in MotherDuck are automatically available in Postgres. Since DuckDB and MotherDuck allow accessing multiple databases from a single connection and Postgres does not, we map database+schema in DuckDB to a schema name in Postgres.
+
+This is done in the following way:
+1. Each schema in your default MotherDuck database are simply merged with the Postgres schemas with the same name.
+2. Except for the `main` DuckDB schema in your default database, which is merged with the Postgres `public` schema.
+3. Tables in other databases are put into dedicated DuckDB-only schemas. These schemas are of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
+4. Except for the `main` schema in those other databases. That schema should be accessed using the shorter name `ddb$<db_name>` instead.
+
+An example of each of these cases is shown below:
 
 ```sql
-INSERT INTO main.my_table VALUES (1, 'abc'); -- inserts into my_db.main.my_table
+INSERT INTO my_table VALUES (1, 'abc'); -- inserts into my_db.main.my_table
+INSERT INTO your_schema.tab1 VALUES (1, 'abc'); -- inserts into my_db.your_schema.tab1
 SELECT COUNT(*) FROM ddb$my_shared_db.aggregated_order_data; -- reads from my_shared_db.main.aggregated_order_data
 SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.hn.hacker_news
 ```

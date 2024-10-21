@@ -49,10 +49,17 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
 		return list_make2((void *)"pg_temp", (void *)"main");
 	}
 
+	if (strcmp("public", postgres_schema_name) == 0) {
+		/* Use the "main" schema in DuckDB for tables in the public schema in Postgres */
+		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
+		return list_make2((void *)dbname, (void *)"main");
+	}
+
 	if (strncmp("ddb$", postgres_schema_name, 4) != 0) {
 		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
 		return list_make2((void *)dbname, (void *)postgres_schema_name);
 	}
+
 	StringInfoData db_name;
 	StringInfoData schema_name;
 	initStringInfo(&db_name);
