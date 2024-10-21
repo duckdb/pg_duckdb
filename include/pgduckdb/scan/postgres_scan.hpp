@@ -33,12 +33,33 @@ public:
 
 class PostgresScanLocalState {
 public:
-	PostgresScanLocalState() : m_output_vector_size(0), m_exhausted_scan(false) {
+	PostgresScanLocalState(const PostgresScanGlobalState *psgs) : m_output_vector_size(0), m_exhausted_scan(false) {
+		if (psgs->m_count_tuples_only) {
+			values = nullptr;
+			nulls = nullptr;
+		} else {
+			/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
+			const auto s = psgs->m_read_columns_ids.size();
+			values = (Datum *)duckdb_malloc(sizeof(Datum) * s);
+			nulls = (bool *)duckdb_malloc(sizeof(bool) * s);
+		}
 	}
+
 	~PostgresScanLocalState() {
+		if (values) {
+			duckdb_free(values);
+			values = nullptr;
+		}
+		if (nulls) {
+			duckdb_free(nulls);
+			nulls = nullptr;
+		}
 	}
+
 	int m_output_vector_size;
 	bool m_exhausted_scan;
+	Datum *values;
+	bool *nulls;
 };
 
 duckdb::unique_ptr<duckdb::TableRef> PostgresReplacementScan(duckdb::ClientContext &context,
