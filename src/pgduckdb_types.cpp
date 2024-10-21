@@ -1079,10 +1079,11 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		return;
 	}
 
-	bool valid_tuple = true;
+	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
+	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * scan_global_state->m_read_columns_ids.size());
+	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * scan_global_state->m_read_columns_ids.size());
 
-	auto values = scan_local_state->values;
-	auto nulls = scan_local_state->nulls;
+	bool valid_tuple = true;
 
 	/* First we are fetching all required columns ordered by column id
 	 * and than we need to write this tuple into output vector. Output column id list
@@ -1135,6 +1136,9 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		scan_local_state->m_output_vector_size++;
 		scan_global_state->m_total_row_count++;
 	}
+
+	duckdb_free(values);
+	duckdb_free(nulls);
 }
 
 } // namespace pgduckdb

@@ -28,8 +28,8 @@ PostgresSeqScanGlobalState::~PostgresSeqScanGlobalState() {
 
 PostgresSeqScanLocalState::PostgresSeqScanLocalState(Relation rel,
                                                      duckdb::shared_ptr<HeapReaderGlobalState> heap_reder_global_state,
-                                                     duckdb::shared_ptr<PostgresScanGlobalState> global_state) {
-	m_local_state = duckdb::make_shared_ptr<PostgresScanLocalState>(global_state.get());
+                                                     duckdb::shared_ptr<PostgresScanGlobalState> global_state)
+    : m_local_state(duckdb::make_shared_ptr<PostgresScanLocalState>()) {
 	m_heap_table_reader = duckdb::make_uniq<HeapReader>(rel, heap_reder_global_state, global_state, m_local_state);
 }
 
