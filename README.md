@@ -29,17 +29,23 @@ To build and install, run:
 make install
 ```
 
-Next, load the pg_duckdb extension:
+Add `pg_duckdb` to the `shared_preload_libraries` in your `postgresql.conf` file:
+
+```ini
+shared_preload_libraries = 'pg_duckdb'
+```
+
+Next, create the `pg_duckdb` extension:
 
 ```sql
 CREATE EXTENSION pg_duckdb;
 ```
 
-**IMPORTANT:** By default, DuckDB-based execution will only run queries that interact with MotherDuck tables or data stored in your object storage account. To enable DuckDB execution for all queries, run `SET duckdb.execution TO true`. This is _opt-in_ to avoid breaking existing queries. To avoid doing that for every session, you can configure it for a certain user by doing `ALTER USER my_analytics_user SET duckdb.execution TO true`.
+**IMPORTANT:** DuckDB execution is usually enabled automatically when needed. It's enabled whenever you use DuckDB functions (such as `read_csv`), when you query DuckDB tables, and when running `COPY table TO 's3://...'`. However, if you want queries which only touch Postgres tables to use DuckDB execution you need to run `SET duckdb.force_execution TO true`'. This feature is _opt-in_ to avoid breaking existing queries. To avoid doing that for every session, you can configure it for a certain user by doing `ALTER USER my_analytics_user SET duckdb.force_execution TO true`.
 
 ## Features
 
-- `SELECT` queries executed by the DuckDB engine can directly read Postgres tables.
+- `SELECT` queries executed by the DuckDB engine can directly read Postgres tables. (If you only query Postgres tables you need to run `SET duckdb.force_execution TO true`, see the **IMPORTANT** section above for details)
 	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, and arrays.
 	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
 - Read and Write support for object storage (AWS S3, Cloudflare R2, or Google GCS):
@@ -66,7 +72,7 @@ CREATE EXTENSION pg_duckdb;
 - Create indexes on Postgres tables to accelerate your DuckDB queries
 - Install DuckDB extensions using `SELECT duckdb.install_extension('extension_name');`
 - Toggle DuckDB execution on/off with a setting:
-	- `SET duckdb.execution = true|false`
+	- `SET duckdb.force_execution = true|false`
 - Cache remote object locally for faster execution using `SELECT duckdb.cache('path', 'type');` where
 	- 'path' is HTTPFS/S3/GCS/R2 remote object
 	- 'type' specify remote object type: 'parquet' or 'csv'

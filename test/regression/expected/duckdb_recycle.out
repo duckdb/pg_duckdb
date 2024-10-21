@@ -1,4 +1,4 @@
-SET duckdb.execution = true;
+SET duckdb.force_execution = true;
 CREATE TABLE ta(a INT);
 EXPLAIN SELECT count(*) FROM ta;
                          QUERY PLAN                         
