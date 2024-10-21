@@ -134,6 +134,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			DuckdbProcessLock::GetLock().lock();
 			UnlockReleaseBuffer(m_buffer);
 			DuckdbProcessLock::GetLock().unlock();
+			m_buffer = InvalidBuffer;
 			m_read_next_page = true;
 			/* Handle cancel request */
 			if (QueryCancelPending) {
