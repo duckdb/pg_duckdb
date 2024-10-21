@@ -1092,13 +1092,15 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		values[input_column_idx] =
 		    HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state, attr_id + 1,
 		                                  &nulls[input_column_idx], scan_global_state->m_relation_missing_attrs);
-		if (scan_global_state->m_column_filters[input_column_idx]) {
-			auto &filter = scan_global_state->m_column_filters[input_column_idx];
-			const auto valid_tuple = ApplyValueFilter(*filter, values[input_column_idx], nulls[input_column_idx],
-			                                          scan_global_state->m_tuple_desc->attrs[attr_id].atttypid);
-			if (!valid_tuple) {
-				return;
-			}
+		auto filter = scan_global_state->m_column_filters[input_column_idx];
+		if (!filter) {
+			continue;
+		}
+
+		const auto valid_tuple = ApplyValueFilter(*filter, values[input_column_idx], nulls[input_column_idx],
+		                                          scan_global_state->m_tuple_desc->attrs[attr_id].atttypid);
+		if (!valid_tuple) {
+			return;
 		}
 	}
 

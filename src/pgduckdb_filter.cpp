@@ -17,7 +17,7 @@ namespace pgduckdb {
 
 template <class T, class OP>
 bool
-TemplatedFilterOperation(const T& value, const duckdb::Value &constant) {
+TemplatedFilterOperation(const T &value, const duckdb::Value &constant) {
 	return OP::Operation(value, constant.GetValueUnsafe<T>());
 }
 
