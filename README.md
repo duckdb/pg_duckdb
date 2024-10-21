@@ -2,19 +2,43 @@
 
 pg_duckdb is a Postgres extension that embeds DuckDB's columnar-vectorized analytics engine and features into Postgres. We recommend using pg_duckdb to build high performance analytics and data-intensive applications.
 
-pg_duckdb was developed in collaboration with our partners, [Hydra](https://hydra.so) and [MotherDuck](https://motherduck.com).
-
-## Goals
-
-* Broad support for Postgres types and functions within analytical context
-* Query external datasets on S3, GCP and Azure (Parquet, Iceberg and Delta Lake)
-* Join native Postgres and analytical data
-* Direct access to data stored in MotherDuck
-* Support installation of DuckDB extensions
+pg_duckdb was developed in collaboration with our partners, [Hydra][] and [MotherDuck][].
 
 ## Installation
 
-Pre-built binaries and additional installation options are coming soon.
+### Docker
+
+Docker images are [available on Dockerhub](https://hub.docker.com/r/pgduckdb/pgduckdb/tags) and are based on the official Postgres image. Use of this image is [the same as the Postgres image](https://hub.docker.com/_/postgres/). For example, you can run the image directly:
+
+```shell
+docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:16-main
+```
+
+Or you can use the docker compose in this repo:
+
+```shell
+git clone https://github.com/duckdb/pg_duckdb && cd pg_duckdb && docker compose up -d
+```
+
+Once started, connect to the database using psql:
+
+```shell
+psql postgres://postgres:duckdb@127.0.0.1:5432/postgres
+# Or if using docker compose
+docker compose exec db psql
+```
+
+### pgxman (apt)
+
+Pre-built apt binaries are [available via pgxman](https://pgx.sh/pg_duckdb). After installation, you will need to add pg_duckdb to `shared_preload_libraries` and create the extension.
+
+```shell
+pgxman install pg_duckdb
+```
+
+Note: due to the use of `shared_preload_libraries`, pgxman's container support is not currently compatible with pg_duckdb.
+
+### Compile from source
 
 To build pg_duckdb, you need:
 
@@ -163,27 +187,30 @@ SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.h
 
 ## Roadmap
 
-Please see the [project roadmap][roadmap] for upcoming planned tasks and features.
+Please see the [project milestones][milestones] for upcoming planned tasks and features.
 
 ## Contributing
 
-pg_duckdb was developed in collaboration with our partners, [Hydra](https://hydra.so) and [MotherDuck](https://motherduck.com). We look forward to their continued contributions and leadership.
+pg_duckdb was developed in collaboration with our partners, [Hydra][] and [MotherDuck][]. We look forward to their continued contributions and leadership.
 
-[Hydra](https://hydra.so) is a Y Combinator-backed database company, focused on DuckDB-Powered Postgres for app developers.
+[Hydra][] is a Y Combinator-backed database company, focused on DuckDB-Powered Postgres for app developers.
 
-[MotherDuck](https://motherduck.com) is the cloud-based data warehouse that extends the power of DuckDB.
+[MotherDuck][] is the cloud-based data warehouse that extends the power of DuckDB.
 
 We welcome all contributions big and small:
 
-- Vote on or suggest features for our roadmap.
+- [Vote on or suggest features][discussions] for our roadmap.
 - Open a PR.
-- Submit a feature request or bug report.
+- [Submit a feature request or bug report][issues].
 
 ## Resources
 
-- Please see the [project roadmap][roadmap] for upcoming planned tasks and features.
-- [GitHub Issues](https://github.com/duckdb/pg_duckdb/issues) for bugs and missing features
-- [Discord discussion](https://discord.duckdb.org/) with the DuckDB community
-- See our docs for more info and limitations
+- Please see the [project milestones][milestones] for upcoming planned tasks and features.
+- [GitHub Issues][issues] for bug reports
+- [Join the DuckDB Discord community](https://discord.duckdb.org/) then chat in [the #pg_duckdb channel](https://discord.com/channels/909674491309850675/1289177578237857802).
 
-[roadmap]: https://github.com/orgs/duckdb/projects/10
+[milestones]: https://github.com/duckdb/pg_duckdb/milestones
+[discussions]: https://github.com/duckdb/pg_duckdb/discussions
+[issues]: https://github.com/duckdb/pg_duckdb/issues
+[Hydra]: https://hydra.so/
+[Motherduck]: https://motherduck.com/
