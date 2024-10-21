@@ -1,5 +1,5 @@
 
-SET duckdb.execution TO false;
+SET duckdb.force_execution TO false;
 
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 
@@ -26,5 +26,3 @@ DELETE FROM duckdb.extensions WHERE name = 'aws';
 SELECT last_value FROM duckdb.extensions_table_seq;
 
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
-
-SET duckdb.execution TO true;

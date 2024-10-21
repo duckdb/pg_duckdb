@@ -162,9 +162,9 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 		pfree(secret_key->data);
 		++secret_id;
+		secret_table_num_rows = secret_id;
 	}
 
-	secret_table_num_rows = secret_id;
 }
 
 void
