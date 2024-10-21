@@ -39,7 +39,7 @@ public:
 			nulls = nullptr;
 		} else {
 			/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
-			const auto s = psgs->m_output_columns_ids.size();
+			const auto s = psgs->m_read_columns_ids.size();
 			values = (Datum *)duckdb_malloc(sizeof(Datum) * s);
 			nulls = (bool *)duckdb_malloc(sizeof(bool) * s);
 		}
