@@ -1110,12 +1110,11 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 	/* Write tuple columns in output vector. */
 	for (idx_t idx = 0; valid_tuple && idx < scan_global_state->m_output_columns_ids.size(); idx++) {
 		auto &result = output.data[idx];
-		if (nulls[idx]) {
+		idx_t output_column_idx = scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
+		if (nulls[output_column_idx]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
 		} else {
-			idx_t output_column_idx =
-			    scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
 			auto attr = scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]];
 			if (attr.attlen == -1) {
 				bool should_free = false;
