@@ -209,7 +209,8 @@ PG_FUNCTION_INFO_V1(pgduckdb_raw_query);
 Datum
 pgduckdb_raw_query(PG_FUNCTION_ARGS) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	auto result = pgduckdb::DuckDBQueryOrThrow(query);
+	typedef duckdb::unique_ptr<duckdb::QueryResult> (*DuckDBQueryOrThrow)(const std::string &);
+	auto result = pgduckdb::DuckDBFunctionGuard<duckdb::unique_ptr<duckdb::QueryResult>, DuckDBQueryOrThrow>(pgduckdb::DuckDBQueryOrThrow, "pgduckdb_raw_query", query);
 	elog(NOTICE, "result: %s", result->ToString().c_str());
 	PG_RETURN_BOOL(true);
 }

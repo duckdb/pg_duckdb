@@ -41,14 +41,35 @@ private:
 	void Initialize();
 
 	void InitializeDatabase();
-	bool CheckSecretsSeq();
+
 	void LoadSecrets(duckdb::ClientContext &);
 	void DropSecrets(duckdb::ClientContext &);
 	void LoadExtensions(duckdb::ClientContext &);
 	void LoadFunctions(duckdb::ClientContext &);
 
+	inline bool
+	IsSecretSeqLessThan(int64 seq) const {
+		return secret_table_current_seq < seq;
+	}
+
+	inline bool
+	IsExtensionsSeqLessThan(int64 seq) const {
+		return extensions_table_current_seq < seq;
+	}
+
+	inline void
+	UpdateSecretSeq(int64 seq) {
+		secret_table_current_seq = seq;
+	}
+
+	inline void
+	UpdateExtensionsSeq(int64 seq) {
+		extensions_table_current_seq = seq;
+	}
+
 	int secret_table_num_rows;
-	int secret_table_current_seq;
+	int64 secret_table_current_seq;
+	int64 extensions_table_current_seq;
 	/*
 	 * FIXME: Use a unique_ptr instead of a raw pointer. For now this is not
 	 * possible though, as the MotherDuck extension causes an ABORT when the

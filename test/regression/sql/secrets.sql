@@ -27,5 +27,3 @@ DELETE FROM duckdb.secrets WHERE key_id = 'access_key_id_1';
 SELECT last_value FROM duckdb.secrets_table_seq;
 
 SELECT * FROM duckdb.raw_query($$ SELECT name FROM duckdb_secrets() $$);
-
-SET duckdb.force_execution TO true;

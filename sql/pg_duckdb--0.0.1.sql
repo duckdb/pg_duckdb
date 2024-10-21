@@ -197,10 +197,27 @@ $$ LANGUAGE PLpgSQL;
 CREATE TRIGGER duckdb_secret_r2_tr BEFORE INSERT OR UPDATE ON secrets
 FOR EACH ROW EXECUTE PROCEDURE duckdb_secret_r2_check();
 
+-- Extensions
+
+CREATE SEQUENCE extensions_table_seq START WITH 1 INCREMENT BY 1;
+SELECT setval('extensions_table_seq', 1);
+
 CREATE TABLE extensions (
     name TEXT NOT NULL PRIMARY KEY,
     enabled BOOL DEFAULT TRUE
 );
+
+CREATE OR REPLACE FUNCTION duckdb_update_extensions_table_seq()
+RETURNS TRIGGER AS
+$$
+BEGIN
+    PERFORM nextval('duckdb.extensions_table_seq');
+    RETURN NEW;
+END;
+$$ LANGUAGE PLpgSQL;
+
+CREATE TRIGGER extensions_table_seq_tr AFTER INSERT OR UPDATE OR DELETE ON extensions
+EXECUTE FUNCTION duckdb_update_extensions_table_seq();
 
 -- The following might seem unnecesasry, but it's needed to know if a dropped
 -- table was a DuckDB table or not. See the comments and code in
