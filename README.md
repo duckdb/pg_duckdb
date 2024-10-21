@@ -48,26 +48,27 @@ CREATE EXTENSION pg_duckdb;
 - `SELECT` queries executed by the DuckDB engine can directly read Postgres tables. (If you only query Postgres tables you need to run `SET duckdb.force_execution TO true`, see the **IMPORTANT** section above for details)
 	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, and arrays.
 	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
-- Read parquet and CSV files from object storage (AWS S3, Cloudflare R2, or Google GCS).
-	- `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
-	- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
-	- You can pass globs and arrays to these functions, just like in DuckDB
-- Enable the DuckDB Iceberg extension using `SELECT duckdb.install_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
-- Write a query — or an entire table — to parquet in object storage.
-	- `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
-	- `COPY table TO 's3://...'`
-- Read and write to Parquet format in a single query
+- Read and Write support for object storage (AWS S3, Cloudflare R2, or Google GCS):
+	- Read parquet and CSV files:
+		- `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
+		- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
+		- You can pass globs and arrays to these functions, just like in DuckDB
+	- Enable the DuckDB Iceberg extension using `SELECT duckdb.install_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
+	- Write a query — or an entire table — to parquet in object storage.
+		- `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
+		- `COPY table TO 's3://...'`
+		- Read and write to Parquet format in a single query
 
-	```sql
-	COPY (
-	  SELECT count(*), name
-	  FROM read_parquet('s3://bucket/file.parquet') AS (name text)
-	  GROUP BY name
-	  ORDER BY count DESC
-	) TO 's3://bucket/results.parquet';
-	```
-
-- Query and `JOIN` data in object storage with Postgres tables, views, and materialized views.
+			```sql
+			COPY (
+				SELECT count(*), name
+				FROM read_parquet('s3://bucket/file.parquet') AS (name text)
+				GROUP BY name
+				ORDER BY count DESC
+			) TO 's3://bucket/results.parquet';
+			```
+- Read and Write support for data stored in MotherDuck
+- Query and `JOIN` data in object storage/MotherDuck with Postgres tables, views, and materialized views.
 - Create indexes on Postgres tables to accelerate your DuckDB queries
 - Install DuckDB extensions using `SELECT duckdb.install_extension('extension_name');`
 - Toggle DuckDB execution on/off with a setting:
@@ -78,7 +79,11 @@ CREATE EXTENSION pg_duckdb;
 
 ## Getting Started
 
-The best way to get started is to connect Postgres to a new or existing object storage bucket (AWS S3, Cloudflare R2, or Google GCS) with pg_duckdb. You can query data in Parquet, CSV, and Iceberg format using `read_parquet`, `read_csv`, and `iceberg_scan` respectively.
+pg_duckdb relies on DuckDB's vectorized execution engine to read and write data to object storage bucket (AWS S3, Cloudflare R2, or Google GCS) and/or MotherDuck. The follow two sections describe how to get started with these destinations.
+
+### Object storage bucket (AWS S3, Cloudflare R2, or Google GCS)
+
+Querying data stored in Parquet, CSV, and Iceberg format can be done with `read_parquet`, `read_csv`, and `iceberg_scan` respectively.
 
 1. Add a credential to enable DuckDB's httpfs support.
 
