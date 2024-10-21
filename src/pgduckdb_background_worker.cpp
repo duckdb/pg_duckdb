@@ -148,6 +148,14 @@ char *current_motherduck_catalog_version;
 static std::string
 PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is_default_db) {
 	if (is_default_db) {
+		/*
+		 * We map the "main" DuckDB schema of the default database to the
+		 * "public" Postgres schema, because they are pretty much equivalent
+		 * from a user perspective even though they are named differently.
+		 */
+		if (schema_name == "main") {
+			return "public";
+		}
 		return schema_name;
 	}
 	std::string escaped_db_name = duckdb::KeywordHelper::EscapeQuotes(db_name, '$');
@@ -399,12 +407,12 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	return true;
 }
 
-void
-SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade);
+void SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade);
 
 void
 SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
-	pgduckdb::DuckDBFunctionGuard<void>(SyncMotherDuckCatalogsWithPg_Unsafe, "SyncMotherDuckCatalogsWithPg", drop_with_cascade);
+	pgduckdb::DuckDBFunctionGuard<void>(SyncMotherDuckCatalogsWithPg_Unsafe, "SyncMotherDuckCatalogsWithPg",
+	                                    drop_with_cascade);
 }
 
 void
@@ -458,6 +466,25 @@ SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade) {
 		bool all_tables_synced_successfully = true;
 		for (duckdb::SchemaCatalogEntry &schema : schemas) {
 			if (schema.name == "information_schema" || schema.name == "pg_catalog") {
+				continue;
+			}
+
+			if (schema.name == "public" && is_default_db) {
+				/*
+				 * We already map the "main" duckdb schema to the "public"
+				 * Postgres. This could cause conflicts and confusion if we
+				 * also map the "public" duckdb schema to the "public"
+				 * Postgres schema. Since there is unlikely to be a "public"
+				 * schema in the DuckDB database, we simply skip this schema
+				 * for now. If users actually turn out to run into this, we
+				 * probably want to map it to something else for example to
+				 * ddb$my_db$public. Users can also always rename the "public"
+				 * schema in their DuckDB database to something else.
+				 */
+				elog(
+				    WARNING,
+				    "Skipping sync of MotherDuck schema %s.%s because it conflicts with the sync of the %s.main schema",
+				    motherduck_db.c_str(), schema.name.c_str(), motherduck_db.c_str());
 				continue;
 			}
 
