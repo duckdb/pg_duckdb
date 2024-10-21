@@ -168,7 +168,7 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 void
 DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
-	for (auto secret_id = 0; secret_id < secret_table_num_rows; ++secret_id) {
+	for (auto secret_id = 0; secret_id < secret_table_num_rows; secret_id++) {
 		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
 		pgduckdb::DuckDBQueryOrThrow(context, drop_secret_cmd);
 	}
