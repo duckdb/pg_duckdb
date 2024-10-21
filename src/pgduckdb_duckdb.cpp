@@ -161,10 +161,9 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		DuckDBQueryOrThrow(context, secret_key->data);
 
 		pfree(secret_key->data);
-		++secret_id;
+		secret_id++;
 		secret_table_num_rows = secret_id;
 	}
-
 }
 
 void
