@@ -79,7 +79,7 @@ CREATE EXTENSION pg_duckdb;
 
 ## Getting Started
 
-pg_duckdb relies on DuckDB's vectorized execution engine to read and write data to object storage bucket (AWS S3, Cloudflare R2, or Google GCS) and/or MotherDuck. The follow two sections describe how to get started with these destination.
+pg_duckdb relies on DuckDB's vectorized execution engine to read and write data to object storage bucket (AWS S3, Cloudflare R2, or Google GCS) and/or MotherDuck. The follow two sections describe how to get started with these destinations.
 
 ### Object storage bucket (AWS S3, Cloudflare R2, or Google GCS)
 
