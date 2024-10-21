@@ -61,10 +61,10 @@ CREATE EXTENSION pg_duckdb;
 
 			```sql
 			COPY (
-			SELECT count(*), name
-			FROM read_parquet('s3://bucket/file.parquet') AS (name text)
-			GROUP BY name
-			ORDER BY count DESC
+				SELECT count(*), name
+				FROM read_parquet('s3://bucket/file.parquet') AS (name text)
+				GROUP BY name
+				ORDER BY count DESC
 			) TO 's3://bucket/results.parquet';
 			```
 - Read and Write support for data stored in MotherDuck
