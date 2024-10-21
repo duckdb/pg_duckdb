@@ -90,12 +90,13 @@ bool
 ApplyValueFilter(const duckdb::TableFilter &filter, const Datum &value, bool is_null, Oid type_oid) {
 	switch (filter.filter_type) {
 	case duckdb::TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction = filter.Cast<duckdb::ConjunctionAndFilter>();
-		bool value_filter_result = true;
-		for (auto &child_filter : conjunction.child_filters) {
-			value_filter_result &= ApplyValueFilter(*child_filter, value, is_null, type_oid);
+		const auto &conjunction = filter.Cast<duckdb::ConjunctionAndFilter>();
+		for (const auto &child_filter : conjunction.child_filters) {
+			if (!ApplyValueFilter(*child_filter, value, is_null, type_oid)) {
+				return false;
+			}
 		}
-		return value_filter_result;
+		return true;
 	}
 	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<duckdb::ConstantFilter>();
