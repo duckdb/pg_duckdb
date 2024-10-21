@@ -1079,8 +1079,6 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		return;
 	}
 
-	bool valid_tuple = true;
-
 	auto values = scan_local_state->values;
 	auto nulls = scan_local_state->nulls;
 
@@ -1097,17 +1095,17 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		if (scan_global_state->m_filters &&
 		    (scan_global_state->m_filters->filters.find(valueIdx) != scan_global_state->m_filters->filters.end())) {
 			auto &filter = scan_global_state->m_filters->filters[valueIdx];
-			valid_tuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
+			const auto valid_tuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
 			                               scan_global_state->m_tuple_desc->attrs[columnIdx].atttypid);
+			if (!valid_tuple) {
+				return;
+			}
 		}
 
-		if (!valid_tuple) {
-			break;
-		}
 	}
 
 	/* Write tuple columns in output vector. */
-	for (idx_t idx = 0; valid_tuple && idx < scan_global_state->m_output_columns_ids.size(); idx++) {
+	for (idx_t idx = 0; idx < scan_global_state->m_output_columns_ids.size(); idx++) {
 		auto &result = output.data[idx];
 		idx_t output_column_idx = scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
 		if (nulls[output_column_idx]) {
@@ -1131,10 +1129,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		}
 	}
 
-	if (valid_tuple) {
-		scan_local_state->m_output_vector_size++;
-		scan_global_state->m_total_row_count++;
-	}
+	scan_local_state->m_output_vector_size++;
+	scan_global_state->m_total_row_count++;
 }
 
 } // namespace pgduckdb
