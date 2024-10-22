@@ -44,27 +44,33 @@ _PG_init(void) {
 
 static void
 DefineCustomVariable(const char *name, const char *short_desc, bool *var, GucContext context = PGC_USERSET,
-                     int flags = 0) {
-	DefineCustomBoolVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, NULL, NULL, NULL);
+                     int flags = 0, GucBoolCheckHook check_hook = NULL, GucBoolAssignHook assign_hook = NULL,
+                     GucShowHook show_hook = NULL) {
+	DefineCustomBoolVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, check_hook, assign_hook,
+	                         show_hook);
 }
 
 static void
 DefineCustomVariable(const char *name, const char *short_desc, char **var, GucContext context = PGC_USERSET,
-                     int flags = 0) {
-	DefineCustomStringVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, NULL, NULL, NULL);
+                     int flags = 0, GucStringCheckHook check_hook = NULL, GucStringAssignHook assign_hook = NULL,
+                     GucShowHook show_hook = NULL) {
+	DefineCustomStringVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, check_hook, assign_hook,
+	                           show_hook);
 }
 
 static void
 DefineCustomVariable(const char *name, const char *short_desc, int *var, const struct config_enum_entry *options,
-                     GucContext context = PGC_USERSET, int flags = 0) {
-	DefineCustomEnumVariable(name, gettext_noop(short_desc), NULL, var, *var, options, context, flags, NULL, NULL,
-	                         NULL);
+                     GucContext context = PGC_USERSET, int flags = 0, GucEnumCheckHook check_hook = NULL,
+                     GucEnumAssignHook assign_hook = NULL, GucShowHook show_hook = NULL) {
+	DefineCustomEnumVariable(name, gettext_noop(short_desc), NULL, var, *var, options, context, flags, check_hook,
+	                         assign_hook, show_hook);
 }
 
 template <typename T>
 static void
 DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T max, GucContext context = PGC_USERSET,
-                     int flags = 0) {
+                     int flags = 0, GucIntCheckHook check_hook = NULL, GucIntAssignHook assign_hook = NULL,
+                     GucShowHook show_hook = NULL) {
 	/* clang-format off */
 	void (*func)(
 			const char *name,
@@ -88,7 +94,7 @@ DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T 
 	} else {
 		static_assert("Unsupported type");
 	}
-	func(name, gettext_noop(short_desc), NULL, var, *var, min, max, context, flags, NULL, NULL, NULL);
+	func(name, gettext_noop(short_desc), NULL, var, *var, min, max, context, flags, check_hook, assign_hook, show_hook);
 }
 
 /*
