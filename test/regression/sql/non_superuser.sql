@@ -11,10 +11,17 @@ SELECT * FROM t;
 SET ROLE user2;
 SELECT * FROM t;
 
--- Should fail because raw_query is to dangerous for regular users
+-- Should fail because we're not allowed to read the internal tables by default
+SELECT * from duckdb.secrets;
+SELECT * from duckdb.tables;
+SELECT * from duckdb.extensions;
+
+-- Should fail because raw_query is to dangerous for regular users and the
+-- others currently allow for SQL injection
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.raw_query($$ SELECT * FROM t $$);
 SELECT * FROM duckdb.install_extension('some hacky sql');
+SELECT * FROM duckdb.cache('some hacky sql', 'some more hacky sql');
 SET duckdb.force_execution = true;
 
 -- Should fail because DuckDB execution is not allowed for this user
