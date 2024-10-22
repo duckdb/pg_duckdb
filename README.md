@@ -62,6 +62,9 @@ psql postgres://postgres:duckdb@127.0.0.1:5432/postgres
 docker compose exec db psql
 ```
 
+For other usages see our [Docker specific README][docker readme].
+
+[docker readme]: https://github.com/duckdb/pg_duckdb/blob/main/docker/README.md
 ### pgxman (apt)
 
 Pre-built apt binaries are [available via pgxman](https://pgx.sh/pg_duckdb). After installation, you will need to add pg_duckdb to `shared_preload_libraries` and create the extension.
