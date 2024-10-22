@@ -643,7 +643,7 @@ duckdb_grant_trigger(PG_FUNCTION_ARGS) {
 	}
 
 	foreach_node(RangeVar, object, stmt->objects) {
-		Oid relation_oid = RangeVarGetRelid(object, AccessShareLock, true);
+		Oid relation_oid = RangeVarGetRelid(object, AccessShareLock, false);
 		Relation relation = RelationIdGetRelation(relation_oid);
 		if (pgduckdb::IsMotherDuckTable(relation)) {
 			elog(ERROR, "MotherDuck tables do not support GRANT");
