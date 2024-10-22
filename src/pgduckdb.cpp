@@ -20,8 +20,8 @@ char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
-char *duckdb_maximum_memory = NULL;
-char *duckdb_disabled_filesystems = NULL;
+char *duckdb_maximum_memory = strdup("4GB");
+char *duckdb_disabled_filesystems = strdup("LocalFileSystem");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_unsigned_extensions = false;
 
