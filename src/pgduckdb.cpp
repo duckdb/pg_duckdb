@@ -13,7 +13,7 @@ extern "C" {
 static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
-int duckdb_max_threads_per_query = 1;
+int duckdb_max_threads_per_postgres_scan = 1;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
@@ -138,9 +138,9 @@ DuckdbInitGUC(void) {
 	                     "Maximum number of DuckDB threads per Postgres backend, alias for duckdb.threads",
 	                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
 
-	DefineCustomVariable("duckdb.max_threads_per_query",
+	DefineCustomVariable("duckdb.max_threads_per_postgres_scan",
 	                     "Maximum number of DuckDB threads used for a single Postgres scan",
-	                     &duckdb_max_threads_per_query, 1, 64);
+	                     &duckdb_max_threads_per_postgres_scan, 1, 64);
 
 	DefineCustomVariable("duckdb.motherduck_enabled",
 	                     "If motherduck support should enabled. 'auto' means enabled if motherduck_token is set",
