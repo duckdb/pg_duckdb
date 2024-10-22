@@ -86,11 +86,6 @@ DuckDBManager::Initialize() {
 
 	auto &context = *connection->context;
 
-	if (duckdb_disabled_filesystems != NULL) {
-		pgduckdb::DuckDBQueryOrThrow(context,
-		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
-	}
-
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	default_dbname = db_manager.GetDefaultDatabase(context);
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
@@ -109,6 +104,11 @@ DuckDBManager::Initialize() {
 
 	LoadFunctions(context);
 	LoadExtensions(context);
+
+	if (duckdb_disabled_filesystems != NULL) {
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
+	}
 }
 
 void
