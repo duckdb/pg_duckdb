@@ -2,6 +2,7 @@ extern "C" {
 #include "postgres.h"
 
 #include "access/htup_details.h"
+#include "access/xact.h"
 #include "catalog/dependency.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_authid.h"
@@ -137,6 +138,12 @@ bool
 IsExtensionRegistered() {
 	if (cache.valid) {
 		return cache.installed;
+	}
+
+	if (IsAbortedTransactionBlockState()) {
+		elog(WARNING, "pgduckdb: IsExtensionRegistered called in an aborted transaction");
+		/* We need to run `get_extension_oid` in a valid transaction */
+		return false;
 	}
 
 	if (!callback_is_configured) {
