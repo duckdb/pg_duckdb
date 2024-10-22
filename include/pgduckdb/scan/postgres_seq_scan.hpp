@@ -25,7 +25,7 @@ struct PostgresSeqScanGlobalState : public duckdb::GlobalTableFunctionState {
 	~PostgresSeqScanGlobalState();
 	idx_t
 	MaxThreads() const override {
-		return duckdb_max_threads_per_query;
+		return duckdb_max_threads_per_postgres_scan;
 	}
 
 public:
