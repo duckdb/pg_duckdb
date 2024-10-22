@@ -1,40 +1,42 @@
 LOAD 'pg_duckdb';
 
--- If duckdb.postgres_role is configured let's make sure it's actually created.
--- If people change this setting after installing the extension they are
--- responsible for creating the user themselves. This is especially useful for
--- demo purposes and our pg_regress testing.
-DO $$
-DECLARE
-    role_name text;
-BEGIN
-    SELECT current_setting('duckdb.postgres_role') INTO role_name;
-    IF role_name != '' AND NOT EXISTS (
-      SELECT FROM pg_catalog.pg_roles
-      WHERE  rolname = role_name) THEN
-        EXECUTE 'CREATE ROLE ' || quote_ident(current_setting('duckdb.postgres_role'));
-    END IF;
-END
-$$;
+-- We create a duckdb schema to store most of our things. We explicitely
+-- don't use CREATE IF EXISTS or the schema key in the control file, so we know
+-- for sure that the extension will own the schema and thus non superusers
+-- cannot put random things in it, so we can assume it's safe. A few functions
+-- we'll put into @extschema@ so that in normal usage they get put into the
+-- public schema and are thus more easily usable. This is the case for the
+-- read_csv, read_parquet and iceberg functions. It would be sad for usability
+-- if people would have to prefix those with duckdb.read_csv
+CREATE SCHEMA duckdb;
+-- Allow users to see the objects in the duckdb schema. We'll manually revoke rights
+-- for the dangerous ones.
+GRANT USAGE ON SCHEMA duckdb to PUBLIC;
 
-CREATE OR REPLACE FUNCTION read_parquet(path text, binary_as_string BOOLEAN DEFAULT FALSE,
+SET search_path = pg_catalog, pg_temp;
+
+CREATE FUNCTION @extschema@.read_parquet(path text, binary_as_string BOOLEAN DEFAULT FALSE,
                                                    filename BOOLEAN DEFAULT FALSE,
                                                    file_row_number BOOLEAN DEFAULT FALSE,
                                                    hive_partitioning BOOLEAN DEFAULT FALSE,
                                                    union_by_name BOOLEAN DEFAULT FALSE)
-RETURNS SETOF record LANGUAGE 'plpgsql' AS
+RETURNS SETOF record LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `read_parquet(TEXT)` only works with Duckdb execution.';
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION read_parquet(path text[], binary_as_string BOOLEAN DEFAULT FALSE,
+CREATE FUNCTION @extschema@.read_parquet(path text[], binary_as_string BOOLEAN DEFAULT FALSE,
                                                      filename BOOLEAN DEFAULT FALSE,
                                                      file_row_number BOOLEAN DEFAULT FALSE,
                                                      hive_partitioning BOOLEAN DEFAULT FALSE,
                                                      union_by_name BOOLEAN DEFAULT FALSE)
-RETURNS SETOF record LANGUAGE 'plpgsql' AS
+RETURNS SETOF record LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `read_parquet(TEXT[])` only works with Duckdb execution.';
@@ -44,7 +46,7 @@ $func$;
 
 -- Arguments 'columns' and 'nullstr' are currently not supported for read_csv
 
-CREATE OR REPLACE FUNCTION read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE,
+CREATE FUNCTION @extschema@.read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE,
                                                allow_quoted_nulls BOOLEAN DEFAULT TRUE,
                                                auto_detect BOOLEAN DEFAULT TRUE,
                                                auto_type_candidates TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -72,14 +74,16 @@ CREATE OR REPLACE FUNCTION read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE
                                                timestampformat VARCHAR DEFAULT '',
                                                types TEXT[] DEFAULT ARRAY[]::TEXT[],
                                                union_by_name BOOLEAN DEFAULT FALSE)
-RETURNS SETOF record LANGUAGE 'plpgsql' AS
+RETURNS SETOF record LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `read_csv(TEXT)` only works with Duckdb execution.';
 END;
 $func$;
 
-CREATE OR REPLACE FUNCTION read_csv(path text[],  all_varchar BOOLEAN DEFAULT FALSE,
+CREATE FUNCTION @extschema@.read_csv(path text[],  all_varchar BOOLEAN DEFAULT FALSE,
                                                   allow_quoted_nulls BOOLEAN DEFAULT TRUE,
                                                   auto_detect BOOLEAN DEFAULT TRUE,
                                                   auto_type_candidates TEXT[] DEFAULT ARRAY[]::TEXT[],
@@ -107,7 +111,9 @@ CREATE OR REPLACE FUNCTION read_csv(path text[],  all_varchar BOOLEAN DEFAULT FA
                                                   timestampformat VARCHAR DEFAULT '',
                                                   types TEXT[] DEFAULT ARRAY[]::TEXT[],
                                                   union_by_name BOOLEAN DEFAULT FALSE)
-RETURNS SETOF record LANGUAGE 'plpgsql' AS
+RETURNS SETOF record LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `read_csv(TEXT[])` only works with Duckdb execution.';
@@ -117,20 +123,22 @@ $func$;
 -- iceberg_* functions optional parameters are extract from source code;
 -- https://github.com/duckdb/duckdb_iceberg/tree/main/src/iceberg_functions
 
-CREATE OR REPLACE FUNCTION iceberg_scan(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
+CREATE FUNCTION @extschema@.iceberg_scan(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
                                                    mode TEXT DEFAULT '',
                                                    metadata_compression_codec TEXT DEFAULT 'none',
                                                    skip_schema_inference BOOLEAN DEFAULT FALSE,
                                                    version TEXT DEFAULT 'version-hint.text',
                                                    version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
-RETURNS SETOF record LANGUAGE 'plpgsql' AS
+RETURNS SETOF record LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `iceberg_scan(TEXT)` only works with Duckdb execution.';
 END;
 $func$;
 
-CREATE TYPE iceberg_metadata_record AS (
+CREATE TYPE duckdb.iceberg_metadata_record AS (
   manifest_path TEXT,
   manifest_sequence_number NUMERIC,
   manifest_content  TEXT,
@@ -139,47 +147,66 @@ CREATE TYPE iceberg_metadata_record AS (
   file_path TEXT
 );
 
-CREATE OR REPLACE FUNCTION iceberg_metadata(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
+CREATE FUNCTION @extschema@.iceberg_metadata(path text, allow_moved_paths BOOLEAN DEFAULT FALSE,
                                                        metadata_compression_codec TEXT DEFAULT 'none',
                                                        skip_schema_inference BOOLEAN DEFAULT FALSE,
                                                        version TEXT DEFAULT 'version-hint.text',
                                                        version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
-RETURNS SETOF iceberg_metadata_record LANGUAGE 'plpgsql' AS
+RETURNS SETOF duckdb.iceberg_metadata_record LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `iceberg_metadata(TEXT)` only works with Duckdb execution.';
 END;
 $func$;
 
-CREATE TYPE iceberg_snapshots_record AS (
+CREATE TYPE duckdb.iceberg_snapshots_record AS (
   sequence_number BIGINT,
   snapshot_id BIGINT,
   timestamp_ms TIMESTAMP,
   manifest_list TEXT
 );
 
-CREATE OR REPLACE FUNCTION iceberg_snapshots(path text, metadata_compression_codec TEXT DEFAULT 'none',
+CREATE FUNCTION @extschema@.iceberg_snapshots(path text, metadata_compression_codec TEXT DEFAULT 'none',
                                                         skip_schema_inference BOOLEAN DEFAULT FALSE,
                                                         version TEXT DEFAULT 'version-hint.text',
                                                         version_name_format TEXT DEFAULT 'v%s%s.metadata.json,%s%s.metadata.json')
-RETURNS SETOF iceberg_snapshots_record LANGUAGE 'plpgsql' AS
+RETURNS SETOF duckdb.iceberg_snapshots_record LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
 $func$
 BEGIN
     RAISE EXCEPTION 'Function `iceberg_snapshots(TEXT)` only works with Duckdb execution.';
 END;
 $func$;
 
-CREATE SCHEMA duckdb;
--- Allow seeing the objects in this schema, we'll manually revoke rights for
--- the dangerous ones.
-GRANT USAGE ON SCHEMA duckdb to PUBLIC;
-SET search_path TO duckdb;
+-- If duckdb.postgres_role is configured let's make sure it's actually created.
+-- If people change this setting after installing the extension they are
+-- responsible for creating the user themselves. This is especially useful for
+-- demo purposes and our pg_regress testing.
+DO $$
+DECLARE
+    role_name text;
+BEGIN
+    SELECT current_setting('duckdb.postgres_role') INTO role_name;
+    IF role_name != '' AND NOT EXISTS (
+      SELECT FROM pg_catalog.pg_roles
+      WHERE  rolname = role_name) THEN
+        EXECUTE 'CREATE ROLE ' || quote_ident(current_setting('duckdb.postgres_role'));
+    END IF;
+END
+$$;
 
-CREATE SEQUENCE secrets_table_seq START WITH 1 INCREMENT BY 1;
-GRANT SELECT ON secrets_table_seq TO PUBLIC;
-SELECT setval('secrets_table_seq', 1);
 
-CREATE TABLE secrets (
+SET search_path TO duckdb, pg_catalog, pg_temp;
+
+CREATE SEQUENCE duckdb.secrets_table_seq START WITH 1 INCREMENT BY 1;
+GRANT SELECT ON duckdb.secrets_table_seq TO PUBLIC;
+SELECT pg_catalog.setval('duckdb.secrets_table_seq', 1);
+
+set search_path = pg_catalog, pg_temp;
+CREATE TABLE duckdb.secrets (
     name TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
     type TEXT NOT NULL,
     key_id TEXT NOT NULL,
@@ -191,9 +218,12 @@ CREATE TABLE secrets (
     use_ssl BOOLEAN DEFAULT true,
     CONSTRAINT type_constraint CHECK (type IN ('S3', 'GCS', 'R2'))
 );
+SET search_path TO duckdb, pg_catalog, pg_temp;
 
-CREATE OR REPLACE FUNCTION duckdb_update_secrets_table_seq()
-RETURNS TRIGGER AS
+CREATE FUNCTION duckdb_update_secrets_table_seq()
+RETURNS TRIGGER
+SET search_path = pg_catalog, pg_temp
+AS
 $$
 BEGIN
     PERFORM nextval('duckdb.secrets_table_seq');
@@ -202,11 +232,13 @@ END;
 $$ LANGUAGE PLpgSQL;
 REVOKE ALL ON FUNCTION duckdb_update_secrets_table_seq() FROM PUBLIC;
 
-CREATE TRIGGER secrets_table_seq_tr AFTER INSERT OR UPDATE OR DELETE ON secrets
+CREATE TRIGGER secrets_table_seq_tr AFTER INSERT OR UPDATE OR DELETE ON duckdb.secrets
 EXECUTE FUNCTION duckdb_update_secrets_table_seq();
 
-CREATE OR REPLACE FUNCTION duckdb_secret_r2_check()
-RETURNS TRIGGER AS
+CREATE FUNCTION duckdb_secret_r2_check()
+RETURNS TRIGGER
+SET search_path = pg_catalog, pg_temp
+AS
 $$
 BEGIN
     IF NEW.type = 'R2' AND NEW.r2_account_id IS NULL THEN
@@ -231,8 +263,10 @@ CREATE TABLE extensions (
     enabled BOOL DEFAULT TRUE
 );
 
-CREATE OR REPLACE FUNCTION duckdb_update_extensions_table_seq()
-RETURNS TRIGGER AS
+CREATE FUNCTION duckdb_update_extensions_table_seq()
+RETURNS TRIGGER
+SET search_path = pg_catalog, pg_temp
+AS
 $$
 BEGIN
     PERFORM nextval('duckdb.extensions_table_seq');
@@ -255,34 +289,40 @@ CREATE TABLE tables (
 
 REVOKE ALL ON tables FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
+CREATE FUNCTION install_extension(extension_name TEXT) RETURNS bool
+    SET search_path = pg_catalog, pg_temp
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 REVOKE ALL ON FUNCTION install_extension(TEXT) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION raw_query(query TEXT) RETURNS void
+CREATE FUNCTION raw_query(query TEXT) RETURNS void
+    SET search_path = pg_catalog, pg_temp
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_raw_query';
 REVOKE ALL ON FUNCTION raw_query(TEXT) FROM PUBLIC;
 
-CREATE OR REPLACE FUNCTION cache(object_path TEXT, type TEXT) RETURNS bool
+CREATE FUNCTION cache(object_path TEXT, type TEXT) RETURNS bool
+    SET search_path = pg_catalog, pg_temp
     LANGUAGE C AS 'MODULE_PATHNAME', 'cache';
 REVOKE ALL ON FUNCTION cache(TEXT, TEXT) FROM PUBLIC;
 
 CREATE FUNCTION duckdb_am_handler(internal)
-RETURNS table_am_handler
-AS 'MODULE_PATHNAME'
-LANGUAGE C;
+    RETURNS table_am_handler
+    SET search_path = pg_catalog, pg_temp
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C;
 
 CREATE ACCESS METHOD duckdb
     TYPE TABLE
     HANDLER duckdb_am_handler;
 
 CREATE FUNCTION duckdb_drop_trigger() RETURNS event_trigger
+    SET search_path = pg_catalog, pg_temp
     AS 'MODULE_PATHNAME' LANGUAGE C;
 
 CREATE EVENT TRIGGER duckdb_drop_trigger ON sql_drop
     EXECUTE FUNCTION duckdb_drop_trigger();
 
 CREATE FUNCTION duckdb_create_table_trigger() RETURNS event_trigger
+    SET search_path = pg_catalog, pg_temp
     AS 'MODULE_PATHNAME' LANGUAGE C;
 
 CREATE EVENT TRIGGER duckdb_create_table_trigger ON ddl_command_end
@@ -296,6 +336,12 @@ CREATE EVENT TRIGGER duckdb_alter_table_trigger ON ddl_command_end
     WHEN tag IN ('ALTER TABLE')
     EXECUTE FUNCTION duckdb_alter_table_trigger();
 
+-- We explicitely don't set the search_path here in the functinon definitian.
+-- Because we actually need the original search_path that was active during the
+-- GRANT to reslove the RangeVar using RangeVarGetRelid. We don't need this for
+-- any of the other triggers since those don't manually resolve RangeVars, at
+-- least not yet. So for those we might as well err on the side of caution and
+-- force a safe search_path.
 CREATE FUNCTION duckdb_grant_trigger() RETURNS event_trigger
     AS 'MODULE_PATHNAME' LANGUAGE C;
 
@@ -303,10 +349,12 @@ CREATE EVENT TRIGGER duckdb_grant_trigger ON ddl_command_end
     WHEN tag IN ('GRANT')
     EXECUTE FUNCTION duckdb_grant_trigger();
 
-CREATE OR REPLACE PROCEDURE force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)
+CREATE PROCEDURE force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)
+    SET search_path = pg_catalog, pg_temp
     LANGUAGE C AS 'MODULE_PATHNAME';
 
-CREATE OR REPLACE FUNCTION recycle_ddb() RETURNS void
+CREATE FUNCTION recycle_ddb() RETURNS void
+    SET search_path = pg_catalog, pg_temp
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_recycle_ddb';
 REVOKE ALL ON FUNCTION recycle_ddb() FROM PUBLIC;
 
