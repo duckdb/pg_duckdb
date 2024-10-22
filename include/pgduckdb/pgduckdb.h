@@ -18,7 +18,7 @@ extern int duckdb_max_threads_per_postgres_scan;
 extern char *duckdb_motherduck_postgres_database;
 extern int duckdb_motherduck_enabled;
 extern char *duckdb_motherduck_token;
-extern char *duckdb_motherduck_postgres_user;
+extern char *duckdb_postgres_role;
 extern "C" void _PG_init(void);
 
 // pgduckdb_hooks.c

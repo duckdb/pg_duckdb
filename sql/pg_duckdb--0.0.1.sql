@@ -1,5 +1,22 @@
 LOAD 'pg_duckdb';
 
+-- If duckdb.postgres_role is configured let's make sure it's actually created.
+-- If people change this setting after installing the extension they are
+-- responsible for creating the user themselves. This is especially useful for
+-- demo purposes and our pg_regress testing.
+DO $$
+DECLARE
+    role_name text;
+BEGIN
+    SELECT current_setting('duckdb.postgres_role') INTO role_name;
+    IF role_name != '' AND NOT EXISTS (
+      SELECT FROM pg_catalog.pg_roles
+      WHERE  rolname = role_name) THEN
+        EXECUTE 'CREATE ROLE ' || quote_ident(current_setting('duckdb.postgres_role'));
+    END IF;
+END
+$$;
+
 CREATE OR REPLACE FUNCTION read_parquet(path text, binary_as_string BOOLEAN DEFAULT FALSE,
                                                    filename BOOLEAN DEFAULT FALSE,
                                                    file_row_number BOOLEAN DEFAULT FALSE,
@@ -153,9 +170,13 @@ END;
 $func$;
 
 CREATE SCHEMA duckdb;
+-- Allow seeing the objects in this schema, we'll manually revoke rights for
+-- the dangerous ones.
+GRANT USAGE ON SCHEMA duckdb to PUBLIC;
 SET search_path TO duckdb;
 
 CREATE SEQUENCE secrets_table_seq START WITH 1 INCREMENT BY 1;
+GRANT SELECT ON secrets_table_seq TO PUBLIC;
 SELECT setval('secrets_table_seq', 1);
 
 CREATE TABLE secrets (
@@ -179,6 +200,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE PLpgSQL;
+REVOKE ALL ON FUNCTION duckdb_update_secrets_table_seq() FROM PUBLIC;
 
 CREATE TRIGGER secrets_table_seq_tr AFTER INSERT OR UPDATE OR DELETE ON secrets
 EXECUTE FUNCTION duckdb_update_secrets_table_seq();
@@ -193,6 +215,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE PLpgSQL;
+REVOKE ALL ON FUNCTION duckdb_secret_r2_check() FROM PUBLIC;
 
 CREATE TRIGGER duckdb_secret_r2_tr BEFORE INSERT OR UPDATE ON secrets
 FOR EACH ROW EXECUTE PROCEDURE duckdb_secret_r2_check();
@@ -201,6 +224,7 @@ FOR EACH ROW EXECUTE PROCEDURE duckdb_secret_r2_check();
 
 CREATE SEQUENCE extensions_table_seq START WITH 1 INCREMENT BY 1;
 SELECT setval('extensions_table_seq', 1);
+GRANT SELECT ON extensions_table_seq TO PUBLIC;
 
 CREATE TABLE extensions (
     name TEXT NOT NULL PRIMARY KEY,
@@ -215,6 +239,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE PLpgSQL;
+REVOKE ALL ON FUNCTION duckdb_update_extensions_table_seq() FROM PUBLIC;
 
 CREATE TRIGGER extensions_table_seq_tr AFTER INSERT OR UPDATE OR DELETE ON extensions
 EXECUTE FUNCTION duckdb_update_extensions_table_seq();
@@ -232,12 +257,15 @@ REVOKE ALL ON tables FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION install_extension(extension_name TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
+REVOKE ALL ON FUNCTION install_extension(TEXT) FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION raw_query(query TEXT) RETURNS void
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_raw_query';
+REVOKE ALL ON FUNCTION raw_query(TEXT) FROM PUBLIC;
 
 CREATE OR REPLACE FUNCTION cache(object_path TEXT, type TEXT) RETURNS bool
     LANGUAGE C AS 'MODULE_PATHNAME', 'cache';
+REVOKE ALL ON FUNCTION cache(TEXT, TEXT) FROM PUBLIC;
 
 CREATE FUNCTION duckdb_am_handler(internal)
 RETURNS table_am_handler
@@ -280,6 +308,7 @@ CREATE OR REPLACE PROCEDURE force_motherduck_sync(drop_with_cascade BOOLEAN DEFA
 
 CREATE OR REPLACE FUNCTION recycle_ddb() RETURNS void
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_recycle_ddb';
+REVOKE ALL ON FUNCTION recycle_ddb() FROM PUBLIC;
 
 DO $$
 BEGIN

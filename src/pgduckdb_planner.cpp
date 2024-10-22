@@ -105,7 +105,8 @@ CreatePlan(Query *query, bool throw_error) {
 }
 
 PlannedStmt *
-DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
+DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
+               bool throw_error) {
 	/* We need to check can we DuckDB create plan */
 	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan *>(CreatePlan, "CreatePlan", parse, throw_error);
 	Plan *duckdb_plan = (Plan *)castNode(CustomScan, plan);
@@ -114,35 +115,23 @@ DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 		return nullptr;
 	}
 
-	/* build the PlannedStmt result */
-	PlannedStmt *result = makeNode(PlannedStmt);
+	/*
+	 * We let postgres generate a basic plan, but then completely overwrite the
+	 * actual plan with our CustomScan node. This is useful to get the correct
+	 * values for all the other many fields of the PLannedStmt.
+	 *
+	 * XXX: The primary reason we do this is that Postgres fills in permInfos
+	 * and rtable correctly. Those are needed for postgres to do its permission
+	 * checks on the used tables.
+	 *
+	 * FIXME: For some reason this needs an additional query copy to allow
+	 * re-planning of the query later during execution. But I don't really
+	 * understand why this is needed.
+	 */
+	Query *copied_query = (Query *)copyObjectImpl(parse);
+	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
 
-	result->commandType = parse->commandType;
-	result->queryId = parse->queryId;
-	result->hasReturning = (parse->returningList != NIL);
-	result->hasModifyingCTE = parse->hasModifyingCTE;
-	result->canSetTag = parse->canSetTag;
-	result->transientPlan = false;
-	result->dependsOnRole = false;
-	result->parallelModeNeeded = false;
-	result->planTree = duckdb_plan;
-	result->rtable = NULL;
-#if PG_VERSION_NUM >= 160000
-	result->permInfos = NULL;
-#endif
-	result->resultRelations = NULL;
-	result->appendRelations = NULL;
-	result->subplans = NIL;
-	result->rewindPlanIDs = NULL;
-	result->rowMarks = NIL;
-	result->relationOids = NIL;
-	result->invalItems = NIL;
-	result->paramExecTypes = NIL;
+	postgres_plan->planTree = duckdb_plan;
 
-	/* utilityStmt should be null, but we might as well copy it */
-	result->utilityStmt = parse->utilityStmt;
-	result->stmt_location = parse->stmt_location;
-	result->stmt_len = parse->stmt_len;
-
-	return result;
+	return postgres_plan;
 }

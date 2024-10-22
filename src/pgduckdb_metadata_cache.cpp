@@ -13,6 +13,7 @@ extern "C" {
 #include "commands/dbcommands.h"
 #include "miscadmin.h"
 #include "nodes/bitmapset.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
 #include "utils/inval.h"
@@ -51,8 +52,8 @@ struct {
 	Oid table_am_oid;
 	/* The OID of the duckdb.motherduck_postgres_database */
 	Oid motherduck_postgres_database_oid;
-	/* The OID of the duckdb.motherduck_postgres_user */
-	Oid motherduck_postgres_user_oid;
+	/* The OID of the duckdb.postgres_role */
+	Oid postgres_role_oid;
 	/*
 	 * A list of Postgres OIDs of functions that can only be executed by DuckDB.
 	 * XXX: We're iterating over this list in IsDuckdbOnlyFunction. If this list
@@ -86,6 +87,7 @@ InvalidateCaches(Datum arg, int cache_id, uint32 hash_value) {
 		cache.duckdb_only_functions = NIL;
 		cache.extension_oid = InvalidOid;
 		cache.table_am_oid = InvalidOid;
+		cache.postgres_role_oid = InvalidOid;
 	}
 }
 
@@ -173,11 +175,15 @@ IsExtensionRegistered() {
 
 		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
 
-		if (duckdb_motherduck_postgres_user[0] != '\0') {
-			cache.motherduck_postgres_user_oid =
-			    GetSysCacheOid1(AUTHNAME, Anum_pg_authid_oid, CStringGetDatum(duckdb_motherduck_postgres_user));
+		if (duckdb_postgres_role[0] != '\0') {
+			cache.postgres_role_oid =
+			    GetSysCacheOid1(AUTHNAME, Anum_pg_authid_oid, CStringGetDatum(duckdb_postgres_role));
+			if (cache.postgres_role_oid == InvalidOid) {
+				elog(WARNING, "The configured duckdb.postgres_role does not exist, falling back to superuser");
+				cache.postgres_role_oid = BOOTSTRAP_SUPERUSERID;
+			}
 		} else {
-			cache.motherduck_postgres_user_oid = BOOTSTRAP_SUPERUSERID;
+			cache.postgres_role_oid = BOOTSTRAP_SUPERUSERID;
 		}
 	}
 	cache.valid = true;
@@ -266,7 +272,14 @@ IsMotherDuckPostgresDatabase() {
 Oid
 MotherDuckPostgresUser() {
 	Assert(cache.valid);
-	return cache.motherduck_postgres_user_oid;
+	return cache.postgres_role_oid;
+}
+
+Oid
+IsDuckdbExecutionAllowed() {
+	Assert(cache.valid);
+	Assert(cache.postgres_role_oid != InvalidOid);
+	return has_privs_of_role(GetUserId(), cache.postgres_role_oid);
 }
 
 } // namespace pgduckdb
