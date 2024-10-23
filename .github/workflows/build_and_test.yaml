@@ -4,6 +4,9 @@ on:
     branches: ["main"]
     tags: ["v*"]
   pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "**.md"
 
 jobs:
   format:
