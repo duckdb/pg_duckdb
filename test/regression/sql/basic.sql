@@ -36,3 +36,14 @@ INSERT INTO lt SELECT g % 10 FROM generate_series(1,100000) g;
 SELECT lt.a * rt.a FROM lt, rt WHERE lt.a % 2 = 0 AND rt.a = 0;
 DROP TABLE lt;
 DROP TABLE rt;
+
+
+---- Regression for gh#347
+
+CREATE TABLE t(a INT, b VARCHAR);
+INSERT INTO t SELECT g from generate_series(1,10) g;
+INSERT INTO t SELECT g % 10 from generate_series(1,1000) g;
+INSERT INTO t SELECT g % 100, MD5(g::VARCHAR) FROM generate_series(1,1000) g;
+INSERT INTO t SELECT g % 100, MD5(g::VARCHAR) FROM generate_series(1,1000) g;
+SELECT COUNT(b) FROM t WHERE a > 3;
+DROP TABLE t;
