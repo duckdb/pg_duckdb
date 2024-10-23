@@ -85,7 +85,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 		m_read_next_page = true;
 	} else {
 		block = m_block_number;
-		if (block != InvalidBlockNumber) {
+		if(!m_read_next_page) {
 			page = BufferGetPage(m_buffer);
 		}
 	}
