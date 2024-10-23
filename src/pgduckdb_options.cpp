@@ -7,6 +7,7 @@ extern "C" {
 #include "access/relation.h"
 #include "access/table.h"
 #include "access/xact.h"
+#include "executor/spi.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
@@ -115,36 +116,24 @@ ReadDuckdbExtensions() {
 }
 
 static bool
-DuckdbInstallExtension(Datum name) {
+DuckdbInstallExtension(Datum name_datum) {
 
-	auto extension_name = DatumToString(name);
+	auto extension_name = DatumToString(name_datum);
 	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
-	{
-		auto connection = pgduckdb::DuckDBManager::CreateConnection();
-		auto res = connection->context->Query(install_extension_command, false);
+	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
 
-		if (res->HasError()) {
-			elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
-			return false;
-		}
-	}
+	Oid arg_types[] = {TEXTOID};
+	Datum values[] = {name_datum};
 
-	bool nulls[Natts_duckdb_extension] = {0};
-	Datum values[Natts_duckdb_extension] = {0};
-
-	values[Anum_duckdb_extension_name - 1] = name;
-	values[Anum_duckdb_extension_enable - 1] = 1;
-
-	/* create heap tuple and insert into catalog table */
-	Relation duckdb_extensions_relation = relation_open(ExtensionsTableRelationId(), RowExclusiveLock);
-	TupleDesc tuple_descr = RelationGetDescr(duckdb_extensions_relation);
-
-	/* inserting extension record */
-	HeapTuple new_tuple = heap_form_tuple(tuple_descr, values, nulls);
-	CatalogTupleInsert(duckdb_extensions_relation, new_tuple);
-
-	CommandCounterIncrement();
-	relation_close(duckdb_extensions_relation, RowExclusiveLock);
+	SPI_connect();
+	auto ret = SPI_execute_with_args(R"(
+		INSERT INTO duckdb.extensions (name, enabled)
+		VALUES ($1, true)
+		)",
+	                                 lengthof(arg_types), arg_types, values, NULL, false, 0);
+	if (ret != SPI_OK_INSERT)
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	SPI_finish();
 
 	return true;
 }
