@@ -67,6 +67,7 @@ private:
 		extensions_table_current_seq = seq;
 	}
 
+	bool disabled_filesystems_is_set;
 	int secret_table_num_rows;
 	int64 secret_table_current_seq;
 	int64 extensions_table_current_seq;

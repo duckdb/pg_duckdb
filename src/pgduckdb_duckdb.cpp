@@ -104,11 +104,6 @@ DuckDBManager::Initialize() {
 
 	LoadFunctions(context);
 	LoadExtensions(context);
-
-	if (duckdb_disabled_filesystems != NULL) {
-		pgduckdb::DuckDBQueryOrThrow(context,
-		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
-	}
 }
 
 void
@@ -212,6 +207,16 @@ DuckDBManager::CreateConnection() {
 	auto &instance = Get();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*instance.database);
 	auto &context = *connection->context;
+	if (!superuser() && duckdb_disabled_filesystems != NULL) {
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
+		instance.disabled_filesystems_is_set = true;
+	}
+
+	else if (superuser() && instance.disabled_filesystems_is_set) {
+		pgduckdb::DuckDBQueryOrThrow(context, "SET disabled_filesystems=''");
+		instance.disabled_filesystems_is_set = false;
+	}
 
 	const auto secret_table_last_seq = GetSeqLastValue("secrets_table_seq");
 	if (instance.IsSecretSeqLessThan(secret_table_last_seq)) {
