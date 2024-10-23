@@ -24,6 +24,8 @@ SELECT * FROM duckdb.install_extension('some hacky sql');
 SELECT * FROM duckdb.cache('some hacky sql', 'some more hacky sql');
 SET duckdb.force_execution = true;
 
+-- read_csv from the local filesystem should be disallowed
+SELECT count("sepal.length") FROM read_csv('../../data/iris.csv') AS ("sepal.length" FLOAT);
 -- Should fail because DuckDB execution is not allowed for this user
 SET ROLE user3;
 SELECT * FROM t;
