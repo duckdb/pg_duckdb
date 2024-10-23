@@ -10,6 +10,8 @@ pg_duckdb was developed in collaboration with our partners, [Hydra][] and [Mothe
 
 ## Features
 
+See our [official documentation][docs] for further details.
+
 - `SELECT` queries executed by the DuckDB engine can directly read Postgres tables. (If you only query Postgres tables you need to run `SET duckdb.force_execution TO true`, see the **IMPORTANT** section above for details)
 	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, and arrays.
 	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
@@ -110,6 +112,8 @@ CREATE EXTENSION pg_duckdb;
 
 ## Getting Started
 
+See our [official documentation][docs] for more usage information.
+
 pg_duckdb relies on DuckDB's vectorized execution engine to read and write data to object storage bucket (AWS S3, Cloudflare R2, or Google GCS) and/or MotherDuck. The follow two sections describe how to get started with these destinations.
 
 ### Object storage bucket (AWS S3, Cloudflare R2, or Google GCS)
@@ -209,9 +213,11 @@ We welcome all contributions big and small:
 - [Vote on or suggest features][discussions] for our roadmap.
 - [Open a PR][prs].
 - [Submit a feature request or bug report][issues].
+- [Improve the docs][docs].
 
 ## Resources
 
+- [Read the pg_duckdb documentation][docs].
 - Please see the [project milestones][milestones] for upcoming planned tasks and features.
 - [GitHub Issues][issues] for bug reports
 - [Join the DuckDB Discord community](https://discord.duckdb.org/) then chat in [the #pg_duckdb channel](https://discord.com/channels/909674491309850675/1289177578237857802).
@@ -222,3 +228,4 @@ We welcome all contributions big and small:
 [issues]: https://github.com/duckdb/pg_duckdb/issues
 [Hydra]: https://hydra.so/
 [Motherduck]: https://motherduck.com/
+[docs]: https://github.com/duckdb/pg_duckdb/tree/main/docs
