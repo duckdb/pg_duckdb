@@ -224,7 +224,7 @@ DuckDBManager::CreateConnection() {
 	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
 	context.Query(http_file_cache_set_dir_query, false);
 
-	if (!superuser() && duckdb_disabled_filesystems != NULL) {
+	if (duckdb_disabled_filesystems != NULL && !superuser()) {
 		/*
 		 * DuckDB does not allow us to disable this setting on the
 		 * database after the DuckDB connection is created for a non
