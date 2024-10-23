@@ -336,9 +336,9 @@ CREATE EVENT TRIGGER duckdb_alter_table_trigger ON ddl_command_end
     WHEN tag IN ('ALTER TABLE')
     EXECUTE FUNCTION duckdb_alter_table_trigger();
 
--- We explicitely don't set the search_path here in the functinon definitian.
+-- We explicitly don't set the search_path here in the function definition.
 -- Because we actually need the original search_path that was active during the
--- GRANT to reslove the RangeVar using RangeVarGetRelid. We don't need this for
+-- GRANT to resolve the RangeVar using RangeVarGetRelid. We don't need this for
 -- any of the other triggers since those don't manually resolve RangeVars, at
 -- least not yet. So for those we might as well err on the side of caution and
 -- force a safe search_path.
