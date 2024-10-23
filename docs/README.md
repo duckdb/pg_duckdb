@@ -7,4 +7,4 @@
 * Extensions - TODO
 * Types - TODO
 * Compiling from source - TODO
-* Changelog - TODO
+* [Changelog](../CHANGELOG.md)
