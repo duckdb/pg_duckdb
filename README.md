@@ -32,7 +32,7 @@ pg_duckdb was developed in collaboration with our partners, [Hydra][] and [Mothe
 			```
 - Read and Write support for data stored in MotherDuck
 - Query and `JOIN` data in object storage/MotherDuck with Postgres tables, views, and materialized views.
-- Create indexes on Postgres tables to accelerate your DuckDB queries
+- Create temporary tables in DuckDB its columnar storage format using `CREATE TEMP TABLE ... USING duckdb`.
 - Install DuckDB extensions using `SELECT duckdb.install_extension('extension_name');`
 - Toggle DuckDB execution on/off with a setting:
 	- `SET duckdb.force_execution = true|false`
@@ -44,7 +44,7 @@ pg_duckdb was developed in collaboration with our partners, [Hydra][] and [Mothe
 
 ### Docker
 
-Docker images are [available on Dockerhub](https://hub.docker.com/r/pgduckdb/pgduckdb/tags) and are based on the official Postgres image. Use of this image is [the same as the Postgres image](https://hub.docker.com/_/postgres/). For example, you can run the image directly:
+Docker images are [available on Dockerhub](https://hub.docker.com/r/pgduckdb/pgduckdb) and are based on the official Postgres image. Use of this image is [the same as the Postgres image](https://hub.docker.com/_/postgres/). For example, you can run the image directly:
 
 ```shell
 docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:16-main
@@ -205,7 +205,7 @@ pg_duckdb was developed in collaboration with our partners, [Hydra][] and [Mothe
 We welcome all contributions big and small:
 
 - [Vote on or suggest features][discussions] for our roadmap.
-- Open a PR.
+- [Open a PR][prs].
 - [Submit a feature request or bug report][issues].
 
 ## Resources
@@ -216,6 +216,7 @@ We welcome all contributions big and small:
 
 [milestones]: https://github.com/duckdb/pg_duckdb/milestones
 [discussions]: https://github.com/duckdb/pg_duckdb/discussions
+[prs]: https://github.com/duckdb/pg_duckdb/pulls
 [issues]: https://github.com/duckdb/pg_duckdb/issues
 [Hydra]: https://hydra.so/
 [Motherduck]: https://motherduck.com/
