@@ -451,8 +451,14 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		 * create tables in a schema, only to list the tables. So we dont' need
 		 * to check for that one.
 		 */
+
+#if PG_VERSION_NUM >= 160000
 		bool user_has_create_access =
 		    object_aclcheck(NamespaceRelationId, schema_oid, MotherDuckPostgresUser(), ACL_CREATE) == ACLCHECK_OK;
+#else
+		bool user_has_create_access =
+		    pg_namespace_aclcheck(schema_oid, MotherDuckPostgresUser(), ACL_CREATE) == ACLCHECK_OK;
+#endif
 		if (user_has_create_access) {
 			return true;
 		}
@@ -464,11 +470,11 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 			 * should not be able to create tables in it unless the DBA has
 			 * configured access this way.
 			 */
-			ereport(WARNING,
-			        (errmsg("MotherDuck schema %s already exists, but duckdb.postgres_user does not have "
-			                "CREATE privileges on it",
-			                postgres_schema_name),
-			         errhint("You might want to grant ALL privileges to %s on this schema.", duckdb_postgres_role)));
+			ereport(WARNING, (errmsg("MotherDuck schema %s already exists, but duckdb.postgres_user does not have "
+			                         "CREATE privileges on it",
+			                         postgres_schema_name),
+			                  errhint("You might want to grant ALL privileges to the user '%s' on this schema.",
+			                          duckdb_postgres_role)));
 			return false;
 		}
 
