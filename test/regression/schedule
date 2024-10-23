@@ -7,6 +7,7 @@ test: extensions
 test: type_support
 test: array_type_support
 test: views
+test: non_superuser
 test: projection_pushdown_unsupported_type
 test: materialized_view
 test: hugeint_conversion

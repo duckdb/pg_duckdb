@@ -17,7 +17,7 @@ int duckdb_max_threads_per_postgres_scan = 1;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
-char *duckdb_motherduck_postgres_user = strdup("");
+char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = NULL;
@@ -142,6 +142,11 @@ DuckdbInitGUC(void) {
 	                     "Maximum number of DuckDB threads used for a single Postgres scan",
 	                     &duckdb_max_threads_per_postgres_scan, 1, 64);
 
+	DefineCustomVariable("duckdb.postgres_role",
+	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
+	                     "MotherDuck tables. Defaults to superusers only",
+	                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
 	DefineCustomVariable("duckdb.motherduck_enabled",
 	                     "If motherduck support should enabled. 'auto' means enabled if motherduck_token is set",
 	                     &duckdb_motherduck_enabled, motherduck_enabled_options, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
@@ -151,9 +156,4 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.motherduck_postgres_database", "Which database to enable MotherDuck support in",
 	                     &duckdb_motherduck_postgres_database);
-
-	DefineCustomVariable("duckdb.motherduck_postgres_user",
-	                     "As which Postgres user to create the MotherDuck tables in Postgres, empty string means the "
-	                     "bootstrap superuser",
-	                     &duckdb_motherduck_postgres_user, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 }

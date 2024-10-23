@@ -205,6 +205,10 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 
 duckdb::unique_ptr<duckdb::Connection>
 DuckDBManager::CreateConnection() {
+	if (!pgduckdb::IsDuckdbExecutionAllowed()) {
+		elog(ERROR, "DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role");
+	}
+
 	auto &instance = Get();
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*instance.database);
 	auto &context = *connection->context;

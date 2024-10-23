@@ -12,6 +12,7 @@ extern "C" {
 #include "utils/builtins.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
+#include "utils/lsyscache.h"
 #include "tcop/tcopprot.h"
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
@@ -29,10 +30,9 @@ static constexpr char r2_filename_prefix[] = "r2://";
 /*
  * Returns the relation of the copy_stmt as a fully qualified DuckDB table reference. This is done
  * including the column names if provided in the original copy_stmt, e.g. my_table(column1, column2).
- * This also checks permissions on the table to see if the user is allowed to copy the data from this table.
  */
 static duckdb::string
-CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt, bool *allowed) {
+CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt) {
 	ParseNamespaceItem *nsitem;
 #if PG_VERSION_NUM >= 160000
 	RTEPermissionInfo *perminfo;
@@ -41,7 +41,6 @@ CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt, bool *allowed)
 #endif
 	Relation rel;
 	Oid relid;
-	duckdb::string relation_copy;
 
 	/* Open and lock the relation, using the appropriate lock type. */
 	rel = table_openrv(copy_stmt->relation, AccessShareLock);
@@ -57,39 +56,24 @@ CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt, bool *allowed)
 #endif
 
 #if PG_VERSION_NUM >= 160000
-	if (!ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), false)) {
-		ereport(WARNING,
-		        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		         errmsg("(PGDuckDB/CreateRelationCopyString) Failed Permission \"%s\"", RelationGetRelationName(rel))));
-		*allowed = false;
-	}
+	ExecCheckPermissions(pstate->p_rtable, list_make1(perminfo), true);
 #else
-	if (!ExecCheckRTPerms(pstate->p_rtable, true)) {
-		ereport(WARNING,
-		        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		         errmsg("(PGDuckDB/CreateRelationCopyString) Failed Permission \"%s\"", RelationGetRelationName(rel))));
-		*allowed = false;
-	}
+	ExecCheckRTPerms(pstate->p_rtable, true);
 #endif
 
 	table_close(rel, AccessShareLock);
-
-	if (!*allowed) {
-		return relation_copy;
-	}
 
 	/*
 	 * RLS for relation. We should probably bail out at this point.
 	 */
 	if (check_enable_rls(relid, InvalidOid, false) == RLS_ENABLED) {
-		ereport(WARNING,
+		ereport(ERROR,
 		        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		         errmsg("(PGDuckDB/CreateRelationCopyString) RLS enabled on \"%s\"", RelationGetRelationName(rel))));
-		*allowed = false;
-		return relation_copy;
+		         errmsg("(PGDuckDB/CreateRelationCopyString) RLS enabled on \"%s\", cannot use DuckDB based COPY",
+		                RelationGetRelationName(rel))));
 	}
 
-	relation_copy += pgduckdb_relation_name(relid);
+	std::string relation_copy = pgduckdb_relation_name(relid);
 	if (copy_stmt->attlist) {
 		ListCell *lc;
 		relation_copy += "(";
@@ -104,8 +88,34 @@ CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt, bool *allowed)
 		relation_copy += ") ";
 	}
 
-	*allowed = true;
 	return relation_copy;
+}
+
+/*
+ * Checks if postgres permissions permit us to execute this query as the
+ * current user.
+ */
+void
+CheckQueryPermissions(Query *query, const char *query_string) {
+	Query *copied_query = (Query *)copyObjectImpl(query);
+
+	/* First we let postgres plan the query */
+	PlannedStmt *postgres_plan = pg_plan_query(copied_query, query_string, CURSOR_OPT_PARALLEL_OK, NULL);
+
+#if PG_VERSION_NUM >= 160000
+	ExecCheckPermissions(postgres_plan->rtable, postgres_plan->permInfos, true);
+#else
+	ExecCheckRTPerms(postgres_plan->rtable, true);
+#endif
+
+	foreach_node(RangeTblEntry, rte, postgres_plan->rtable) {
+		if (check_enable_rls(rte->relid, InvalidOid, false) == RLS_ENABLED) {
+			ereport(ERROR,
+			        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			         errmsg("(PGDuckDB/CheckQueryPermissions) RLS enabled on \"%s\", cannot use DuckDB based COPY",
+			                get_rel_name(rte->relid))));
+		}
+	}
 }
 
 static duckdb::string
@@ -154,6 +164,37 @@ CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
 	return options_string;
 }
 
+/*
+ * Throws an error if a rewritten raw statement returns an unexpected number of
+ * queries (i.e. not just a single query). This is taken from Postgres its
+ * BeginCopyTo function.
+ */
+static void
+CheckRewritten(List *rewritten) {
+	/* check that we got back something we can work with */
+	if (rewritten == NIL) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("DO INSTEAD NOTHING rules are not supported for COPY")));
+	} else if (list_length(rewritten) > 1) {
+		ListCell *lc;
+
+		/* examine queries to determine which error message to issue */
+		foreach (lc, rewritten) {
+			Query *q = lfirst_node(Query, lc);
+
+			if (q->querySource == QSRC_QUAL_INSTEAD_RULE)
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				                errmsg("conditional DO INSTEAD rules are not supported for COPY")));
+			if (q->querySource == QSRC_NON_INSTEAD_RULE)
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				                errmsg("DO ALSO rules are not supported for the COPY")));
+		}
+
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("multi-statement DO INSTEAD rules are not supported for COPY")));
+	}
+}
+
 bool
 DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env, uint64 *processed) {
 	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
@@ -185,28 +226,24 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 	duckdb::string rewritten_query_string;
 
 	if (copy_stmt->query) {
-		List *rewritten;
-		RawStmt *raw_stmt;
-		Query *query;
-
-		raw_stmt = makeNode(RawStmt);
+		RawStmt *raw_stmt = makeNode(RawStmt);
 		raw_stmt->stmt = copy_stmt->query;
 		raw_stmt->stmt_location = pstmt->stmt_location;
 		raw_stmt->stmt_len = pstmt->stmt_len;
 
-		rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
-		query = linitial_node(Query, rewritten);
+		List *rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
+		CheckRewritten(rewritten);
+
+		Query *query = linitial_node(Query, rewritten);
+		CheckQueryPermissions(query, query_string);
+
 		rewritten_query_string = duckdb::StringUtil::Format("COPY (%s) TO %s %s", pgduckdb_get_querydef(query),
 		                                                    filename_quoted, options_string);
 	} else {
-		bool copy_allowed = true;
 		ParseState *pstate = make_parsestate(NULL);
 		pstate->p_sourcetext = query_string;
 		pstate->p_queryEnv = query_env;
-		duckdb::string relation_copy_part = CreateRelationCopyString(pstate, copy_stmt, &copy_allowed);
-		if (!copy_allowed) {
-			return false;
-		}
+		duckdb::string relation_copy_part = CreateRelationCopyString(pstate, copy_stmt);
 		rewritten_query_string =
 		    duckdb::StringUtil::Format("COPY %s TO %s %s", relation_copy_part, filename_quoted, options_string);
 	}

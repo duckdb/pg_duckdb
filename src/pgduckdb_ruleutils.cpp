@@ -13,6 +13,7 @@ extern "C" {
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/rel.h"
+#include "utils/rls.h"
 #include "utils/syscache.h"
 #include "storage/lockdefs.h"
 
@@ -128,8 +129,29 @@ pgduckdb_relation_name(Oid relation_oid) {
 	Form_pg_class relation = (Form_pg_class)GETSTRUCT(tp);
 	const char *relname = NameStr(relation->relname);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
+	bool is_duckdb_table = pgduckdb::IsDuckdbTable(relation);
 
+	if (!is_duckdb_table) {
+		/*
+		 * FIXME: This should be moved somewhere else. We already have a list
+		 * of RTEs somwhere that we use to call ExecCheckPermissions. We could
+		 * used that same list to check if RLS is enabled on any of the tables,
+		 * instead of checking it here for **every occurence** of each table in
+		 * the query. One benefit of having it here is that it ensures that we
+		 * never forget to check for RLS.
+		 *
+		 * NOTE: We only need to check this for non-DuckDB tables because DuckDB
+		 * tables don't support RLS anyway.
+		 */
+		if (check_enable_rls(relation_oid, InvalidOid, false) == RLS_ENABLED) {
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			                errmsg("(PGDuckDB/pgduckdb_relation_name) Cannot use \"%s\" in a DuckDB query, because RLS "
+			                       "is enabled on it",
+			                       get_rel_name(relation_oid))));
+		}
+	}
+
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, is_duckdb_table);
 	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
 	ReleaseSysCache(tp);

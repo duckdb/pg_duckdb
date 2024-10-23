@@ -170,9 +170,9 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
 
-			return DuckdbPlanNode(parse, cursor_options, true);
+			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
 		} else if (duckdb_force_execution && IsAllowedStatement(parse)) {
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, false);
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}
