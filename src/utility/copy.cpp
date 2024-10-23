@@ -95,7 +95,7 @@ CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt) {
  * Checks if postgres permissions permit us to execute this query as the
  * current user.
  */
-bool
+void
 CheckQueryPermissions(Query *query, const char *query_string) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
 
@@ -114,10 +114,8 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 			        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			         errmsg("(PGDuckDB/CheckQueryPermissions) RLS enabled on \"%s\", cannot use DuckDB based COPY",
 			                get_rel_name(rte->relid))));
-			return false;
 		}
 	}
-	return true;
 }
 
 static duckdb::string
@@ -171,8 +169,8 @@ CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
  * queries (i.e. not just a single query). This is taken from Postgres its
  * BeginCopyTo function.
  */
-void
-check_rewritten(List *rewritten) {
+static void
+CheckRewritten(List *rewritten) {
 	/* check that we got back something we can work with */
 	if (rewritten == NIL) {
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -234,13 +232,11 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		raw_stmt->stmt_len = pstmt->stmt_len;
 
 		List *rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
-		if (list_length(rewritten) != 1) {
-			return false;
-		}
+		CheckRewritten(rewritten);
+
 		Query *query = linitial_node(Query, rewritten);
-		if (!CheckQueryPermissions(query, query_string)) {
-			return false;
-		}
+		CheckQueryPermissions(query, query_string);
+
 		rewritten_query_string = duckdb::StringUtil::Format("COPY (%s) TO %s %s", pgduckdb_get_querydef(query),
 		                                                    filename_quoted, options_string);
 	} else {
