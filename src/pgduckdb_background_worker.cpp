@@ -32,9 +32,11 @@ extern "C" {
 #include "storage/shmem.h"
 #include "utils/builtins.h"
 #include "catalog/dependency.h"
+#include "catalog/pg_authid.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_extension.h"
+#include "utils/acl.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
@@ -307,6 +309,8 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 	 */
 	Oid schema_oid = get_namespace_oid(postgres_schema_name, false);
 	HeapTuple tuple = SearchSysCache2(RELNAMENSP, CStringGetDatum(table_name), ObjectIdGetDatum(schema_oid));
+
+	bool did_delete_table = false;
 	if (HeapTupleIsValid(tuple)) {
 		Form_pg_class postgres_relation = (Form_pg_class)GETSTRUCT(tuple);
 		/* The table already exists in Postgres, so we cannot simply create it. */
@@ -329,16 +333,57 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 		 * It's an old version of this DuckDB table, we can safely
 		 * drop it and recreate it.
 		 */
-		auto drop_query = DropPgTableString(postgres_schema_name, table_name, drop_with_cascade);
-		create_table_query = psprintf("%s %s", drop_query.c_str(), create_table_query);
+		std::string drop_table_query = DropPgTableString(postgres_schema_name, table_name, drop_with_cascade);
+
+		/* We use this to roll back the drop if the CREATE after fails */
+		BeginInternalSubTransaction(NULL);
+
+		/* Revert back to original privileges */
+		if (!SPI_run_utility_command(drop_table_query.c_str())) {
+
+			ereport(WARNING, (errmsg("Failed to sync MotherDuck table %s.%s", postgres_schema_name, table_name),
+
+			                  errdetail("While executing command: %s", create_table_query),
+			                  errhint("See previous WARNING for details")));
+			/*
+			 * Rollback the subtransaction to clean up the subtransaction
+			 * state. Even though there's nothing actually in it. So we could
+			 * we could just as well commit it, but rolling back seems more
+			 * sensible.
+			 */
+			RollbackAndReleaseCurrentSubTransaction();
+			return false;
+		}
+
+		did_delete_table = true;
 	}
 
-	if (!SPI_run_utility_command(create_table_query)) {
+	Oid saved_userid;
+	int sec_context;
+	GetUserIdAndSecContext(&saved_userid, &sec_context);
+	SetUserIdAndSecContext(MotherDuckPostgresUser(), sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	bool create_table_succeeded = SPI_run_utility_command(create_table_query);
+	SetUserIdAndSecContext(saved_userid, sec_context);
+	/* Revert back to original privileges */
+	if (!create_table_succeeded) {
+
 		ereport(WARNING, (errmsg("Failed to sync MotherDuck table %s.%s", postgres_schema_name, table_name),
 
 		                  errdetail("While executing command: %s", create_table_query),
 		                  errhint("See previous WARNING for details")));
+		if (did_delete_table) {
+			/* Rollback the drop that succeeded */
+			RollbackAndReleaseCurrentSubTransaction();
+		}
 		return false;
+	}
+
+	if (did_delete_table) {
+		/*
+		 * Commit the subtransaction that contains both the drop and the create that
+		 * contains the actual table creation.
+		 */
+		ReleaseCurrentSubTransaction();
 	}
 
 	/* And then we also commit the actual transaction to release any locks that
@@ -368,21 +413,101 @@ DropTable(const char *fully_qualified_table, bool drop_with_cascade) {
 	return true;
 }
 
+/*
+ * We should grant access on schemas that we want to create tables in.
+ *
+ * Returns if access was granted successfully, in some cases we don't do this
+ * for security reasons.
+ */
+static bool
+GrantAccessToSchema(const char *postgres_schema_name) {
+	if (pgduckdb::MotherDuckPostgresUser() == BOOTSTRAP_SUPERUSERID) {
+		/*
+		 * We don't need to grant access to the bootstrap superuser. It already
+		 * has every access it might need.
+		 */
+		return true;
+	}
+
+	/* Grant access to the schema to the current user */
+	const char *grant_query =
+	    psprintf("GRANT ALL ON SCHEMA %s TO %s", postgres_schema_name, quote_identifier(duckdb_postgres_role));
+	if (!SPI_run_utility_command(grant_query)) {
+		ereport(WARNING,
+		        (errmsg("Failed to grant access to MotherDuck schema %s", postgres_schema_name),
+		         errdetail("While executing command: %s", grant_query), errhint("See previous WARNING for details")));
+		return false;
+	}
+	return true;
+}
+
 static bool
 CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	Oid schema_oid = get_namespace_oid(postgres_schema_name, true);
 	if (schema_oid != InvalidOid) {
-		return true;
+		/*
+		 * Let's check if the duckdb.postgres_user can actually create tables
+		 * in this schema. Surprisingly the USAGE permission is not needed to
+		 * create tables in a schema, only to list the tables. So we dont' need
+		 * to check for that one.
+		 */
+		bool user_has_create_access =
+		    object_aclcheck(NamespaceRelationId, schema_oid, MotherDuckPostgresUser(), ACL_CREATE) == ACLCHECK_OK;
+		if (user_has_create_access) {
+			return true;
+		}
+		if (is_default_db) {
+			/*
+			 * For non $ddb schemas that already exist we don't want to give
+			 * CREATE privileges to the duckdb.posgres_role automatically. It
+			 * might be some restricted and an attacker with MotherDuck access
+			 * should not be able to create tables in it unless the DBA has
+			 * configured access this way.
+			 */
+			ereport(WARNING,
+			        (errmsg("MotherDuck schema %s already exists, but duckdb.postgres_user does not have "
+			                "CREATE privileges on it",
+			                postgres_schema_name),
+			         errhint("You might want to grant ALL privileges to %s on this schema.", duckdb_postgres_role)));
+			return false;
+		}
+
+		/*
+		 * We always want to grant access for ddb$ schemas. They are
+		 * effictively owned by the extension so MotherDuck users should be
+		 * able to do with them whatever they want. GrantAccessToSchema will
+		 * already log a WARNING if it fails.
+		 */
+		return GrantAccessToSchema(postgres_schema_name);
 	}
 
 	std::string create_schema_query = CreatePgSchemaString(postgres_schema_name);
+
+	/* We want to group the CREATE SCHEMA and the GRANT in a subtransaction */
+	BeginInternalSubTransaction(NULL);
 
 	if (!SPI_run_utility_command(create_schema_query.c_str())) {
 		ereport(WARNING, (errmsg("Failed to sync MotherDuck schema %s", postgres_schema_name),
 		                  errdetail("While executing command: %s", create_schema_query.c_str()),
 		                  errhint("See previous WARNING for details")));
+		RollbackAndReleaseCurrentSubTransaction();
 		return false;
 	}
+
+	/*
+	 * And let's GRANT access to the schema. Even for non-$ddb schemas this
+	 * should be safe, because it's a new schema so no-one depends upon it not
+	 * having unexpected tables in it. So basically, because it didn't exist
+	 * yet we now claim it.
+	 */
+	if (!GrantAccessToSchema(postgres_schema_name)) {
+		/* GrantAccessToSchema already logged a WARNING */
+		RollbackAndReleaseCurrentSubTransaction();
+		return false;
+	}
+
+	/* Success, so we commit the subtransaction */
+	ReleaseCurrentSubTransaction();
 
 	if (!is_default_db) {
 		/*
@@ -490,7 +615,10 @@ SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade) {
 
 			std::string postgres_schema_name = PgSchemaName(motherduck_db, schema.name, is_default_db);
 
-			CreateSchemaIfNotExists(postgres_schema_name.c_str(), is_default_db);
+			if (!CreateSchemaIfNotExists(postgres_schema_name.c_str(), is_default_db)) {
+				/* We failed to create the schema, so we skip the tables in it */
+				continue;
+			}
 
 			schema.Scan(context, duckdb::CatalogType::TABLE_ENTRY, [&](duckdb::CatalogEntry &entry) {
 				if (entry.type != duckdb::CatalogType::TABLE_ENTRY) {
