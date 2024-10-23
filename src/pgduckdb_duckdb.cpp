@@ -86,11 +86,6 @@ DuckDBManager::Initialize() {
 
 	auto &context = *connection->context;
 
-	if (duckdb_disabled_filesystems != NULL) {
-		pgduckdb::DuckDBQueryOrThrow(context,
-		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
-	}
-
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	default_dbname = db_manager.GetDefaultDatabase(context);
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
@@ -198,7 +193,6 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 			continue;
 		}
 
-		DuckDBQueryOrThrow(context, "INSTALL " + extension.name);
 		DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 	}
 }
@@ -229,6 +223,21 @@ DuckDBManager::CreateConnection() {
 	auto http_file_cache_set_dir_query =
 	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
 	context.Query(http_file_cache_set_dir_query, false);
+
+	if (duckdb_disabled_filesystems != NULL && !superuser()) {
+		/*
+		 * DuckDB does not allow us to disable this setting on the
+		 * database after the DuckDB connection is created for a non
+		 * superuser, any further connections will inherit this
+		 * restriction. This means that once a non-superuser used a
+		 * DuckDB connection in aside a Postgres backend, any loter
+		 * connection will inherit these same filesystem restrictions.
+		 * This shouldn't be a problem in practice.
+		 */
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
+		instance.disabled_filesystems_is_set = true;
+	}
 
 	return connection;
 }

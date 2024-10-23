@@ -7,13 +7,25 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 
 -- INSERT SHOULD TRIGGER UPDATE OF EXTENSIONS
 
-INSERT INTO duckdb.extensions (name, enabled) VALUES ('icu', TRUE);
+SELECT duckdb.install_extension('icu');
 
+-- Increases the sequence twice because we use ON CONFLICT DO UPDATE. So
+-- the trigger fires for both INSERT and UPDATE internally.
 SELECT last_value FROM duckdb.extensions_table_seq;
 
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 
-INSERT INTO duckdb.extensions (name, enabled) VALUES ('aws', TRUE);
+-- Check that we can rerun this without issues
+SELECT duckdb.install_extension('icu');
+
+-- Increases the sequence twice because we use ON CONFLICT DO UPDATE. So
+-- the trigger fires for both INSERT and UPDATE internally.
+SELECT last_value FROM duckdb.extensions_table_seq;
+
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+
+
+SELECT duckdb.install_extension('aws');
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 
