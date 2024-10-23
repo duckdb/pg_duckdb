@@ -32,7 +32,38 @@ SELECT duckdb.install_extension('icu');
 SELECT last_value FROM duckdb.extensions_table_seq;
  last_value 
 ------------
-          2
+          3
+(1 row)
+
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+NOTICE:  result: extension_name	loaded	installed	
+VARCHAR	BOOLEAN	BOOLEAN	
+[ Rows: 5]
+cached_httpfs	true	true
+icu	true	true
+json	true	true
+parquet	true	true
+pgduckdb	true	false
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+-- Check that we can rerun this without issues
+SELECT duckdb.install_extension('icu');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- Increases the sequence twice because we use ON CONFLICT DO UPDATE. So
+-- the trigger fires for both INSERT and UPDATE internally.
+SELECT last_value FROM duckdb.extensions_table_seq;
+ last_value 
+------------
+          5
 (1 row)
 
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
@@ -60,7 +91,7 @@ SELECT duckdb.install_extension('aws');
 SELECT last_value FROM duckdb.extensions_table_seq;
  last_value 
 ------------
-          3
+          7
 (1 row)
 
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
@@ -86,7 +117,7 @@ DELETE FROM duckdb.extensions WHERE name = 'aws';
 SELECT last_value FROM duckdb.extensions_table_seq;
  last_value 
 ------------
-          4
+          8
 (1 row)
 
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);

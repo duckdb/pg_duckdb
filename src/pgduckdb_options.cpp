@@ -129,6 +129,7 @@ DuckdbInstallExtension(Datum name_datum) {
 	auto ret = SPI_execute_with_args(R"(
 		INSERT INTO duckdb.extensions (name, enabled)
 		VALUES ($1, true)
+		ON CONFLICT (name) DO UPDATE SET enabled = true
 		)",
 	                                 lengthof(arg_types), arg_types, values, NULL, false, 0);
 	if (ret != SPI_OK_INSERT)
