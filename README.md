@@ -1,5 +1,5 @@
 <p align="center">
-    <img width="300" src="5AAC723E-E14A-452B-889F-D241F5C73758.jpeg" alt="temporary logo" />
+    <img width="500" src="logo.png" alt="temporary logo" />
 </p>
 
 # pg_duckdb: Official Postgres extension for DuckDB
