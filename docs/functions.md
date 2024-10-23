@@ -90,7 +90,7 @@ Compatibility notes:
 
 Reads an Iceberg table, either from a remote location (via httpfs) or a local directory.
 
-To use `iceberg_scan`, you must enable the extension:
+To use `iceberg_scan`, you must enable the `iceberg` extension:
 
 ```sql
 SELECT duckdb.install_extension('iceberg');
@@ -125,9 +125,48 @@ Optional parameters mirror DuckDB's `iceberg_scan` function based on the DuckDB 
 | version | text | `'version-hint.text'` | |
 | version_name_format | text | `'v%s%s.metadata.json,%s%s.metadata.json'` | |
 
-#### <a name="iceberg_metadata"></a>`iceberg_metadata(path TEXT, /* optional parameters */) -> TODO`
+#### <a name="iceberg_metadata"></a>`iceberg_metadata(path TEXT, /* optional parameters */) -> SETOF iceberg_metadata_record`
 
-TODO
+To use `iceberg_metadata`, you must enable the `iceberg` extension:
+
+```sql
+SELECT duckdb.install_extension('iceberg');
+```
+
+Return metadata about an iceberg table. Data is returned as a set of `icerberg_metadata_record`, which is defined as:
+
+```sql
+CREATE TYPE duckdb.iceberg_metadata_record AS (
+  manifest_path TEXT,
+  manifest_sequence_number NUMERIC,
+  manifest_content TEXT,
+  status TEXT,
+  content TEXT,
+  file_path TEXT
+);
+```
+
+Further information:
+
+* [DuckDB Iceberg extension documentation](https://duckdb.org/docs/extensions/iceberg.html)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text | The path, either to a remote httpfs location or a local location (if enabled), of the Iceberg table to read. |
+
+##### Optional Arguments
+
+Optional parameters mirror DuckDB's `iceberg_metadata` function based on the DuckDB source code. However, documentation on these parameters is limited. To specify optional parameters, use `parameter := 'value'`.
+
+| Name | Type | Default | Description |
+| :--- | :--- | :------ | :---------- |
+| allowed_moved_paths | boolean | false | Ensures that some path resolution is performed, which allows scanning Iceberg tables that are moved. |
+| metadata_compression_codec | text | `'none'` | |
+| skip_schema_inference | boolean | false | |
+| version | text | `'version-hint.text'` | |
+| version_name_format | text | `'v%s%s.metadata.json,%s%s.metadata.json'` | |
 
 #### <a name="iceberg_snapshots"></a>`iceberg_snapshots(path TEXT, /* optional parameters */) -> TODO`
 
