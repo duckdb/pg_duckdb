@@ -40,11 +40,11 @@ Returns a record set (`SETOF record`). Functions that return record sets need to
 ```sql
 SELECT COUNT(i) FROM read_parquet('file.parquet') AS (int i);
 ```
+
 Further information:
 
 * [DuckDB Parquet documentation](https://duckdb.org/docs/data/parquet/overview)
 * [DuckDB httpfs documentation](https://duckdb.org/docs/extensions/httpfs/https.html)
-
 
 ##### Required Arguments
 
@@ -190,4 +190,4 @@ TODO
 
 #### <a name="force_motherduck_sync"></a>`duckdb.force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)`
 
-TODO - this is a procedure, so usage is `CALL`. Not sure if direct invocation is intended.
+This is a procedure, so usage is `CALL`. This is mostly meant for debugging the automatic synchronization of MotherDuck tables, not for general use. If for some reason the synchronization is not working, you can use this to force a full resync of all MotherDuck databases and schemas to Postgres.
