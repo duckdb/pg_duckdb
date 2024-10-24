@@ -14,91 +14,94 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
-extern "C" {
-#include "postgres.h"
-
-#include "utils/elog.h"
-}
-#include <string>
-
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <unistd.h>
-#include <errno.h>
-
 namespace pgduckdb {
 
-static bool
-CheckDataDirectory(const char *data_directory) {
-	struct stat info;
-
-	if (lstat(data_directory, &info) != 0) {
-		if (errno == ENOENT) {
-			elog(DEBUG2, "(PGDuckDB/CheckDataDirectory) Directory `%s` doesn't exists", data_directory);
-			return false;
-		} else if (errno == EACCES) {
-			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Can't access `%s` directory", data_directory);
-		} else {
-			elog(ERROR, "(PGDuckDB/CheckDataDirectory) Other error when reading `%s`", data_directory);
-		}
-	}
-
-	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "(PGDuckDB/CheckDataDirectory) `%s` is not directory", data_directory);
-	}
-
-	if (access(data_directory, R_OK | W_OK)) {
-		elog(ERROR, "(PGDuckDB/CheckDataDirectory) Directory `%s` permission problem", data_directory);
-	}
-
-	return true;
+DuckDBManager::DuckDBManager() {
 }
 
-static std::string
-GetExtensionDirectory() {
-	StringInfo duckdb_extension_data_directory = makeStringInfo();
-	appendStringInfo(duckdb_extension_data_directory, "%s/duckdb_extensions", DataDir);
+#define SET_DUCKDB_OPTION(ddb_option_name)                                                                             \
+	config.options.ddb_option_name = duckdb_##ddb_option_name;                                                         \
+	elog(DEBUG2,                                                                                                       \
+	     "[PGDuckDB] Set DuckDB option: '" #ddb_option_name "'="                                                       \
+	     "%s",                                                                                                         \
+	     std::to_string(duckdb_##ddb_option_name).c_str());
 
-	if (!CheckDataDirectory(duckdb_extension_data_directory->data)) {
-		if (mkdir(duckdb_extension_data_directory->data, S_IRWXU | S_IRWXG | S_IRWXO) == -1) {
-			int error = errno;
-			pfree(duckdb_extension_data_directory->data);
-			elog(ERROR,
-			     "(PGDuckDB/GetExtensionDirectory) Creating duckdb extensions directory failed with reason `%s`\n",
-			     strerror(error));
-		}
-		elog(DEBUG2, "(PGDuckDB/GetExtensionDirectory) Created %s as `duckdb.data_dir`",
-		     duckdb_extension_data_directory->data);
-	};
-
-	std::string duckdb_extension_directory(duckdb_extension_data_directory->data);
-	pfree(duckdb_extension_data_directory->data);
-	return duckdb_extension_directory;
-}
-
-DuckDBManager::DuckDBManager() : secret_table_num_rows(0), secret_table_current_seq(0) {
+void
+DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
 	duckdb::DBConfig config;
-	config.SetOptionByName("extension_directory", GetExtensionDirectory());
+	config.SetOptionByName("custom_user_agent", "pg_duckdb");
+	config.SetOptionByName("extension_directory", CreateOrGetDirectoryPath("duckdb_extensions"));
 	// Transforms VIEWs into their view definition
 	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
+	SET_DUCKDB_OPTION(allow_unsigned_extensions);
+	SET_DUCKDB_OPTION(enable_external_access);
 
-	database = duckdb::make_uniq<duckdb::DuckDB>(nullptr, &config);
-	duckdb::DBConfig::GetConfig(*database->instance).storage_extensions["pgduckdb"] =
-	    duckdb::make_uniq<duckdb::PostgresStorageExtension>();
+	if (duckdb_maximum_memory != NULL) {
+		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
+	}
+
+	if (duckdb_maximum_threads > -1) {
+		SET_DUCKDB_OPTION(maximum_threads);
+	}
+
+	const char *connection_string = nullptr;
+
+	/*
+	 * If MotherDuck is enabled, use it to connect to DuckDB. That way DuckDB
+	 * its default database will be set to the default MotherDuck database.
+	 */
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		/*
+		 * Disable web login for MotherDuck. Having support for web login could
+		 * be nice for demos, but because the received token is not shared
+		 * between backends you will get browser windows popped up. Sharing the
+		 * token across backends could be made to work but the implementing it
+		 * is not trivial, so for now we simply disable the web login.
+		 */
+		setenv("motherduck_disable_web_login", "1", 1);
+		if (duckdb_motherduck_token[0] == '\0') {
+			connection_string = "md:";
+		} else {
+			connection_string = psprintf("md:?motherduck_token=%s", duckdb_motherduck_token);
+		}
+	}
+
+	database = new duckdb::DuckDB(connection_string, &config);
+
+	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
+	dbconfig.storage_extensions["pgduckdb"] = duckdb::make_uniq<duckdb::PostgresStorageExtension>();
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
 	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
-	context.Query("ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)", false);
+
+	auto &db_manager = duckdb::DatabaseManager::Get(context);
+	default_dbname = db_manager.GetDefaultDatabase(context);
+	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
+	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
+
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		/*
+		 * Workaround for MotherDuck catalog sync that turns off automatically,
+		 * in case of no queries being sent to MotherDuck. Since the background
+		 * worker never sends any query to MotherDuck we need to turn this off.
+		 * So we set the timeout to an arbitrary very large value.
+		 */
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET motherduck_background_catalog_refresh_inactivity_timeout='99 years'");
+	}
+
 	LoadFunctions(context);
 	LoadExtensions(context);
 }
@@ -116,17 +119,11 @@ DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	context.transaction.Commit();
 }
 
-bool
-DuckDBManager::CheckSecretsSeq() {
+int64
+GetSeqLastValue(const char *seq_name) {
 	Oid duckdb_namespace = get_namespace_oid("duckdb", false);
-	Oid secret_table_seq_oid = get_relname_relid("secrets_table_seq", duckdb_namespace);
-	int64 seq =
-	    PostgresFunctionGuard<int64>(DirectFunctionCall1Coll, pg_sequence_last_value, InvalidOid, secret_table_seq_oid);
-	if (secret_table_current_seq < seq) {
-		secret_table_current_seq = seq;
-		return true;
-	}
-	return false;
+	Oid table_seq_oid = get_relname_relid(seq_name, duckdb_namespace);
+	return PostgresFunctionGuard<int64>(DirectFunctionCall1Coll, pg_sequence_last_value, InvalidOid, table_seq_oid);
 }
 
 void
@@ -138,7 +135,7 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		StringInfo secret_key = makeStringInfo();
 		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
 		appendStringInfo(secret_key, "CREATE SECRET pgduckb_secret_%d ", secret_id);
-		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.id.c_str(),
+		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.key_id.c_str(),
 		                 secret.secret.c_str());
 		if (secret.region.length() && !is_r2_cloud_secret) {
 			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
@@ -156,28 +153,21 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
 		}
 		appendStringInfo(secret_key, ");");
-		auto res = context.Query(secret_key->data, false);
-		if (res->HasError()) {
-			elog(ERROR, "(PGDuckDB/LoadSecrets) secret `%s` could not be loaded with DuckDB", secret.id.c_str());
-		}
+		DuckDBQueryOrThrow(context, secret_key->data);
 
 		pfree(secret_key->data);
 		secret_id++;
+		secret_table_num_rows = secret_id;
 	}
-
-	secret_table_num_rows = secret_id;
 }
 
 void
 DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
-
 	for (auto secret_id = 0; secret_id < secret_table_num_rows; secret_id++) {
 		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
-		auto res = context.Query(drop_secret_cmd, false);
-		if (res->HasError()) {
-			elog(ERROR, "(PGDuckDB/DropSecrets) secret `%d` could not be dropped.", secret_id);
-		}
+		pgduckdb::DuckDBQueryOrThrow(context, drop_secret_cmd);
 	}
+
 	secret_table_num_rows = 0;
 }
 
@@ -186,26 +176,69 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
-		StringInfo duckdb_extension = makeStringInfo();
-		if (extension.enabled) {
-			appendStringInfo(duckdb_extension, "LOAD %s;", extension.name.c_str());
-			auto res = context.Query(duckdb_extension->data, false);
-			if (res->HasError()) {
-				elog(ERROR, "(PGDuckDB/LoadExtensions) `%s` could not be loaded with DuckDB", extension.name.c_str());
-			}
+		if (!extension.enabled) {
+			continue;
 		}
-		pfree(duckdb_extension->data);
+
+		/*
+		 * Skip the httpfs extension. It conflicts with our cached_httpfs
+		 * extension which is loaded by default, but people might still try to
+		 * install it manually. We could also throw an error by doing so, but
+		 * it seems nicer to just skip it, because it is clear what they meant
+		 * to do and this way we don't need to educate people about the
+		 * existence of our cached_httpfs extension (which might be removed in
+		 * the near future anyway).
+		 */
+		if (extension.name == "httpfs") {
+			continue;
+		}
+
+		DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 	}
 }
 
 duckdb::unique_ptr<duckdb::Connection>
-DuckDBManager::GetConnection() {
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
-	if (CheckSecretsSeq()) {
-		auto &context = *connection->context;
-		DropSecrets(context);
-		LoadSecrets(context);
+DuckDBManager::CreateConnection() {
+	if (!pgduckdb::IsDuckdbExecutionAllowed()) {
+		elog(ERROR, "DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role");
 	}
+
+	auto &instance = Get();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*instance.database);
+	auto &context = *connection->context;
+
+	const auto secret_table_last_seq = GetSeqLastValue("secrets_table_seq");
+	if (instance.IsSecretSeqLessThan(secret_table_last_seq)) {
+		instance.DropSecrets(context);
+		instance.LoadSecrets(context);
+		instance.UpdateSecretSeq(secret_table_last_seq);
+	}
+
+	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");
+	if (instance.IsExtensionsSeqLessThan(extensions_table_last_seq)) {
+		instance.LoadExtensions(context);
+		instance.UpdateExtensionsSeq(extensions_table_last_seq);
+	}
+
+	auto http_file_cache_set_dir_query =
+	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
+	context.Query(http_file_cache_set_dir_query, false);
+
+	if (duckdb_disabled_filesystems != NULL && !superuser()) {
+		/*
+		 * DuckDB does not allow us to disable this setting on the
+		 * database after the DuckDB connection is created for a non
+		 * superuser, any further connections will inherit this
+		 * restriction. This means that once a non-superuser used a
+		 * DuckDB connection in aside a Postgres backend, any loter
+		 * connection will inherit these same filesystem restrictions.
+		 * This shouldn't be a problem in practice.
+		 */
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
+		instance.disabled_filesystems_is_set = true;
+	}
+
 	return connection;
 }
 

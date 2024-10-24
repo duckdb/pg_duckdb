@@ -23,16 +23,21 @@ TemplatedFilterOperation(T value, const duckdb::Value &constant) {
 
 template <class OP>
 bool
-StringFilterOperation(Datum &value, const duckdb::Value &constant) {
-	if (value == (Datum) 0 || constant.IsNull()) {
+StringFilterOperation(Datum &value, const duckdb::Value &constant, bool is_bpchar) {
+	if (value == (Datum)0 || constant.IsNull()) {
 		return false; // Comparison to NULL always returns false.
 	}
 
 	bool should_free = false;
 	const auto detoasted_value = DetoastPostgresDatum(reinterpret_cast<varlena *>(value), &should_free);
-	const auto datum_sv =  std::string_view((const char*)VARDATA_ANY(detoasted_value), VARSIZE_ANY_EXHDR(detoasted_value));
+
+	/* bpchar adds zero padding so we need to read true len of bpchar */
+	auto detoasted_val_len = is_bpchar ? bpchartruelen(VARDATA_ANY(detoasted_value), VARSIZE_ANY_EXHDR(detoasted_value))
+	                                   : VARSIZE_ANY_EXHDR(detoasted_value);
+
+	const auto datum_sv = std::string_view((const char *)VARDATA_ANY(detoasted_value), detoasted_val_len);
 	const auto val = duckdb::StringValue::Get(constant);
-	const auto val_sv =  std::string_view(val);
+	const auto val_sv = std::string_view(val);
 	const bool res = OP::Operation(datum_sv, val_sv);
 
 	if (should_free) {
@@ -67,12 +72,17 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 		int64_t timestamp = DatumGetTimestamp(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 		return TemplatedFilterOperation<int64_t, OP>(timestamp, constant);
 	}
+	case TIMESTAMPTZOID: {
+		int64_t timestamptz = DatumGetTimestampTz(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		return TemplatedFilterOperation<int64_t, OP>(timestamptz, constant);
+	}
+	case BPCHAROID:
 	case TEXTOID:
 	case VARCHAROID:
-		return StringFilterOperation<OP>(value, constant);
+		return StringFilterOperation<OP>(value, constant, type_oid == BPCHAROID);
 	default:
 		throw duckdb::InvalidTypeException(
-		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: %d", type_oid));
+		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: " + std::to_string(type_oid)));
 	}
 }
 
@@ -86,26 +96,20 @@ ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool is_null, Oid ty
 			value_filter_result &= ApplyValueFilter(*child_filter, value, is_null, type_oid);
 		}
 		return value_filter_result;
-		break;
 	}
 	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<duckdb::ConstantFilter>();
 		switch (constant_filter.comparison_type) {
 		case duckdb::ExpressionType::COMPARE_EQUAL:
 			return FilterOperationSwitch<duckdb::Equals>(value, constant_filter.constant, type_oid);
-			break;
 		case duckdb::ExpressionType::COMPARE_LESSTHAN:
 			return FilterOperationSwitch<duckdb::LessThan>(value, constant_filter.constant, type_oid);
-			break;
 		case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
 			return FilterOperationSwitch<duckdb::LessThanEquals>(value, constant_filter.constant, type_oid);
-			break;
 		case duckdb::ExpressionType::COMPARE_GREATERTHAN:
 			return FilterOperationSwitch<duckdb::GreaterThan>(value, constant_filter.constant, type_oid);
-			break;
 		case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 			return FilterOperationSwitch<duckdb::GreaterThanEquals>(value, constant_filter.constant, type_oid);
-			break;
 		default:
 			D_ASSERT(0);
 		}
@@ -113,10 +117,8 @@ ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool is_null, Oid ty
 	}
 	case duckdb::TableFilterType::IS_NOT_NULL:
 		return is_null == false;
-		break;
 	case duckdb::TableFilterType::IS_NULL:
 		return is_null == true;
-		break;
 	default:
 		D_ASSERT(0);
 		break;

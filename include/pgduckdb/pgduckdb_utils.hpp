@@ -1,10 +1,12 @@
 #pragma once
 
+#include "duckdb/common/exception.hpp"
+#include "duckdb/common/error_data.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 }
-
-#include "duckdb/common/exception.hpp"
 
 #include <vector>
 #include <string>
@@ -30,7 +32,6 @@ template <typename T, typename FuncType, typename... FuncArgs>
 T
 PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 	T return_value;
-	bool error = false;
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
 	// clang-format off
@@ -43,11 +44,10 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 		MemoryContextSwitchTo(ctx);
 		edata = CopyErrorData();
 		FlushErrorState();
-		error = true;
 	}
 	PG_END_TRY();
 	// clang-format on
-	if (error) {
+	if (edata) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
 	}
 	return return_value;
@@ -56,7 +56,6 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 template <typename FuncType, typename... FuncArgs>
 void
 PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
-	bool error = false;
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
 	// clang-format off
@@ -69,13 +68,46 @@ PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
 		MemoryContextSwitchTo(ctx);
 		edata = CopyErrorData();
 		FlushErrorState();
-		error = true;
 	}
 	PG_END_TRY();
 	// clang-format on
-	if (error) {
+	if (edata) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
 	}
 }
+
+template <typename FuncRetT, typename FuncType, typename... FuncArgs>
+FuncRetT
+DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArgs... args) {
+	const char *error_message = nullptr;
+	try {
+		return duckdb_function(args...);
+	} catch (duckdb::Exception &ex) {
+		duckdb::ErrorData edata(ex.what());
+		error_message = pstrdup(edata.Message().c_str());
+	} catch (std::exception &ex) {
+		const auto msg = ex.what();
+		if (msg[0] == '{') {
+			duckdb::ErrorData edata(ex.what());
+			error_message = pstrdup(edata.Message().c_str());
+		} else {
+			error_message = pstrdup(ex.what());
+		}
+	}
+
+	if (error_message) {
+		elog(ERROR, "(PGDuckDB/%s) %s", function_name, error_message);
+	}
+
+	std::abort(); // Cannot reach.
+}
+
+std::string CreateOrGetDirectoryPath(std::string directory_name);
+
+duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
+
+duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query);
+
+duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(const std::string &query);
 
 } // namespace pgduckdb

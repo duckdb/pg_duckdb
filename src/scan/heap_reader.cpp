@@ -51,6 +51,12 @@ HeapReader::HeapReader(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> h
 }
 
 HeapReader::~HeapReader() {
+	/* If execution is interrupted and buffer is still opened close it now */
+	if (m_buffer != InvalidBuffer) {
+		DuckdbProcessLock::GetLock().lock();
+		UnlockReleaseBuffer(m_buffer);
+		DuckdbProcessLock::GetLock().unlock();
+	}
 }
 
 Page
@@ -79,7 +85,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 		m_read_next_page = true;
 	} else {
 		block = m_block_number;
-		if (block != InvalidBlockNumber) {
+		if(!m_read_next_page) {
 			page = BufferGetPage(m_buffer);
 		}
 	}
@@ -112,6 +118,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			ItemPointerSet(&(m_tuple.t_self), block, m_current_tuple_index);
 
 			if (!m_page_tuples_all_visible) {
+				std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 				visible = HeapTupleSatisfiesVisibility(&m_tuple, m_global_state->m_snapshot, m_buffer);
 				/* skip tuples not visible to this snapshot */
 				if (!visible)
@@ -127,6 +134,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			DuckdbProcessLock::GetLock().lock();
 			UnlockReleaseBuffer(m_buffer);
 			DuckdbProcessLock::GetLock().unlock();
+			m_buffer = InvalidBuffer;
 			m_read_next_page = true;
 			/* Handle cancel request */
 			if (QueryCancelPending) {

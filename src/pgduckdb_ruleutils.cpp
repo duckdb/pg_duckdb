@@ -1,3 +1,4 @@
+#include "duckdb.hpp"
 extern "C" {
 #include "postgres.h"
 
@@ -5,18 +6,23 @@ extern "C" {
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
 #include "catalog/pg_collation.h"
+#include "commands/dbcommands.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/rel.h"
+#include "utils/rls.h"
 #include "utils/syscache.h"
 #include "storage/lockdefs.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 }
 
+#include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_table_am.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
 extern "C" {
@@ -27,6 +33,86 @@ pgduckdb_function_name(Oid function_oid) {
 	}
 	auto func_name = get_func_name(function_oid);
 	return psprintf("system.main.%s", quote_identifier(func_name));
+}
+
+/*
+ * Given a postgres schema name, this returns a list of two elements: the first
+ * is the DuckDB database name and the second is the duckdb schema name. These
+ * are not escaped yet.
+ */
+List *
+pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
+	if (!is_duckdb_table) {
+		return list_make2((void *)"pgduckdb", (void *)postgres_schema_name);
+	}
+
+	if (strcmp("pg_temp", postgres_schema_name) == 0) {
+		return list_make2((void *)"pg_temp", (void *)"main");
+	}
+
+	if (strcmp("public", postgres_schema_name) == 0) {
+		/* Use the "main" schema in DuckDB for tables in the public schema in Postgres */
+		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
+		return list_make2((void *)dbname, (void *)"main");
+	}
+
+	if (strncmp("ddb$", postgres_schema_name, 4) != 0) {
+		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
+		return list_make2((void *)dbname, (void *)postgres_schema_name);
+	}
+
+	StringInfoData db_name;
+	StringInfoData schema_name;
+	initStringInfo(&db_name);
+	initStringInfo(&schema_name);
+	const char *saveptr = &postgres_schema_name[4];
+	const char *dollar;
+
+	while ((dollar = strchr(saveptr, '$'))) {
+		appendBinaryStringInfo(&db_name, saveptr, dollar - saveptr);
+		saveptr = dollar + 1;
+		if (saveptr[0] == '\0') {
+			elog(ERROR, "Schema name is invalid");
+		}
+
+		if (saveptr[0] == '$') {
+			appendStringInfoChar(&db_name, '$');
+		} else {
+			break;
+		}
+	}
+
+	if (!dollar) {
+		appendStringInfoString(&db_name, saveptr);
+		return list_make2((void *)db_name.data, (char *)"main");
+	}
+
+	while ((dollar = strchr(saveptr, '$'))) {
+		appendBinaryStringInfo(&schema_name, saveptr, dollar - saveptr);
+		saveptr = dollar + 1;
+
+		if (saveptr[0] == '$') {
+			appendStringInfoChar(&schema_name, '$');
+		} else {
+			break;
+		}
+	}
+	appendStringInfoString(&schema_name, saveptr);
+
+	return list_make2(db_name.data, schema_name.data);
+}
+
+/*
+ * Returns the fully qualified DuckDB database and schema. The schema and
+ * database are quoted if necessary.
+ */
+const char *
+pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table) {
+	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, is_duckdb_table);
+	const char *db_name = (const char *)linitial(db_and_schema);
+	const char *schema_name = (const char *)lsecond(db_and_schema);
+	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
+	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
 }
 
 /*
@@ -42,24 +128,54 @@ pgduckdb_relation_name(Oid relation_oid) {
 		elog(ERROR, "cache lookup failed for relation %u", relation_oid);
 	Form_pg_class relation = (Form_pg_class)GETSTRUCT(tp);
 	const char *relname = NameStr(relation->relname);
-	/*
-	 * XXX: Should this be using get_namespace_name instead, the difference is
-	 * that it will store temp tables in the pg_temp_123 style schemas instead
-	 * of plain pg_temp. I don't think this really matters.
-	 */
-	const char *nspname = get_namespace_name_or_temp(relation->relnamespace);
-	const char *dbname;
+	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
+	bool is_duckdb_table = pgduckdb::IsDuckdbTable(relation);
 
-	if (relation->relam == pgduckdb::DuckdbTableAmOid()) {
-		dbname = "memory";
-	} else {
-		dbname = "pgduckdb";
+	if (!is_duckdb_table) {
+		/*
+		 * FIXME: This should be moved somewhere else. We already have a list
+		 * of RTEs somwhere that we use to call ExecCheckPermissions. We could
+		 * used that same list to check if RLS is enabled on any of the tables,
+		 * instead of checking it here for **every occurence** of each table in
+		 * the query. One benefit of having it here is that it ensures that we
+		 * never forget to check for RLS.
+		 *
+		 * NOTE: We only need to check this for non-DuckDB tables because DuckDB
+		 * tables don't support RLS anyway.
+		 */
+		if (check_enable_rls(relation_oid, InvalidOid, false) == RLS_ENABLED) {
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			                errmsg("(PGDuckDB/pgduckdb_relation_name) Cannot use \"%s\" in a DuckDB query, because RLS "
+			                       "is enabled on it",
+			                       get_rel_name(relation_oid))));
+		}
 	}
 
-	char *result = psprintf("%s.%s.%s", quote_identifier(dbname), quote_identifier(nspname), quote_identifier(relname));
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, is_duckdb_table);
+	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
 	ReleaseSysCache(tp);
 
+	return result;
+}
+
+/*
+ * pgduckdb_get_querydef returns the definition of a given query in DuckDB
+ * syntax. This definition includes the query's SQL string, but does not
+ * include the query's parameters.
+ *
+ * It's a small wrapper around pgduckdb_pg_get_querydef_internal to ensure that
+ * dates are always formatted in ISO format (which is the only format that
+ * DuckDB understands). The reason this is not part of
+ * pgduckdb_pg_get_querydef_internal is because we want to avoid changing that
+ * vendored in function as much as possible to keep updates easy.
+ */
+char *
+pgduckdb_get_querydef(Query *query) {
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("DateStyle", "ISO, YMD", PGC_USERSET, PGC_S_SESSION);
+	char *result = pgduckdb_pg_get_querydef_internal(query, false);
+	AtEOXact_GUC(false, save_nestlevel);
 	return result;
 }
 
@@ -79,7 +195,8 @@ char *
 pgduckdb_get_tabledef(Oid relation_oid) {
 	Relation relation = relation_open(relation_oid, AccessShareLock);
 	const char *relation_name = pgduckdb_relation_name(relation_oid);
-	const char *schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
+	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
 
 	StringInfoData buffer;
 	initStringInfo(&buffer);
@@ -88,12 +205,20 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		elog(ERROR, "Only regular tables are supported in DuckDB");
 	}
 
-	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", quote_identifier(schema_name));
+	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
 
 	appendStringInfoString(&buffer, "CREATE ");
 
-	if (relation->rd_rel->relpersistence != RELPERSISTENCE_TEMP) {
-		elog(ERROR, "Only TEMP tables are supported in DuckDB");
+	if (relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP) {
+		// allowed
+	} else if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
+		elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
+	} else if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
+		elog(ERROR, "Only TEMP and non-UNLOGGED tables are supported in DuckDB");
+	} else if (!pgduckdb::IsMotherDuckPostgresDatabase()) {
+		elog(ERROR, "MotherDuck tables must be created in the duckb.motherduck_postgres_database");
+	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUser()) {
+		elog(ERROR, "MotherDuck tables must be created by the duckb.motherduck_postgres_user");
 	}
 
 	appendStringInfo(&buffer, "TABLE %s (", relation_name);

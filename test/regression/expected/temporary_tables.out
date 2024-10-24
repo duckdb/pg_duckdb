@@ -1,5 +1,5 @@
--- All the queries below should work even if duckdb.execution is turned off.
-SET duckdb.execution = false;
+-- All the queries below should work even if duckdb.force_execution is turned off.
+SET duckdb.force_execution = false;
 CREATE TEMP TABLE t(
     bool BOOLEAN,
     i2 SMALLINT,
@@ -15,23 +15,19 @@ CREATE TEMP TABLE t(
     json_obj JSON,
     CHECK (i4 > i2)
 ) USING duckdb;
--- FIXME: This should not be necessary to make this test work, we should always
--- send ISO dates to duckdb or even better would be to make DuckDB respect
--- postgres its datestyle
-SET DateStyle = 'ISO, YMD';
 INSERT INTO t VALUES (true, 2, 4, 8, 4.0, 8.0, 't1', 't2', 't3', '2024-05-04', '2020-01-01T01:02:03', '{"a": 1}');
 SELECT * FROM t;
- bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |         ts          | json_obj 
-------+----+----+----+-----+-----+----+----+----+------------+---------------------+----------
- t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 2024-05-04 | 2020-01-01 01:02:03 | {"a": 1}
+ bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |            ts            | json_obj 
+------+----+----+----+-----+-----+----+----+----+------------+--------------------------+----------
+ t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 05-04-2024 | Wed Jan 01 01:02:03 2020 | {"a": 1}
 (1 row)
 
 CREATE TEMP TABLE t_heap (a int);
 INSERT INTO t_heap VALUES (2);
 SELECT * FROM t JOIN t_heap ON i2 = a;
- bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |         ts          | json_obj | a 
-------+----+----+----+-----+-----+----+----+----+------------+---------------------+----------+---
- t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 2024-05-04 | 2020-01-01 01:02:03 | {"a": 1} | 2
+ bool | i2 | i4 | i8 | fl4 | fl8 | t1 | t2 | t3 |     d      |            ts            | json_obj | a 
+------+----+----+----+-----+-----+----+----+----+------------+--------------------------+----------+---
+ t    |  2 |  4 |  8 |   4 |   8 | t1 | t2 | t3 | 05-04-2024 | Wed Jan 01 01:02:03 2020 | {"a": 1} | 2
 (1 row)
 
 -- The default_table_access_method GUC should be honored.
@@ -93,9 +89,9 @@ BEGIN;
 
     DROP TABLE t4;
 END;
--- Even if duckdb.execution is turned on
+-- Even if duckdb.force_execution is turned on
 BEGIN;
-    SET LOCAL duckdb.execution = true;
+    SET LOCAL duckdb.force_execution = true;
     CREATE TEMP TABLE t4(a int) USING heap;
     INSERT INTO t4 VALUES (1);
     SELECT * FROM t4;
@@ -106,12 +102,16 @@ BEGIN;
 
     DROP TABLE t4;
 END;
+-- ANALYZE should not fail on our tables. For now it doesn't do anything
+-- though. But it should not fail, otherwise a plain "ANALYZE" of all tables
+-- will error.
+ANALYZE t;
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 NOTICE:  result: database_name	schema_name	sql	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
-memory	pg_temp	CREATE TABLE pg_temp.t(bool BOOLEAN, i2 SMALLINT, i4 INTEGER DEFAULT(1), i8 BIGINT NOT NULL, fl4 FLOAT DEFAULT((random() + CAST(1 AS DOUBLE))), fl8 DOUBLE, t1 VARCHAR, t2 VARCHAR, t3 VARCHAR, d DATE, ts TIMESTAMP, json_obj JSON, CHECK((i4 > i2)), CHECK((fl8 > CAST(0 AS DOUBLE))));
-memory	pg_temp	CREATE TABLE pg_temp.t2(a INTEGER);
+pg_temp	main	CREATE TABLE t(bool BOOLEAN, i2 SMALLINT, i4 INTEGER DEFAULT(1), i8 BIGINT NOT NULL, fl4 FLOAT DEFAULT((random() + CAST(1 AS DOUBLE))), fl8 DOUBLE, t1 VARCHAR, t2 VARCHAR, t3 VARCHAR, d DATE, ts TIMESTAMP, json_obj JSON, CHECK((i4 > i2)), CHECK((fl8 > CAST(0 AS DOUBLE))));
+pg_temp	main	CREATE TABLE t2(a INTEGER);
 
 
  raw_query 
@@ -132,7 +132,7 @@ VARCHAR	VARCHAR	VARCHAR
 (1 row)
 
 CREATE TABLE t(a int);
-ERROR:  Only TEMP tables are supported in DuckDB
+ERROR:  Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled
 -- XXX: A better error message would be nice here, but for now this is acceptable.
 CREATE TEMP TABLE t(a int PRIMARY KEY);
 ERROR:  duckdb does not implement duckdb_index_build_range_scan
@@ -206,5 +206,44 @@ DROP TABLE t;
 -- unsupported
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 ERROR:  DuckDB does not support ON COMMIT DROP
+-- CTAS fully in Duckdb
 CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
-ERROR:  DuckDB does not support CREATE TABLE AS yet
+SELECT * FROM webpages ORDER BY column00 LIMIT 2;
+ column00 |     column01     |  column02  
+----------+------------------+------------
+        1 | AAAAAAAABAAAAAAA | 09-03-1997
+        2 | AAAAAAAACAAAAAAA | 09-03-1997
+(2 rows)
+
+CREATE TEMP TABLE t_heap(a int) USING heap;
+INSERT INTO t_heap VALUES (1);
+-- CTAS from postgres table to duckdb table
+CREATE TEMP TABLE t(b) USING duckdb AS SELECT * FROM t_heap;
+SELECT * FROM t;
+ b 
+---
+ 1
+(1 row)
+
+-- CTAS from DuckDB table to postgres table
+CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t_heap;
+SELECT * FROM t_heap2;
+ c 
+---
+ 1
+(1 row)
+
+SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
+NOTICE:  result: database_name	schema_name	sql	
+VARCHAR	VARCHAR	VARCHAR	
+[ Rows: 2]
+pg_temp	main	CREATE TABLE t(b INTEGER);
+pg_temp	main	CREATE TABLE webpages(column00 INTEGER, column01 VARCHAR, column02 DATE);
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+DROP TABLE webpages, t, t_heap, t_heap2;

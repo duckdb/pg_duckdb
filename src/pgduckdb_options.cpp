@@ -7,6 +7,7 @@ extern "C" {
 #include "access/relation.h"
 #include "access/table.h"
 #include "access/xact.h"
+#include "executor/spi.h"
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
@@ -17,6 +18,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
 
@@ -60,7 +62,7 @@ ReadDuckdbSecrets() {
 		DuckdbSecret secret;
 
 		secret.type = DatumToString(datum_array[Anum_duckdb_secret_type - 1]);
-		secret.id = DatumToString(datum_array[Anum_duckdb_secret_id - 1]);
+		secret.key_id = DatumToString(datum_array[Anum_duckdb_secret_key_id - 1]);
 		secret.secret = DatumToString(datum_array[Anum_duckdb_secret_secret - 1]);
 
 		if (!is_null_array[Anum_duckdb_secret_region - 1])
@@ -87,21 +89,21 @@ ReadDuckdbSecrets() {
 	return duckdb_secrets;
 }
 
-std::vector<DuckdbExension>
+std::vector<DuckdbExtension>
 ReadDuckdbExtensions() {
 	HeapTuple tuple = NULL;
 	Oid duckdb_extension_table_relation_id = ExtensionsTableRelationId();
 	Relation duckdb_extension_relation = table_open(duckdb_extension_table_relation_id, AccessShareLock);
 	SysScanDescData *scan =
 	    systable_beginscan(duckdb_extension_relation, InvalidOid, false, GetActiveSnapshot(), 0, NULL);
-	std::vector<DuckdbExension> duckdb_extensions;
+	std::vector<DuckdbExtension> duckdb_extensions;
 
 	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
 		Datum datum_array[Natts_duckdb_secret];
 		bool is_null_array[Natts_duckdb_secret];
 
 		heap_deform_tuple(tuple, RelationGetDescr(duckdb_extension_relation), datum_array, is_null_array);
-		DuckdbExension secret;
+		DuckdbExtension secret;
 
 		secret.name = DatumToString(datum_array[Anum_duckdb_extension_name - 1]);
 		secret.enabled = DatumGetBool(datum_array[Anum_duckdb_extension_enable - 1]);
@@ -114,42 +116,71 @@ ReadDuckdbExtensions() {
 }
 
 static bool
-DuckdbInstallExtension(Datum name) {
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
+DuckdbInstallExtension(Datum name_datum) {
 
-	auto extension_name = DatumToString(name);
+	auto extension_name = DatumToString(name_datum);
+	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
+	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
 
-	StringInfo install_extension_command = makeStringInfo();
-	appendStringInfo(install_extension_command, "INSTALL %s;", extension_name.c_str());
+	Oid arg_types[] = {TEXTOID};
+	Datum values[] = {name_datum};
 
-	auto res = context.Query(install_extension_command->data, false);
+	SPI_connect();
+	auto ret = SPI_execute_with_args(R"(
+		INSERT INTO duckdb.extensions (name, enabled)
+		VALUES ($1, true)
+		ON CONFLICT (name) DO UPDATE SET enabled = true
+		)",
+	                                 lengthof(arg_types), arg_types, values, NULL, false, 0);
+	if (ret != SPI_OK_INSERT)
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	SPI_finish();
 
-	pfree(install_extension_command->data);
+	return true;
+}
 
-	if (res->HasError()) {
-		elog(WARNING, "(PGDuckDB/DuckdbInstallExtension) %s", res->GetError().c_str());
+static bool
+CanCacheRemoteObject(std::string remote_object) {
+	return (remote_object.rfind("https://", 0) == 0) || (remote_object.rfind("http://", 0) == 0) ||
+	       (remote_object.rfind("s3://", 0) == 0) || (remote_object.rfind("s3a://", 0) == 0) ||
+	       (remote_object.rfind("s3n://", 0) == 0) || (remote_object.rfind("gcs://", 0) == 0) ||
+	       (remote_object.rfind("gs://", 0) == 0) || (remote_object.rfind("r2://", 0) == 0);
+}
+
+static bool
+DuckdbCacheObject(Datum object, Datum type) {
+	auto con = DuckDBManager::CreateConnection();
+	auto &context = *con->context;
+	auto object_type = DatumToString(type);
+
+	if (object_type != "parquet" && object_type != "csv") {
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
 		return false;
 	}
 
-	bool nulls[Natts_duckdb_extension] = {0};
-	Datum values[Natts_duckdb_extension] = {0};
+	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
 
-	values[Anum_duckdb_extension_name - 1] = name;
-	values[Anum_duckdb_extension_enable - 1] = 1;
+	context.Query("SET enable_http_file_cache TO true;", false);
 
-	/* create heap tuple and insert into catalog table */
-	Relation duckdb_extensions_relation = relation_open(ExtensionsTableRelationId(), RowExclusiveLock);
-	TupleDesc tuple_descr = RelationGetDescr(duckdb_extensions_relation);
+	auto object_path = DatumToString(object);
 
-	/* inserting extension record */
-	HeapTuple new_tuple = heap_form_tuple(tuple_descr, values, nulls);
-	CatalogTupleInsert(duckdb_extensions_relation, new_tuple);
+	if (!CanCacheRemoteObject(object_path)) {
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
+		return false;
+	}
 
-	CommandCounterIncrement();
-	relation_close(duckdb_extensions_relation, RowExclusiveLock);
+	auto cache_object_query =
+	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
+	auto res = context.Query(cache_object_query, false);
+	auto query_has_errors = res->HasError();
 
-	return true;
+	if (query_has_errors) {
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) %s", res->GetError().c_str());
+	}
+
+	context.Query("SET enable_http_file_cache TO false;", false);
+
+	return query_has_errors;
 }
 
 } // namespace pgduckdb
@@ -168,13 +199,25 @@ PG_FUNCTION_INFO_V1(pgduckdb_raw_query);
 Datum
 pgduckdb_raw_query(PG_FUNCTION_ARGS) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
-	auto connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto &context = *connection->context;
-	auto result = context.Query(query, false);
-	if (result->HasError()) {
-		elog(ERROR, "(PGDuckDB/DuckdbInstallExtension) %s", result->GetError().c_str());
-	}
+	typedef duckdb::unique_ptr<duckdb::QueryResult> (*DuckDBQueryOrThrow)(const std::string &);
+	auto result = pgduckdb::DuckDBFunctionGuard<duckdb::unique_ptr<duckdb::QueryResult>, DuckDBQueryOrThrow>(pgduckdb::DuckDBQueryOrThrow, "pgduckdb_raw_query", query);
 	elog(NOTICE, "result: %s", result->ToString().c_str());
+	PG_RETURN_BOOL(true);
+}
+
+PG_FUNCTION_INFO_V1(cache);
+Datum
+cache(PG_FUNCTION_ARGS) {
+	Datum object = PG_GETARG_DATUM(0);
+	Datum type = PG_GETARG_DATUM(1);
+	bool result = pgduckdb::DuckdbCacheObject(object, type);
+	PG_RETURN_BOOL(result);
+}
+
+PG_FUNCTION_INFO_V1(pgduckdb_recycle_ddb);
+Datum
+pgduckdb_recycle_ddb(PG_FUNCTION_ARGS) {
+	pgduckdb::DuckDBManager::Get().Reset();
 	PG_RETURN_BOOL(true);
 }
 

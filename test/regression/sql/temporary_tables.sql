@@ -1,5 +1,5 @@
--- All the queries below should work even if duckdb.execution is turned off.
-SET duckdb.execution = false;
+-- All the queries below should work even if duckdb.force_execution is turned off.
+SET duckdb.force_execution = false;
 CREATE TEMP TABLE t(
     bool BOOLEAN,
     i2 SMALLINT,
@@ -16,11 +16,6 @@ CREATE TEMP TABLE t(
     CHECK (i4 > i2)
 ) USING duckdb;
 
-
--- FIXME: This should not be necessary to make this test work, we should always
--- send ISO dates to duckdb or even better would be to make DuckDB respect
--- postgres its datestyle
-SET DateStyle = 'ISO, YMD';
 
 INSERT INTO t VALUES (true, 2, 4, 8, 4.0, 8.0, 't1', 't2', 't3', '2024-05-04', '2020-01-01T01:02:03', '{"a": 1}');
 SELECT * FROM t;
@@ -67,14 +62,19 @@ BEGIN;
     DROP TABLE t4;
 END;
 
--- Even if duckdb.execution is turned on
+-- Even if duckdb.force_execution is turned on
 BEGIN;
-    SET LOCAL duckdb.execution = true;
+    SET LOCAL duckdb.force_execution = true;
     CREATE TEMP TABLE t4(a int) USING heap;
     INSERT INTO t4 VALUES (1);
     SELECT * FROM t4;
     DROP TABLE t4;
 END;
+
+-- ANALYZE should not fail on our tables. For now it doesn't do anything
+-- though. But it should not fail, otherwise a plain "ANALYZE" of all tables
+-- will error.
+ANALYZE t;
 
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
@@ -146,4 +146,23 @@ DROP TABLE t;
 -- unsupported
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 
+-- CTAS fully in Duckdb
 CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
+SELECT * FROM webpages ORDER BY column00 LIMIT 2;
+
+CREATE TEMP TABLE t_heap(a int) USING heap;
+INSERT INTO t_heap VALUES (1);
+
+-- CTAS from postgres table to duckdb table
+CREATE TEMP TABLE t(b) USING duckdb AS SELECT * FROM t_heap;
+SELECT * FROM t;
+
+-- CTAS from DuckDB table to postgres table
+CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t_heap;
+SELECT * FROM t_heap2;
+
+SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
+
+DROP TABLE webpages, t, t_heap, t_heap2;
+
+

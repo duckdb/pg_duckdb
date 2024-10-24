@@ -12,7 +12,7 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/guc.h"
 
-#include "pgduckdb/vendor/pg_ruleutils.h"
+#include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -34,7 +34,7 @@ DuckdbPrepare(const Query *query) {
 	PreventInTransactionBlock(true, "DuckDB queries");
 
 	Query *copied_query = (Query *)copyObjectImpl(query);
-	const char *query_string = pgduckdb_pg_get_querydef(copied_query, false);
+	const char *query_string = pgduckdb_get_querydef(copied_query);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {
@@ -46,14 +46,14 @@ DuckdbPrepare(const Query *query) {
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
-	auto duckdb_connection = pgduckdb::DuckDBManager::Get().GetConnection();
-	auto context = duckdb_connection->context;
-	auto prepared_query = context->Prepare(query_string);
+	auto duckdb_connection = pgduckdb::DuckDBManager::CreateConnection();
+	auto prepared_query = duckdb_connection->context->Prepare(query_string);
 	return {std::move(prepared_query), std::move(duckdb_connection)};
 }
 
 static Plan *
-CreatePlan(Query *query) {
+CreatePlan(Query *query, bool throw_error) {
+	int elevel = throw_error ? ERROR : WARNING;
 	/*
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
@@ -61,8 +61,7 @@ CreatePlan(Query *query) {
 	auto prepared_query = std::move(std::get<0>(prepare_result));
 
 	if (prepared_query->HasError()) {
-		elog(WARNING, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s",
-		     prepared_query->GetError().c_str());
+		elog(elevel, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s", prepared_query->GetError().c_str());
 		return nullptr;
 	}
 
@@ -75,7 +74,7 @@ CreatePlan(Query *query) {
 		Oid postgresColumnOid = pgduckdb::GetPostgresDuckDBType(column);
 
 		if (!OidIsValid(postgresColumnOid)) {
-			elog(WARNING, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
+			elog(elevel, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
 			return nullptr;
 		}
 
@@ -84,7 +83,7 @@ CreatePlan(Query *query) {
 
 		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
 		if (!HeapTupleIsValid(tp)) {
-			elog(WARNING, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
+			elog(elevel, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
 			return nullptr;
 		}
 
@@ -106,43 +105,33 @@ CreatePlan(Query *query) {
 }
 
 PlannedStmt *
-DuckdbPlanNode(Query *parse, int cursor_options) {
+DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
+               bool throw_error) {
 	/* We need to check can we DuckDB create plan */
-	Plan *duckdb_plan = (Plan *)castNode(CustomScan, CreatePlan(parse));
+	Plan *plan = pgduckdb::DuckDBFunctionGuard<Plan *>(CreatePlan, "CreatePlan", parse, throw_error);
+	Plan *duckdb_plan = (Plan *)castNode(CustomScan, plan);
 
 	if (!duckdb_plan) {
 		return nullptr;
 	}
 
-	/* build the PlannedStmt result */
-	PlannedStmt *result = makeNode(PlannedStmt);
+	/*
+	 * We let postgres generate a basic plan, but then completely overwrite the
+	 * actual plan with our CustomScan node. This is useful to get the correct
+	 * values for all the other many fields of the PLannedStmt.
+	 *
+	 * XXX: The primary reason we do this is that Postgres fills in permInfos
+	 * and rtable correctly. Those are needed for postgres to do its permission
+	 * checks on the used tables.
+	 *
+	 * FIXME: For some reason this needs an additional query copy to allow
+	 * re-planning of the query later during execution. But I don't really
+	 * understand why this is needed.
+	 */
+	Query *copied_query = (Query *)copyObjectImpl(parse);
+	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
 
-	result->commandType = parse->commandType;
-	result->queryId = parse->queryId;
-	result->hasReturning = (parse->returningList != NIL);
-	result->hasModifyingCTE = parse->hasModifyingCTE;
-	result->canSetTag = parse->canSetTag;
-	result->transientPlan = false;
-	result->dependsOnRole = false;
-	result->parallelModeNeeded = false;
-	result->planTree = duckdb_plan;
-	result->rtable = NULL;
-#if PG_VERSION_NUM >= 160000
-	result->permInfos = NULL;
-#endif
-	result->resultRelations = NULL;
-	result->appendRelations = NULL;
-	result->subplans = NIL;
-	result->rewindPlanIDs = NULL;
-	result->rowMarks = NIL;
-	result->relationOids = NIL;
-	result->invalItems = NIL;
-	result->paramExecTypes = NIL;
+	postgres_plan->planTree = duckdb_plan;
 
-	/* utilityStmt should be null, but we might as well copy it */
-	result->utilityStmt = parse->utilityStmt;
-	result->stmt_location = parse->stmt_location;
-	result->stmt_len = parse->stmt_len;
-
-	return result;
+	return postgres_plan;
 }

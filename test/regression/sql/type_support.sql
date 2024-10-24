@@ -24,10 +24,17 @@ INSERT INTO bool_tbl SELECT CAST(a AS BOOL) from (VALUES (False), (NULL), (True)
 SELECT * FROM bool_tbl;
 
 --- VARCHAR
+CREATE TABLE bpchar_tbl(a CHAR(25) NOT NULL);
+INSERT INTO bpchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), ('test'), ('this is a long string')) t(a);
+SELECT * FROM bpchar_tbl;
+SELECT * FROM bpchar_tbl WHERE a = 'test';
+
+--- VARCHAR
 CREATE TABLE varchar_tbl(a VARCHAR);
 INSERT INTO varchar_tbl SELECT CAST(a AS VARCHAR) from (VALUES (''), (NULL), ('test'), ('this is a long string')) t(a);
 SELECT * FROM varchar_tbl;
 SELECT * FROM varchar_tbl WHERE a = 'test';
+
 
 --- TEXT
 CREATE TABLE text_tbl(a TEXT);
@@ -43,81 +50,97 @@ SELECT * FROM date_tbl;
 -- TIMESTAMP
 CREATE TABLE timestamp_tbl(a TIMESTAMP);
 INSERT INTO timestamp_tbl SELECT CAST(a AS TIMESTAMP) FROM (VALUES
-	('2022-04-29 10:15:30'::TIMESTAMP),
-	(NULL),
-	('2023-05-15 12:30:45'::TIMESTAMP)
+    ('2022-04-29 10:15:30'::TIMESTAMP),
+    (NULL),
+    ('2023-05-15 12:30:45'::TIMESTAMP)
 ) t(a);
 SELECT * FROM timestamp_tbl;
+
+-- TIMESTAMP_TZ
+CREATE TABLE timestamptz_tbl(a TIMESTAMP WITH TIME ZONE);
+INSERT INTO timestamptz_tbl SELECT CAST(a AS TIMESTAMP WITH TIME ZONE) FROM (VALUES
+    (NULL),
+    ('2024-10-14 12:00:00'::TIMESTAMP WITH TIME ZONE),
+    ('2024-10-14 12:00:00 Europe/London'::TIMESTAMP WITH TIME ZONE),
+    ('2024-10-14 12:00:00 America/New_York'::TIMESTAMP WITH TIME ZONE),
+    ('2024-10-14 12:00:00+06'::TIMESTAMP WITH TIME ZONE),
+    ('2024-10-14 12:00:00-2'::TIMESTAMP WITH TIME ZONE),
+    ('2024-10-14 12:00:00 CET'::TIMESTAMP WITH TIME ZONE)
+) t(a);
+
+SELECT * FROM timestamptz_tbl;
+SELECT * FROM timestamptz_tbl WHERE a >= '2024-10-14 13:00:00+1';
+SELECT * FROM timestamptz_tbl WHERE a >= '2024-10-14 13:00:00 Europe/London';
 
 -- FLOAT4
 CREATE TABLE float4_tbl(a FLOAT4);
 INSERT INTO float4_tbl SELECT CAST(a AS FLOAT4) FROM (VALUES
-	(0.234234234::FLOAT4),
-	(NULL),
-	(458234502034234234234.000012::FLOAT4)
+    (0.234234234::FLOAT4),
+    (NULL),
+    (458234502034234234234.000012::FLOAT4)
 ) t(a);
 SELECT * FROM float4_tbl;
 
 -- FLOAT8
 CREATE TABLE float8_tbl(a FLOAT8);
 INSERT INTO float8_tbl SELECT CAST(a AS FLOAT8) FROM (VALUES
-	(0.234234234::FLOAT8),
-	(NULL),
-	(458234502034234234234.000012::FLOAT8)
+    (0.234234234::FLOAT8),
+    (NULL),
+    (458234502034234234234.000012::FLOAT8)
 ) t(a);
 SELECT * FROM float8_tbl;
 
 -- NUMERIC as DOUBLE
 CREATE TABLE numeric_as_double(a NUMERIC);
 INSERT INTO numeric_as_double SELECT a FROM (VALUES
-	(0.234234234),
-	(NULL),
-	(458234502034234234234.000012)
+    (0.234234234),
+    (NULL),
+    (458234502034234234234.000012)
 ) t(a);
 SELECT * FROM numeric_as_double;
 
 -- NUMERIC with a physical type of SMALLINT
 CREATE TABLE smallint_numeric(a NUMERIC(4, 2));
 INSERT INTO smallint_numeric SELECT a FROM (VALUES
-	(0.23),
-	(NULL),
-	(45.12)
+    (0.23),
+    (NULL),
+    (45.12)
 ) t(a);
 SELECT * FROM smallint_numeric;
 
 -- NUMERIC with a physical type of INTEGER
 CREATE TABLE integer_numeric(a NUMERIC(9, 6));
 INSERT INTO integer_numeric SELECT a FROM (VALUES
-	(243.345035::NUMERIC(9,6)),
-	(NULL),
-	(45.000012::NUMERIC(9,6))
+    (243.345035::NUMERIC(9,6)),
+    (NULL),
+    (45.000012::NUMERIC(9,6))
 ) t(a);
 SELECT * FROM integer_numeric;
 
 -- NUMERIC with a physical type of BIGINT
 CREATE TABLE bigint_numeric(a NUMERIC(18, 12));
 INSERT INTO bigint_numeric SELECT a FROM (VALUES
-	(856324.111122223333::NUMERIC(18,12)),
-	(NULL),
-	(12.000000000001::NUMERIC(18,12))
+    (856324.111122223333::NUMERIC(18,12)),
+    (NULL),
+    (12.000000000001::NUMERIC(18,12))
 ) t(a);
 SELECT * FROM bigint_numeric;
 
 -- NUMERIC with a physical type of HUGEINT
 CREATE TABLE hugeint_numeric(a NUMERIC(38, 24));
 INSERT INTO hugeint_numeric SELECT a FROM (VALUES
-	(32942348563242.111222333444555666777888::NUMERIC(38,24)),
-	(NULL),
-	(123456789.000000000000000000000001::NUMERIC(38,24))
+    (32942348563242.111222333444555666777888::NUMERIC(38,24)),
+    (NULL),
+    (123456789.000000000000000000000001::NUMERIC(38,24))
 ) t(a);
 SELECT * FROM hugeint_numeric;
 
 -- UUID
 CREATE TABLE uuid_tbl(a UUID);
 INSERT INTO uuid_tbl SELECT CAST(a as UUID) FROM (VALUES
-	('80bf0be9-89be-4ef8-bc58-fc7d691c5544'),
-	(NULL),
-	('00000000-0000-0000-0000-000000000000')
+    ('80bf0be9-89be-4ef8-bc58-fc7d691c5544'),
+    (NULL),
+    ('00000000-0000-0000-0000-000000000000')
 ) t(a);
 SELECT * FROM uuid_tbl;
 
@@ -140,10 +163,12 @@ DROP TABLE chr;
 DROP TABLE small;
 DROP TABLE intgr;
 DROP TABLE big;
+DROP TABLE bpchar_tbl;
 DROP TABLE varchar_tbl;
 DROP TABLE text_tbl;
 DROP TABLE date_tbl;
 DROP TABLE timestamp_tbl;
+DROP TABLE timestamptz_tbl;
 DROP TABLE float4_tbl;
 DROP TABLE float8_tbl;
 DROP TABLE numeric_as_double;

@@ -7,6 +7,7 @@ extern "C" {
 #include "nodes/pg_list.h"
 #include "optimizer/optimizer.h"
 }
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
 
@@ -15,23 +16,74 @@ public:
 	static inline DuckDBManager &
 	Get() {
 		static DuckDBManager instance;
+		if (!instance.database) {
+			instance.Initialize();
+		}
 		return instance;
 	}
 
-	duckdb::unique_ptr<duckdb::Connection> GetConnection();
+	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
+
+	inline const std::string &
+	GetDefaultDBName() const {
+		return default_dbname;
+	}
+
+	void
+	Reset() {
+		delete database;
+		database = nullptr;
+	}
 
 private:
 	DuckDBManager();
+
+	void Initialize();
+
 	void InitializeDatabase();
-	bool CheckSecretsSeq();
+
 	void LoadSecrets(duckdb::ClientContext &);
 	void DropSecrets(duckdb::ClientContext &);
 	void LoadExtensions(duckdb::ClientContext &);
 	void LoadFunctions(duckdb::ClientContext &);
 
+	inline bool
+	IsSecretSeqLessThan(int64 seq) const {
+		return secret_table_current_seq < seq;
+	}
+
+	inline bool
+	IsExtensionsSeqLessThan(int64 seq) const {
+		return extensions_table_current_seq < seq;
+	}
+
+	inline void
+	UpdateSecretSeq(int64 seq) {
+		secret_table_current_seq = seq;
+	}
+
+	inline void
+	UpdateExtensionsSeq(int64 seq) {
+		extensions_table_current_seq = seq;
+	}
+
+	bool disabled_filesystems_is_set;
 	int secret_table_num_rows;
-	int secret_table_current_seq;
-	duckdb::unique_ptr<duckdb::DuckDB> database;
+	int64 secret_table_current_seq;
+	int64 extensions_table_current_seq;
+	/*
+	 * FIXME: Use a unique_ptr instead of a raw pointer. For now this is not
+	 * possible though, as the MotherDuck extension causes an ABORT when the
+	 * DuckDB database its destructor is run at the exit of the process.  This
+	 * then in turn crashes Postgres, which we obviously dont't want. Not
+	 * running the destructor also doesn't really have any downsides, as the
+	 * process is going to die anyway. It's probably even a tiny bit more
+	 * efficient not to run the destructor at all. But we should still fix
+	 * this, because running the destructor is a good way to find bugs (such
+	 * as the one reported in #279).
+	 */
+	duckdb::DuckDB *database;
+	std::string default_dbname;
 };
 
 } // namespace pgduckdb

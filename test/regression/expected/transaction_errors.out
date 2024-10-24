@@ -1,10 +1,22 @@
-CREATE TABLE foo AS SELECT 'bar' AS t;
-BEGIN; SET duckdb.execution = true; SELECT t::integer AS t1 FROM foo; ROLLBACK;
+CREATE TABLE foo AS SELECT 'bar'::text AS t;
+BEGIN; SET duckdb.force_execution = true; SELECT t::integer AS t1 FROM foo; ROLLBACK;
 ERROR:  invalid input syntax for type integer: "bar"
-SET duckdb.execution = true;
+SET duckdb.force_execution = true;
 SELECT 1 FROM foo;
  ?column? 
 ----------
         1
 (1 row)
 
+-- Make sure we query the cache during a valid TX
+DROP EXTENSION IF EXISTS pg_duckdb CASCADE;
+BEGIN;
+CREATE EXTENSION pg_duckdb;
+SELECT * FROM do_not_exist;
+ERROR:  relation "do_not_exist" does not exist
+LINE 1: SELECT * FROM do_not_exist;
+                      ^
+END;
+WARNING:  pgduckdb: IsExtensionRegistered called in an aborted transaction
+WARNING:  pgduckdb: IsExtensionRegistered called in an aborted transaction
+CREATE EXTENSION pg_duckdb;

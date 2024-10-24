@@ -384,6 +384,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 		break;
 	}
+	case TIMESTAMPTZOID: {
+		duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
+		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		break;
+	}
 	case FLOAT4OID: {
 		auto result_float = value.GetValue<float>();
 		slot->tts_tupleDescriptor->attrs[col].atttypid = FLOAT4OID;
@@ -404,7 +409,8 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		}
 		NumericVar numeric_var;
 		D_ASSERT(value.type().id() == duckdb::LogicalTypeId::DECIMAL ||
-		         value.type().id() == duckdb::LogicalTypeId::HUGEINT);
+		         value.type().id() == duckdb::LogicalTypeId::HUGEINT ||
+		         value.type().id() == duckdb::LogicalTypeId::UBIGINT);
 		auto physical_type = value.type().InternalType();
 		const bool is_decimal = value.type().id() == duckdb::LogicalTypeId::DECIMAL;
 		uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
@@ -420,6 +426,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		}
 		case duckdb::PhysicalType::INT64: {
 			numeric_var = ConvertNumeric<int64_t>(value.GetValueUnsafe<int64_t>(), scale);
+			break;
+		}
+		case duckdb::PhysicalType::UINT64: {
+			numeric_var = ConvertNumeric<uint64_t>(value.GetValueUnsafe<uint64_t>(), scale);
 			break;
 		}
 		case duckdb::PhysicalType::INT128: {
@@ -473,6 +483,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	return true;
 }
 
+static inline int32
+make_numeric_typmod(int precision, int scale) {
+	return ((precision << 16) | (scale & 0x7ff)) + VARHDRSZ;
+}
+
 static inline int
 numeric_typmod_precision(int32 typmod) {
 	return ((typmod - VARHDRSZ) >> 16) & 0xffff;
@@ -523,6 +538,8 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalTypeId::DATE;
 	case TIMESTAMPOID:
 		return duckdb::LogicalTypeId::TIMESTAMP;
+	case TIMESTAMPTZOID:
+		return duckdb::LogicalTypeId::TIMESTAMP_TZ;
 	case FLOAT4OID:
 		return duckdb::LogicalTypeId::FLOAT;
 	case FLOAT8OID:
@@ -572,6 +589,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		return INT4OID;
 	case duckdb::LogicalTypeId::BIGINT:
 		return INT8OID;
+	case duckdb::LogicalTypeId::UBIGINT:
 	case duckdb::LogicalTypeId::HUGEINT:
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::UTINYINT:
@@ -590,6 +608,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		return DATEOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		return TIMESTAMPOID;
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+		return TIMESTAMPTZOID;
 	case duckdb::LogicalTypeId::FLOAT:
 		return FLOAT4OID;
 	case duckdb::LogicalTypeId::DOUBLE:
@@ -627,6 +647,20 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 	}
 }
 
+int32
+GetPostgresDuckDBTypemod(duckdb::LogicalType type) {
+	auto id = type.id();
+	switch (id) {
+	case duckdb::LogicalTypeId::DECIMAL: {
+		uint8_t width, scale;
+		type.GetDecimalProperties(width, scale);
+		return make_numeric_typmod(width, scale);
+	}
+	default:
+		return -1;
+	}
+}
+
 template <class T>
 static void
 Append(duckdb::Vector &result, T value, idx_t offset) {
@@ -635,9 +669,10 @@ Append(duckdb::Vector &result, T value, idx_t offset) {
 }
 
 static void
-AppendString(duckdb::Vector &result, Datum value, idx_t offset) {
+AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) {
 	const char *text = VARDATA_ANY(value);
-	int len = VARSIZE_ANY_EXHDR(value);
+	/* Remove the padding of a BPCHAR type. DuckDB expects unpadded value. */
+	auto len = is_bpchar ? bpchartruelen(VARDATA_ANY(value), VARSIZE_ANY_EXHDR(value)) : VARSIZE_ANY_EXHDR(value);
 	duckdb::string_t str(text, len);
 
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
@@ -741,6 +776,9 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::DATE(duckdb::date_t(DatumGetDateADT(value) + PGDUCKDB_DUCK_DATE_OFFSET));
 	case TIMESTAMPOID:
 		return duckdb::Value::TIMESTAMP(duckdb::timestamp_t(DatumGetTimestamp(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
+	case TIMESTAMPTZOID:
+		return duckdb::Value::TIMESTAMPTZ(
+		    duckdb::timestamp_t(DatumGetTimestampTz(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
 	case FLOAT4OID: {
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
 	}
@@ -753,7 +791,7 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 }
 
 void
-ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
+ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, idx_t offset) {
 	auto &type = result.GetType();
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
@@ -789,7 +827,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		break;
 	case duckdb::LogicalTypeId::VARCHAR: {
 		// NOTE: This also handles JSON
-		AppendString(result, value, offset);
+		AppendString(result, value, offset, attr_type == BPCHAROID);
 		break;
 	}
 	case duckdb::LogicalTypeId::DATE:
@@ -799,10 +837,13 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 		Append<duckdb::timestamp_t>(
 		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
 		break;
-	case duckdb::LogicalTypeId::FLOAT: {
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+		Append<duckdb::timestamp_t>(
+		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
+		break;
+	case duckdb::LogicalTypeId::FLOAT:
 		Append<float>(result, DatumGetFloat4(value), offset);
 		break;
-	}
 	case duckdb::LogicalTypeId::DOUBLE: {
 		auto aux_info = type.GetAuxInfoShrPtr();
 		if (aux_info && dynamic_cast<NumericAsDouble *>(aux_info.get())) {
@@ -862,17 +903,18 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 
 		auto ndims = ARR_NDIM(array);
 		int *dims = ARR_DIMS(array);
+		auto elem_type = ARR_ELEMTYPE(array);
 
 		int16 typlen;
 		bool typbyval;
 		char typalign;
-		get_typlenbyvalalign(ARR_ELEMTYPE(array), &typlen, &typbyval, &typalign);
+		get_typlenbyvalalign(elem_type, &typlen, &typbyval, &typalign);
 
 		int nelems;
 		Datum *elems;
 		bool *nulls;
 		// Deconstruct the array into Datum elements
-		deconstruct_array(array, ARR_ELEMTYPE(array), typlen, typbyval, typalign, &elems, &nulls, &nelems);
+		deconstruct_array(array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
 
 		if (ndims == -1) {
 			throw duckdb::InternalException("Array type has an ndims of -1, so it's actually not an array??");
@@ -924,7 +966,7 @@ ConvertPostgresToDuckValue(Datum value, duckdb::Vector &result, idx_t offset) {
 				array_mask.SetInvalid(dest_idx);
 				continue;
 			}
-			ConvertPostgresToDuckValue(elems[i], *vec, dest_idx);
+			ConvertPostgresToDuckValue(elem_type, elems[i], *vec, dest_idx);
 		}
 		break;
 	}
@@ -1037,11 +1079,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		return;
 	}
 
-	/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
-	Datum *values = (Datum *)duckdb_malloc(sizeof(Datum) * scan_global_state->m_read_columns_ids.size());
-	bool *nulls = (bool *)duckdb_malloc(sizeof(bool) * scan_global_state->m_read_columns_ids.size());
-
-	bool valid_tuple = true;
+	auto values = scan_local_state->values;
+	auto nulls = scan_local_state->nulls;
 
 	/* First we are fetching all required columns ordered by column id
 	 * and than we need to write this tuple into output vector. Output column id list
@@ -1056,45 +1095,42 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		if (scan_global_state->m_filters &&
 		    (scan_global_state->m_filters->filters.find(valueIdx) != scan_global_state->m_filters->filters.end())) {
 			auto &filter = scan_global_state->m_filters->filters[valueIdx];
-			valid_tuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
+			const auto valid_tuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
 			                               scan_global_state->m_tuple_desc->attrs[columnIdx].atttypid);
+			if (!valid_tuple) {
+				return;
+			}
 		}
 
-		if (!valid_tuple) {
-			break;
-		}
 	}
 
 	/* Write tuple columns in output vector. */
-	for (idx_t idx = 0; valid_tuple && idx < scan_global_state->m_output_columns_ids.size(); idx++) {
+	for (idx_t idx = 0; idx < scan_global_state->m_output_columns_ids.size(); idx++) {
 		auto &result = output.data[idx];
-		if (nulls[idx]) {
+		idx_t output_column_idx = scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
+		if (nulls[output_column_idx]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
 		} else {
-			idx_t output_column_idx =
-			    scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
-			if (scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]].attlen == -1) {
+			auto attr = scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]];
+			if (attr.attlen == -1) {
 				bool should_free = false;
 				values[output_column_idx] =
 				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[output_column_idx]), &should_free);
-				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
+				ConvertPostgresToDuckValue(attr.atttypid, values[output_column_idx], result,
+				                           scan_local_state->m_output_vector_size);
 				if (should_free) {
 					duckdb_free(reinterpret_cast<void *>(values[output_column_idx]));
 				}
 			} else {
-				ConvertPostgresToDuckValue(values[output_column_idx], result, scan_local_state->m_output_vector_size);
+				ConvertPostgresToDuckValue(attr.atttypid, values[output_column_idx], result,
+				                           scan_local_state->m_output_vector_size);
 			}
 		}
 	}
 
-	if (valid_tuple) {
-		scan_local_state->m_output_vector_size++;
-		scan_global_state->m_total_row_count++;
-	}
-
-	duckdb_free(values);
-	duckdb_free(nulls);
+	scan_local_state->m_output_vector_size++;
+	scan_global_state->m_total_row_count++;
 }
 
 } // namespace pgduckdb

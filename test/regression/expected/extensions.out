@@ -1,0 +1,139 @@
+SET duckdb.force_execution TO false;
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+NOTICE:  result: extension_name	loaded	installed	
+VARCHAR	BOOLEAN	BOOLEAN	
+[ Rows: 4]
+cached_httpfs	true	true
+json	true	true
+parquet	true	true
+pgduckdb	true	false
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+SELECT last_value FROM duckdb.extensions_table_seq;
+ last_value 
+------------
+          1
+(1 row)
+
+-- INSERT SHOULD TRIGGER UPDATE OF EXTENSIONS
+SELECT duckdb.install_extension('icu');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- Increases the sequence twice because we use ON CONFLICT DO UPDATE. So
+-- the trigger fires for both INSERT and UPDATE internally.
+SELECT last_value FROM duckdb.extensions_table_seq;
+ last_value 
+------------
+          3
+(1 row)
+
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+NOTICE:  result: extension_name	loaded	installed	
+VARCHAR	BOOLEAN	BOOLEAN	
+[ Rows: 5]
+cached_httpfs	true	true
+icu	true	true
+json	true	true
+parquet	true	true
+pgduckdb	true	false
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+-- Check that we can rerun this without issues
+SELECT duckdb.install_extension('icu');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- Increases the sequence twice because we use ON CONFLICT DO UPDATE. So
+-- the trigger fires for both INSERT and UPDATE internally.
+SELECT last_value FROM duckdb.extensions_table_seq;
+ last_value 
+------------
+          5
+(1 row)
+
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+NOTICE:  result: extension_name	loaded	installed	
+VARCHAR	BOOLEAN	BOOLEAN	
+[ Rows: 5]
+cached_httpfs	true	true
+icu	true	true
+json	true	true
+parquet	true	true
+pgduckdb	true	false
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+SELECT duckdb.install_extension('aws');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT last_value FROM duckdb.extensions_table_seq;
+ last_value 
+------------
+          7
+(1 row)
+
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+NOTICE:  result: extension_name	loaded	installed	
+VARCHAR	BOOLEAN	BOOLEAN	
+[ Rows: 6]
+aws	true	true
+cached_httpfs	true	true
+icu	true	true
+json	true	true
+parquet	true	true
+pgduckdb	true	false
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
+-- DELETE SHOULD TRIGGER UPDATE OF EXTENSIONS
+-- But we do not unload for now (would require a restart of DuckDB)
+DELETE FROM duckdb.extensions WHERE name = 'aws';
+SELECT last_value FROM duckdb.extensions_table_seq;
+ last_value 
+------------
+          8
+(1 row)
+
+SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+NOTICE:  result: extension_name	loaded	installed	
+VARCHAR	BOOLEAN	BOOLEAN	
+[ Rows: 6]
+aws	true	true
+cached_httpfs	true	true
+icu	true	true
+json	true	true
+parquet	true	true
+pgduckdb	true	false
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
