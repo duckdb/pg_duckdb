@@ -58,6 +58,7 @@ private:
 	OffsetNumber m_current_tuple_index;
 	int m_page_tuples_left;
 	HeapTupleData m_tuple;
+	BufferAccessStrategy m_buffer_access_strategy;
 };
 
 } // namespace pgduckdb
