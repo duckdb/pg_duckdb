@@ -20,6 +20,28 @@ If you installed `pg_duckdb` in a different Postgres database than the default o
 duckdb.motherduck_postgres_database = 'your_database_name'
 ```
 
+### Non-supersuer configuration
+
+If you want to use MotherDuck as a different user than a superuser you also have to configure:
+
+```ini
+duckdb.postgres_role = 'your_role_name'  # e.g. duckdb or duckdb_group
+```
+
+You also likely want to make sure that this role has `CREATE` permissions on the `public` schema in Postgres, because this is where the tables in the `main` schema are created in. You can grant these permissions as follows:
+
+```sql
+GRANT CREATE ON SCHEMA public TO {your_role_name};
+-- So if you've configured the duckdb role above
+GRANT CREATE ON SCHEMA public TO duckdb;
+```
+
+If you do this after starting postgres the initial sync of MotherDuck tables will probably have failed for the public schema. You can force a full resync of the tables by running:
+
+```sql
+select * from pg_terminate_backend((select pid from pg_stat_activity where backend_type = 'pg_duckdb sync worker'));
+```
+
 ## Using `pg_duckdb` with MotherDuck
 
 After doing the configuration (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
