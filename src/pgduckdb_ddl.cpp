@@ -161,7 +161,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	 * pg_catalog.pg_event_trigger_ddl_commands does not exist in DuckDB.
 	 */
 	auto save_nestlevel = NewGUCNestLevel();
-	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
 	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
 	int ret = SPI_exec(R"(
@@ -344,7 +344,7 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	 * pg_catalog.pg_event_trigger_dropped_objects does not exist in DuckDB.
 	 */
 	auto save_nestlevel = NewGUCNestLevel();
-	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
 	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
 	if (!pgduckdb::doing_motherduck_sync) {
@@ -521,7 +521,7 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	 * pg_catalog.pg_event_trigger_dropped_objects does not exist in DuckDB.
 	 */
 	auto save_nestlevel = NewGUCNestLevel();
-	SetConfigOption("search_path", "", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
 	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 	Oid saved_userid;
 	int sec_context;
