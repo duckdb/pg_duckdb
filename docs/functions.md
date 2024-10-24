@@ -190,4 +190,29 @@ TODO
 
 #### <a name="force_motherduck_sync"></a>`duckdb.force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)`
 
-This is a procedure, so usage is `CALL`. This is mostly meant for debugging the automatic synchronization of MotherDuck tables, not for general use. If for some reason the synchronization is not working, you can use this to force a full resync of all MotherDuck databases and schemas to Postgres.
+WARNING: There are known issues with this function currently. For now you
+should use the following command to retrigger a sync:
+
+```
+select * from pg_terminate_backend((select pid from pg_stat_activity where backend_type = 'pg_duckdb sync worker'));
+```
+
+`pg_duckdb` will normally automatically synchronize your MotherDuck tables with Postgres using a Postgres background worker. Sometimes this synchronization fails. This can happen for various reasons, but often this is due to permission issues or users having created dependencies on MotherDuck tables that need to be updated. In those cases this function can be helpful for a few reasons:
+
+1. To show the ERRORs that happen during syncing
+2. To retrigger a sync after fixing the issue
+3. To drop the MotherDuck tables with `CASCADE` to drop all objects that depend on it.
+
+For the first two usages you can simply call this procedure like follows:
+
+```sql
+CALL duckdb.force_motherduck_sync();
+```
+
+But for the third usage you need to run pass it the `drop_with_cascade` parameter:
+
+```sql
+CALL duckdb.force_motherduck_sync(drop_with_cascade := true);
+```
+
+NOTE: Dropping with cascade will drop all objects that depend on the MotherDuck tables. This includes all views, functions, and tables that depend on the MotherDuck tables. This can be a destructive operation, so use with caution.
