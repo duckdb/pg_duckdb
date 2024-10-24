@@ -24,6 +24,8 @@ SELECT duckdb.install_extension('extname');
 Installing an extension causes it to be loaded and installed globally for any connection that uses DuckDB. The current list of installed extensions is maintained in the `duckdb.extensions` table. Superusers can use this table to view, disable, or uninstall extensions, as follows:
 
 ```sql
+-- Install an extension
+SELECT duckdb.install_extension('iceberg');
 -- view currently installed extensions
 SELECT * FROM duckdb.extensions;
 -- disable or enable an extension
@@ -32,7 +34,7 @@ UPDATE duckdb.extensions SET enabled = (false|true) WHERE name = 'iceberg';
 DELETE FROM duckdb.extensions WHERE name = 'iceberg';
 ```
 
-There is no practical difference between a disabled and uninstalled extension.
+There is currently no practical difference between a disabled and uninstalled extension.
 
 ## Supported Extensions
 

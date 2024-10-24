@@ -1,56 +1,103 @@
 # pg_duckdb Settings
 
-TODO:
+Many of these settings are simply used to configure specific [DuckDB settings](https://duckdb.org/docs/configuration/overview.html). If there's a setting from DuckDB that you'd like to see added, please open an issue/PR.
 
-* properly list all settings
-* what the setting does in more detail
-* what the default is and why
-* when is it recommended to change this setting
+### `duckdb.force_execution`
 
-## Temporary list of settings
+Force queries to use DuckDB execution. This is only necessary when accessing only Postgres tables in a query. As soon as you access a DuckDB table or DuckDB function (like `read_parquet`), DuckDB execution will be used automatically.
 
-```c
-DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
+Default: `false`
 
-DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
-                     &duckdb_enable_external_access, PGC_SUSET);
+Access: General
 
-DefineCustomVariable("duckdb.allow_unsigned_extensions",
-                     "Allow DuckDB to load extensions with invalid or missing signatures",
-                     &duckdb_allow_unsigned_extensions, PGC_SUSET);
+## MotherDuck
 
-DefineCustomVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)", &duckdb_maximum_memory,
-                     PGC_SUSET);
-DefineCustomVariable("duckdb.memory_limit",
-                     "The maximum memory DuckDB can use (e.g., 1GB), alias for duckdb.max_memory",
-                     &duckdb_maximum_memory, PGC_SUSET);
+MotherDuck support is optional, and can be enabled an configured using these settings. Check out our [MotherDuck documentation](motherduck.md) for more information.
 
-DefineCustomVariable("duckdb.disabled_filesystems",
-                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
-                     &duckdb_disabled_filesystems, PGC_SUSET);
+### `duckdb.motherduck_enabled`
 
-DefineCustomVariable("duckdb.threads", "Maximum number of DuckDB threads per Postgres backend.",
-                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
-DefineCustomVariable("duckdb.worker_threads",
-                     "Maximum number of DuckDB threads per Postgres backend, alias for duckdb.threads",
-                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
+If MotherDuck support should be enabled. `auto` means enabled if the `duckdb.motherduck_token` is set.
 
-DefineCustomVariable("duckdb.max_threads_per_postgres_scan",
-                     "Maximum number of DuckDB threads used for a single Postgres scan",
-                     &duckdb_max_threads_per_postgres_scan, 1, 64);
+Default: `MotherDuckEnabled::MOTHERDUCK_AUTO`
 
-DefineCustomVariable("duckdb.postgres_role",
-                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
-                     "MotherDuck tables. Defaults to superusers only",
-                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+Access: Needs to be in the `postgresql.conf` file and requires a restart
 
-DefineCustomVariable("duckdb.motherduck_enabled",
-                     "If motherduck support should enabled. 'auto' means enabled if motherduck_token is set",
-                     &duckdb_motherduck_enabled, motherduck_enabled_options, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+### `duckdb.motherduck_token`
 
-DefineCustomVariable("duckdb.motherduck_token", "The token to use for MotherDuck", &duckdb_motherduck_token,
-                     PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+The token to use for MotherDuck
 
-DefineCustomVariable("duckdb.motherduck_postgres_database", "Which database to enable MotherDuck support in",
-                     &duckdb_motherduck_postgres_database);
-```
+Default: `""`
+
+Access: Needs to be in the `postgresql.conf` file and requires a restart
+
+### `duckdb.motherduck_postgres_database`
+
+Which database to enable MotherDuck support in
+
+Default: `"postgres"`
+
+Access: General
+
+## Security
+
+### `duckdb.postgres_role`
+
+Which Postgres role should be allowed to use DuckDB execution, use the secrets and create MotherDuck tables. Defaults to superusers only. If this is configured, but the role does not exist when running `CREATE EXTENSION pg_duckdb`, it will be created automatically. This role will have access to DuckDB secrets and data in MotherDuck (tables, secrets, etc).
+
+Default: `""`
+
+Access: Needs to be in the `postgresql.conf` file and requires a restart
+
+### `duckdb.disabled_filesystems`
+
+Disable specific file systems preventing access. This setting only applies to non-superusers. Superusers can always access all file systems. Unless you completely trust the user in `duckdb.posgres_role`, it is recommended to disable `LocalFileSystem`. Otherwise they can trivially read and write any file on the machine that the Postgres process can.
+
+Default: `"LocalFileSystem"`
+
+Access: Superuser-only
+
+### `duckdb.enable_external_access` (experimental)
+
+Allow the DuckDB to access external access (e.g., HTTP, S3, etc.). This setting is not tested very well yet and disabling it may break unintended `pg_duckdb` functionality.
+
+Default: `true`
+
+Access: Superuser-only
+
+## Resource management
+
+Since any connection that uses DuckDB will have its own DuckDB instance, these settings are per-connection. When using `pg_duckdb` in many concurrent connections it can be a good idea to set some of these more conservatively than their defaults.
+
+### `duckdb.max_memory` / `duckdb.memory_limit`
+
+The maximum memory DuckDB can use within a single Postgres connection. This is somewhat comparable to Postgres its `work_mem` setting.
+
+Default: `"4GB"`
+
+Access: Superuser-only
+
+### `duckdb.threads` / `duckdb.worker_threads`
+
+Maximum number of DuckDB threads per Postgres connection.
+
+Default: `-1`
+
+Access: Superuser-only
+
+### `duckdb.max_threads_per_postgres_scan` (experimental)
+
+Maximum number of DuckDB threads used for a single Postgres scan on heap tables (Postgres its regular storage format). In early testing, setting this to `1` has shown to be faster in most cases (for now). So changing this setting to a higher value than the default is currently not recommended.
+
+Default: `1`
+
+Access: General
+
+## Developer settings
+
+### `duckdb.allow_unsigned_extensions`
+
+Allow DuckDB to load extensions with invalid or missing signatures. Mostly useful for development of DuckDB extensions.
+
+Default: `false`
+
+Access: Superuser-only
