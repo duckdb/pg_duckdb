@@ -140,7 +140,7 @@ CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
 			switch (nodeTag(defel->arg)) {
 			case T_Integer:
 			case T_Float:
-			case T_Boolean:
+			case T_BooleanTest:
 				options_string += defGetString(defel);
 				break;
 			case T_String:
@@ -231,7 +231,11 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		raw_stmt->stmt_location = pstmt->stmt_location;
 		raw_stmt->stmt_len = pstmt->stmt_len;
 
+#if PG_VERSION_NUM >= 150000
 		List *rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
+#else
+		List *rewritten = pg_analyze_and_rewrite(raw_stmt, query_string, NULL, 0, NULL);
+#endif
 		CheckRewritten(rewritten);
 
 		Query *query = linitial_node(Query, rewritten);
