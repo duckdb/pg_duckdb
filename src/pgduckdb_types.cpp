@@ -1079,8 +1079,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		return;
 	}
 
-	auto values = scan_local_state->values;
-	auto nulls = scan_local_state->nulls;
+	auto &values = scan_local_state->values;
+	auto &nulls = scan_local_state->nulls;
 
 	/* First we are fetching all required columns ordered by column id
 	 * and than we need to write this tuple into output vector. Output column id list
@@ -1088,31 +1088,35 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 	 */
 
 	/* Read heap tuple with all required columns. */
+	auto filters = scan_global_state->m_filters ? &scan_global_state->m_filters->filters : nullptr;
 	for (auto const &[columnIdx, valueIdx] : scan_global_state->m_read_columns_ids) {
+		bool is_null = false;
 		values[valueIdx] =
 		    HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state, columnIdx + 1,
-		                                  &nulls[valueIdx], scan_global_state->m_relation_missing_attrs);
-		if (scan_global_state->m_filters &&
-		    (scan_global_state->m_filters->filters.find(valueIdx) != scan_global_state->m_filters->filters.end())) {
-			auto &filter = scan_global_state->m_filters->filters[valueIdx];
-			const auto valid_tuple = ApplyValueFilter(*filter, values[valueIdx], nulls[valueIdx],
-			                               scan_global_state->m_tuple_desc->attrs[columnIdx].atttypid);
+		                                  &is_null, scan_global_state->m_relation_missing_attrs);
+		nulls[valueIdx] = is_null;
+		if (filters && (filters->find(valueIdx) != filters->end())) {
+			auto &filter = (*filters)[valueIdx];
+			const auto valid_tuple = ApplyValueFilter(*filter, values[valueIdx], is_null,
+			                                          scan_global_state->m_tuple_desc->attrs[columnIdx].atttypid);
 			if (!valid_tuple) {
 				return;
 			}
 		}
-
 	}
 
 	/* Write tuple columns in output vector. */
-	for (idx_t idx = 0; idx < scan_global_state->m_output_columns_ids.size(); idx++) {
-		auto &result = output.data[idx];
-		idx_t output_column_idx = scan_global_state->m_read_columns_ids[scan_global_state->m_output_columns_ids[idx]];
+	const auto nb_output_columns = scan_global_state->m_output_columns_ids.size();
+	for (idx_t output_col_idx = 0; output_col_idx < nb_output_columns; output_col_idx++) {
+		auto &result = output.data[output_col_idx];
+
+		const auto read_col_idx = scan_global_state->m_output_columns_ids[output_col_idx];
+		idx_t output_column_idx = scan_global_state->m_read_columns_ids[read_col_idx];
 		if (nulls[output_column_idx]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
 		} else {
-			auto attr = scan_global_state->m_tuple_desc->attrs[scan_global_state->m_output_columns_ids[idx]];
+			auto attr = scan_global_state->m_tuple_desc->attrs[read_col_idx];
 			if (attr.attlen == -1) {
 				bool should_free = false;
 				values[output_column_idx] =

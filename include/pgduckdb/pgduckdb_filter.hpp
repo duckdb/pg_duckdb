@@ -8,6 +8,6 @@ extern "C" {
 
 namespace pgduckdb {
 
-bool ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool is_null, Oid type_oid);
+bool ApplyValueFilter(const duckdb::TableFilter &filter, const Datum &value, bool is_null, Oid type_oid);
 
 } // namespace pgduckdb
