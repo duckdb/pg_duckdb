@@ -4,7 +4,7 @@ Many of these settings are simply used to configure specific [DuckDB settings](h
 
 ### `duckdb.force_execution`
 
-Force queries to use DuckDB execution. This is only necessary when accessing only Postgres tables in a query. As soon as you access a DuckDB table or DuckDB function (like `read_parquet`), DuckDB execution will be used automatically.
+Force queries to use DuckDB execution. This is only necessary when accessing only Postgres tables in a query. As soon as you use a DuckDB-only features, then DuckDB execution will be used automatically. DuckDB-only features are reading from DuckDB/MotherDuck tables, using DuckDB functions (like `read_parquet`), or `COPY` to remote storage (`s3://` etc).
 
 Default: `false`
 
@@ -78,7 +78,7 @@ Access: Superuser-only
 
 ### `duckdb.threads` / `duckdb.worker_threads`
 
-Maximum number of DuckDB threads per Postgres connection.
+Maximum number of DuckDB threads per Postgres connection. `-1` means to use DuckDB its default, which is the number of CPU cores on the machine.
 
 Default: `-1`
 
