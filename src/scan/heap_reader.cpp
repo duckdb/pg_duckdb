@@ -48,15 +48,19 @@ HeapReader::HeapReader(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> h
 	m_tuple.t_data = NULL;
 	m_tuple.t_tableOid = RelationGetRelid(m_rel);
 	ItemPointerSetInvalid(&m_tuple.t_self);
+	DuckdbProcessLock::GetLock().lock();
+	m_buffer_access_strategy = GetAccessStrategy(BAS_BULKREAD);
+	DuckdbProcessLock::GetLock().unlock();
 }
 
 HeapReader::~HeapReader() {
+	DuckdbProcessLock::GetLock().lock();
 	/* If execution is interrupted and buffer is still opened close it now */
 	if (m_buffer != InvalidBuffer) {
-		DuckdbProcessLock::GetLock().lock();
 		UnlockReleaseBuffer(m_buffer);
-		DuckdbProcessLock::GetLock().unlock();
 	}
+	FreeAccessStrategy(m_buffer_access_strategy);
+	DuckdbProcessLock::GetLock().unlock();
 }
 
 Page
@@ -97,7 +101,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			block = m_block_number;
 
 			m_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_rel, MAIN_FORKNUM, block, RBM_NORMAL,
-			                                         GetAccessStrategy(BAS_BULKREAD));
+			                                        m_buffer_access_strategy);
 
 			PostgresFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE);
 
