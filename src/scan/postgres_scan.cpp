@@ -39,9 +39,25 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 		return;
 	}
 
-	/* We need ordered columns ids for reading tuple. */
+	/* We need ordered columns id for reading tuple. */
+	duckdb::map<duckdb::column_t, duckdb::idx_t> ordered_input_columns;
 	for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
-		m_read_columns_ids[input.column_ids[i]] = i;
+		ordered_input_columns[input.column_ids[i]] = i;
+	}
+
+	auto table_filters = input.filters.get();
+	m_column_filters.resize(input.column_ids.size(), 0);
+
+	for (auto const &[attr_id, column_idx] : ordered_input_columns) {
+		duckdb::TableFilter *column_filter = nullptr;
+		if (table_filters) {
+			auto column_filter_it = table_filters->filters.find(column_idx);
+			if (column_filter_it != table_filters->filters.end()) {
+				column_filter = column_filter_it->second.get();
+			}
+		}
+		m_input_columns.emplace_back(duckdb::make_pair(attr_id, column_idx));
+		m_column_filters[column_idx] = column_filter;
 	}
 
 	/* We need to check do we consider projection_ids or column_ids list to be used
@@ -52,21 +68,20 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 	 */
 	if (input.CanRemoveFilterColumns()) {
 		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
-			m_output_columns_ids[i] = input.column_ids[input.projection_ids[i]];
+			m_output_columns.emplace_back(
+			    duckdb::make_pair(input.projection_ids[i], input.column_ids[input.projection_ids[i]]));
 		}
 	} else {
 		for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
-			m_output_columns_ids[i] = input.column_ids[i];
+			m_output_columns.emplace_back(duckdb::make_pair(i, input.column_ids[i]));
 		}
 	}
-
-	m_filters = input.filters.get();
 }
 
 void
 PostgresScanGlobalState::InitRelationMissingAttrs(TupleDesc tuple_desc) {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-	for(int attnum = 0; attnum < tuple_desc->natts; attnum++) {
+	for (int attnum = 0; attnum < tuple_desc->natts; attnum++) {
 		bool is_null = false;
 		Datum attr = getmissingattr(tuple_desc, attnum + 1, &is_null);
 		/* Add missing attr datum if not null*/
