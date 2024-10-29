@@ -1,7 +1,7 @@
 from .utils import Cursor, PG_MAJOR_VERSION, eprint
 
 
-def test_temporary_table(cur: Cursor):
+def test_temporary_table_set_access_method(cur: Cursor):
     if PG_MAJOR_VERSION >= 15:
         cur.sql("CREATE TEMP TABLE t(a int)")
         cur.sql("ALTER TABLE t ADD COLUMN b int")
