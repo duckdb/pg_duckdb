@@ -2,7 +2,7 @@
 
 Documentation is a work in progress. Search for `TODO` to see areas that need further contribution.
 
-* [Functions](functions.wd)
+* [Functions](functions.md)
 * [Motherduck](motherduck.md)
 * [Data Lake Secrets Management](secrets.md)
 * [Settings](settings.md)
