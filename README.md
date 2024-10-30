@@ -2,6 +2,8 @@
     <img width="500" src="logo.png" alt="temporary logo" />
 </p>
 
+0.1.0 release is here 🎉 Please [try](#installation) it out!
+
 # pg_duckdb: Official Postgres extension for DuckDB
 
 pg_duckdb is a Postgres extension that embeds DuckDB's columnar-vectorized analytics engine and features into Postgres. We recommend using pg_duckdb to build high performance analytics and data-intensive applications.
