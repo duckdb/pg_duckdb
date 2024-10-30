@@ -548,16 +548,17 @@ SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
 
 void
 SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade) {
-	initial_cache_version = pgduckdb::CacheVersion();
-
-	auto connection = pgduckdb::DuckDBManager::Get().CreateConnection();
-	auto &context = *connection->context;
 	if (!pgduckdb::IsMotherDuckEnabled()) {
 		throw std::runtime_error("MotherDuck support is not enabled");
 	}
 
+	initial_cache_version = pgduckdb::CacheVersion();
+
+	auto connection = pgduckdb::DuckDBManager::Get().CreateConnection();
+	auto &context = *connection->context;
+
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
-	auto default_db = db_manager.GetDefaultDatabase(context);
+	const auto& default_db = db_manager.GetDefaultDatabase(context);
 	auto result =
 	    context.Query("SELECT alias, server_catalog_version::text FROM __md_local_databases_metadata()", false);
 	if (result->HasError()) {
