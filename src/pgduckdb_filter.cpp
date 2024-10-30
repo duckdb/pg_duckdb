@@ -17,13 +17,13 @@ namespace pgduckdb {
 
 template <class T, class OP>
 bool
-TemplatedFilterOperation(T value, const duckdb::Value &constant) {
+TemplatedFilterOperation(const T &value, const duckdb::Value &constant) {
 	return OP::Operation(value, constant.GetValueUnsafe<T>());
 }
 
 template <class OP>
 bool
-StringFilterOperation(Datum &value, const duckdb::Value &constant, bool is_bpchar) {
+StringFilterOperation(const Datum &value, const duckdb::Value &constant, bool is_bpchar) {
 	if (value == (Datum)0 || constant.IsNull()) {
 		return false; // Comparison to NULL always returns false.
 	}
@@ -48,7 +48,7 @@ StringFilterOperation(Datum &value, const duckdb::Value &constant, bool is_bpcha
 
 template <class OP>
 static bool
-FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
+FilterOperationSwitch(const Datum &value, const duckdb::Value &constant, Oid type_oid) {
 	switch (type_oid) {
 	case BOOLOID:
 		return TemplatedFilterOperation<bool, OP>(DatumGetBool(value), constant);
@@ -87,15 +87,16 @@ FilterOperationSwitch(Datum &value, duckdb::Value &constant, Oid type_oid) {
 }
 
 bool
-ApplyValueFilter(duckdb::TableFilter &filter, Datum &value, bool is_null, Oid type_oid) {
+ApplyValueFilter(const duckdb::TableFilter &filter, const Datum &value, bool is_null, Oid type_oid) {
 	switch (filter.filter_type) {
 	case duckdb::TableFilterType::CONJUNCTION_AND: {
-		auto &conjunction = filter.Cast<duckdb::ConjunctionAndFilter>();
-		bool value_filter_result = true;
-		for (auto &child_filter : conjunction.child_filters) {
-			value_filter_result &= ApplyValueFilter(*child_filter, value, is_null, type_oid);
+		const auto &conjunction = filter.Cast<duckdb::ConjunctionAndFilter>();
+		for (const auto &child_filter : conjunction.child_filters) {
+			if (!ApplyValueFilter(*child_filter, value, is_null, type_oid)) {
+				return false;
+			}
 		}
-		return value_filter_result;
+		return true;
 	}
 	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
 		auto &constant_filter = filter.Cast<duckdb::ConstantFilter>();

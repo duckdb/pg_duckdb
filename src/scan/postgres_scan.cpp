@@ -41,23 +41,26 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 
 	/* We need ordered columns id for reading tuple. */
 	duckdb::map<duckdb::column_t, duckdb::idx_t> ordered_input_columns;
-	for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
-		ordered_input_columns[input.column_ids[i]] = i;
+	duckdb::idx_t i = 0;
+	for (const auto &input_column : input.column_ids) {
+		ordered_input_columns[input_column] = i++;
 	}
 
 	auto table_filters = input.filters.get();
 	m_column_filters.resize(input.column_ids.size(), 0);
 
 	for (auto const &[attr_id, column_idx] : ordered_input_columns) {
+		m_input_columns.emplace_back(attr_id, column_idx);
+
 		duckdb::TableFilter *column_filter = nullptr;
-		if (table_filters) {
-			auto column_filter_it = table_filters->filters.find(column_idx);
-			if (column_filter_it != table_filters->filters.end()) {
-				column_filter = column_filter_it->second.get();
-			}
+		if (!table_filters) {
+			continue;
 		}
-		m_input_columns.emplace_back(duckdb::make_pair(attr_id, column_idx));
-		m_column_filters[column_idx] = column_filter;
+
+		auto column_filter_it = table_filters->filters.find(column_idx);
+		if (column_filter_it != table_filters->filters.end()) {
+			m_column_filters[column_idx] = column_filter_it->second.get();
+		}
 	}
 
 	/* We need to check do we consider projection_ids or column_ids list to be used
@@ -67,13 +70,13 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 	 * to upper layers of query execution.
 	 */
 	if (input.CanRemoveFilterColumns()) {
-		for (duckdb::idx_t i = 0; i < input.projection_ids.size(); i++) {
-			m_output_columns.emplace_back(
-			    duckdb::make_pair(input.projection_ids[i], input.column_ids[input.projection_ids[i]]));
+		for (const auto &projection_id : input.projection_ids) {
+			m_output_columns.emplace_back(projection_id, input.column_ids[projection_id]);
 		}
 	} else {
-		for (duckdb::idx_t i = 0; i < input.column_ids.size(); i++) {
-			m_output_columns.emplace_back(duckdb::make_pair(i, input.column_ids[i]));
+		duckdb::idx_t i = 0;
+		for (const auto &column_id : input.column_ids) {
+			m_output_columns.emplace_back(i++, column_id);
 		}
 	}
 }
@@ -97,14 +100,11 @@ FindMatchingRelation(const duckdb::string &schema, const duckdb::string &table) 
 	if (!schema.empty()) {
 		name_list = lappend(name_list, makeString(pstrdup(schema.c_str())));
 	}
+
 	name_list = lappend(name_list, makeString(pstrdup(table.c_str())));
 
 	RangeVar *table_range_var = makeRangeVarFromNameList(name_list);
-	Oid relOid = RangeVarGetRelid(table_range_var, AccessShareLock, true);
-	if (relOid != InvalidOid) {
-		return relOid;
-	}
-	return InvalidOid;
+	return RangeVarGetRelid(table_range_var, AccessShareLock, true);
 }
 
 duckdb::unique_ptr<duckdb::TableRef>
@@ -160,6 +160,7 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 		PostgresFunctionGuard(ReleaseSysCache, tuple);
 		return nullptr;
 	}
+
 	PostgresFunctionGuard(ReleaseSysCache, tuple);
 	return ReplaceView(relid);
 }
