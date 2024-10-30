@@ -41,7 +41,7 @@ PostgresTable::~PostgresTable() {
 ::Relation
 PostgresTable::OpenRelation(Oid relid) {
 	std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
-	return pgduckdb::PostgresFunctionGuard<::Relation>(RelationIdGetRelation, relid);
+	return PostgresFunctionGuard(::RelationIdGetRelation, relid);
 }
 
 void

@@ -45,7 +45,7 @@ static bool ctas_skip_data = false;
  */
 void
 DuckdbTruncateTable(Oid relation_oid) {
-	auto name = pgduckdb::PostgresFunctionGuard<char *>(pgduckdb_relation_name, relation_oid);
+	auto name = PostgresFunctionGuard(pgduckdb_relation_name, relation_oid);
 	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
 }
 
