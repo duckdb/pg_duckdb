@@ -8,22 +8,8 @@ extern "C" {
 #include "postgres.h"
 }
 
-#include <vector>
-#include <string>
-#include <sstream>
 
 namespace pgduckdb {
-
-inline std::vector<std::string>
-TokenizeString(char *str, const char delimiter) {
-	std::vector<std::string> v;
-	std::stringstream ss(str); // Turn the string into a stream.
-	std::string tok;
-	while (getline(ss, tok, delimiter)) {
-		v.push_back(tok);
-	}
-	return v;
-};
 
 struct PgExceptionGuard {
 	PgExceptionGuard() : _save_exception_stack(PG_exception_stack), _save_context_stack(error_context_stack) {
