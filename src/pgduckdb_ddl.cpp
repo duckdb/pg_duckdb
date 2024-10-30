@@ -187,7 +187,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	}
 
 	if (SPI_processed != 1) {
-		elog(ERROR, "Expected single table to be created, but found %" PRIu64, SPI_processed);
+		elog(ERROR, "Expected single table to be created, but found %" PRIu64, static_cast<uint64_t>(SPI_processed));
 	}
 
 	HeapTuple tuple = SPI_tuptable->vals[0];
