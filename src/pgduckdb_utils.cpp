@@ -92,20 +92,5 @@ DuckDBQueryOrThrow(const std::string &query) {
 	return DuckDBQueryOrThrow(*connection, query);
 }
 
-bool TryDuckDBQuery(const std::string &query) {
-	auto connection = pgduckdb::DuckDBManager::CreateConnection();
-	return TryDuckDBQuery(*connection->context, query);
-}
-
-bool TryDuckDBQuery(duckdb::ClientContext &context, const std::string &query) {
-	auto res = context.Query(query, false);
-	const bool has_error = res->HasError();
-	if (has_error) {
-		elog(WARNING, "(PGDuckDB) %s", res->GetError().c_str());
-	}
-
-	return !has_error;
-}
-
 } // namespace pgduckdb
 

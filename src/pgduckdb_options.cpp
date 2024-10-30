@@ -163,15 +163,15 @@ DuckdbCacheObject(Datum object, Datum type) {
 	auto con = DuckDBManager::CreateConnection();
 	auto &context = *con->context;
 
-	TryDuckDBQuery(context, "SET enable_http_file_cache TO true;");
+	DuckDBQueryOrThrow(context, "SET enable_http_file_cache TO true;");
 
 	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
 	auto cache_object_query =
 	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
-	const auto res = TryDuckDBQuery(context, cache_object_query);
-	TryDuckDBQuery(context, "SET enable_http_file_cache TO false;");
+	DuckDBQueryOrThrow(context, cache_object_query);
+	DuckDBQueryOrThrow(context, "SET enable_http_file_cache TO false;");
 
-	return res;
+	return true;
 }
 
 } // namespace pgduckdb
