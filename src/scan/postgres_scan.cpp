@@ -52,7 +52,6 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 	for (auto const &[attr_id, column_idx] : ordered_input_columns) {
 		m_input_columns.emplace_back(attr_id, column_idx);
 
-		duckdb::TableFilter *column_filter = nullptr;
 		if (!table_filters) {
 			continue;
 		}
