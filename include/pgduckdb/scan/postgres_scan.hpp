@@ -10,6 +10,8 @@ extern "C" {
 #include "nodes/pathnodes.h"
 }
 
+#include "pgduckdb/utility/allocator.hpp"
+
 namespace pgduckdb {
 
 class PostgresScanGlobalState {
@@ -36,24 +38,18 @@ public:
 class PostgresScanLocalState {
 public:
 	PostgresScanLocalState(const PostgresScanGlobalState *psgs)
-	    : m_output_vector_size(0), m_exhausted_scan(false), values(nullptr), nulls(nullptr) {
+	    : m_output_vector_size(0), m_exhausted_scan(false) {
 		if (!psgs->m_count_tuples_only) {
-			/* FIXME: all calls to duckdb_malloc/duckdb_free should be changed in future */
 			const auto s = psgs->m_input_columns.size();
-			values = (Datum *)duckdb_malloc(sizeof(Datum) * s);
-			nulls = (bool *)duckdb_malloc(sizeof(bool) * s);
+			values.reserve(s);
+			nulls.reserve(s);
 		}
-	}
-
-	~PostgresScanLocalState() {
-		duckdb_free(values);
-		duckdb_free(nulls);
 	}
 
 	int m_output_vector_size;
 	bool m_exhausted_scan;
-	Datum *values;
-	bool *nulls;
+	std::vector<Datum, DuckDBMallocator<Datum>> values;
+	std::vector<bool, DuckDBMallocator<bool>> nulls;
 };
 
 duckdb::unique_ptr<duckdb::TableRef> PostgresReplacementScan(duckdb::ClientContext &context,

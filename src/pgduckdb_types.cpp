@@ -1079,8 +1079,8 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		return;
 	}
 
-	auto values = scan_local_state->values;
-	auto nulls = scan_local_state->nulls;
+	auto &values = scan_local_state->values;
+	auto &nulls = scan_local_state->nulls;
 
 	/* First we are fetching all required columns ordered by column id
 	 * and than we need to write this tuple into output vector. Output column id list
@@ -1089,15 +1089,17 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 
 	/* Read heap tuple with all required columns. */
 	for (auto const &[attr_id, input_column_idx] : scan_global_state->m_input_columns) {
+		bool is_null = false;
 		values[input_column_idx] =
 		    HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state, attr_id + 1,
-		                                  &nulls[input_column_idx], scan_global_state->m_relation_missing_attrs);
+		                                  &is_null, scan_global_state->m_relation_missing_attrs);
+		nulls[input_column_idx] = is_null;
 		auto filter = scan_global_state->m_column_filters[input_column_idx];
 		if (!filter) {
 			continue;
 		}
 
-		const auto valid_tuple = ApplyValueFilter(*filter, values[input_column_idx], nulls[input_column_idx],
+		const auto valid_tuple = ApplyValueFilter(*filter, values[input_column_idx], is_null,
 		                                          scan_global_state->m_tuple_desc->attrs[attr_id].atttypid);
 		if (!valid_tuple) {
 			return;
