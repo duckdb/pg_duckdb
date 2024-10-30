@@ -100,8 +100,8 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 			block = m_block_number;
 
-			m_buffer = PostgresFunctionGuard<Buffer>(ReadBufferExtended, m_rel, MAIN_FORKNUM, block, RBM_NORMAL,
-			                                        m_buffer_access_strategy);
+			m_buffer = PostgresFunctionGuard(ReadBufferExtended, m_rel, MAIN_FORKNUM, block, RBM_NORMAL,
+			                                 m_buffer_access_strategy);
 
 			PostgresFunctionGuard(LockBuffer, m_buffer, BUFFER_LOCK_SHARE);
 

@@ -119,7 +119,7 @@ ToastFetchDatum(struct varlena *attr) {
 
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 
-	toast_rel = PostgresFunctionGuard<Relation>(try_table_open, toast_pointer.va_toastrelid, AccessShareLock);
+	toast_rel = PostgresFunctionGuard(try_table_open, toast_pointer.va_toastrelid, AccessShareLock);
 
 	if (toast_rel == NULL) {
 		throw duckdb::InternalException("(PGDuckDB/ToastFetchDatum) Error toast relation is NULL");

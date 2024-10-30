@@ -25,56 +25,52 @@ TokenizeString(char *str, const char delimiter) {
 	return v;
 };
 
+struct PgExceptionGuard {
+	PgExceptionGuard() : _save_exception_stack(PG_exception_stack), _save_context_stack(error_context_stack) {
+	}
+
+	~PgExceptionGuard() noexcept {
+		RestoreStacks();
+	}
+
+	void
+	RestoreStacks() const noexcept {
+		PG_exception_stack = _save_exception_stack;
+		error_context_stack = _save_context_stack;
+	}
+
+	sigjmp_buf *_save_exception_stack;
+	ErrorContextCallback *_save_context_stack;
+};
+
 /*
  * DuckdbGlobalLock should be held before calling.
  */
-template <typename T, typename FuncType, typename... FuncArgs>
-T
-PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
-	T return_value;
+template <typename Func, Func func, typename... FuncArgs>
+typename std::invoke_result<Func, FuncArgs...>::type
+__PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
-	// clang-format off
-	PG_TRY();
-	{
-		return_value = postgres_function(args...);
-	}
-	PG_CATCH();
-	{
-		MemoryContextSwitchTo(ctx);
-		edata = CopyErrorData();
-		FlushErrorState();
-	}
-	PG_END_TRY();
-	// clang-format on
-	if (edata) {
-		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
-	}
-	return return_value;
+	{ // Scope for PG_END_TRY
+		PgExceptionGuard g;
+		sigjmp_buf _local_sigjmp_buf;
+		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
+			PG_exception_stack = &_local_sigjmp_buf;
+			return func(std::forward<FuncArgs>(args)...);
+		} else {
+			g.RestoreStacks();
+			MemoryContextSwitchTo(ctx);
+			edata = CopyErrorData();
+			FlushErrorState();
+		}
+	} // PG_END_TRY();
+
+	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, edata->message);
+	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
 }
 
-template <typename FuncType, typename... FuncArgs>
-void
-PostgresFunctionGuard(FuncType postgres_function, FuncArgs... args) {
-	MemoryContext ctx = CurrentMemoryContext;
-	ErrorData *edata = nullptr;
-	// clang-format off
-	PG_TRY();
-	{
-		postgres_function(args...);
-	}
-	PG_CATCH();
-	{
-		MemoryContextSwitchTo(ctx);
-		edata = CopyErrorData();
-		FlushErrorState();
-	}
-	PG_END_TRY();
-	// clang-format on
-	if (edata) {
-		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, edata->message);
-	}
-}
+#define PostgresFunctionGuard(FUNC, ...)                                                                               \
+	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>("##FUNC##", __VA_ARGS__)
 
 template <typename FuncRetT, typename FuncType, typename... FuncArgs>
 FuncRetT
@@ -109,5 +105,8 @@ duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query);
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(const std::string &query);
+
+bool TryDuckDBQuery(duckdb::ClientContext &context, const std::string &query);
+bool TryDuckDBQuery(const std::string &query);
 
 } // namespace pgduckdb

@@ -85,7 +85,7 @@ PostgresScanGlobalState::InitRelationMissingAttrs(TupleDesc tuple_desc) {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 	for (int attnum = 0; attnum < tuple_desc->natts; attnum++) {
 		bool is_null = false;
-		Datum attr = getmissingattr(tuple_desc, attnum + 1, &is_null);
+		Datum attr = PostgresFunctionGuard(getmissingattr, tuple_desc, attnum + 1, &is_null);
 		/* Add missing attr datum if not null*/
 		if (!is_null) {
 			m_relation_missing_attrs[attnum] = attr;
@@ -106,12 +106,16 @@ FindMatchingRelation(const duckdb::string &schema, const duckdb::string &table) 
 	return RangeVarGetRelid(table_range_var, AccessShareLock, true);
 }
 
+const char *
+pgduckdb_pg_get_viewdef(Oid view) {
+	auto oid = ObjectIdGetDatum(view);
+	Datum viewdef = DirectFunctionCall1(pg_get_viewdef, oid);
+	return text_to_cstring(DatumGetTextP(viewdef));
+}
+
 duckdb::unique_ptr<duckdb::TableRef>
 ReplaceView(Oid view) {
-	auto oid = ObjectIdGetDatum(view);
-	Datum viewdef = PostgresFunctionGuard<Datum>(
-	    [](PGFunction func, Datum arg) { return DirectFunctionCall1(func, arg); }, pg_get_viewdef, oid);
-	auto view_definition = text_to_cstring(DatumGetTextP(viewdef));
+	const auto view_definition = PostgresFunctionGuard(pgduckdb_pg_get_viewdef, view);
 
 	if (!view_definition) {
 		throw duckdb::InvalidInputException("Could not retrieve view definition for Relation with relid: %u", view);
@@ -119,7 +123,7 @@ ReplaceView(Oid view) {
 
 	duckdb::Parser parser;
 	parser.ParseQuery(view_definition);
-	auto statements = std::move(parser.statements);
+	auto &statements = parser.statements;
 	if (statements.size() != 1) {
 		throw duckdb::InvalidInputException("View definition contained more than 1 statement!");
 	}
@@ -130,8 +134,7 @@ ReplaceView(Oid view) {
 	}
 
 	auto select = duckdb::unique_ptr_cast<duckdb::SQLStatement, duckdb::SelectStatement>(std::move(statements[0]));
-	auto subquery = duckdb::make_uniq<duckdb::SubqueryRef>(std::move(select));
-	return std::move(subquery);
+	return duckdb::make_uniq<duckdb::SubqueryRef>(std::move(select));
 }
 
 duckdb::unique_ptr<duckdb::TableRef>
@@ -141,20 +144,18 @@ PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanI
 	auto &schema_name = input.schema_name;
 	auto &table_name = input.table_name;
 
-	auto relid = FindMatchingRelation(schema_name, table_name);
-
+	auto relid = PostgresFunctionGuard(FindMatchingRelation, schema_name, table_name);
 	if (relid == InvalidOid) {
 		return nullptr;
 	}
 
-	auto tuple = PostgresFunctionGuard<HeapTuple>(SearchSysCache1, RELOID, ObjectIdGetDatum(relid));
+	auto tuple = PostgresFunctionGuard(SearchSysCache1, RELOID, ObjectIdGetDatum(relid));
 	if (!HeapTupleIsValid(tuple)) {
 		elog(WARNING, "(PGDuckDB/PostgresReplacementScan) Cache lookup failed for relation %u", relid);
 		return nullptr;
 	}
 
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
-
 	if (relForm->relkind != RELKIND_VIEW) {
 		PostgresFunctionGuard(ReleaseSysCache, tuple);
 		return nullptr;
