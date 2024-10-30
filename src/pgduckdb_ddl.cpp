@@ -131,9 +131,13 @@ extern "C" {
  */
 static std::unordered_set<Oid> temporary_duckdb_tables;
 
-PG_FUNCTION_INFO_V1(duckdb_create_table_trigger);
+DECLARE_PG_FUNCTION(duckdb_create_table_trigger);
+DECLARE_PG_FUNCTION(duckdb_drop_trigger);
+DECLARE_PG_FUNCTION(duckdb_alter_table_trigger);
+DECLARE_PG_FUNCTION(duckdb_grant_trigger);
+
 Datum
-duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
+duckdb_create_table_trigger_cpp(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
@@ -196,6 +200,7 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
 	if (isnull) {
 		elog(ERROR, "Expected relid to be returned, but found NULL");
 	}
+
 	Datum is_temporary_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
 	if (isnull) {
 		elog(ERROR, "Expected temporary boolean to be returned, but found NULL");
@@ -317,9 +322,8 @@ duckdb_create_table_trigger(PG_FUNCTION_ARGS) {
  * dropped table was a DuckDB table or not (because we cannot check its access
  * method anymore).
  */
-PG_FUNCTION_INFO_V1(duckdb_drop_trigger);
 Datum
-duckdb_drop_trigger(PG_FUNCTION_ARGS) {
+duckdb_drop_trigger_cpp(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
@@ -494,9 +498,8 @@ duckdb_drop_trigger(PG_FUNCTION_ARGS) {
 	PG_RETURN_NULL();
 }
 
-PG_FUNCTION_INFO_V1(duckdb_alter_table_trigger);
 Datum
-duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
+duckdb_alter_table_trigger_cpp(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
@@ -596,17 +599,14 @@ duckdb_alter_table_trigger(PG_FUNCTION_ARGS) {
 	}
 
 	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
-
-	PG_RETURN_NULL();
 }
 
 /*
  * This event trigger is called when a GRANT statement is executed. We use it to
  * block GRANTs on DuckDB tables. We allow grants on schemas though.
  */
-PG_FUNCTION_INFO_V1(duckdb_grant_trigger);
 Datum
-duckdb_grant_trigger(PG_FUNCTION_ARGS) {
+duckdb_grant_trigger_cpp(PG_FUNCTION_ARGS) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 

@@ -120,48 +120,46 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 
 static duckdb::string
 CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
-	duckdb::string options_string;
-	duckdb::vector<duckdb::string> options_parts;
-
 	if (list_length(copy_stmt->options) == 0) {
 		return ";";
 	}
 
-	options_string = "(";
+	std::ostringstream options_stream;
+	options_stream << "(";
 
 	bool first = true;
 	foreach_node(DefElem, defel, copy_stmt->options) {
 		if (!first) {
-			options_string += ", ";
+			options_stream << ", ";
 		}
-		options_string += defel->defname;
+		options_stream << defel->defname;
 		if (defel->arg) {
-			options_string += " ";
+			options_stream << " ";
 			switch (nodeTag(defel->arg)) {
 			case T_Integer:
 			case T_Float:
 			case T_Boolean:
-				options_string += defGetString(defel);
+				options_stream << defGetString(defel);
 				break;
 			case T_String:
 			case T_TypeName:
-				options_string += quote_literal_cstr(defGetString(defel));
+				options_stream << quote_literal_cstr(defGetString(defel));
 				break;
 			case T_List:
-				options_string += NameListToQuotedString((List *)defel->arg);
+				options_stream << NameListToQuotedString((List *)defel->arg);
 				break;
 			case T_A_Star:
-				options_string += "*";
+				options_stream << "*";
 				break;
 			default:
-				elog(ERROR, "unexpected node type in COPY: %d", (int)nodeTag(defel->arg));
+				throw std::runtime_error("unexpected node type in COPY: " + std::to_string((int)nodeTag(defel->arg)));
 			}
 		}
 
 		first = false;
 	}
-	options_string += ");";
-	return options_string;
+	options_stream << ");";
+	return options_stream.str();
 }
 
 /*
