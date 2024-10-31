@@ -61,6 +61,15 @@ CreateOrGetDirectoryPath(const char* directory_name) {
 	return duckdb_data_directory;
 }
 
+int
+SPI_exec_or_throw(const char *query, int tcount, int expected_ret_code) {
+	int ret = SPI_exec(query, tcount);
+	if (ret != expected_ret_code) {
+		throw std::runtime_error(std::string("SPI_exec failed: error code ") + SPI_result_code_string(ret));
+	}
+	return ret;
+}
+
 duckdb::unique_ptr<duckdb::QueryResult>
 DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query) {
 	auto res = context.Query(query, false);

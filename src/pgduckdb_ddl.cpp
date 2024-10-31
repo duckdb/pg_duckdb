@@ -162,7 +162,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
 	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
-	int ret = SPI_exec(R"(
+	pgduckdb::SPI_exec_or_throw(R"(
 		SELECT DISTINCT objid AS relid, pg_class.relpersistence = 't' AS is_temporary
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
@@ -170,10 +170,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		WHERE cmds.object_type = 'table'
 		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		)",
-	                   0);
-
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	                            0, SPI_OK_SELECT);
 
 	/* if we selected a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
@@ -227,11 +224,11 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 			values[2] = CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version);
 			nulls[2] = ' ';
 		}
-		ret = SPI_execute_with_args(R"(
+		int ret = SPI_execute_with_args(R"(
 			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version)
 			VALUES ($1, $2, $3)
 			)",
-		                            lengthof(arg_types), arg_types, values, nulls, false, 0);
+		                                lengthof(arg_types), arg_types, values, nulls, false, 0);
 
 		/* Revert back to original privileges */
 		SetUserIdAndSecContext(saved_userid, sec_context);
@@ -345,15 +342,13 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
 	if (!pgduckdb::doing_motherduck_sync) {
-		int ret = SPI_exec(R"(
+		pgduckdb::SPI_exec_or_throw(R"(
 			SELECT object_identity
 			FROM pg_catalog.pg_event_trigger_dropped_objects()
 			WHERE object_type = 'schema'
 				AND object_identity LIKE 'ddb$%'
 			)",
-		                   0);
-		if (ret != SPI_OK_SELECT)
-			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+		                            0, SPI_OK_SELECT);
 
 		if (SPI_processed > 0) {
 			elog(ERROR, "Currently it's not possible to drop ddb$ schemas");
@@ -375,7 +370,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * Here we first handle the non-temporary tables.
 	 */
 
-	int ret = SPI_exec(R"(
+	pgduckdb::SPI_exec_or_throw(R"(
 		DELETE FROM duckdb.tables
 		USING (
 			SELECT objid, schema_name, object_name
@@ -385,13 +380,10 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		WHERE relid = objid
 		RETURNING objs.schema_name, objs.object_name
 		)",
-	                   0);
+	                            0, SPI_OK_DELETE_RETURNING);
 
 	/* Revert back to original privileges */
 	SetUserIdAndSecContext(saved_userid, sec_context);
-
-	if (ret != SPI_OK_DELETE_RETURNING)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	/*
 	 * We lazily create a connection to DuckDB when we need it. That's
@@ -442,16 +434,13 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * And now we basically do the same thing as above, but for TEMP tables.
 	 * For those we need to check our in-memory temporary_duckdb_tables set.
 	 */
-	ret = SPI_exec(R"(
+	pgduckdb::SPI_exec_or_throw(R"(
 		SELECT objid, object_name
 		FROM pg_catalog.pg_event_trigger_dropped_objects()
 		WHERE object_type = 'table'
 			AND schema_name = 'pg_temp'
 		)",
-	               0);
-
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	                            0, SPI_OK_SELECT);
 
 	for (auto proc = 0; proc < SPI_processed; ++proc) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];

@@ -82,6 +82,8 @@ __CPPFunctionGuard__(const char *func_name, FuncArgs... args) {
 
 #define InvokeCPPFunc(FUNC, ...) pgduckdb::__CPPFunctionGuard__<decltype(&FUNC), &FUNC>(__FUNCTION__, __VA_ARGS__)
 
+int SPI_exec_or_throw(const char *query, int tcount, int expected_ret_code);
+
 // Wrappers
 
 #define DECLARE_PG_FUNCTION(func_name)                                                                                 \
