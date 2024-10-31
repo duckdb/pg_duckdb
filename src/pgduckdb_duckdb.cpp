@@ -222,7 +222,7 @@ DuckDBManager::CreateConnection() {
 
 	auto http_file_cache_set_dir_query =
 	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
-	context.Query(http_file_cache_set_dir_query, false);
+	DuckDBQueryOrThrow(context, http_file_cache_set_dir_query);
 
 	if (duckdb_disabled_filesystems != NULL && !superuser()) {
 		/*

@@ -92,7 +92,4 @@ duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &c
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(const std::string &query);
 
-bool TryDuckDBQuery(duckdb::ClientContext &context, const std::string &query);
-bool TryDuckDBQuery(const std::string &query);
-
 } // namespace pgduckdb

@@ -117,7 +117,6 @@ ReadDuckdbExtensions() {
 
 static bool
 DuckdbInstallExtension(Datum name_datum) {
-
 	auto extension_name = DatumToString(name_datum);
 	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
 	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
@@ -149,38 +148,30 @@ CanCacheRemoteObject(std::string remote_object) {
 
 static bool
 DuckdbCacheObject(Datum object, Datum type) {
-	auto con = DuckDBManager::CreateConnection();
-	auto &context = *con->context;
-	auto object_type = DatumToString(type);
-
-	if (object_type != "parquet" && object_type != "csv") {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
-		return false;
-	}
-
-	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
-
-	context.Query("SET enable_http_file_cache TO true;", false);
-
 	auto object_path = DatumToString(object);
-
 	if (!CanCacheRemoteObject(object_path)) {
 		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
 		return false;
 	}
 
-	auto cache_object_query =
-	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
-	auto res = context.Query(cache_object_query, false);
-	auto query_has_errors = res->HasError();
-
-	if (query_has_errors) {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) %s", res->GetError().c_str());
+	auto object_type = DatumToString(type);
+	if (object_type != "parquet" && object_type != "csv") {
+		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
+		return false;
 	}
 
-	context.Query("SET enable_http_file_cache TO false;", false);
+	auto con = DuckDBManager::CreateConnection();
+	auto &context = *con->context;
 
-	return query_has_errors;
+	DuckDBQueryOrThrow(context, "SET enable_http_file_cache TO true;");
+
+	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
+	auto cache_object_query =
+	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
+	DuckDBQueryOrThrow(context, cache_object_query);
+	DuckDBQueryOrThrow(context, "SET enable_http_file_cache TO false;");
+
+	return true;
 }
 
 } // namespace pgduckdb
