@@ -28,7 +28,7 @@ extern "C" {
 
 extern "C" {
 char *
-pgduckdb_function_name_cpp(Oid function_oid) {
+pgduckdb_function_name(Oid function_oid) {
 	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
 		return nullptr;
 	}
@@ -37,10 +37,6 @@ pgduckdb_function_name_cpp(Oid function_oid) {
 	return psprintf("system.main.%s", quote_identifier(func_name));
 }
 
-char *
-pgduckdb_function_name(Oid function_oid) {
-	return InvokeCPPFunc(pgduckdb_function_name_cpp, function_oid);
-}
 /*
  * Given a postgres schema name, this returns a list of two elements: the first
  * is the DuckDB database name and the second is the duckdb schema name. These
