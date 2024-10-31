@@ -89,7 +89,8 @@ __CPPFunctionGuard__(const char *func_name, FuncArgs... args) {
 	Datum func_name##_cpp(PG_FUNCTION_ARGS);                                                                           \
 	Datum func_name(PG_FUNCTION_ARGS) {                                                                                \
 		return InvokeCPPFunc(func_name##_cpp, fcinfo);                                                                 \
-	}
+	} \
+	Datum func_name##_cpp(PG_FUNCTION_ARGS)
 
 
 std::string CreateOrGetDirectoryPath(const char* directory_name);

@@ -131,13 +131,7 @@ extern "C" {
  */
 static std::unordered_set<Oid> temporary_duckdb_tables;
 
-DECLARE_PG_FUNCTION(duckdb_create_table_trigger);
-DECLARE_PG_FUNCTION(duckdb_drop_trigger);
-DECLARE_PG_FUNCTION(duckdb_alter_table_trigger);
-DECLARE_PG_FUNCTION(duckdb_grant_trigger);
-
-Datum
-duckdb_create_table_trigger_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
@@ -322,8 +316,7 @@ duckdb_create_table_trigger_cpp(PG_FUNCTION_ARGS) {
  * dropped table was a DuckDB table or not (because we cannot check its access
  * method anymore).
  */
-Datum
-duckdb_drop_trigger_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
@@ -498,8 +491,7 @@ duckdb_drop_trigger_cpp(PG_FUNCTION_ARGS) {
 	PG_RETURN_NULL();
 }
 
-Datum
-duckdb_alter_table_trigger_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
@@ -605,8 +597,7 @@ duckdb_alter_table_trigger_cpp(PG_FUNCTION_ARGS) {
  * This event trigger is called when a GRANT statement is executed. We use it to
  * block GRANTs on DuckDB tables. We allow grants on schemas though.
  */
-Datum
-duckdb_grant_trigger_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(duckdb_grant_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 

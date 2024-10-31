@@ -178,36 +178,27 @@ DuckdbCacheObject(Datum object, Datum type) {
 
 extern "C" {
 
-DECLARE_PG_FUNCTION(install_extension);
-DECLARE_PG_FUNCTION(pgduckdb_raw_query);
-DECLARE_PG_FUNCTION(cache);
-DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb);
-
-Datum
-install_extension_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(install_extension) {
 	Datum extension_name = PG_GETARG_DATUM(0);
 	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
 	PG_RETURN_BOOL(result);
 }
 
-Datum
-pgduckdb_raw_query_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(pgduckdb_raw_query) {
 	const char *query = text_to_cstring(PG_GETARG_TEXT_PP(0));
 	auto result = pgduckdb::DuckDBQueryOrThrow(query);
 	elog(NOTICE, "result: %s", result->ToString().c_str());
 	PG_RETURN_BOOL(true);
 }
 
-Datum
-cache_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(cache) {
 	Datum object = PG_GETARG_DATUM(0);
 	Datum type = PG_GETARG_DATUM(1);
 	bool result = pgduckdb::DuckdbCacheObject(object, type);
 	PG_RETURN_BOOL(result);
 }
 
-Datum
-pgduckdb_recycle_ddb_cpp(PG_FUNCTION_ARGS) {
+DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 	pgduckdb::DuckDBManager::Get().Reset();
 	PG_RETURN_BOOL(true);
 }
