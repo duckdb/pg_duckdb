@@ -568,10 +568,8 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	}
 	case REGCLASSOID:
 		return duckdb::LogicalTypeId::UINTEGER;
-	default: {
-		std::string name = "UnsupportedPostgresType (Oid=" + std::to_string(type) + ")";
-		return duckdb::LogicalType::USER(name);
-	}
+	default:
+		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(type) + ")");
 	}
 }
 
@@ -779,12 +777,10 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	case TIMESTAMPTZOID:
 		return duckdb::Value::TIMESTAMPTZ(
 		    duckdb::timestamp_t(DatumGetTimestampTz(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
-	case FLOAT4OID: {
+	case FLOAT4OID:
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
-	}
-	case FLOAT8OID: {
+	case FLOAT8OID:
 		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
-	}
 	default:
 		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
 	}
