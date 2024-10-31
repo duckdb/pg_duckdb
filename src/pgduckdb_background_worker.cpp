@@ -538,16 +538,15 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	return true;
 }
 
-void SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade);
+void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade);
 
 void
 SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
-	pgduckdb::DuckDBFunctionGuard<void>(SyncMotherDuckCatalogsWithPg_Unsafe, "SyncMotherDuckCatalogsWithPg",
-	                                    drop_with_cascade);
+	InvokeCPPFunc(SyncMotherDuckCatalogsWithPg_Cpp, drop_with_cascade);
 }
 
 void
-SyncMotherDuckCatalogsWithPg_Unsafe(bool drop_with_cascade) {
+SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
 	if (!pgduckdb::IsMotherDuckEnabled()) {
 		throw std::runtime_error("MotherDuck support is not enabled");
 	}

@@ -23,6 +23,7 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
@@ -165,7 +166,7 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 }
 
 static PlannedStmt *
-DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
@@ -187,9 +188,15 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 	}
 }
 
+static PlannedStmt *
+DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params);
+}
+
 static void
-DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
-                  ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
+DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
+                      ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
+                      QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
 	if (pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
 		uint64 processed;
@@ -210,6 +217,12 @@ DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_t
 	} else {
 		standard_ProcessUtility(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 	}
+}
+
+static void
+DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
+                  ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
+	InvokeCPPFunc(DuckdbUtilityHook_Cpp, pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 }
 
 extern "C" {

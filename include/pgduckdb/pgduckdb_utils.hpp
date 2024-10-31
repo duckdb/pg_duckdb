@@ -58,12 +58,12 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
 	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>("##FUNC##", __VA_ARGS__)
 
-template <typename FuncRetT, typename FuncType, typename... FuncArgs>
-FuncRetT
-DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArgs... args) {
+template <typename Func, Func func, typename... FuncArgs>
+typename std::invoke_result<Func, FuncArgs...>::type
+__CPPFunctionGuard__(const char *func_name, FuncArgs... args) {
 	const char *error_message = nullptr;
 	try {
-		return duckdb_function(args...);
+		return func(args...);
 	} catch (duckdb::Exception &ex) {
 		duckdb::ErrorData edata(ex.what());
 		error_message = pstrdup(edata.Message().c_str());
@@ -77,14 +77,23 @@ DuckDBFunctionGuard(FuncType duckdb_function, const char* function_name, FuncArg
 		}
 	}
 
-	if (error_message) {
-		elog(ERROR, "(PGDuckDB/%s) %s", function_name, error_message);
-	}
-
-	std::abort(); // Cannot reach.
+	elog(ERROR, "(PGDuckDB/%s) %s", func_name, error_message);
 }
 
-std::string CreateOrGetDirectoryPath(std::string directory_name);
+#define InvokeCPPFunc(FUNC, ...) pgduckdb::__CPPFunctionGuard__<decltype(&FUNC), &FUNC>(__FUNCTION__, __VA_ARGS__)
+
+// Wrappers
+
+#define DECLARE_PG_FUNCTION(func_name)                                                                                 \
+	PG_FUNCTION_INFO_V1(func_name);                                                                                    \
+	Datum func_name##_cpp(PG_FUNCTION_ARGS);                                                                           \
+	Datum func_name(PG_FUNCTION_ARGS) {                                                                                \
+		return InvokeCPPFunc(func_name##_cpp, fcinfo);                                                                 \
+	} \
+	Datum func_name##_cpp(PG_FUNCTION_ARGS)
+
+
+std::string CreateOrGetDirectoryPath(const char* directory_name);
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 

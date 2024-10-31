@@ -5,6 +5,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "lib/stringinfo.h"
 #include "storage/fd.h"
+#include "executor/spi.h"
 }
 
 #include <string>
@@ -17,49 +18,47 @@ extern "C" {
 namespace pgduckdb {
 
 static bool
-CheckDirectory(const char *directory) {
+CheckDirectory(const std::string &directory) {
 	struct stat info;
 
-	if (lstat(directory, &info) != 0) {
+	if (lstat(directory.c_str(), &info) != 0) {
 		if (errno == ENOENT) {
-			elog(DEBUG2, "Directory `%s` doesn't exists.", directory);
+			elog(DEBUG2, "Directory `%s` doesn't exists.", directory.c_str());
 			return false;
 		} else if (errno == EACCES) {
-			elog(ERROR, "Can't access `%s` directory.", directory);
+			throw std::runtime_error("Can't access `" + directory + "` directory.");
 		} else {
-			elog(ERROR, "Other error when reading `%s`.", directory);
+			throw std::runtime_error("Other error when reading `" + directory + "`.");
 		}
 	}
 
 	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "`%s` is not directory.", directory);
+		elog(WARNING, "`%s` is not directory.", directory.c_str());
 	}
 
-	if (access(directory, R_OK | W_OK)) {
-		elog(ERROR, "Directory `%s` permission problem.", directory);
+	if (access(directory.c_str(), R_OK | W_OK)) {
+		throw std::runtime_error("Directory `" + std::string(directory) + "` permission problem.");
 	}
 
 	return true;
 }
 
 std::string
-CreateOrGetDirectoryPath(std::string directory_name) {
-	StringInfo duckdb_data_directory = makeStringInfo();
-	appendStringInfo(duckdb_data_directory, "%s/%s", DataDir, directory_name.c_str());
+CreateOrGetDirectoryPath(const char* directory_name) {
+	std::ostringstream oss;
+	oss << DataDir << "/" << directory_name;
+	const auto duckdb_data_directory = oss.str();
 
-	if (!CheckDirectory(duckdb_data_directory->data)) {
-		if (MakePGDirectory(duckdb_data_directory->data) == -1) {
-			int error = errno;
-			elog(ERROR, "Creating %s directory failed with reason `%s`\n", duckdb_data_directory->data,
-			     strerror(error));
-			pfree(duckdb_data_directory->data);
+	if (!CheckDirectory(duckdb_data_directory)) {
+		if (MakePGDirectory(duckdb_data_directory.c_str()) == -1) {
+			throw std::runtime_error("Creating data directory '" + duckdb_data_directory + "' failed: `" +
+			                         strerror(errno) + "`");
 		}
-		elog(DEBUG2, "Created %s directory", duckdb_data_directory->data);
+
+		elog(DEBUG2, "Created %s directory", duckdb_data_directory.c_str());
 	};
 
-	std::string directory(duckdb_data_directory->data);
-	pfree(duckdb_data_directory->data);
-	return directory;
+	return duckdb_data_directory;
 }
 
 duckdb::unique_ptr<duckdb::QueryResult>
