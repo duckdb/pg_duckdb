@@ -63,21 +63,11 @@ CreateOrGetDirectoryPath(const char* directory_name) {
 
 duckdb::unique_ptr<duckdb::QueryResult>
 DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query) {
-	const char *error_message = nullptr;
-	{
-		auto res = context.Query(query, false);
-		if (!res->HasError()) {
-			return res;
-		}
-
-		error_message = pstrdup(res->GetError().c_str());
+	auto res = context.Query(query, false);
+	if (res->HasError()) {
+		res->ThrowError();
 	}
-
-	if (error_message) {
-		elog(ERROR, "(PGDuckDB/DuckDBQuery) %s", error_message);
-	}
-
-	return nullptr; // unreachable
+	return res;
 }
 
 duckdb::unique_ptr<duckdb::QueryResult>
