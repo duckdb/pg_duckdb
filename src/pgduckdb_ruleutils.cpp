@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 
@@ -31,6 +32,7 @@ pgduckdb_function_name(Oid function_oid) {
 	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
 		return nullptr;
 	}
+
 	auto func_name = get_func_name(function_oid);
 	return psprintf("system.main.%s", quote_identifier(func_name));
 }
@@ -112,7 +114,6 @@ pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_t
 	const char *db_name = (const char *)linitial(db_and_schema);
 	const char *schema_name = (const char *)lsecond(db_and_schema);
 	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
-	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
 }
 
 /*
@@ -122,7 +123,6 @@ pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_t
  */
 char *
 pgduckdb_relation_name(Oid relation_oid) {
-
 	HeapTuple tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relation_oid));
 	if (!HeapTupleIsValid(tp))
 		elog(ERROR, "cache lookup failed for relation %u", relation_oid);
