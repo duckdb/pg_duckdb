@@ -19,6 +19,7 @@ extern "C" {
 #include "utils/rel.h"
 #include "utils/rls.h"
 
+#include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_ruleutils.h"
 #include "pgduckdb/vendor/pg_list.hpp"
 }
@@ -69,17 +70,16 @@ appendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *co
 		return;
 	}
 
-	ListCell *lc;
 	appendStringInfo(info, "(");
 	bool first = true;
-	foreach (lc, copy_stmt->attlist) {
+	foreach_node(String, attr, copy_stmt->attlist) {
 		if (first) {
 			first = false;
 		} else {
 			appendStringInfo(info, ", ");
 		}
 
-		appendStringInfoString(info, quote_identifier(strVal(lfirst(lc))));
+		appendStringInfoString(info, quote_identifier(strVal(attr)));
 	}
 
 	appendStringInfo(info, ") ");
@@ -170,12 +170,8 @@ CheckRewritten(List *rewritten) {
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 		                errmsg("DO INSTEAD NOTHING rules are not supported for COPY")));
 	} else if (list_length(rewritten) > 1) {
-		ListCell *lc;
-
 		/* examine queries to determine which error message to issue */
-		foreach (lc, rewritten) {
-			Query *q = lfirst_node(Query, lc);
-
+		foreach_node (Query, q, rewritten) {
 			if (q->querySource == QSRC_QUAL_INSTEAD_RULE)
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				                errmsg("conditional DO INSTEAD rules are not supported for COPY")));
