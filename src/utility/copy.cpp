@@ -1,6 +1,6 @@
-#include "duckdb.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/utility/copy.hpp"
+
+#include <inttypes.h>
 
 extern "C" {
 #include "postgres.h"
@@ -31,27 +31,18 @@ static constexpr char r2_filename_prefix[] = "r2://";
  * Returns the relation of the copy_stmt as a fully qualified DuckDB table reference. This is done
  * including the column names if provided in the original copy_stmt, e.g. my_table(column1, column2).
  */
-static duckdb::string
-CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt) {
-	ParseNamespaceItem *nsitem;
-#if PG_VERSION_NUM >= 160000
-	RTEPermissionInfo *perminfo;
-#else
-	RangeTblEntry *rte;
-#endif
-	Relation rel;
-	Oid relid;
-
+static void
+appendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *copy_stmt) {
 	/* Open and lock the relation, using the appropriate lock type. */
-	rel = table_openrv(copy_stmt->relation, AccessShareLock);
-	relid = RelationGetRelid(rel);
-	nsitem = addRangeTableEntryForRelation(pstate, rel, AccessShareLock, NULL, false, false);
+	Relation rel = table_openrv(copy_stmt->relation, AccessShareLock);
+	Oid relid = RelationGetRelid(rel);
+	ParseNamespaceItem *nsitem = addRangeTableEntryForRelation(pstate, rel, AccessShareLock, NULL, false, false);
 
 #if PG_VERSION_NUM >= 160000
-	perminfo = nsitem->p_perminfo;
+	RTEPermissionInfo *perminfo = nsitem->p_perminfo;
 	perminfo->requiredPerms = ACL_SELECT;
 #else
-	rte = nsitem->p_rte;
+	RangeTblEntry *rte = nsitem->p_rte;
 	rte->requiredPerms = ACL_SELECT;
 #endif
 
@@ -73,22 +64,25 @@ CreateRelationCopyString(ParseState *pstate, CopyStmt *copy_stmt) {
 		                RelationGetRelationName(rel))));
 	}
 
-	std::string relation_copy = pgduckdb_relation_name(relid);
-	if (copy_stmt->attlist) {
-		ListCell *lc;
-		relation_copy += "(";
-		bool first = true;
-		foreach (lc, copy_stmt->attlist) {
-			if (!first) {
-				relation_copy += ", ";
-			}
-			first = false;
-			relation_copy += quote_identifier(strVal(lfirst(lc)));
-		}
-		relation_copy += ") ";
+	appendStringInfoString(info, pgduckdb_relation_name(relid));
+	if (!copy_stmt->attlist) {
+		return;
 	}
 
-	return relation_copy;
+	ListCell *lc;
+	appendStringInfo(info, "(");
+	bool first = true;
+	foreach (lc, copy_stmt->attlist) {
+		if (first) {
+			first = false;
+		} else {
+			appendStringInfo(info, ", ");
+		}
+
+		appendStringInfoString(info, quote_identifier(strVal(lfirst(lc))));
+	}
+
+	appendStringInfo(info, ") ");
 }
 
 /*
@@ -118,48 +112,50 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 	}
 }
 
-static duckdb::string
-CreateCopyOptions(CopyStmt *copy_stmt, bool *options_valid) {
+static void
+appendCreateCopyOptions(StringInfo info, CopyStmt *copy_stmt) {
 	if (list_length(copy_stmt->options) == 0) {
-		return ";";
+		appendStringInfo(info, ";");
+		return;
 	}
 
-	std::ostringstream options_stream;
-	options_stream << "(";
+	appendStringInfo(info, "(");
 
 	bool first = true;
 	foreach_node(DefElem, defel, copy_stmt->options) {
-		if (!first) {
-			options_stream << ", ";
+		if (first) {
+			first = false;
+		} else {
+			appendStringInfo(info, ", ");
 		}
-		options_stream << defel->defname;
+
+		appendStringInfoString(info, defel->defname);
 		if (defel->arg) {
-			options_stream << " ";
+			appendStringInfo(info, " ");
 			switch (nodeTag(defel->arg)) {
 			case T_Integer:
 			case T_Float:
 			case T_Boolean:
-				options_stream << defGetString(defel);
+				appendStringInfoString(info, defGetString(defel));
 				break;
 			case T_String:
 			case T_TypeName:
-				options_stream << quote_literal_cstr(defGetString(defel));
+				appendStringInfoString(info, quote_literal_cstr(defGetString(defel)));
 				break;
 			case T_List:
-				options_stream << NameListToQuotedString((List *)defel->arg);
+				appendStringInfoString(info, NameListToQuotedString((List *)defel->arg));
 				break;
 			case T_A_Star:
-				options_stream << "*";
+				appendStringInfo(info, "*");
 				break;
 			default:
-				throw std::runtime_error("unexpected node type in COPY: " + std::to_string((int)nodeTag(defel->arg)));
+				// elog(ERROR, "Expected single table to be created, but found %" PRIu64, static_cast<uint64_t>(SPI_processed));
+				elog(ERROR, "Unexpected node type in COPY: %" PRIu64, (uint64_t)nodeTag(defel->arg));
 			}
 		}
-
-		first = false;
 	}
-	options_stream << ");";
-	return options_stream.str();
+
+	appendStringInfo(info, ");");
 }
 
 /*
@@ -193,36 +189,36 @@ CheckRewritten(List *rewritten) {
 	}
 }
 
-bool
-DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env, uint64 *processed) {
-	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
+bool starts_with(const char* str, const char* prefix) {
+	while (*prefix) {
+		if (*prefix++ != *str++) {
+			return false;
+		}
+	}
+	return true;
+}
 
+const char*
+MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env) {
+	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
 	if (!copy_stmt->filename) {
-		return false;
+		return nullptr;
 	}
 
 	/* Copy `filename` should start with S3/GS/R2 prefix */
-	if (duckdb::string(copy_stmt->filename).rfind(s3_filename_prefix, 0) &&
-	    duckdb::string(copy_stmt->filename).rfind(gcs_filename_prefix, 0) &&
-	    duckdb::string(copy_stmt->filename).rfind(r2_filename_prefix, 0)) {
-		return false;
+	if (!starts_with(copy_stmt->filename, s3_filename_prefix) &&
+	    !starts_with(copy_stmt->filename, gcs_filename_prefix) &&
+	    !starts_with(copy_stmt->filename, r2_filename_prefix)) {
+		return nullptr;
 	}
 
 	/* We handle only COPY .. TO */
 	if (copy_stmt->is_from) {
-		return false;
+		return nullptr;
 	}
 
-	bool options_valid = true;
-	duckdb::string options_string = CreateCopyOptions(copy_stmt, &options_valid);
-	if (!options_valid) {
-		return false;
-	}
-
-	auto filename_quoted = quote_literal_cstr(copy_stmt->filename);
-
-	duckdb::string rewritten_query_string;
-
+	StringInfo rewritten_query_info = makeStringInfo();
+	appendStringInfo(rewritten_query_info, "COPY ");
 	if (copy_stmt->query) {
 		RawStmt *raw_stmt = makeNode(RawStmt);
 		raw_stmt->stmt = copy_stmt->query;
@@ -235,22 +231,22 @@ DuckdbCopy(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment
 		Query *query = linitial_node(Query, rewritten);
 		CheckQueryPermissions(query, query_string);
 
-		rewritten_query_string = duckdb::StringUtil::Format("COPY (%s) TO %s %s", pgduckdb_get_querydef(query),
-		                                                    filename_quoted, options_string);
+		appendStringInfo(rewritten_query_info, "(");
+		appendStringInfoString(rewritten_query_info, pgduckdb_get_querydef(query));
+		appendStringInfo(rewritten_query_info, ")");
 	} else {
 		ParseState *pstate = make_parsestate(NULL);
 		pstate->p_sourcetext = query_string;
 		pstate->p_queryEnv = query_env;
-		duckdb::string relation_copy_part = CreateRelationCopyString(pstate, copy_stmt);
-		rewritten_query_string =
-		    duckdb::StringUtil::Format("COPY %s TO %s %s", relation_copy_part, filename_quoted, options_string);
+		appendCreateRelationCopyString(rewritten_query_info, pstate, copy_stmt);
 	}
 
-	elog(DEBUG2, "(PGDuckDB/CreateRelationCopyString) Rewritten query: \'%s\'", rewritten_query_string.c_str());
-	pfree(filename_quoted);
+	appendStringInfo(rewritten_query_info, " TO ");
+	appendStringInfoString(rewritten_query_info, quote_literal_cstr(copy_stmt->filename));
+	appendStringInfo(rewritten_query_info, " ");
+	appendCreateCopyOptions(rewritten_query_info, copy_stmt);
 
-	auto res = pgduckdb::DuckDBQueryOrThrow(rewritten_query_string);
-	auto chunk = res->Fetch();
-	*processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
-	return true;
+	elog(DEBUG2, "(PGDuckDB/CreateRelationCopyString) Rewritten query: \'%s\'", rewritten_query_info->data);
+
+	return rewritten_query_info->data;
 }
