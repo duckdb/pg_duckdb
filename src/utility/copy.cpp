@@ -149,7 +149,6 @@ appendCreateCopyOptions(StringInfo info, CopyStmt *copy_stmt) {
 				appendStringInfo(info, "*");
 				break;
 			default:
-				// elog(ERROR, "Expected single table to be created, but found %" PRIu64, static_cast<uint64_t>(SPI_processed));
 				elog(ERROR, "Unexpected node type in COPY: %" PRIu64, (uint64_t)nodeTag(defel->arg));
 			}
 		}
