@@ -110,10 +110,9 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 
 	foreach_node(RangeTblEntry, rte, postgres_plan->rtable) {
 		if (check_enable_rls(rte->relid, InvalidOid, false) == RLS_ENABLED) {
-			ereport(ERROR,
-			        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			         errmsg("(PGDuckDB/CheckQueryPermissions) RLS enabled on \"%s\", cannot use DuckDB based COPY",
-			                get_rel_name(rte->relid))));
+			throw duckdb::NotImplementedException("(PGDuckDB/CheckQueryPermissions) RLS enabled on \"" +
+			                                      std::string(get_rel_name(rte->relid)) +
+			                                      "\", cannot use DuckDB based COPY");
 		}
 	}
 }

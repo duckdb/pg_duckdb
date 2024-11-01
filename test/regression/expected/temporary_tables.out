@@ -132,7 +132,7 @@ VARCHAR	VARCHAR	VARCHAR
 (1 row)
 
 CREATE TABLE t(a int);
-ERROR:  Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled
 -- XXX: A better error message would be nice here, but for now this is acceptable.
 CREATE TEMP TABLE t(a int PRIMARY KEY);
 ERROR:  duckdb does not implement duckdb_index_build_range_scan
@@ -140,12 +140,12 @@ ERROR:  duckdb does not implement duckdb_index_build_range_scan
 CREATE TEMP TABLE t(a int UNIQUE);
 ERROR:  duckdb does not implement duckdb_index_build_range_scan
 CREATE TEMP TABLE t(a int, b int GENERATED ALWAYS AS (a + 1) STORED);
-ERROR:  DuckDB does not support STORED generated columns
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: DuckDB does not support STORED generated columns
 CREATE TEMP TABLE t(a int GENERATED ALWAYS AS IDENTITY);
-ERROR:  Identity columns are not supported in DuckDB
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: Identity columns are not supported in DuckDB
 CREATE TEMP TABLE theap(b int PRIMARY KEY) USING heap;
 CREATE TEMP TABLE t(a int REFERENCES theap(b));
-ERROR:  DuckDB tables do not support foreign keys
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: DuckDB tables do not support foreign keys
 DROP TABLE theap;
 -- allowed but all other collations are not supported
 CREATE TEMP TABLE t(a text COLLATE "default");
@@ -155,11 +155,11 @@ DROP TABLE t;
 CREATE TEMP TABLE t(a text COLLATE "POSIX");
 DROP TABLE t;
 CREATE TEMP TABLE t(a text COLLATE "de-x-icu");
-ERROR:  DuckDB does not support column collations
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: DuckDB does not support column collations
 CREATE TEMP TABLE t(A text COMPRESSION "pglz");
-ERROR:  Column compression is not supported in DuckDB
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: Column compression is not supported in DuckDB
 CREATE TEMP TABLE t(a int) WITH (fillfactor = 50);
-ERROR:  Storage options are not supported in DuckDB
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: Storage options are not supported in DuckDB
 CREATE TEMP TABLE cities_duckdb (
   name       text,
   population real,
@@ -205,7 +205,7 @@ SELECT * FROM t;
 DROP TABLE t;
 -- unsupported
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
-ERROR:  DuckDB does not support ON COMMIT DROP
+ERROR:  (PGDuckDB/duckdb_create_table_trigger) Not implemented Error: DuckDB does not support ON COMMIT DROP
 -- CTAS fully in Duckdb
 CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
 SELECT * FROM webpages ORDER BY column00 LIMIT 2;

@@ -782,7 +782,8 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	case FLOAT8OID:
 		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
 	default:
-		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
+		throw duckdb::NotImplementedException("Could not convert Postgres parameter of type: %d to DuckDB type",
+		                                      postgres_type);
 	}
 }
 
