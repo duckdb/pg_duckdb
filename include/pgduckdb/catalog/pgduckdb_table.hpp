@@ -5,17 +5,9 @@
 
 extern "C" {
 #include "postgres.h"
-#include "utils/snapshot.h"
-#include "postgres.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_class.h"
-#include "optimizer/planmain.h"
-#include "optimizer/planner.h"
-#include "utils/builtins.h"
-#include "utils/regproc.h"
-#include "utils/snapmgr.h"
-#include "utils/syscache.h"
-#include "access/htup_details.h"
+#include "nodes/nodes.h" // Cardinality
+#include "utils/relcache.h" // Relation
+#include "utils/snapmgr.h" // Snapshot
 }
 
 namespace duckdb {

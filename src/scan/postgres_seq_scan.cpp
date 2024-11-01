@@ -4,6 +4,10 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include <inttypes.h>
 
+extern "C" {
+#include "utils/rel.h" // RelationGetDescr
+}
+
 namespace pgduckdb {
 
 //

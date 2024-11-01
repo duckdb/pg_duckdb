@@ -2,11 +2,6 @@
 
 #include "duckdb.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "nodes/pg_list.h"
-#include "optimizer/optimizer.h"
-}
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 namespace pgduckdb {
@@ -48,29 +43,29 @@ private:
 	void LoadFunctions(duckdb::ClientContext &);
 
 	inline bool
-	IsSecretSeqLessThan(int64 seq) const {
+	IsSecretSeqLessThan(int64_t seq) const {
 		return secret_table_current_seq < seq;
 	}
 
 	inline bool
-	IsExtensionsSeqLessThan(int64 seq) const {
+	IsExtensionsSeqLessThan(int64_t seq) const {
 		return extensions_table_current_seq < seq;
 	}
 
 	inline void
-	UpdateSecretSeq(int64 seq) {
+	UpdateSecretSeq(int64_t seq) {
 		secret_table_current_seq = seq;
 	}
 
 	inline void
-	UpdateExtensionsSeq(int64 seq) {
+	UpdateExtensionsSeq(int64_t seq) {
 		extensions_table_current_seq = seq;
 	}
 
 	bool disabled_filesystems_is_set;
 	int secret_table_num_rows;
-	int64 secret_table_current_seq;
-	int64 extensions_table_current_seq;
+	int64_t secret_table_current_seq;
+	int64_t extensions_table_current_seq;
 	/*
 	 * FIXME: Use a unique_ptr instead of a raw pointer. For now this is not
 	 * possible though, as the MotherDuck extension causes an ABORT when the

@@ -1,19 +1,13 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "miscadmin.h"
-#include "lib/stringinfo.h"
-#include "storage/fd.h"
-#include "executor/spi.h"
-}
-
 #include <string>
 
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include <errno.h>
+
+// FIXME - this file should not depend on PG, rather DataDir should be provided
+extern PGDLLIMPORT char *DataDir;
 
 namespace pgduckdb {
 
@@ -50,7 +44,7 @@ CreateOrGetDirectoryPath(const char* directory_name) {
 	const auto duckdb_data_directory = oss.str();
 
 	if (!CheckDirectory(duckdb_data_directory)) {
-		if (MakePGDirectory(duckdb_data_directory.c_str()) == -1) {
+		if (mkdir(duckdb_data_directory.c_str(), S_IRWXU) == -1) {
 			throw std::runtime_error("Creating data directory '" + duckdb_data_directory + "' failed: `" +
 			                         strerror(errno) + "`");
 		}

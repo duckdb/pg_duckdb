@@ -1,27 +1,27 @@
 #include "duckdb.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/copy.hpp"
 
 extern "C" {
 #include "postgres.h"
 
 #include "access/table.h"
-#include "commands/copy.h"
+#include "catalog/namespace.h"
 #include "commands/defrem.h"
 #include "executor/executor.h"
-#include "catalog/namespace.h"
+#include "nodes/parsenodes.h"
+#include "parser/parse_node.h"
 #include "parser/parse_relation.h"
+#include "storage/lockdefs.h"
+#include "tcop/tcopprot.h"
 #include "utils/builtins.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
-#include "utils/lsyscache.h"
-#include "tcop/tcopprot.h"
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
-}
-
-#include "pgduckdb/utility/copy.hpp"
-#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
+}
 
 static constexpr char s3_filename_prefix[] = "s3://";
 static constexpr char gcs_filename_prefix[] = "gs://";

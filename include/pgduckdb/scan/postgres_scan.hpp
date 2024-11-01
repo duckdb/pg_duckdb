@@ -18,10 +18,11 @@ class PostgresScanGlobalState {
 public:
 	PostgresScanGlobalState() : m_snapshot(nullptr), m_count_tuples_only(false), m_total_row_count(0) {
 	}
-	~PostgresScanGlobalState() {
-	}
+
 	void InitGlobalState(duckdb::TableFunctionInitInput &input);
+
 	void InitRelationMissingAttrs(TupleDesc tuple_desc);
+
 	Snapshot m_snapshot;
 	TupleDesc m_tuple_desc;
 	std::mutex m_lock; // Lock for one replacement scan
