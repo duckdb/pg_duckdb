@@ -132,30 +132,28 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 	int secret_id = 0;
 	for (auto &secret : duckdb_secrets) {
-		StringInfo secret_key = makeStringInfo();
+		std::ostringstream query;
 		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
-		appendStringInfo(secret_key, "CREATE SECRET pgduckb_secret_%d ", secret_id);
-		appendStringInfo(secret_key, "(TYPE %s, KEY_ID '%s', SECRET '%s'", secret.type.c_str(), secret.key_id.c_str(),
-		                 secret.secret.c_str());
+		query << "CREATE SECRET pgduckb_secret_" << secret_id << " ";
+		query << "(TYPE " << secret.type << ", KEY_ID '" << secret.key_id << "', SECRET '" << secret.secret << "'";
 		if (secret.region.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", REGION '%s'", secret.region.c_str());
+			query << ", REGION '" << secret.region << "'";
 		}
 		if (secret.session_token.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", SESSION_TOKEN '%s'", secret.session_token.c_str());
+			query << ", SESSION_TOKEN '" << secret.session_token << "'";
 		}
 		if (secret.endpoint.length() && !is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", ENDPOINT '%s'", secret.endpoint.c_str());
+			query << ", ENDPOINT '" << secret.endpoint << "'";
 		}
 		if (is_r2_cloud_secret) {
-			appendStringInfo(secret_key, ", ACCOUNT_ID '%s'", secret.endpoint.c_str());
+			query << ", ACCOUNT_ID '" << secret.endpoint << "'";
 		}
 		if (!secret.use_ssl) {
-			appendStringInfo(secret_key, ", USE_SSL 'FALSE'");
+			query << ", USE_SSL 'FALSE'";
 		}
-		appendStringInfo(secret_key, ");");
-		DuckDBQueryOrThrow(context, secret_key->data);
+		query << ");";
 
-		pfree(secret_key->data);
+		DuckDBQueryOrThrow(context, query.str());
 		secret_id++;
 		secret_table_num_rows = secret_id;
 	}
@@ -163,7 +161,7 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 
 void
 DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
-	for (auto secret_id = 0; secret_id < secret_table_num_rows; secret_id++) {
+	for (auto secret_id = 0; secret_id < secret_table_num_rows; ++secret_id) {
 		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
 		pgduckdb::DuckDBQueryOrThrow(context, drop_secret_cmd);
 	}
