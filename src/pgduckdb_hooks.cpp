@@ -199,8 +199,11 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
                       QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
 	if (pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
-		uint64 processed;
-		if (DuckdbCopy(pstmt, query_string, query_env, &processed)) {
+		auto copy_query = PostgresFunctionGuard(MakeDuckdbCopyQuery, pstmt, query_string, query_env);
+		if (copy_query) {
+			auto res = pgduckdb::DuckDBQueryOrThrow(copy_query);
+			auto chunk = res->Fetch();
+			auto processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
 			if (qc) {
 				SetQueryCompletion(qc, CMDTAG_COPY, processed);
 			}
