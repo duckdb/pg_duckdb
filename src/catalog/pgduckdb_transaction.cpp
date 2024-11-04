@@ -12,18 +12,18 @@ extern "C" {
 #include "utils/rel.h"         // Form_pg_class, RELKIND_VIEW
 }
 
-namespace duckdb {
+namespace pgduckdb {
 
-PostgresTransaction::PostgresTransaction(TransactionManager &manager, ClientContext &context, PostgresCatalog &catalog,
-                                         Snapshot snapshot)
-    : Transaction(manager, context), catalog(catalog), snapshot(snapshot) {
+PostgresTransaction::PostgresTransaction(duckdb::TransactionManager &manager, duckdb::ClientContext &context,
+                                         PostgresCatalog &catalog, Snapshot snapshot)
+    : duckdb::Transaction(manager, context), catalog(catalog), snapshot(snapshot) {
 }
 
 PostgresTransaction::~PostgresTransaction() {
 }
 
-optional_ptr<CatalogEntry>
-SchemaItems::GetTable(const string &entry_name) {
+duckdb::optional_ptr<duckdb::CatalogEntry>
+SchemaItems::GetTable(const duckdb::string &entry_name) {
 	auto it = tables.find(entry_name);
 	if (it != tables.end()) {
 		return it->second.get();
@@ -63,38 +63,40 @@ SchemaItems::GetTable(const string &entry_name) {
 
 	::Relation rel = PostgresTable::OpenRelation(rel_oid);
 
-	CreateTableInfo info;
+	duckdb::CreateTableInfo info;
 	info.table = entry_name;
 	PostgresTable::SetTableInfo(info, rel);
 
 	auto cardinality = PostgresTable::GetTableCardinality(rel);
-	auto table = make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
+	auto table = duckdb::make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
 	tables[entry_name] = std::move(table);
 	return tables[entry_name].get();
 }
 
-optional_ptr<CatalogEntry> SchemaItems::GetSchema() const {
+duckdb::optional_ptr<duckdb::CatalogEntry>
+SchemaItems::GetSchema() const {
 	return schema.get();
 }
 
-optional_ptr<CatalogEntry>
-PostgresTransaction::GetSchema(const string &name) {
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresTransaction::GetSchema(const duckdb::string &name) {
 	auto it = schemas.find(name);
 	if (it != schemas.end()) {
 		return it->second.GetSchema();
 	}
 
-	CreateSchemaInfo create_schema;
+	duckdb::CreateSchemaInfo create_schema;
 	create_schema.schema = name;
-	auto pg_schema = make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
+	auto pg_schema = duckdb::make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
 	schemas.emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
 	return schemas.at(name).GetSchema();
 }
 
-optional_ptr<CatalogEntry>
-PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, const string &name) {
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresTransaction::GetCatalogEntry(duckdb::CatalogType type, const duckdb::string &schema,
+                                     const duckdb::string &name) {
 	switch (type) {
-	case CatalogType::TABLE_ENTRY: {
+	case duckdb::CatalogType::TABLE_ENTRY: {
 		auto it = schemas.find(schema);
 		if (it == schemas.end()) {
 			return nullptr;
@@ -103,7 +105,7 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 		auto &schema_entry = it->second;
 		return schema_entry.GetTable(name);
 	}
-	case CatalogType::SCHEMA_ENTRY: {
+	case duckdb::CatalogType::SCHEMA_ENTRY: {
 		return GetSchema(schema);
 	}
 	default:
@@ -111,6 +113,4 @@ PostgresTransaction::GetCatalogEntry(CatalogType type, const string &schema, con
 	}
 }
 
-} // namespace duckdb
-
-// namespace duckdb
+} // namespace pgduckdb

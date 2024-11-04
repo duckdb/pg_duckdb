@@ -2,11 +2,12 @@
 #include "pgduckdb/catalog/pgduckdb_catalog.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction_manager.hpp"
 
-namespace duckdb {
+namespace pgduckdb {
 
-static unique_ptr<TransactionManager>
-CreateTransactionManager(StorageExtensionInfo *storage_info, AttachedDatabase &db, Catalog &catalog) {
-	return make_uniq<PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>());
+static duckdb::unique_ptr<duckdb::TransactionManager>
+CreateTransactionManager(duckdb::StorageExtensionInfo *storage_info, duckdb::AttachedDatabase &db,
+                         duckdb::Catalog &catalog) {
+	return duckdb::make_uniq<PostgresTransactionManager>(db, catalog.Cast<PostgresCatalog>());
 }
 
 PostgresStorageExtension::PostgresStorageExtension() {
@@ -14,4 +15,4 @@ PostgresStorageExtension::PostgresStorageExtension() {
 	create_transaction_manager = CreateTransactionManager;
 }
 
-} // namespace duckdb
+} // namespace pgduckdb

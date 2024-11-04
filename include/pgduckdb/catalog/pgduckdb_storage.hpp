@@ -2,11 +2,11 @@
 
 #include "duckdb/storage/storage_extension.hpp"
 
-namespace duckdb {
+namespace pgduckdb {
 
-class PostgresStorageExtension : public StorageExtension {
+class PostgresStorageExtension : public duckdb::StorageExtension {
 public:
 	PostgresStorageExtension();
 };
 
-} // namespace duckdb
+} // namespace pgduckdb

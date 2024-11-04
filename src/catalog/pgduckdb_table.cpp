@@ -13,32 +13,32 @@ extern "C" {
 #include "catalog/namespace.h" // makeRangeVarFromNameList
 }
 
-namespace duckdb {
+namespace pgduckdb {
 
-PostgresTable::PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, ::Relation rel,
-                             Cardinality cardinality, Snapshot snapshot)
-    : TableCatalogEntry(catalog, schema, info), rel(rel), cardinality(cardinality), snapshot(snapshot) {
+PostgresTable::PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema,
+                             duckdb::CreateTableInfo &info, ::Relation rel, Cardinality cardinality, Snapshot snapshot)
+    : duckdb::TableCatalogEntry(catalog, schema, info), rel(rel), cardinality(cardinality), snapshot(snapshot) {
 }
 
 PostgresTable::~PostgresTable() {
-	std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 	RelationClose(rel);
 }
 
 ::Relation
 PostgresTable::OpenRelation(Oid relid) {
-	std::lock_guard<std::mutex> lock(pgduckdb::DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 	return PostgresFunctionGuard(::RelationIdGetRelation, relid);
 }
 
 void
-PostgresTable::SetTableInfo(CreateTableInfo &info, ::Relation rel) {
+PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, ::Relation rel) {
 	auto tupleDesc = RelationGetDescr(rel);
 
 	for (int i = 0; i < tupleDesc->natts; ++i) {
 		Form_pg_attribute attr = &tupleDesc->attrs[i];
 		auto col_name = duckdb::string(NameStr(attr->attname));
-		auto duck_type = pgduckdb::ConvertPostgresToDuckColumnType(attr);
+		auto duck_type = ConvertPostgresToDuckColumnType(attr);
 		info.columns.AddColumn(duckdb::ColumnDefinition(col_name, duck_type));
 		/* Log column name and type */
 		elog(DEBUG2, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
@@ -59,25 +59,27 @@ PostgresTable::GetTableCardinality(::Relation rel) {
 // PostgresHeapTable
 //===--------------------------------------------------------------------===//
 
-PostgresHeapTable::PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info,
-                                     ::Relation rel, Cardinality cardinality, Snapshot snapshot)
+PostgresHeapTable::PostgresHeapTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema,
+                                     duckdb::CreateTableInfo &info, ::Relation rel, Cardinality cardinality,
+                                     Snapshot snapshot)
     : PostgresTable(catalog, schema, info, rel, cardinality, snapshot) {
 }
 
-unique_ptr<BaseStatistics>
-PostgresHeapTable::GetStatistics(ClientContext &context, column_t column_id) {
+duckdb::unique_ptr<duckdb::BaseStatistics>
+PostgresHeapTable::GetStatistics(duckdb::ClientContext &context, duckdb::column_t column_id) {
 	throw duckdb::NotImplementedException("GetStatistics not supported yet");
 }
 
-TableFunction
-PostgresHeapTable::GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) {
-	bind_data = duckdb::make_uniq<pgduckdb::PostgresSeqScanFunctionData>(rel, cardinality, snapshot);
-	return pgduckdb::PostgresSeqScanFunction();
+duckdb::TableFunction
+PostgresHeapTable::GetScanFunction(duckdb::ClientContext &context,
+                                   duckdb::unique_ptr<duckdb::FunctionData> &bind_data) {
+	bind_data = duckdb::make_uniq<PostgresSeqScanFunctionData>(rel, cardinality, snapshot);
+	return PostgresSeqScanFunction();
 }
 
-TableStorageInfo
-PostgresHeapTable::GetStorageInfo(ClientContext &context) {
+duckdb::TableStorageInfo
+PostgresHeapTable::GetStorageInfo(duckdb::ClientContext &context) {
 	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
 }
 
-} // namespace duckdb
+} // namespace pgduckdb
