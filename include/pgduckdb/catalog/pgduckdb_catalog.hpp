@@ -4,12 +4,6 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "pgduckdb/catalog/pgduckdb_schema.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "miscadmin.h"
-#include "utils/snapshot.h"
-}
-
 namespace duckdb {
 
 class PostgresCatalog : public Catalog {
