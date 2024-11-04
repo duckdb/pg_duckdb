@@ -3,86 +3,89 @@
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
-namespace duckdb {
+namespace pgduckdb {
 
-PostgresSchema::PostgresSchema(Catalog &catalog, CreateSchemaInfo &info, Snapshot snapshot)
+PostgresSchema::PostgresSchema(duckdb::Catalog &catalog, duckdb::CreateSchemaInfo &info, Snapshot snapshot)
     : SchemaCatalogEntry(catalog, info), snapshot(snapshot), catalog(catalog) {
 }
 
 void
-PostgresSchema::Scan(ClientContext &context, CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
+PostgresSchema::Scan(duckdb::ClientContext &context, duckdb::CatalogType type,
+                     const std::function<void(CatalogEntry &)> &callback) {
 	return;
 }
 
 void
-PostgresSchema::Scan(CatalogType type, const std::function<void(CatalogEntry &)> &callback) {
-	throw NotImplementedException("Scan(no context) not supported yet");
+PostgresSchema::Scan(duckdb::CatalogType type, const std::function<void(duckdb::CatalogEntry &)> &callback) {
+	throw duckdb::NotImplementedException("Scan(no context) not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateIndex(CatalogTransaction transaction, CreateIndexInfo &info, TableCatalogEntry &table) {
-	throw NotImplementedException("CreateIndex not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateIndex(duckdb::CatalogTransaction transaction, duckdb::CreateIndexInfo &info,
+                            duckdb::TableCatalogEntry &table) {
+	throw duckdb::NotImplementedException("CreateIndex not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateFunction(CatalogTransaction transaction, CreateFunctionInfo &info) {
-	throw NotImplementedException("CreateFunction not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateFunction(duckdb::CatalogTransaction transaction, duckdb::CreateFunctionInfo &info) {
+	throw duckdb::NotImplementedException("CreateFunction not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateTable(CatalogTransaction transaction, BoundCreateTableInfo &info) {
-	throw NotImplementedException("CreateTable not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateTable(duckdb::CatalogTransaction transaction, duckdb::BoundCreateTableInfo &info) {
+	throw duckdb::NotImplementedException("CreateTable not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateView(CatalogTransaction transaction, CreateViewInfo &info) {
-	throw NotImplementedException("CreateView not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateView(duckdb::CatalogTransaction transaction, duckdb::CreateViewInfo &info) {
+	throw duckdb::NotImplementedException("CreateView not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateSequence(CatalogTransaction transaction, CreateSequenceInfo &info) {
-	throw NotImplementedException("CreateSequence not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateSequence(duckdb::CatalogTransaction transaction, duckdb::CreateSequenceInfo &info) {
+	throw duckdb::NotImplementedException("CreateSequence not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateTableFunction(CatalogTransaction transaction, CreateTableFunctionInfo &info) {
-	throw NotImplementedException("CreateTableFunction not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateTableFunction(duckdb::CatalogTransaction transaction, duckdb::CreateTableFunctionInfo &info) {
+	throw duckdb::NotImplementedException("CreateTableFunction not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateCopyFunction(CatalogTransaction transaction, CreateCopyFunctionInfo &info) {
-	throw NotImplementedException("CreateCopyFunction not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateCopyFunction(duckdb::CatalogTransaction transaction, duckdb::CreateCopyFunctionInfo &info) {
+	throw duckdb::NotImplementedException("CreateCopyFunction not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreatePragmaFunction(CatalogTransaction transaction, CreatePragmaFunctionInfo &info) {
-	throw NotImplementedException("CreatePragmaFunction not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreatePragmaFunction(duckdb::CatalogTransaction transaction, duckdb::CreatePragmaFunctionInfo &info) {
+	throw duckdb::NotImplementedException("CreatePragmaFunction not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateCollation(CatalogTransaction transaction, CreateCollationInfo &info) {
-	throw NotImplementedException("CreateCollation not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateCollation(duckdb::CatalogTransaction transaction, duckdb::CreateCollationInfo &info) {
+	throw duckdb::NotImplementedException("CreateCollation not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::CreateType(CatalogTransaction transaction, CreateTypeInfo &info) {
-	throw NotImplementedException("CreateType not supported yet");
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::CreateType(duckdb::CatalogTransaction transaction, duckdb::CreateTypeInfo &info) {
+	throw duckdb::NotImplementedException("CreateType not supported yet");
 }
 
-optional_ptr<CatalogEntry>
-PostgresSchema::GetEntry(CatalogTransaction transaction, CatalogType type, const string &entry_name) {
+duckdb::optional_ptr<duckdb::CatalogEntry>
+PostgresSchema::GetEntry(duckdb::CatalogTransaction transaction, duckdb::CatalogType type,
+                         const duckdb::string &entry_name) {
 	auto &pg_transaction = transaction.transaction->Cast<PostgresTransaction>();
 	return pg_transaction.GetCatalogEntry(type, name, entry_name);
 }
 
 void
-PostgresSchema::DropEntry(ClientContext &context, DropInfo &info) {
-	throw NotImplementedException("DropEntry not supported yet");
+PostgresSchema::DropEntry(duckdb::ClientContext &context, duckdb::DropInfo &info) {
+	throw duckdb::NotImplementedException("DropEntry not supported yet");
 }
 
 void
-PostgresSchema::Alter(CatalogTransaction transaction, AlterInfo &info) {
-	throw NotImplementedException("Alter not supported yet");
+PostgresSchema::Alter(duckdb::CatalogTransaction transaction, duckdb::AlterInfo &info) {
+	throw duckdb::NotImplementedException("Alter not supported yet");
 }
 
-} // namespace duckdb
+} // namespace pgduckdb

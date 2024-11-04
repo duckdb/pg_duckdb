@@ -5,20 +5,20 @@
 
 #include "pgduckdb/pg_declarations.hpp"
 
-namespace duckdb {
+namespace pgduckdb {
 
-class PostgresTable : public TableCatalogEntry {
+class PostgresTable : public duckdb::TableCatalogEntry {
 public:
 	virtual ~PostgresTable();
 
 public:
 	static ::Relation OpenRelation(Oid relid);
-	static void SetTableInfo(CreateTableInfo &info, ::Relation rel);
+	static void SetTableInfo(duckdb::CreateTableInfo &info, ::Relation rel);
 	static Cardinality GetTableCardinality(::Relation rel);
 
 protected:
-	PostgresTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, ::Relation rel,
-	              Cardinality cardinality, Snapshot snapshot);
+	PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema, duckdb::CreateTableInfo &info,
+	              ::Relation rel, Cardinality cardinality, Snapshot snapshot);
 
 protected:
 	::Relation rel;
@@ -28,14 +28,16 @@ protected:
 
 class PostgresHeapTable : public PostgresTable {
 public:
-	PostgresHeapTable(Catalog &catalog, SchemaCatalogEntry &schema, CreateTableInfo &info, ::Relation rel,
-	                  Cardinality cardinality, Snapshot snapshot);
+	PostgresHeapTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema, duckdb::CreateTableInfo &info,
+	                  ::Relation rel, Cardinality cardinality, Snapshot snapshot);
 
 public:
 	// -- Table API --
-	unique_ptr<BaseStatistics> GetStatistics(ClientContext &context, column_t column_id) override;
-	TableFunction GetScanFunction(ClientContext &context, unique_ptr<FunctionData> &bind_data) override;
-	TableStorageInfo GetStorageInfo(ClientContext &context) override;
+	duckdb::unique_ptr<duckdb::BaseStatistics> GetStatistics(duckdb::ClientContext &context,
+	                                                         duckdb::column_t column_id) override;
+	duckdb::TableFunction GetScanFunction(duckdb::ClientContext &context,
+	                                      duckdb::unique_ptr<duckdb::FunctionData> &bind_data) override;
+	duckdb::TableStorageInfo GetStorageInfo(duckdb::ClientContext &context) override;
 };
 
-} // namespace duckdb
+} // namespace pgduckdb

@@ -1,43 +1,44 @@
 #include "pgduckdb/catalog/pgduckdb_transaction_manager.hpp"
-#include "duckdb/main/attached_database.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
+
+#include "duckdb/main/attached_database.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "utils/snapmgr.h" // GetActiveSnapshot
 }
 
-namespace duckdb {
+namespace pgduckdb {
 
-PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog)
+PostgresTransactionManager::PostgresTransactionManager(duckdb::AttachedDatabase &db_p, PostgresCatalog &catalog)
     : TransactionManager(db_p), catalog(catalog) {
 }
 
-Transaction &
-PostgresTransactionManager::StartTransaction(ClientContext &context) {
-	auto transaction = make_uniq<PostgresTransaction>(*this, context, catalog, GetActiveSnapshot());
+duckdb::Transaction &
+PostgresTransactionManager::StartTransaction(duckdb::ClientContext &context) {
+	auto transaction = duckdb::make_uniq<PostgresTransaction>(*this, context, catalog, GetActiveSnapshot());
 	auto &result = *transaction;
-	lock_guard<mutex> l(transaction_lock);
+	duckdb::lock_guard<duckdb::mutex> l(transaction_lock);
 	transactions[result] = std::move(transaction);
 	return result;
 }
 
-ErrorData
-PostgresTransactionManager::CommitTransaction(ClientContext &context, Transaction &transaction) {
-	lock_guard<mutex> l(transaction_lock);
+duckdb::ErrorData
+PostgresTransactionManager::CommitTransaction(duckdb::ClientContext &context, duckdb::Transaction &transaction) {
+	duckdb::lock_guard<duckdb::mutex> l(transaction_lock);
 	transactions.erase(transaction);
-	return ErrorData();
+	return duckdb::ErrorData();
 }
 
 void
-PostgresTransactionManager::RollbackTransaction(Transaction &transaction) {
-	lock_guard<mutex> l(transaction_lock);
+PostgresTransactionManager::RollbackTransaction(duckdb::Transaction &transaction) {
+	duckdb::lock_guard<duckdb::mutex> l(transaction_lock);
 	transactions.erase(transaction);
 }
 
 void
-PostgresTransactionManager::Checkpoint(ClientContext &context, bool force) {
+PostgresTransactionManager::Checkpoint(duckdb::ClientContext &context, bool force) {
 	return;
 }
 
-} // namespace duckdb
+} // namespace pgduckdb

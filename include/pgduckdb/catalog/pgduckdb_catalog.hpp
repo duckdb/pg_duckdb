@@ -4,46 +4,54 @@
 #include "duckdb/catalog/catalog.hpp"
 #include "pgduckdb/catalog/pgduckdb_schema.hpp"
 
-namespace duckdb {
+namespace pgduckdb {
 
-class PostgresCatalog : public Catalog {
+class PostgresCatalog : public duckdb::Catalog {
 public:
-	PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode);
-
-public:
-	static unique_ptr<Catalog> Attach(StorageExtensionInfo *storage_info, ClientContext &context, AttachedDatabase &db,
-	                                  const string &name, AttachInfo &info, AccessMode access_mode);
+	PostgresCatalog(duckdb::AttachedDatabase &db, const duckdb::string &connection_string,
+	                duckdb::AccessMode access_mode);
 
 public:
-	string path;
-	AccessMode access_mode;
+	static duckdb::unique_ptr<duckdb::Catalog> Attach(duckdb::StorageExtensionInfo *storage_info,
+	                                                  duckdb::ClientContext &context, duckdb::AttachedDatabase &db,
+	                                                  const duckdb::string &name, duckdb::AttachInfo &info,
+	                                                  duckdb::AccessMode access_mode);
+
+public:
+	duckdb::string path;
+	duckdb::AccessMode access_mode;
 
 public:
 	// -- Catalog API --
 	void Initialize(bool load_builtin) override;
-	string GetCatalogType() override;
-	optional_ptr<CatalogEntry> CreateSchema(CatalogTransaction transaction, CreateSchemaInfo &info) override;
-	optional_ptr<SchemaCatalogEntry> GetSchema(CatalogTransaction transaction, const string &schema_name,
-	                                           OnEntryNotFound if_not_found,
-	                                           QueryErrorContext error_context = QueryErrorContext()) override;
-	void ScanSchemas(ClientContext &context, std::function<void(SchemaCatalogEntry &)> callback) override;
-	unique_ptr<PhysicalOperator> PlanCreateTableAs(ClientContext &context, LogicalCreateTable &op,
-	                                               unique_ptr<PhysicalOperator> plan) override;
-	unique_ptr<PhysicalOperator> PlanInsert(ClientContext &context, LogicalInsert &op,
-	                                        unique_ptr<PhysicalOperator> plan) override;
-	unique_ptr<PhysicalOperator> PlanDelete(ClientContext &context, LogicalDelete &op,
-	                                        unique_ptr<PhysicalOperator> plan) override;
-	unique_ptr<PhysicalOperator> PlanUpdate(ClientContext &context, LogicalUpdate &op,
-	                                        unique_ptr<PhysicalOperator> plan) override;
-	unique_ptr<LogicalOperator> BindCreateIndex(Binder &binder, CreateStatement &stmt, TableCatalogEntry &table,
-	                                            unique_ptr<LogicalOperator> plan) override;
-	DatabaseSize GetDatabaseSize(ClientContext &context) override;
+	duckdb::string GetCatalogType() override;
+	duckdb::optional_ptr<duckdb::CatalogEntry> CreateSchema(duckdb::CatalogTransaction transaction,
+	                                                        duckdb::CreateSchemaInfo &info) override;
+	duckdb::optional_ptr<duckdb::SchemaCatalogEntry>
+	GetSchema(duckdb::CatalogTransaction transaction, const duckdb::string &schema_name,
+	          duckdb::OnEntryNotFound if_not_found,
+	          duckdb::QueryErrorContext error_context = duckdb::QueryErrorContext()) override;
+	void ScanSchemas(duckdb::ClientContext &context,
+	                 std::function<void(duckdb::SchemaCatalogEntry &)> callback) override;
+	duckdb::unique_ptr<duckdb::PhysicalOperator>
+	PlanCreateTableAs(duckdb::ClientContext &context, duckdb::LogicalCreateTable &op,
+	                  duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
+	duckdb::unique_ptr<duckdb::PhysicalOperator> PlanInsert(duckdb::ClientContext &context, duckdb::LogicalInsert &op,
+	                                                        duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
+	duckdb::unique_ptr<duckdb::PhysicalOperator> PlanDelete(duckdb::ClientContext &context, duckdb::LogicalDelete &op,
+	                                                        duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
+	duckdb::unique_ptr<duckdb::PhysicalOperator> PlanUpdate(duckdb::ClientContext &context, duckdb::LogicalUpdate &op,
+	                                                        duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
+	duckdb::unique_ptr<duckdb::LogicalOperator>
+	BindCreateIndex(duckdb::Binder &binder, duckdb::CreateStatement &stmt, duckdb::TableCatalogEntry &table,
+	                duckdb::unique_ptr<duckdb::LogicalOperator> plan) override;
+	duckdb::DatabaseSize GetDatabaseSize(duckdb::ClientContext &context) override;
 	bool InMemory() override;
-	string GetDBPath() override;
-	void DropSchema(ClientContext &context, DropInfo &info) override;
+	duckdb::string GetDBPath() override;
+	void DropSchema(duckdb::ClientContext &context, duckdb::DropInfo &info) override;
 
 private:
-	case_insensitive_map_t<unique_ptr<PostgresSchema>> schemas;
+	duckdb::case_insensitive_map_t<duckdb::unique_ptr<PostgresSchema>> schemas;
 };
 
-} // namespace duckdb
+} // namespace pgduckdb
