@@ -8,22 +8,9 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
-#include "postgres.h"
-#include "access/tableam.h"
-#include "access/heapam.h"
-#include "storage/bufmgr.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_class.h"
-#include "optimizer/planmain.h"
-#include "optimizer/planner.h"
-#include "optimizer/plancat.h"
-#include "utils/builtins.h"
-#include "utils/regproc.h"
-#include "utils/snapmgr.h"
-#include "utils/syscache.h"
-#include "utils/relcache.h"
-#include "access/htup_details.h"
-#include "parser/parsetree.h"
+#include "utils/rel.h"         // RelationGetDescr
+#include "optimizer/plancat.h" // estimate_rel_size
+#include "catalog/namespace.h" // makeRangeVarFromNameList
 }
 
 namespace duckdb {

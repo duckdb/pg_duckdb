@@ -1,7 +1,7 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "pgduckdb/catalog/pgduckdb_table.hpp"
+#include "pgduckdb/pg_declarations.hpp"
 
 namespace duckdb {
 

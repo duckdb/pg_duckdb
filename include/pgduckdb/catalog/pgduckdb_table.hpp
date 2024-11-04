@@ -3,12 +3,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "nodes/nodes.h" // Cardinality
-#include "utils/relcache.h" // Relation
-#include "utils/snapmgr.h" // Snapshot
-}
+#include "pgduckdb/pg_declarations.hpp"
 
 namespace duckdb {
 
