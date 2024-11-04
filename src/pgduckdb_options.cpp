@@ -131,8 +131,9 @@ DuckdbInstallExtension(Datum name_datum) {
 		ON CONFLICT (name) DO UPDATE SET enabled = true
 		)",
 	                                 lengthof(arg_types), arg_types, values, NULL, false, 0);
-	if (ret != SPI_OK_INSERT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	if (ret != SPI_OK_INSERT) {
+		throw std::runtime_error("SPI_exec failed: error code " + std::string(SPI_result_code_string(ret)));
+	}
 	SPI_finish();
 
 	return true;

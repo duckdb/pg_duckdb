@@ -75,7 +75,7 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
 		auto stmt = castNode(CreateSchemaStmt, parsetree);
 		if (strncmp("ddb$", stmt->schemaname, 4) == 0) {
-			elog(ERROR, "Creating ddb$ schemas is currently not supported");
+			throw duckdb::NotImplementedException("Creating ddb$ schemas is currently not supported");
 		}
 		return;
 	} else if (IsA(parsetree, RenameStmt)) {
@@ -85,10 +85,10 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 			return;
 		}
 		if (strncmp("ddb$", stmt->subname, 4) == 0) {
-			elog(ERROR, "Changing the name of a ddb$ schema is currently not supported");
+			throw duckdb::NotImplementedException("Changing the name of a ddb$ schema is currently not supported");
 		}
 		if (strncmp("ddb$", stmt->newname, 4) == 0) {
-			elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
+			throw duckdb::NotImplementedException("Changing a schema to a ddb$ schema is currently not supported");
 		}
 		return;
 	}
@@ -110,9 +110,9 @@ CheckOnCommitSupport(OnCommitAction on_commit) {
 	case ONCOMMIT_DELETE_ROWS:
 		break;
 	case ONCOMMIT_DROP:
-		elog(ERROR, "DuckDB does not support ON COMMIT DROP");
+		throw duckdb::NotImplementedException("DuckDB does not support ON COMMIT DROP");
 	default:
-		elog(ERROR, "Unsupported ON COMMIT clause: %d", on_commit);
+		throw duckdb::NotImplementedException("Unsupported ON COMMIT clause: ", on_commit);
 	}
 }
 
@@ -162,7 +162,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
 	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
-	int ret = SPI_exec(R"(
+	pgduckdb::SPI_exec_or_throw(R"(
 		SELECT DISTINCT objid AS relid, pg_class.relpersistence = 't' AS is_temporary
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
@@ -170,10 +170,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		WHERE cmds.object_type = 'table'
 		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		)",
-	                   0);
-
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	                            0, SPI_OK_SELECT);
 
 	/* if we selected a row it was a duckdb table */
 	auto is_duckdb_table = SPI_processed > 0;
@@ -185,19 +182,19 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	}
 
 	if (SPI_processed != 1) {
-		elog(ERROR, "Expected single table to be created, but found %" PRIu64, static_cast<uint64_t>(SPI_processed));
+		throw std::runtime_error("Expected single table to be created, but found " + std::to_string(SPI_processed));
 	}
 
 	HeapTuple tuple = SPI_tuptable->vals[0];
 	bool isnull;
 	Datum relid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
 	if (isnull) {
-		elog(ERROR, "Expected relid to be returned, but found NULL");
+		throw std::runtime_error("Expected relid to be returned, but found NULL");
 	}
 
 	Datum is_temporary_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
 	if (isnull) {
-		elog(ERROR, "Expected temporary boolean to be returned, but found NULL");
+		throw std::runtime_error("Expected temporary boolean to be returned, but found NULL");
 	}
 
 	Oid relid = DatumGetObjectId(relid_datum);
@@ -227,17 +224,18 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 			values[2] = CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version);
 			nulls[2] = ' ';
 		}
-		ret = SPI_execute_with_args(R"(
+		int ret = SPI_execute_with_args(R"(
 			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version)
 			VALUES ($1, $2, $3)
 			)",
-		                            lengthof(arg_types), arg_types, values, nulls, false, 0);
+		                                lengthof(arg_types), arg_types, values, nulls, false, 0);
 
 		/* Revert back to original privileges */
 		SetUserIdAndSecContext(saved_userid, sec_context);
 
-		if (ret != SPI_OK_INSERT)
-			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+		if (ret != SPI_OK_INSERT) {
+			throw std::runtime_error("SPI_exec failed: error code " + std::string(SPI_result_code_string(ret)));
+		}
 	}
 
 	AtEOXact_GUC(false, save_nestlevel);
@@ -265,7 +263,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
 		CheckOnCommitSupport(stmt->into->onCommit);
 	} else {
-		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(parsetree));
+		throw std::runtime_error("Unexpected parsetree type: " + std::to_string(nodeTag(parsetree)));
 	}
 
 	/*
@@ -345,18 +343,16 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 
 	if (!pgduckdb::doing_motherduck_sync) {
-		int ret = SPI_exec(R"(
+		pgduckdb::SPI_exec_or_throw(R"(
 			SELECT object_identity
 			FROM pg_catalog.pg_event_trigger_dropped_objects()
 			WHERE object_type = 'schema'
 				AND object_identity LIKE 'ddb$%'
 			)",
-		                   0);
-		if (ret != SPI_OK_SELECT)
-			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+		                            0, SPI_OK_SELECT);
 
 		if (SPI_processed > 0) {
-			elog(ERROR, "Currently it's not possible to drop ddb$ schemas");
+			throw std::runtime_error("Currently it's not possible to drop ddb$ schemas");
 		}
 	}
 
@@ -375,7 +371,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * Here we first handle the non-temporary tables.
 	 */
 
-	int ret = SPI_exec(R"(
+	pgduckdb::SPI_exec_or_throw(R"(
 		DELETE FROM duckdb.tables
 		USING (
 			SELECT objid, schema_name, object_name
@@ -385,13 +381,10 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		WHERE relid = objid
 		RETURNING objs.schema_name, objs.object_name
 		)",
-	                   0);
+	                            0, SPI_OK_DELETE_RETURNING);
 
 	/* Revert back to original privileges */
 	SetUserIdAndSecContext(saved_userid, sec_context);
-
-	if (ret != SPI_OK_DELETE_RETURNING)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
 	/*
 	 * We lazily create a connection to DuckDB when we need it. That's
@@ -442,16 +435,13 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * And now we basically do the same thing as above, but for TEMP tables.
 	 * For those we need to check our in-memory temporary_duckdb_tables set.
 	 */
-	ret = SPI_exec(R"(
+	pgduckdb::SPI_exec_or_throw(R"(
 		SELECT objid, object_name
 		FROM pg_catalog.pg_event_trigger_dropped_objects()
 		WHERE object_type = 'table'
 			AND schema_name = 'pg_temp'
 		)",
-	               0);
-
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	                            0, SPI_OK_SELECT);
 
 	for (auto proc = 0; proc < SPI_processed; ++proc) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
@@ -459,7 +449,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		bool isnull;
 		Datum relid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
 		if (isnull) {
-			elog(ERROR, "Expected relid to be returned, but found NULL");
+			std::runtime_error("Expected relid to be returned, but found NULL");
 		}
 		Oid relid = DatumGetObjectId(relid_datum);
 		if (temporary_duckdb_tables.count(relid) == 0) {
@@ -556,8 +546,9 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	SetUserIdAndSecContext(saved_userid, sec_context);
 	AtEOXact_GUC(false, save_nestlevel);
 
-	if (ret != SPI_OK_SELECT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	if (ret != SPI_OK_SELECT) {
+		throw std::runtime_error("SPI_exec failed: error code '" + std::string(SPI_result_code_string(ret)) + "'");
+	}
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_possibly_duckdb_table = SPI_processed > 0;
@@ -572,11 +563,11 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	bool isnull;
 	Datum relid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
 	if (isnull) {
-		elog(ERROR, "Expected relid to be returned, but found NULL");
+		throw std::runtime_error("Expected relid to be returned, but found NULL");
 	}
 	Datum needs_to_check_temporary_set_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
 	if (isnull) {
-		elog(ERROR, "Expected temporary boolean to be returned, but found NULL");
+		throw std::runtime_error("Expected temporary boolean to be returned, but found NULL");
 	}
 
 	Oid relid = DatumGetObjectId(relid_datum);
@@ -599,7 +590,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
  */
 DECLARE_PG_FUNCTION(duckdb_grant_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
-		elog(ERROR, "not fired by event trigger manager");
+		throw std::runtime_error("not fired by event trigger manager");
 
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/*
@@ -637,7 +628,7 @@ DECLARE_PG_FUNCTION(duckdb_grant_trigger) {
 		Oid relation_oid = RangeVarGetRelid(object, AccessShareLock, false);
 		Relation relation = RelationIdGetRelation(relation_oid);
 		if (pgduckdb::IsMotherDuckTable(relation)) {
-			elog(ERROR, "MotherDuck tables do not support GRANT");
+			throw std::runtime_error("MotherDuck tables do not support GRANT");
 		}
 		RelationClose(relation);
 	}

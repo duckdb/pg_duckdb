@@ -108,6 +108,8 @@ extern "C" {
 #include "utils/numeric.h"
 }
 
+#include "duckdb/common/exception/conversion_exception.hpp"
+
 typedef int16_t NumericDigit;
 
 struct NumericShort {
@@ -258,7 +260,7 @@ CreateNumeric(const NumericVar &var, bool *have_error) {
 			*have_error = true;
 			return NULL;
 		} else {
-			ereport(ERROR, (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE), errmsg("value overflows numeric format")));
+			throw duckdb::ConversionException("value overflows numeric format");
 		}
 	}
 	return result;

@@ -38,7 +38,7 @@ ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Permission Erro
 -- Should fail because DuckDB execution is not allowed for this user
 SET ROLE user3;
 SELECT * FROM t;
-ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
+ERROR:  (PGDuckDB/DuckdbPlanNode) DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
 -- Should work with regular posgres execution though, because this user is
 -- allowed to read the table.
 SET duckdb.force_execution = false;
@@ -60,7 +60,7 @@ SELECT * FROM t;
 -- Should fail now, we don't support RLS
 SET ROLE user1;
 SELECT * FROM t;
-ERROR:  (PGDuckDB/pgduckdb_relation_name) Cannot use "t" in a DuckDB query, because RLS is enabled on it
+ERROR:  (PGDuckDB/DuckdbPlanNode) Not implemented Error: (PGDuckDB/pgduckdb_relation_name) Cannot use "t" in a DuckDB query, because RLS is enabled on it
 RESET ROLE;
 DROP TABLE t;
 DROP USER user1, user2;

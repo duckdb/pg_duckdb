@@ -74,7 +74,7 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
 		appendBinaryStringInfo(&db_name, saveptr, dollar - saveptr);
 		saveptr = dollar + 1;
 		if (saveptr[0] == '\0') {
-			elog(ERROR, "Schema name is invalid");
+			throw std::runtime_error("Schema name is invalid");
 		}
 
 		if (saveptr[0] == '$') {
@@ -124,8 +124,10 @@ pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_t
 char *
 pgduckdb_relation_name(Oid relation_oid) {
 	HeapTuple tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relation_oid));
-	if (!HeapTupleIsValid(tp))
-		elog(ERROR, "cache lookup failed for relation %u", relation_oid);
+	if (!HeapTupleIsValid(tp)) {
+		throw std::runtime_error("cache lookup failed for relation '" + std::to_string(relation_oid) + "'");
+	}
+
 	Form_pg_class relation = (Form_pg_class)GETSTRUCT(tp);
 	const char *relname = NameStr(relation->relname);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
@@ -144,10 +146,9 @@ pgduckdb_relation_name(Oid relation_oid) {
 		 * tables don't support RLS anyway.
 		 */
 		if (check_enable_rls(relation_oid, InvalidOid, false) == RLS_ENABLED) {
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			                errmsg("(PGDuckDB/pgduckdb_relation_name) Cannot use \"%s\" in a DuckDB query, because RLS "
-			                       "is enabled on it",
-			                       get_rel_name(relation_oid))));
+			throw duckdb::NotImplementedException("(PGDuckDB/pgduckdb_relation_name) Cannot use \"" +
+			                                      std::string(relname) +
+			                                      "\" in a DuckDB query, because RLS is enabled on it");
 		}
 	}
 
@@ -202,7 +203,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	initStringInfo(&buffer);
 
 	if (get_rel_relkind(relation_oid) != RELKIND_RELATION) {
-		elog(ERROR, "Only regular tables are supported in DuckDB");
+		throw duckdb::NotImplementedException("Only regular tables are supported in DuckDB");
 	}
 
 	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
@@ -212,19 +213,22 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	if (relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP) {
 		// allowed
 	} else if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
-		elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
+		throw duckdb::NotImplementedException(
+		    "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
 	} else if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
-		elog(ERROR, "Only TEMP and non-UNLOGGED tables are supported in DuckDB");
+		throw duckdb::NotImplementedException("Only TEMP and non-UNLOGGED tables are supported in DuckDB");
 	} else if (!pgduckdb::IsMotherDuckPostgresDatabase()) {
-		elog(ERROR, "MotherDuck tables must be created in the duckb.motherduck_postgres_database");
+		throw duckdb::NotImplementedException(
+		    "MotherDuck tables must be created in the duckb.motherduck_postgres_database");
 	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUser()) {
-		elog(ERROR, "MotherDuck tables must be created by the duckb.motherduck_postgres_user");
+		throw duckdb::NotImplementedException(
+		    "MotherDuck tables must be created by the duckb.motherduck_postgres_user");
 	}
 
 	appendStringInfo(&buffer, "TABLE %s (", relation_name);
 
 	if (list_length(RelationGetFKeyList(relation)) > 0) {
-		elog(ERROR, "DuckDB tables do not support foreign keys");
+		throw duckdb::NotImplementedException("DuckDB tables do not support foreign keys");
 	}
 
 	List *relation_context = pgduckdb_deparse_context_for(relation_name, relation_oid);
@@ -260,11 +264,11 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		appendStringInfoString(&buffer, column_type_name);
 
 		if (column->attcompression) {
-			elog(ERROR, "Column compression is not supported in DuckDB");
+			throw duckdb::NotImplementedException("Column compression is not supported in DuckDB");
 		}
 
 		if (column->attidentity) {
-			elog(ERROR, "Identity columns are not supported in DuckDB");
+			throw duckdb::NotImplementedException("Identity columns are not supported in DuckDB");
 		}
 
 		/* if this column has a default value, append the default value */
@@ -296,9 +300,9 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 			if (!column->attgenerated) {
 				appendStringInfo(&buffer, " DEFAULT %s", default_string);
 			} else if (column->attgenerated == ATTRIBUTE_GENERATED_STORED) {
-				elog(ERROR, "DuckDB does not support STORED generated columns");
+				throw duckdb::NotImplementedException("DuckDB does not support STORED generated columns");
 			} else {
-				elog(ERROR, "Unkown generated column type");
+				throw std::runtime_error("Unkown generated column type");
 			}
 		}
 
@@ -316,7 +320,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		Oid collation = column->attcollation;
 		if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && collation != C_COLLATION_OID &&
 		    collation != POSIX_COLLATION_OID) {
-			elog(ERROR, "DuckDB does not support column collations");
+			throw duckdb::NotImplementedException("DuckDB does not support column collations");
 		}
 	}
 
@@ -354,12 +358,13 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 
 	if (!pgduckdb::IsDuckdbTableAm(relation->rd_tableam)) {
 		/* Shouldn't happen but seems good to check anyway */
-		elog(ERROR, "Only a table with the DuckDB can be stored in DuckDB, %d %d", relation->rd_rel->relam,
-		     pgduckdb::DuckdbTableAmOid());
+		throw std::runtime_error(
+		    "Only a table with the DuckDB can be stored in DuckDB, (relam=" + std::to_string(relation->rd_rel->relam) +
+		    ", oid=" + std::to_string(relation_oid) + ")");
 	}
 
 	if (relation->rd_options) {
-		elog(ERROR, "Storage options are not supported in DuckDB");
+		throw duckdb::NotImplementedException("Storage options are not supported in DuckDB");
 	}
 
 	relation_close(relation, AccessShareLock);
