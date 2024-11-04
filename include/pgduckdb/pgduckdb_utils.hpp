@@ -8,7 +8,6 @@ extern "C" {
 #include "postgres.h"
 }
 
-
 namespace pgduckdb {
 
 struct PgExceptionGuard {

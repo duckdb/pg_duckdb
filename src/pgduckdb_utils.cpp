@@ -9,6 +9,10 @@
 // FIXME - this file should not depend on PG, rather DataDir should be provided
 extern PGDLLIMPORT char *DataDir;
 
+extern "C" {
+#include "common/file_perm.h"
+}
+
 namespace pgduckdb {
 
 static bool
@@ -44,7 +48,7 @@ CreateOrGetDirectoryPath(const char* directory_name) {
 	const auto duckdb_data_directory = oss.str();
 
 	if (!CheckDirectory(duckdb_data_directory)) {
-		if (mkdir(duckdb_data_directory.c_str(), S_IRWXU) == -1) {
+		if (mkdir(duckdb_data_directory.c_str(), pg_dir_create_mode) == -1) {
 			throw std::runtime_error("Creating data directory '" + duckdb_data_directory + "' failed: `" +
 			                         strerror(errno) + "`");
 		}
