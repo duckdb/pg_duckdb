@@ -3,7 +3,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 
-#include "pgduckdb/pg_declarations.h"
+#include "pgduckdb/pg_declarations.hpp"
 
 namespace duckdb {
 
