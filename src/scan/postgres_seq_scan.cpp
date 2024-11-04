@@ -44,7 +44,7 @@ PostgresSeqScanLocalState::~PostgresSeqScanLocalState() {
 // PostgresSeqScanFunctionData
 //
 
-PostgresSeqScanFunctionData::PostgresSeqScanFunctionData(::Relation rel, uint64_t cardinality, Snapshot snapshot)
+PostgresSeqScanFunctionData::PostgresSeqScanFunctionData(Relation rel, uint64_t cardinality, Snapshot snapshot)
     : m_rel(rel), m_cardinality(cardinality), m_snapshot(snapshot) {
 }
 

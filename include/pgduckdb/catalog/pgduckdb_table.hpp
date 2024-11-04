@@ -12,16 +12,16 @@ public:
 	virtual ~PostgresTable();
 
 public:
-	static ::Relation OpenRelation(Oid relid);
-	static void SetTableInfo(duckdb::CreateTableInfo &info, ::Relation rel);
-	static Cardinality GetTableCardinality(::Relation rel);
+	static Relation OpenRelation(Oid relid);
+	static void SetTableInfo(duckdb::CreateTableInfo &info, Relation rel);
+	static Cardinality GetTableCardinality(Relation rel);
 
 protected:
 	PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema, duckdb::CreateTableInfo &info,
-	              ::Relation rel, Cardinality cardinality, Snapshot snapshot);
+	              Relation rel, Cardinality cardinality, Snapshot snapshot);
 
 protected:
-	::Relation rel;
+	Relation rel;
 	Cardinality cardinality;
 	Snapshot snapshot;
 };
@@ -29,7 +29,7 @@ protected:
 class PostgresHeapTable : public PostgresTable {
 public:
 	PostgresHeapTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema, duckdb::CreateTableInfo &info,
-	                  ::Relation rel, Cardinality cardinality, Snapshot snapshot);
+	                  Relation rel, Cardinality cardinality, Snapshot snapshot);
 
 public:
 	// -- Table API --

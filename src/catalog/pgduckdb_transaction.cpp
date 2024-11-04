@@ -61,7 +61,7 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 
 	ReleaseSysCache(tuple);
 
-	::Relation rel = PostgresTable::OpenRelation(rel_oid);
+	Relation rel = PostgresTable::OpenRelation(rel_oid);
 
 	duckdb::CreateTableInfo info;
 	info.table = entry_name;

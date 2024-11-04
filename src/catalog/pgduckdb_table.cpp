@@ -16,7 +16,7 @@ extern "C" {
 namespace pgduckdb {
 
 PostgresTable::PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema,
-                             duckdb::CreateTableInfo &info, ::Relation rel, Cardinality cardinality, Snapshot snapshot)
+                             duckdb::CreateTableInfo &info, Relation rel, Cardinality cardinality, Snapshot snapshot)
     : duckdb::TableCatalogEntry(catalog, schema, info), rel(rel), cardinality(cardinality), snapshot(snapshot) {
 }
 
@@ -25,14 +25,14 @@ PostgresTable::~PostgresTable() {
 	RelationClose(rel);
 }
 
-::Relation
+Relation
 PostgresTable::OpenRelation(Oid relid) {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-	return PostgresFunctionGuard(::RelationIdGetRelation, relid);
+	return PostgresFunctionGuard(RelationIdGetRelation, relid);
 }
 
 void
-PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, ::Relation rel) {
+PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, Relation rel) {
 	auto tupleDesc = RelationGetDescr(rel);
 
 	for (int i = 0; i < tupleDesc->natts; ++i) {
@@ -47,7 +47,7 @@ PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, ::Relation rel) {
 }
 
 Cardinality
-PostgresTable::GetTableCardinality(::Relation rel) {
+PostgresTable::GetTableCardinality(Relation rel) {
 	Cardinality cardinality;
 	BlockNumber n_pages;
 	double allvisfrac;
@@ -60,7 +60,7 @@ PostgresTable::GetTableCardinality(::Relation rel) {
 //===--------------------------------------------------------------------===//
 
 PostgresHeapTable::PostgresHeapTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema,
-                                     duckdb::CreateTableInfo &info, ::Relation rel, Cardinality cardinality,
+                                     duckdb::CreateTableInfo &info, Relation rel, Cardinality cardinality,
                                      Snapshot snapshot)
     : PostgresTable(catalog, schema, info, rel, cardinality, snapshot) {
 }
