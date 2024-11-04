@@ -7,23 +7,9 @@
 #include "duckdb/catalog/catalog.hpp"
 
 extern "C" {
-#include "postgres.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_class.h"
-#include "optimizer/planmain.h"
-#include "optimizer/planner.h"
-#include "utils/builtins.h"
-#include "utils/regproc.h"
-#include "utils/snapmgr.h"
-#include "utils/syscache.h"
-#include "access/htup_details.h"
-#include "executor/nodeIndexscan.h"
-#include "nodes/pathnodes.h"
-#include "nodes/execnodes.h"
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
-#include "parser/parsetree.h"
-#include "utils/rel.h"
+#include "catalog/namespace.h" // makeRangeVarFromNameList
+#include "utils/syscache.h"    // RELOID
+#include "utils/rel.h"         // Form_pg_class, RELKIND_VIEW
 }
 
 namespace duckdb {

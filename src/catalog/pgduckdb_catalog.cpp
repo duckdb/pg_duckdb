@@ -4,21 +4,6 @@
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "utils/fmgroids.h"
-#include "fmgr.h"
-#include "catalog/pg_namespace.h"
-#include "utils/syscache.h"
-#include "utils/builtins.h"
-#include "utils/rel.h"
-#include "access/heapam.h"
-#include "access/htup_details.h"
-#include "catalog/indexing.h"
-#include "access/genam.h"
-#include "access/xact.h"
-}
-
 namespace duckdb {
 
 PostgresCatalog::PostgresCatalog(AttachedDatabase &db, const string &connection_string, AccessMode access_mode)

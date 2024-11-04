@@ -2,6 +2,11 @@
 #include "duckdb/main/attached_database.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 
+extern "C" {
+#include "postgres.h"
+#include "utils/snapmgr.h" // GetActiveSnapshot
+}
+
 namespace duckdb {
 
 PostgresTransactionManager::PostgresTransactionManager(AttachedDatabase &db_p, PostgresCatalog &catalog)
