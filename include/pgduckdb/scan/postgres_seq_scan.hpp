@@ -41,11 +41,11 @@ public:
 
 struct PostgresSeqScanFunctionData : public duckdb::TableFunctionData {
 public:
-	PostgresSeqScanFunctionData(::Relation rel, uint64_t cardinality, Snapshot snapshot);
+	PostgresSeqScanFunctionData(Relation rel, uint64_t cardinality, Snapshot snapshot);
 	~PostgresSeqScanFunctionData() override;
 
 public:
-	::Relation m_rel;
+	Relation m_rel;
 	uint64_t m_cardinality;
 	Snapshot m_snapshot;
 };
