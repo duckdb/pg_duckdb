@@ -1,4 +1,5 @@
 #include "pgduckdb/catalog/pgduckdb_catalog.hpp"
+#include "pgduckdb/catalog/pgduckdb_schema.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
@@ -20,6 +21,10 @@ PostgresTransaction::PostgresTransaction(duckdb::TransactionManager &manager, du
 }
 
 PostgresTransaction::~PostgresTransaction() {
+}
+
+SchemaItems::SchemaItems(duckdb::unique_ptr<PostgresSchema> &&schema, const duckdb::string &name)
+	: name(name), schema(std::move(schema)) {
 }
 
 duckdb::optional_ptr<duckdb::CatalogEntry>

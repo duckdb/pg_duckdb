@@ -10,13 +10,16 @@ It should not include any C++ code, only Postgres C declarations.
 */
 
 extern "C" {
-struct SnapshotData;
-typedef struct SnapshotData *Snapshot;
+typedef double Cardinality;
+
+struct Node;
+
+typedef unsigned int Oid;
 
 struct RelationData;
 typedef struct RelationData *Relation;
 
-typedef double Cardinality;
+struct SnapshotData;
+typedef struct SnapshotData *Snapshot;
 
-typedef unsigned int Oid;
 }

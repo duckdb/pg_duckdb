@@ -2,9 +2,10 @@
 
 #include "duckdb/storage/storage_extension.hpp"
 #include "duckdb/catalog/catalog.hpp"
-#include "pgduckdb/catalog/pgduckdb_schema.hpp"
 
 namespace pgduckdb {
+
+class PostgresSchema;
 
 class PostgresCatalog : public duckdb::Catalog {
 public:
