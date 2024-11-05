@@ -1,19 +1,17 @@
 #pragma once
 
 #include "duckdb/transaction/transaction.hpp"
-
-#include "pgduckdb/catalog/pgduckdb_table.hpp"
-#include "pgduckdb/catalog/pgduckdb_schema.hpp"
+#include "pgduckdb/pg_declarations.hpp"
 
 namespace pgduckdb {
 
 class PostgresCatalog;
+class PostgresSchema;
+class PostgresTable;
 
 class SchemaItems {
 public:
-	SchemaItems(duckdb::unique_ptr<PostgresSchema> &&schema, const duckdb::string &name)
-	    : name(name), schema(std::move(schema)) {
-	}
+	SchemaItems(duckdb::unique_ptr<PostgresSchema> &&schema, const duckdb::string &name);
 
 	duckdb::optional_ptr<duckdb::CatalogEntry> GetTable(const duckdb::string &name);
 

@@ -1,7 +1,6 @@
-extern "C" {
-#include "postgres.h"
-#include "utils/rel.h"
-}
+#pragma once
+
+#include "pgduckdb/pg_declarations.hpp"
 
 namespace pgduckdb {
 bool IsExtensionRegistered();

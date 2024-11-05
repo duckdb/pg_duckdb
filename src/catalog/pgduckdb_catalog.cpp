@@ -1,6 +1,7 @@
-#include "pgduckdb/catalog/pgduckdb_catalog.hpp"
 #include "duckdb/parser/parsed_data/attach_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
+#include "pgduckdb/catalog/pgduckdb_catalog.hpp"
+#include "pgduckdb/catalog/pgduckdb_schema.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 

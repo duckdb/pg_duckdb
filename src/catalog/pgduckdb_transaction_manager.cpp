@@ -1,4 +1,5 @@
 #include "pgduckdb/catalog/pgduckdb_transaction_manager.hpp"
+#include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 
 #include "duckdb/main/attached_database.hpp"

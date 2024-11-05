@@ -2,11 +2,12 @@
 
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/reference_map.hpp"
-
-#include "pgduckdb/catalog/pgduckdb_catalog.hpp"
-#include "pgduckdb/catalog/pgduckdb_transaction.hpp"
+#include "pgduckdb/pg_declarations.hpp"
 
 namespace pgduckdb {
+
+class PostgresCatalog;
+class PostgresTransaction;
 
 class PostgresTransactionManager : public duckdb::TransactionManager {
 public:

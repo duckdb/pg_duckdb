@@ -10,14 +10,8 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  */
 
-#include "duckdb.hpp"
-
 extern "C" {
 #include "postgres.h"
-
-#include <math.h>
-
-#include "miscadmin.h"
 
 #include "access/tableam.h"
 #include "access/heapam.h"
@@ -30,7 +24,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
-#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 
 extern "C" {
