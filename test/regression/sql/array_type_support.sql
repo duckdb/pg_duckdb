@@ -168,101 +168,101 @@ SELECT * FROM regclass_array_1d;
 -- CHAR (two dimensions)
 CREATE TABLE char_array_2d(a CHAR(1)[][]);
 INSERT INTO char_array_2d VALUES
-                              ('{{"a","b"},{"c","d"}}'),
-                              ('{{"e","f","g"},{"h","i","j"}}'),
-                              (NULL),
-                              ('{{"k","l"},{"m",NULL}}'),
-                              ('{}');
+    ('{{"a","b"},{"c","d"}}'),
+    ('{{"e","f","g"},{"h","i","j"}}'),
+    (NULL),
+    ('{{"k","l"},{"m",NULL}}'),
+    ('{}');
 SELECT * FROM char_array_2d;
 
 -- SMALLINT (two dimensions)
 CREATE TABLE smallint_array_2d(a SMALLINT[][]);
 INSERT INTO smallint_array_2d VALUES
-                                  ('{{1,2},{3,4}}'),
-                                  ('{{5,6,7},{8,9,10}}'),
-                                  (NULL),
-                                  ('{}'),
-                                  ('{{11,12},{NULL,14}}');
+    ('{{1,2},{3,4}}'),
+    ('{{5,6,7},{8,9,10}}'),
+    (NULL),
+    ('{}'),
+    ('{{11,12},{NULL,14}}');
 SELECT * FROM smallint_array_2d;
 
 -- VARCHAR (two dimensions)
 CREATE TABLE varchar_array_2d(a VARCHAR[][]);
 INSERT INTO varchar_array_2d VALUES
-                                 ('{{"hello","world"},{"foo","bar"}}'),
-                                 ('{{"test","array","data"},{"more","text","here"}}'),
-                                 (NULL),
-                                 ('{}'),
-                                 ('{{"some","strings"},{NULL,"last"}}');
+    ('{{"hello","world"},{"foo","bar"}}'),
+    ('{{"test","array","data"},{"more","text","here"}}'),
+    (NULL),
+    ('{}'),
+    ('{{"some","strings"},{NULL,"last"}}');
 SELECT * FROM varchar_array_2d;
 
 -- TIMESTAMP (two dimensions)
 CREATE TABLE timestamp_array_2d(a TIMESTAMP[][]);
 INSERT INTO timestamp_array_2d VALUES
-                                   ('{{"2023-01-01 12:00:00","2023-01-02 13:00:00"},{"2023-01-03 14:00:00","2023-01-04 15:00:00"}}'),
-                                   ('{{"2023-02-01 09:00:00","2023-02-02 10:00:00","2023-02-03 11:00:00"},{"2023-02-04 12:00:00","2023-02-05 13:00:00","2023-02-06 14:00:00"}}'),
-                                   (NULL),
-                                   ('{}'),
-                                   ('{{"2023-03-01 08:00:00","2023-03-02 09:00:00"},{NULL,"2023-03-04 11:00:00"}}');
+    ('{{"2023-01-01 12:00:00","2023-01-02 13:00:00"},{"2023-01-03 14:00:00","2023-01-04 15:00:00"}}'),
+    ('{{"2023-02-01 09:00:00","2023-02-02 10:00:00","2023-02-03 11:00:00"},{"2023-02-04 12:00:00","2023-02-05 13:00:00","2023-02-06 14:00:00"}}'),
+    (NULL),
+    ('{}'),
+    ('{{"2023-03-01 08:00:00","2023-03-02 09:00:00"},{NULL,"2023-03-04 11:00:00"}}');
 SELECT * FROM timestamp_array_2d;
 
 -- FLOAT4 (two dimensions)
 CREATE TABLE float4_array_2d(a FLOAT4[][]);
 INSERT INTO float4_array_2d VALUES
-                                ('{{1.1,2.2},{3.3,4.4}}'),
-                                ('{{5.5,6.6,7.7},{8.8,9.9,10.1}}'),
-                                (NULL),
-                                ('{}'),
-                                ('{{11.1,12.2},{NULL,14.4}}');
+    ('{{1.1,2.2},{3.3,4.4}}'),
+    ('{{5.5,6.6,7.7},{8.8,9.9,10.1}}'),
+    (NULL),
+    ('{}'),
+    ('{{11.1,12.2},{NULL,14.4}}');
 SELECT * FROM float4_array_2d;
 
 -- FLOAT8 (two dimensions)
 CREATE TABLE float8_array_2d(a FLOAT8[][]);
 INSERT INTO float8_array_2d VALUES
-                                ('{{1.11111,2.22222},{3.33333,4.44444}}'),
-                                ('{{5.55555,6.66666,7.77777},{8.88888,9.99999,10.10101}}'),
-                                (NULL),
-                                ('{}'),
-                                ('{{11.11111,12.22222},{NULL,14.44444}}');
+    ('{{1.11111,2.22222},{3.33333,4.44444}}'),
+    ('{{5.55555,6.66666,7.77777},{8.88888,9.99999,10.10101}}'),
+    (NULL),
+    ('{}'),
+    ('{{11.11111,12.22222},{NULL,14.44444}}');
 SELECT * FROM float8_array_2d;
 
 -- NUMERIC (two dimensions)
 CREATE TABLE numeric_array_2d(a NUMERIC[][]);
 INSERT INTO numeric_array_2d VALUES
-                                 ('{{1.1,2.2},{3.3,4.4}}'),
-                                 ('{{5.5,6.6,7.7},{8.8,9.9,10.1}}'),
-                                 (NULL),
-                                 ('{}'),
-                                 ('{{11.1,12.2},{NULL,14.4}}');
+    ('{{1.1,2.2},{3.3,4.4}}'),
+    ('{{5.5,6.6,7.7},{8.8,9.9,10.1}}'),
+    (NULL),
+    ('{}'),
+    ('{{11.1,12.2},{NULL,14.4}}');
 SELECT * FROM numeric_array_2d;
 
 -- UUID (two dimensions)
 CREATE TABLE uuid_array_2d(a UUID[][]);
 INSERT INTO uuid_array_2d VALUES
-                              ('{{"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"},{"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13","a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14"}}'),
-                              ('{{"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13"},{"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16"}}'),
-                              (NULL),
-                              ('{}'),
-                              ('{{"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"},{NULL,"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14"}}');
+    ('{{"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"},{"a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13","a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14"}}'),
+    ('{{"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a13"},{"b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a15","b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a16"}}'),
+    (NULL),
+    ('{}'),
+    ('{{"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"},{NULL,"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14"}}');
 SELECT * FROM uuid_array_2d;
 
 -- JSON (two dimensions)
 CREATE TABLE json_array_2d(a JSON[][]);
 INSERT INTO json_array_2d VALUES
-                              ('{{"{"key": "value1"}","{"array": [1, 2, 3]}"},{"{"object": {"nested": "value2"}}","{"number": 42}"}}'),
-                              ('{{"{"test": true}","{"data": null}","{"empty": {}}"},{"{"pi": 3.14}","{"list": ["a", "b", "c"]}","{"bool": false}"}}'),
-                              (NULL),
-                              ('{}'),
-                              ('{{"{"first": 1}","{"second": "two"}"},{"null","{}"}}');
+    ('{{"{"key": "value1"}","{"array": [1, 2, 3]}"},{"{"object": {"nested": "value2"}}","{"number": 42}"}}'),
+    ('{{"{"test": true}","{"data": null}","{"empty": {}}"},{"{"pi": 3.14}","{"list": ["a", "b", "c"]}","{"bool": false}"}}'),
+    (NULL),
+    ('{}'),
+    ('{{"{"first": 1}","{"second": "two"}"},{"null","{}"}}');
 SELECT * FROM json_array_2d;
 
 -- REGCLASS (two dimensions)
 CREATE TABLE regclass_array_2d(a REGCLASS[][]);
 INSERT INTO regclass_array_2d VALUES
-                                  ('{{"pg_class","pg_attribute"},{"pg_type","pg_index"}}'),
-                                  ('{{"pg_proc","pg_operator","pg_aggregate"},{"pg_am","pg_amop","pg_amproc"}}'),
-                                  (NULL),
-                                  ('{}'),
-                                  ('{{"pg_database","pg_tablespace"},{NULL,"pg_auth_members"}}');
+    ('{{"pg_class","pg_attribute"},{"pg_type","pg_index"}}'),
+    ('{{"pg_proc","pg_operator","pg_aggregate"},{"pg_am","pg_amop","pg_amproc"}}'),
+    (NULL),
+    ('{}'),
+    ('{{"pg_database","pg_tablespace"},{NULL,"pg_auth_members"}}');
 SELECT * FROM regclass_array_2d;
 
 -- Cleanup

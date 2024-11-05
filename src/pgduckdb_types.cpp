@@ -205,7 +205,8 @@ ConvertNumericDatum(const duckdb::Value &value) {
 		break;
 	}
 	default: {
-		throw duckdb::InvalidInputException("(PGDuckDB/ConvertDuckToPostgresValue) Unrecognized physical type for DECIMAL value");
+		throw duckdb::InvalidInputException(
+		    "(PGDuckDB/ConvertDuckToPostgresValue) Unrecognized physical type for DECIMAL value");
 	}
 	}
 	auto numeric = CreateNumeric(numeric_var, NULL);
@@ -231,7 +232,6 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 	return UUIDPGetDatum(postgres_uuid);
 }
 
-
 struct PGTypeInfo {
 	int16 typlen;
 	bool typbyval;
@@ -248,7 +248,7 @@ GetPGTypeInfo(Oid typid) {
 	if (!HeapTupleIsValid(tp))
 		elog(ERROR, "cache lookup failed for type %u", typid);
 
-	typtup = (Form_pg_type) GETSTRUCT(tp);
+	typtup = (Form_pg_type)GETSTRUCT(tp);
 	info.typlen = typtup->typlen;
 	info.typbyval = typtup->typbyval;
 	info.typalign = typtup->typalign;
@@ -269,63 +269,75 @@ struct PostgresOIDMapping {
 	static Datum ToDatum(const duckdb::Value &val);
 };
 
-template<>
-Datum PostgresOIDMapping<BOOLOID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<BOOLOID>::ToDatum(const duckdb::Value &val) {
 	return ConvertBoolDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<CHAROID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<CHAROID>::ToDatum(const duckdb::Value &val) {
 	return ConvertCharDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<INT2OID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<INT2OID>::ToDatum(const duckdb::Value &val) {
 	return ConvertInt2Datum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<INT4OID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<INT4OID>::ToDatum(const duckdb::Value &val) {
 	return ConvertInt4Datum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<INT8OID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<INT8OID>::ToDatum(const duckdb::Value &val) {
 	return ConvertInt8Datum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<FLOAT4OID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<FLOAT4OID>::ToDatum(const duckdb::Value &val) {
 	return ConvertFloatDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<FLOAT8OID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<FLOAT8OID>::ToDatum(const duckdb::Value &val) {
 	return ConvertDoubleDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<TIMESTAMPOID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<TIMESTAMPOID>::ToDatum(const duckdb::Value &val) {
 	return ConvertTimestampDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<DATEOID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<DATEOID>::ToDatum(const duckdb::Value &val) {
 	return ConvertDateDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<UUIDOID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<UUIDOID>::ToDatum(const duckdb::Value &val) {
 	return ConvertUUIDDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<NUMERICOID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<NUMERICOID>::ToDatum(const duckdb::Value &val) {
 	return ConvertNumericDatum(val);
 }
 
-template<>
-Datum PostgresOIDMapping<VARCHAROID>::ToDatum(const duckdb::Value &val) {
+template <>
+Datum
+PostgresOIDMapping<VARCHAROID>::ToDatum(const duckdb::Value &val) {
 	return ConvertVarCharDatum(val);
 }
 
@@ -335,8 +347,7 @@ public:
 	static ArrayType *
 	ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
 		PGTypeInfo type_info = MAPPING::GetPGTypeInfo();
-		return construct_md_array(datums, nulls, ndims, dims, lower_bound,
-		                          MAPPING::postgres_oid, type_info.typlen,
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, MAPPING::postgres_oid, type_info.typlen,
 		                          type_info.typbyval, type_info.typalign);
 	}
 
@@ -404,15 +415,15 @@ public:
 		auto &values = duckdb::ListValue::GetChildren(value);
 		idx_t to_append = values.size();
 
-        if (to_append == 0 && dimension < number_of_dimensions-1) {
-            for (auto idx = dimension; idx < number_of_dimensions; idx++) {
-                dimensions[idx] = 0;
-            }
-            if (dimension == 0) {
-                expected_values = 0;
-            }
-            return;
-        }
+		if (to_append == 0 && dimension < number_of_dimensions - 1) {
+			for (auto idx = dimension; idx < number_of_dimensions; idx++) {
+				dimensions[idx] = 0;
+			}
+			if (dimension == 0) {
+				expected_values = 0;
+			}
+			return;
+		}
 
 		D_ASSERT(dimension < number_of_dimensions);
 		if (dimensions[dimension] == -1) {
@@ -610,7 +621,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	case UUIDARRAYOID: {
-		ConvertDuckToPostgresArray<UUIDArray >(slot, value, col);
+		ConvertDuckToPostgresArray<UUIDArray>(slot, value, col);
 		break;
 	}
 	default:
@@ -692,13 +703,13 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	}
 	case FLOAT4OID:
 	case FLOAT4ARRAYOID: {
-		 base_type = duckdb::LogicalTypeId::FLOAT;
-		 break;
+		base_type = duckdb::LogicalTypeId::FLOAT;
+		break;
 	}
 	case FLOAT8OID:
 	case FLOAT8ARRAYOID: {
-		 base_type = duckdb::LogicalTypeId::DOUBLE;
-		 break;
+		base_type = duckdb::LogicalTypeId::DOUBLE;
+		break;
 	}
 	case NUMERICOID:
 	case NUMERICARRAYOID: {
@@ -731,7 +742,7 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(type) + ")");
 	}
 	}
-    if (dimensions > 0) {
+	if (dimensions > 0) {
 		for (int i = 0; i < dimensions; i++) {
 			base_type = duckdb::LogicalType::LIST(base_type);
 		}
@@ -793,40 +804,40 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		switch (child_type_id) {
 		case duckdb::LogicalTypeId::BOOLEAN:
 			return BOOLARRAYOID;
-        case duckdb::LogicalTypeId::TINYINT:
-            return CHARARRAYOID;
-        case duckdb::LogicalTypeId::SMALLINT:
-            return INT2ARRAYOID;
+		case duckdb::LogicalTypeId::TINYINT:
+			return CHARARRAYOID;
+		case duckdb::LogicalTypeId::SMALLINT:
+			return INT2ARRAYOID;
 		case duckdb::LogicalTypeId::INTEGER:
 			return INT4ARRAYOID;
 		case duckdb::LogicalTypeId::BIGINT:
 			return INT8ARRAYOID;
-        case duckdb::LogicalTypeId::HUGEINT:
-            return NUMERICARRAYOID;
-        case duckdb::LogicalTypeId::UTINYINT:
-            return INT2ARRAYOID;
-        case duckdb::LogicalTypeId::USMALLINT:
-            return INT4ARRAYOID;
-        case duckdb::LogicalTypeId::UINTEGER:
-            return INT8ARRAYOID;
-        case duckdb::LogicalTypeId::VARCHAR: {
-            if (type.IsJSONType()) {
-                return JSONARRAYOID;
-            }
-            return VARCHARARRAYOID;
-        }
-        case duckdb::LogicalTypeId::DATE:
-            return DATEARRAYOID;
-        case duckdb::LogicalTypeId::TIMESTAMP:
-            return TIMESTAMPARRAYOID;
-        case duckdb::LogicalTypeId::FLOAT:
-            return FLOAT4ARRAYOID;
-        case duckdb::LogicalTypeId::DOUBLE:
-            return FLOAT8ARRAYOID;
-        case duckdb::LogicalTypeId::DECIMAL:
-            return NUMERICARRAYOID;
-        case duckdb::LogicalTypeId::UUID:
-            return UUIDARRAYOID;
+		case duckdb::LogicalTypeId::HUGEINT:
+			return NUMERICARRAYOID;
+		case duckdb::LogicalTypeId::UTINYINT:
+			return INT2ARRAYOID;
+		case duckdb::LogicalTypeId::USMALLINT:
+			return INT4ARRAYOID;
+		case duckdb::LogicalTypeId::UINTEGER:
+			return INT8ARRAYOID;
+		case duckdb::LogicalTypeId::VARCHAR: {
+			if (type.IsJSONType()) {
+				return JSONARRAYOID;
+			}
+			return VARCHARARRAYOID;
+		}
+		case duckdb::LogicalTypeId::DATE:
+			return DATEARRAYOID;
+		case duckdb::LogicalTypeId::TIMESTAMP:
+			return TIMESTAMPARRAYOID;
+		case duckdb::LogicalTypeId::FLOAT:
+			return FLOAT4ARRAYOID;
+		case duckdb::LogicalTypeId::DOUBLE:
+			return FLOAT8ARRAYOID;
+		case duckdb::LogicalTypeId::DECIMAL:
+			return NUMERICARRAYOID;
+		case duckdb::LogicalTypeId::UUID:
+			return UUIDARRAYOID;
 		default: {
 			elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %d to Postgres type",
 			     (uint8)child_type_id);
