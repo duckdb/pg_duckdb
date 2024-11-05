@@ -35,13 +35,10 @@ namespace pgduckdb {
 
 struct varlena *
 PglzDecompressDatum(const struct varlena *value) {
-	struct varlena *result;
-	int32 raw_size;
+	struct varlena *result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
 
-	result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
-
-	raw_size = pglz_decompress((char *)value + VARHDRSZ_COMPRESSED, VARSIZE(value) - VARHDRSZ_COMPRESSED,
-	                           VARDATA(result), VARDATA_COMPRESSED_GET_EXTSIZE(value), true);
+	int32 raw_size = pglz_decompress((char *)value + VARHDRSZ_COMPRESSED, VARSIZE(value) - VARHDRSZ_COMPRESSED,
+	                                 VARDATA(result), VARDATA_COMPRESSED_GET_EXTSIZE(value), true);
 	if (raw_size < 0) {
 		throw duckdb::InvalidInputException("(PGDuckDB/PglzDecompressDatum) Compressed pglz data is corrupt");
 	}
@@ -56,13 +53,10 @@ Lz4DecompresDatum(const struct varlena *value) {
 #ifndef USE_LZ4
 	return NULL; /* keep compiler quiet */
 #else
-	int32 raw_size;
-	struct varlena *result;
+	struct varlena *result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
 
-	result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
-
-	raw_size = LZ4_decompress_safe((char *)value + VARHDRSZ_COMPRESSED, VARDATA(result),
-	                               VARSIZE(value) - VARHDRSZ_COMPRESSED, VARDATA_COMPRESSED_GET_EXTSIZE(value));
+	int32 raw_size = LZ4_decompress_safe((char *)value + VARHDRSZ_COMPRESSED, VARDATA(result),
+	                                     VARSIZE(value) - VARHDRSZ_COMPRESSED, VARDATA_COMPRESSED_GET_EXTSIZE(value));
 	if (raw_size < 0) {
 		throw duckdb::InvalidInputException("(PGDuckDB/Lz4DecompresDatum) Compressed lz4 data is corrupt");
 	}
@@ -75,8 +69,7 @@ Lz4DecompresDatum(const struct varlena *value) {
 
 static struct varlena *
 ToastDecompressDatum(struct varlena *attr) {
-	ToastCompressionId cmid;
-	cmid = (ToastCompressionId)TOAST_COMPRESS_METHOD(attr);
+	ToastCompressionId cmid = (ToastCompressionId)TOAST_COMPRESS_METHOD(attr);
 	switch (cmid) {
 	case TOAST_PGLZ_COMPRESSION_ID:
 		return PglzDecompressDatum(attr);
@@ -89,23 +82,33 @@ ToastDecompressDatum(struct varlena *attr) {
 	}
 }
 
+bool
+table_relation_fetch_toast_slice(const struct varatt_external &toast_pointer, int32 attrsize, struct varlena *result) {
+	Relation toast_rel = try_table_open(toast_pointer.va_toastrelid, AccessShareLock);
+
+	if (toast_rel == NULL) {
+		return false;
+	}
+
+	table_relation_fetch_toast_slice(toast_rel, toast_pointer.va_valueid, attrsize, 0, attrsize, result);
+
+	table_close(toast_rel, AccessShareLock);
+	return true;
+}
+
 static struct varlena *
 ToastFetchDatum(struct varlena *attr) {
-	Relation toast_rel;
-	struct varlena *result;
-	struct varatt_external toast_pointer;
-	int32 attrsize;
-
 	if (!VARATT_IS_EXTERNAL_ONDISK(attr)) {
 		throw duckdb::InvalidInputException("(PGDuckDB/ToastFetchDatum) Shouldn't be called for non-ondisk datums");
 	}
 
 	/* Must copy to access aligned fields */
+	struct varatt_external toast_pointer;
 	VARATT_EXTERNAL_GET_POINTER(toast_pointer, attr);
 
-	attrsize = VARATT_EXTERNAL_GET_EXTSIZE(toast_pointer);
+	int32 attrsize = VARATT_EXTERNAL_GET_EXTSIZE(toast_pointer);
 
-	result = (struct varlena *)duckdb_malloc(attrsize + VARHDRSZ);
+	struct varlena *result = (struct varlena *)duckdb_malloc(attrsize + VARHDRSZ);
 
 	if (VARATT_EXTERNAL_IS_COMPRESSED(toast_pointer)) {
 		SET_VARSIZE_COMPRESSED(result, attrsize + VARHDRSZ);
@@ -119,16 +122,10 @@ ToastFetchDatum(struct varlena *attr) {
 
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 
-	toast_rel = PostgresFunctionGuard(try_table_open, toast_pointer.va_toastrelid, AccessShareLock);
-
-	if (toast_rel == NULL) {
+	if (!PostgresFunctionGuard(table_relation_fetch_toast_slice, toast_pointer, attrsize, result)) {
+		duckdb_free(result);
 		throw duckdb::InternalException("(PGDuckDB/ToastFetchDatum) Error toast relation is NULL");
 	}
-
-	PostgresFunctionGuard(table_relation_fetch_toast_slice, toast_rel, toast_pointer.va_valueid, attrsize, 0, attrsize,
-	                      result);
-
-	PostgresFunctionGuard(table_close, toast_rel, AccessShareLock);
 
 	return result;
 }
