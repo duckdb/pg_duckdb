@@ -1,27 +1,76 @@
-#include "duckdb.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "pgduckdb/pgduckdb_duckdb.hpp"
+
 #include "pgduckdb/pgduckdb_guc.h"
 #include "duckdb/main/extension_util.hpp"
-#include "duckdb/main/client_data.hpp"
-#include "duckdb/catalog/catalog_search_path.hpp"
-#include "duckdb/main/extension_install_info.hpp"
+#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "catalog/namespace.h"
-#include "utils/lsyscache.h"
-#include "utils/fmgrprotos.h"
+#include "utils/lsyscache.h" // get_relname_relid
+#include "utils/fmgrprotos.h" // pg_sequence_last_value
+#include "common/file_perm.h"
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
-#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
+
+#include <sys/stat.h>
+#include <unistd.h>
+
+// FIXME - this file should not depend on PG, rather DataDir should be provided
+extern char *DataDir;
+
 namespace pgduckdb {
+
+static bool
+CheckDirectory(const std::string &directory) {
+	struct stat info;
+
+	if (lstat(directory.c_str(), &info) != 0) {
+		if (errno == ENOENT) {
+			elog(DEBUG2, "Directory `%s` doesn't exists.", directory.c_str());
+			return false;
+		} else if (errno == EACCES) {
+			throw std::runtime_error("Can't access `" + directory + "` directory.");
+		} else {
+			throw std::runtime_error("Other error when reading `" + directory + "`.");
+		}
+	}
+
+	if (!S_ISDIR(info.st_mode)) {
+		elog(WARNING, "`%s` is not directory.", directory.c_str());
+	}
+
+	if (access(directory.c_str(), R_OK | W_OK)) {
+		throw std::runtime_error("Directory `" + std::string(directory) + "` permission problem.");
+	}
+
+	return true;
+}
+
+std::string
+CreateOrGetDirectoryPath(const char* directory_name) {
+	std::ostringstream oss;
+	oss << DataDir << "/" << directory_name;
+	const auto duckdb_data_directory = oss.str();
+
+	if (!CheckDirectory(duckdb_data_directory)) {
+		if (mkdir(duckdb_data_directory.c_str(), pg_dir_create_mode) == -1) {
+			throw std::runtime_error("Creating data directory '" + duckdb_data_directory + "' failed: `" +
+			                         strerror(errno) + "`");
+		}
+
+		elog(DEBUG2, "Created %s directory", duckdb_data_directory.c_str());
+	};
+
+	return duckdb_data_directory;
+}
 
 DuckDBManager::DuckDBManager() {
 }

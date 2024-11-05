@@ -2,8 +2,6 @@
 
 #include "duckdb.hpp"
 
-#include "pgduckdb/pgduckdb_utils.hpp"
-
 namespace pgduckdb {
 
 class DuckDBManager {
