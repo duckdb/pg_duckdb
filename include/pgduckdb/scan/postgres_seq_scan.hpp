@@ -2,7 +2,7 @@
 
 #include "duckdb.hpp"
 
-#include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/heap_reader.hpp"
 
