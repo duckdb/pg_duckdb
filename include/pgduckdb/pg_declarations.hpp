@@ -12,6 +12,9 @@ It should not include any C++ code, only Postgres C declarations.
 extern "C" {
 typedef double Cardinality;
 
+struct FormData_pg_class;
+typedef FormData_pg_class *Form_pg_class;
+
 struct Node;
 
 typedef unsigned int Oid;
