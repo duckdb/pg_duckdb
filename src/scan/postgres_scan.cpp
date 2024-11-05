@@ -39,26 +39,32 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 		return;
 	}
 
-	/* We need ordered columns id for reading tuple. */
-	duckdb::map<duckdb::column_t, duckdb::idx_t> ordered_input_columns;
-	duckdb::idx_t i = 0;
-	for (const auto &input_column : input.column_ids) {
-		ordered_input_columns[input_column] = i++;
+	/*
+	 * We need to read columns from the Postgres tuple in column order, but for
+	 * outputting them we care about the DuckDB order. A map automatically
+	 * orders them based on key, which in this case is the Postgres column
+	 * order
+	 */
+	duckdb::map<AttrNumber, duckdb::idx_t> pg_column_order;
+	duckdb::idx_t scan_index = 0;
+	for (const auto &pg_column : input.column_ids) {
+		/* Postgres AttrNumbers are 1-based */
+		pg_column_order[pg_column + 1] = scan_index++;
 	}
 
 	auto table_filters = input.filters.get();
 	m_column_filters.resize(input.column_ids.size(), 0);
 
-	for (auto const &[attr_id, column_idx] : ordered_input_columns) {
-		m_input_columns.emplace_back(attr_id, column_idx);
+	for (auto const &[att_num, duckdb_scanned_index] : pg_column_order) {
+		m_columns_to_scan.emplace_back(att_num, duckdb_scanned_index);
 
 		if (!table_filters) {
 			continue;
 		}
 
-		auto column_filter_it = table_filters->filters.find(column_idx);
+		auto column_filter_it = table_filters->filters.find(duckdb_scanned_index);
 		if (column_filter_it != table_filters->filters.end()) {
-			m_column_filters[column_idx] = column_filter_it->second.get();
+			m_column_filters[duckdb_scanned_index] = column_filter_it->second.get();
 		}
 	}
 
@@ -70,12 +76,12 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 	 */
 	if (input.CanRemoveFilterColumns()) {
 		for (const auto &projection_id : input.projection_ids) {
-			m_output_columns.emplace_back(projection_id, input.column_ids[projection_id]);
+			m_output_columns.emplace_back(projection_id, input.column_ids[projection_id] + 1);
 		}
 	} else {
-		duckdb::idx_t i = 0;
+		duckdb::idx_t output_index = 0;
 		for (const auto &column_id : input.column_ids) {
-			m_output_columns.emplace_back(i++, column_id);
+			m_output_columns.emplace_back(output_index++, column_id + 1);
 		}
 	}
 }

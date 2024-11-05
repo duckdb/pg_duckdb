@@ -27,21 +27,22 @@ public:
 	TupleDesc m_tuple_desc;
 	std::mutex m_lock; // Lock for one replacement scan
 	bool m_count_tuples_only;
-	/* Postgres column id to duckdb output vector idx */
-	std::vector<duckdb::pair<duckdb::column_t, duckdb::idx_t>> m_input_columns;
+	/* Postgres column id to duckdb scanned index. The scanned index is DuckDB
+	 * its scan order of the columns. */
+	std::vector<duckdb::pair<AttrNumber, duckdb::idx_t>> m_columns_to_scan;
+	/* These are indexed by the DuckDB scan index */
 	std::vector<duckdb::TableFilter *> m_column_filters;
 	/* Duckdb output vector idx with information about postgres column id */
-	duckdb::vector<duckdb::pair<duckdb::idx_t, duckdb::column_t>> m_output_columns;
+	duckdb::vector<duckdb::pair<duckdb::idx_t, AttrNumber>> m_output_columns;
 	std::atomic<std::uint32_t> m_total_row_count;
 	duckdb::map<int, Datum> m_relation_missing_attrs;
 };
 
 class PostgresScanLocalState {
 public:
-	PostgresScanLocalState(const PostgresScanGlobalState *psgs)
-	    : m_output_vector_size(0), m_exhausted_scan(false) {
+	PostgresScanLocalState(const PostgresScanGlobalState *psgs) : m_output_vector_size(0), m_exhausted_scan(false) {
 		if (!psgs->m_count_tuples_only) {
-			const auto s = psgs->m_input_columns.size();
+			const auto s = psgs->m_columns_to_scan.size();
 			values.reserve(s);
 			nulls.reserve(s);
 		}
