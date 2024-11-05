@@ -1,5 +1,8 @@
 #include "pgduckdb/catalog/pgduckdb_transaction_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
+#include "pgduckdb/catalog/pgduckdb_schema.hpp"
+#include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 
 #include "duckdb/main/attached_database.hpp"
@@ -27,6 +30,7 @@ PostgresTransactionManager::StartTransaction(duckdb::ClientContext &context) {
 duckdb::ErrorData
 PostgresTransactionManager::CommitTransaction(duckdb::ClientContext &context, duckdb::Transaction &transaction) {
 	duckdb::lock_guard<duckdb::mutex> l(transaction_lock);
+	ClosePostgresRelations(context);
 	transactions.erase(transaction);
 	return duckdb::ErrorData();
 }
@@ -34,6 +38,10 @@ PostgresTransactionManager::CommitTransaction(duckdb::ClientContext &context, du
 void
 PostgresTransactionManager::RollbackTransaction(duckdb::Transaction &transaction) {
 	duckdb::lock_guard<duckdb::mutex> l(transaction_lock);
+	duckdb::shared_ptr<duckdb::ClientContext> context = transaction.context.lock();
+	if (context) {
+		ClosePostgresRelations(*context);
+	}
 	transactions.erase(transaction);
 }
 

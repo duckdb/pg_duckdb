@@ -8,6 +8,7 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
+#include "access/relation.h"   // relation_open and relation_close
 #include "utils/rel.h"         // RelationGetDescr
 #include "optimizer/plancat.h" // estimate_rel_size
 #include "catalog/namespace.h" // makeRangeVarFromNameList
@@ -22,13 +23,15 @@ PostgresTable::PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntr
 
 PostgresTable::~PostgresTable() {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-	RelationClose(rel);
+
+	PostgresFunctionGuard(relation_close, rel, NoLock);
 }
 
 Relation
 PostgresTable::OpenRelation(Oid relid) {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-	return PostgresFunctionGuard(RelationIdGetRelation, relid);
+	/* We lock the tables as well just to be sure */
+	return PostgresFunctionGuard(relation_open, relid, AccessShareLock);
 }
 
 void

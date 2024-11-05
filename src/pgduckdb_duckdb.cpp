@@ -6,8 +6,9 @@
 
 extern "C" {
 #include "postgres.h"
+#include "access/xact.h"
 #include "catalog/namespace.h"
-#include "utils/lsyscache.h" // get_relname_relid
+#include "utils/lsyscache.h"  // get_relname_relid
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "common/file_perm.h"
 }
@@ -18,7 +19,6 @@ extern "C" {
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
-
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -55,7 +55,7 @@ CheckDirectory(const std::string &directory) {
 }
 
 std::string
-CreateOrGetDirectoryPath(const char* directory_name) {
+CreateOrGetDirectoryPath(const char *directory_name) {
 	std::ostringstream oss;
 	oss << DataDir << "/" << directory_name;
 	const auto duckdb_data_directory = oss.str();
@@ -132,7 +132,7 @@ DuckDBManager::Initialize() {
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*database);
+	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
 	auto &context = *connection->context;
 
@@ -245,27 +245,19 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	}
 }
 
-duckdb::unique_ptr<duckdb::Connection>
-DuckDBManager::CreateConnection() {
-	if (!pgduckdb::IsDuckdbExecutionAllowed()) {
-		elog(ERROR, "DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role");
-	}
-
-	auto &instance = Get();
-	auto connection = duckdb::make_uniq<duckdb::Connection>(*instance.database);
-	auto &context = *connection->context;
-
+void
+DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 	const auto secret_table_last_seq = GetSeqLastValue("secrets_table_seq");
-	if (instance.IsSecretSeqLessThan(secret_table_last_seq)) {
-		instance.DropSecrets(context);
-		instance.LoadSecrets(context);
-		instance.UpdateSecretSeq(secret_table_last_seq);
+	if (IsSecretSeqLessThan(secret_table_last_seq)) {
+		DropSecrets(context);
+		LoadSecrets(context);
+		UpdateSecretSeq(secret_table_last_seq);
 	}
 
 	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");
-	if (instance.IsExtensionsSeqLessThan(extensions_table_last_seq)) {
-		instance.LoadExtensions(context);
-		instance.UpdateExtensionsSeq(extensions_table_last_seq);
+	if (IsExtensionsSeqLessThan(extensions_table_last_seq)) {
+		LoadExtensions(context);
+		UpdateExtensionsSeq(extensions_table_last_seq);
 	}
 
 	auto http_file_cache_set_dir_query =
@@ -284,10 +276,99 @@ DuckDBManager::CreateConnection() {
 		 */
 		pgduckdb::DuckDBQueryOrThrow(context,
 		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
-		instance.disabled_filesystems_is_set = true;
+	}
+}
+
+/*
+ * Creates a new connection to the global DuckDB instance. This should only be
+ * used in some rare cases, where a temporary new connection is needed instead
+ * of the global cached connection that is returned by GetConnection.
+ */
+duckdb::unique_ptr<duckdb::Connection>
+DuckDBManager::CreateConnection() {
+	if (!pgduckdb::IsDuckdbExecutionAllowed()) {
+		elog(ERROR, "DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role");
 	}
 
+	auto &instance = Get();
+	auto connection = duckdb::make_uniq<duckdb::Connection>(*instance.database);
+	auto &context = *connection->context;
+
+	instance.RefreshConnectionState(context);
+
 	return connection;
+}
+
+static bool transaction_handler_configured = false;
+static bool started_duckdb_transaction = false;
+
+void
+DuckDBManager::DuckdbXactCallback_Cpp(XactEvent event, void *arg) {
+	if (!started_duckdb_transaction) {
+		return;
+	}
+	auto &instance = DuckDBManager::Get();
+	auto &context = *instance.connection->context;
+
+	switch (event) {
+	case XACT_EVENT_PRE_COMMIT:
+	case XACT_EVENT_PARALLEL_PRE_COMMIT:
+		// Commit the DuckDB transaction too
+		context.transaction.Commit();
+		started_duckdb_transaction = false;
+		break;
+
+	case XACT_EVENT_ABORT:
+	case XACT_EVENT_PARALLEL_ABORT:
+		// Abort the Postgres transaction too
+		context.transaction.Rollback(nullptr);
+		started_duckdb_transaction = false;
+		break;
+
+	case XACT_EVENT_PREPARE:
+	case XACT_EVENT_PRE_PREPARE:
+		// Throw an error for prepare events
+		throw duckdb::NotImplementedException("Prepared transactions are not implemented in DuckDB.");
+
+	case XACT_EVENT_COMMIT:
+	case XACT_EVENT_PARALLEL_COMMIT:
+		// No action needed for commit event, we already did committed the
+		// DuckDB transaction in the PRE_COMMIT event.
+		break;
+
+	default:
+		// Fail hard if future PG versions introduce a new event
+		throw duckdb::NotImplementedException("Not implemented XactEvent: %d", event);
+	}
+}
+
+void
+DuckDBManager::DuckdbXactCallback(XactEvent event, void *arg) {
+	InvokeCPPFunc(DuckdbXactCallback_Cpp, event, arg);
+}
+
+/* Returns the cached connection to the global DuckDB instance. */
+duckdb::Connection *
+DuckDBManager::GetConnection() {
+	if (!pgduckdb::IsDuckdbExecutionAllowed()) {
+		elog(ERROR, "DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role");
+	}
+
+	auto &instance = Get();
+	auto &context = *instance.connection->context;
+
+	if (!transaction_handler_configured) {
+		PostgresFunctionGuard(RegisterXactCallback, DuckdbXactCallback, nullptr);
+	}
+
+	if (!started_duckdb_transaction) {
+		// context.transaction.SetAutoCommit(false);
+		instance.connection->BeginTransaction();
+		started_duckdb_transaction = true;
+	}
+	instance.RefreshConnectionState(context);
+
+	return instance.connection.get();
 }
 
 } // namespace pgduckdb
