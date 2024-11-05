@@ -1,5 +1,6 @@
 #include "duckdb.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "pgduckdb/pgduckdb_guc.h"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 

@@ -16,6 +16,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"

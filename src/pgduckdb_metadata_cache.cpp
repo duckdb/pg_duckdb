@@ -25,6 +25,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_guc.h"
 
 namespace pgduckdb {
 struct {
