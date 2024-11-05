@@ -92,8 +92,6 @@ __CPPFunctionGuard__(const char *func_name, FuncArgs... args) {
 	Datum func_name##_cpp(PG_FUNCTION_ARGS)
 
 
-std::string CreateOrGetDirectoryPath(const char* directory_name);
-
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query);
