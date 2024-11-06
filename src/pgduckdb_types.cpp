@@ -232,41 +232,177 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 	return UUIDPGetDatum(postgres_uuid);
 }
 
-struct PGTypeInfo {
-	int16 typlen;
-	bool typbyval;
-	char typalign;
+template <int32_t OID>
+struct PostgresTypeTraits;
+
+// Specializations for each type
+// BOOL type
+template <>
+struct PostgresTypeTraits<BOOLOID> {
+	static constexpr int16_t typlen = 1;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'c';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertBoolDatum(val);
+	}
 };
 
-PGTypeInfo
-GetPGTypeInfo(Oid typid) {
-	PGTypeInfo info;
-	HeapTuple tp;
-	Form_pg_type typtup;
+// CHAR type
+template <>
+struct PostgresTypeTraits<CHAROID> {
+	static constexpr int16_t typlen = 1;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'c';
 
-	tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(typid));
-	if (!HeapTupleIsValid(tp))
-		elog(ERROR, "cache lookup failed for type %u", typid);
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertCharDatum(val);
+	}
+};
 
-	typtup = (Form_pg_type)GETSTRUCT(tp);
-	info.typlen = typtup->typlen;
-	info.typbyval = typtup->typbyval;
-	info.typalign = typtup->typalign;
+// INT2 type (smallint)
+template <>
+struct PostgresTypeTraits<INT2OID> {
+	static constexpr int16_t typlen = 2;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 's';
 
-	ReleaseSysCache(tp);
-	return info;
-}
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertInt2Datum(val);
+	}
+};
+
+// INT4 type (integer)
+template <>
+struct PostgresTypeTraits<INT4OID> {
+	static constexpr int16_t typlen = 4;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'i';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertInt4Datum(val);
+	}
+};
+
+// INT8 type (bigint)
+template <>
+struct PostgresTypeTraits<INT8OID> {
+	static constexpr int16_t typlen = 8;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'd';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertInt8Datum(val);
+	}
+};
+
+// FLOAT4 type (real)
+template <>
+struct PostgresTypeTraits<FLOAT4OID> {
+	static constexpr int16_t typlen = 4;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'i';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertFloatDatum(val);
+	}
+};
+
+// FLOAT8 type (double precision)
+template <>
+struct PostgresTypeTraits<FLOAT8OID> {
+	static constexpr int16_t typlen = 8;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'd';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertDoubleDatum(val);
+	}
+};
+
+// TIMESTAMP type
+template <>
+struct PostgresTypeTraits<TIMESTAMPOID> {
+	static constexpr int16_t typlen = 8;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'd';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertTimestampDatum(val);
+	}
+};
+
+// DATE type
+template <>
+struct PostgresTypeTraits<DATEOID> {
+	static constexpr int16_t typlen = 4;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'i';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertDateDatum(val);
+	}
+};
+
+// UUID type
+template <>
+struct PostgresTypeTraits<UUIDOID> {
+	static constexpr int16_t typlen = 16;
+	static constexpr bool typbyval = false;
+	static constexpr char typalign = 'c';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertUUIDDatum(val);
+	}
+};
+
+// NUMERIC type
+template <>
+struct PostgresTypeTraits<NUMERICOID> {
+	static constexpr int16_t typlen = -1; // variable-length
+	static constexpr bool typbyval = false;
+	static constexpr char typalign = 'i';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertNumericDatum(val);
+	}
+};
+
+// VARCHAR type
+template <>
+struct PostgresTypeTraits<VARCHAROID> {
+	static constexpr int16_t typlen = -1; // variable-length
+	static constexpr bool typbyval = false;
+	static constexpr char typalign = 'i';
+
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertVarCharDatum(val);
+	}
+};
 
 template <int32_t OID>
 struct PostgresOIDMapping {
 	static constexpr int32_t postgres_oid = OID;
+	static constexpr int16_t typlen = PostgresTypeTraits<OID>::typlen;
+	static constexpr bool typbyval = PostgresTypeTraits<OID>::typbyval;
+	static constexpr char typalign = PostgresTypeTraits<OID>::typalign;
 
-	static PGTypeInfo
-	GetPGTypeInfo() {
-		return pgduckdb::GetPGTypeInfo(postgres_oid);
+	static Datum
+	ToDatum(const duckdb::Value &val) {
+		return PostgresTypeTraits<OID>::ToDatum(val);
 	}
-
-	static Datum ToDatum(const duckdb::Value &val);
 };
 
 template <>
@@ -346,9 +482,8 @@ struct PODArray {
 public:
 	static ArrayType *
 	ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
-		PGTypeInfo type_info = MAPPING::GetPGTypeInfo();
-		return construct_md_array(datums, nulls, ndims, dims, lower_bound, MAPPING::postgres_oid, type_info.typlen,
-		                          type_info.typbyval, type_info.typalign);
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, MAPPING::postgres_oid, MAPPING::typlen,
+		                          MAPPING::typbyval, MAPPING::typalign);
 	}
 
 	static Datum
