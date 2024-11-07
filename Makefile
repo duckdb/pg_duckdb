@@ -42,10 +42,12 @@ SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUI
 
 include Makefile.global
 
-# We need the DuckDB header files to build the .o files. We depend on the
-# duckdb Makefile, because that target pulls in the submodule which includes
-# those header files.
-$(OBJS): third_party/duckdb/Makefile
+# We need the DuckDB header files to build our own .o files. We depend on the
+# duckdb submodule HEAD, because that target pulls in the submodule which
+# includes those header files. This does mean that we rebuild our .o files
+# whenever we change the DuckDB version, but that seems like a fairly
+# reasonable thing to do anyway, even if not always strictly necessary always.
+$(OBJS): .git/modules/third_party/duckdb/HEAD
 
 COMPILE.cc.bc += $(PG_CPPFLAGS)
 COMPILE.cxx.bc += $(PG_CXXFLAGS)
@@ -73,10 +75,10 @@ check: installcheck pycheck
 
 duckdb: $(FULL_DUCKDB_LIB)
 
-third_party/duckdb/Makefile:
+.git/modules/third_party/duckdb/HEAD:
 	git submodule update --init --recursive
 
-$(FULL_DUCKDB_LIB): third_party/duckdb/Makefile
+$(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \
