@@ -43,8 +43,8 @@ public:
 	PostgresScanLocalState(const PostgresScanGlobalState *psgs) : m_output_vector_size(0), m_exhausted_scan(false) {
 		if (!psgs->m_count_tuples_only) {
 			const auto s = psgs->m_columns_to_scan.size();
-			values.reserve(s);
-			nulls.reserve(s);
+			values.resize(s);
+			nulls.resize(s);
 		}
 	}
 
