@@ -18,9 +18,10 @@ See our [official documentation][docs] for further details.
 	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, and arrays.
 	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
 - Read and Write support for object storage (AWS S3, Cloudflare R2, or Google GCS):
-	- Read parquet and CSV files:
+	- Read parquet, CSV and JSON files:
 		- `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
 		- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
+		- `SELECT n FROM read_json('s3://bucket/file.json') AS (n int)`
 		- You can pass globs and arrays to these functions, just like in DuckDB
 	- Enable the DuckDB Iceberg extension using `SELECT duckdb.install_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
 	- Enable the DuckDB Delta extension using `SELECT duckdb.install_extension('delta')` and read Delta files with `delta_scan`.
@@ -121,7 +122,7 @@ pg_duckdb relies on DuckDB's vectorized execution engine to read and write data 
 
 ### Object storage bucket (AWS S3, Cloudflare R2, or Google GCS)
 
-Querying data stored in Parquet, CSV, and Iceberg format can be done with `read_parquet`, `read_csv`, `iceberg_scan` and `delta_scan` respectively.
+Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done with `read_parquet`, `read_csv`, `read_json`, `iceberg_scan` and `delta_scan` respectively.
 
 1. Add a credential to enable DuckDB's httpfs support.
 

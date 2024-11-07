@@ -56,3 +56,9 @@ LIMIT 1;
 
 SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg');
 SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths => true);
+
+-- read_json
+
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT);
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT, c FLOAT) WHERE c > 50.4;
+SELECT a, b, c FROM read_json('../../data/table.json') AS (a INT, b VARCHAR, c FLOAT) WHERE c > 50.4 AND c < 51.2;
