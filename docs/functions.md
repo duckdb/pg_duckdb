@@ -13,6 +13,7 @@ Note: `ALTER EXTENSION pg_duckdb WITH SCHEMA schema` is not currently supported.
 | [`iceberg_scan`](#iceberg_scan) | Read an Iceberg dataset |
 | [`iceberg_metadata`](#iceberg_metadata) | Read Iceberg metadata |
 | [`iceberg_snapshots`](#iceberg_snapshots) | Read Iceberg snapshot information |
+| [`delta_scan`](#delta_scan) | Read a Delta dataset |
 
 ## DuckDB Administration Functions
 
@@ -171,6 +172,35 @@ Optional parameters mirror DuckDB's `iceberg_metadata` function based on the Duc
 #### <a name="iceberg_snapshots"></a>`iceberg_snapshots(path TEXT, /* optional parameters */) -> TODO`
 
 TODO
+
+#### <a name="delta_scan"></a>`delta_scan(path TEXT) -> SETOF record`
+
+Reads a delta dataset, either from a remote (via httpfs) or a local location.
+
+Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
+
+To use `delta_scan`, you must enable the `delta` extension:
+
+```sql
+SELECT duckdb.install_extension('delta');
+```
+
+```sql
+SELECT COUNT(i) FROM delta_scan('/path/to/delta/dataset') AS (int i);
+```
+
+Further information:
+
+* [DuckDB Delta extension documentation](https://duckdb.org/docs/extensions/delta)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text | The path, either to a remote httpfs location or a local location (if enabled) of the delta dataset to read. |
+
+##### Optional Parameters
+
 
 #### <a name="cache"></a>`duckdb.cache(path TEXT, /* optional parameters */) -> bool`
 

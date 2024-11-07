@@ -60,3 +60,23 @@ SELECT "sepal.length", filename
 
 SELECT * FROM read_csv('../../non-existing-file.csv') AS ("sepal.length" FLOAT);
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'IO Error: No files found that match the pattern "../../non-existing-file.csv"
+-- delta_scan
+SELECT duckdb.install_extension('delta');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT count(a) FROM delta_scan('../../data/delta_table') AS (a INT);
+ count 
+-------
+   100
+(1 row)
+
+SELECT * FROM delta_scan('../../data/delta_table') AS (a INT, b VARCHAR) WHERE (a = 1 OR b = 'delta_table_3');
+ a |       b       
+---+---------------
+ 1 | delta_table_1
+ 3 | delta_table_3
+(2 rows)
+
