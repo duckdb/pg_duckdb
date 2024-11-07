@@ -127,3 +127,22 @@ SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths
  lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro |                        2 | DATA             | DELETED | EXISTING | lineitem_iceberg/data/00000-411-0792dcfe-4e25-4ca3-8ada-175286069a47-00001.parquet
 (2 rows)
 
+-- read_json
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT);
+ count 
+-------
+   100
+(1 row)
+
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT, c FLOAT) WHERE c > 50.4;
+ count 
+-------
+    51
+(1 row)
+
+SELECT a, b, c FROM read_json('../../data/table.json') AS (a INT, b VARCHAR, c FLOAT) WHERE c > 50.4 AND c < 51.2;
+ a  |    b    |  c   
+----+---------+------
+ 50 | json_50 | 50.5
+(1 row)
+
