@@ -106,6 +106,7 @@ ConvertNumeric(T value, idx_t scale) {
 	result.dscale = scale;
 	auto &weight = result.weight;
 	auto &ndigits = result.ndigits;
+
 	constexpr idx_t MAX_DIGITS = sizeof(T) * 4;
 	if (value < 0) {
 		value = -value;
@@ -123,11 +124,13 @@ ConvertNumeric(T value, idx_t scale) {
 		integer_part = value / OP::GetPowerOfTen(scale);
 		fractional_part = value % OP::GetPowerOfTen(scale);
 	}
+
 	uint16_t integral_digits[MAX_DIGITS];
 	uint16_t fractional_digits[MAX_DIGITS];
 	int32_t integral_ndigits;
 	// split the integral part into parts of up to NBASE (4 digits => 0..9999)
 	integral_ndigits = 0;
+
 	while (integer_part > 0) {
 		integral_digits[integral_ndigits++] = uint16_t(integer_part % T(NBASE));
 		integer_part /= T(NBASE);
@@ -148,10 +151,14 @@ ConvertNumeric(T value, idx_t scale) {
 		fractional_digits[i] = uint16_t(fractional_part % NBASE);
 		fractional_part /= NBASE;
 	}
+
 	ndigits = integral_ndigits + fractional_ndigits;
+
 	result.buf = (NumericDigit *)palloc(ndigits * sizeof(NumericDigit));
 	result.digits = result.buf;
+
 	auto &digits = result.digits;
+
 	idx_t digits_idx = 0;
 	for (idx_t i = integral_ndigits; i > 0; i--) {
 		digits[digits_idx++] = integral_digits[i - 1];
@@ -159,6 +166,7 @@ ConvertNumeric(T value, idx_t scale) {
 	for (idx_t i = fractional_ndigits; i > 0; i--) {
 		digits[digits_idx++] = fractional_digits[i - 1];
 	}
+
 	return result;
 }
 
@@ -485,10 +493,10 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	auto arr = OP::ConstructArray(datums, nulls, number_of_dimensions, dimensions, lower_bounds);
 
 	// Free allocated memory
-    if (append_state.expected_values > 0) {
-        pfree(datums);
-        pfree(nulls);
-    }
+	if (append_state.expected_values > 0) {
+		pfree(datums);
+		pfree(nulls);
+	}
 	pfree(dimensions);
 	pfree(lower_bounds);
 
@@ -663,14 +671,16 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	case BPCHARARRAYOID:
 	case TEXTOID:
 	case TEXTARRAYOID:
-	case VARCHARARRAYOID:
-	case VARCHAROID: {
+	case VARCHAROID:
+	case VARCHARARRAYOID: {
 		base_type = duckdb::LogicalTypeId::VARCHAR;
 		break;
 	}
 	case DATEOID:
+	case DATEARRAYOID: {
 		base_type = duckdb::LogicalTypeId::DATE;
 		break;
+	}
 	case TIMESTAMPOID:
 	case TIMESTAMPARRAYOID: {
 		base_type = duckdb::LogicalTypeId::TIMESTAMP;
