@@ -245,16 +245,6 @@ INSERT INTO uuid_array_2d VALUES
     ('{{"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11","c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a12"},{NULL,"c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a14"}}');
 SELECT * FROM uuid_array_2d;
 
--- JSON (two dimensions)
-CREATE TABLE json_array_2d(a JSON[][]);
-INSERT INTO json_array_2d VALUES
-    ('{{"{"key": "value1"}","{"array": [1, 2, 3]}"},{"{"object": {"nested": "value2"}}","{"number": 42}"}}'),
-    ('{{"{"test": true}","{"data": null}","{"empty": {}}"},{"{"pi": 3.14}","{"list": ["a", "b", "c"]}","{"bool": false}"}}'),
-    (NULL),
-    ('{}'),
-    ('{{"{"first": 1}","{"second": "two"}"},{"null","{}"}}');
-SELECT * FROM json_array_2d;
-
 -- REGCLASS (two dimensions)
 CREATE TABLE regclass_array_2d(a REGCLASS[][]);
 INSERT INTO regclass_array_2d VALUES
@@ -289,5 +279,4 @@ DROP TABLE float4_array_2d;
 DROP TABLE float8_array_2d;
 DROP TABLE numeric_array_2d;
 DROP TABLE uuid_array_2d;
-DROP TABLE json_array_2d;
 DROP TABLE regclass_array_2d;

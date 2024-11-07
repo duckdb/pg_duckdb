@@ -128,9 +128,9 @@ ConvertNumeric(T value, idx_t scale) {
 	uint16_t integral_digits[MAX_DIGITS];
 	uint16_t fractional_digits[MAX_DIGITS];
 	int32_t integral_ndigits;
+
 	// split the integral part into parts of up to NBASE (4 digits => 0..9999)
 	integral_ndigits = 0;
-
 	while (integer_part > 0) {
 		integral_digits[integral_ndigits++] = uint16_t(integer_part % T(NBASE));
 		integer_part /= T(NBASE);
@@ -156,7 +156,6 @@ ConvertNumeric(T value, idx_t scale) {
 
 	result.buf = (NumericDigit *)palloc(ndigits * sizeof(NumericDigit));
 	result.digits = result.buf;
-
 	auto &digits = result.digits;
 
 	idx_t digits_idx = 0;
@@ -935,7 +934,6 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 			duck_type = &child_type;
 		}
 		auto child_type_id = duck_type->id();
-
 		switch (child_type_id) {
 		case duckdb::LogicalTypeId::BOOLEAN:
 			return BOOLARRAYOID;
