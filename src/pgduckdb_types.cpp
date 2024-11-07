@@ -21,7 +21,6 @@ extern "C" {
 #include "utils/timestamp.h"
 }
 
-#include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
@@ -549,16 +548,6 @@ public:
 		auto &values = duckdb::ListValue::GetChildren(value);
 		idx_t to_append = values.size();
 
-		if (to_append == 0 && dimension < number_of_dimensions - 1) {
-			for (auto idx = dimension; idx < number_of_dimensions; idx++) {
-				dimensions[idx] = 0;
-			}
-			if (dimension == 0) {
-				expected_values = 0;
-			}
-			return;
-		}
-
 		D_ASSERT(dimension < number_of_dimensions);
 		if (dimensions[dimension] == -1) {
 			// This dimension is not set yet
@@ -634,6 +623,16 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	auto nulls = append_state.nulls;
 	auto dimensions = append_state.dimensions;
 	auto lower_bounds = append_state.lower_bounds;
+
+	// When we insert an empty array into multi-dimensions array,
+	// the dimensions[1] to dimension[number_of_dimensions-1] will not be set and always be -1.
+	for (idx_t i = 0; i < number_of_dimensions; i++) {
+		if (dimensions[i] == -1) {
+			// This dimension is not set yet, we should set them to 0.
+			// Otherwise, it will cause some issues when we call ConstructArray.
+			dimensions[i] = 0;
+		}
+	}
 
 	auto arr = OP::ConstructArray(datums, nulls, number_of_dimensions, dimensions, lower_bounds);
 
