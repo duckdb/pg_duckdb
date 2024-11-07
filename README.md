@@ -23,6 +23,7 @@ See our [official documentation][docs] for further details.
 		- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
 		- You can pass globs and arrays to these functions, just like in DuckDB
 	- Enable the DuckDB Iceberg extension using `SELECT duckdb.install_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
+	- Enable the DuckDB Delta extension using `SELECT duckdb.install_extension('delta')` and read Delta files with `delta_scan`.
 	- Write a query — or an entire table — to parquet in object storage.
 		- `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
 		- `COPY table TO 's3://...'`
@@ -120,7 +121,7 @@ pg_duckdb relies on DuckDB's vectorized execution engine to read and write data 
 
 ### Object storage bucket (AWS S3, Cloudflare R2, or Google GCS)
 
-Querying data stored in Parquet, CSV, and Iceberg format can be done with `read_parquet`, `read_csv`, and `iceberg_scan` respectively.
+Querying data stored in Parquet, CSV, and Iceberg format can be done with `read_parquet`, `read_csv`, `iceberg_scan` and `delta_scan` respectively.
 
 1. Add a credential to enable DuckDB's httpfs support.
 

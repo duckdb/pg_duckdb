@@ -22,3 +22,11 @@ SELECT "sepal.length", filename
     AS ("sepal.length" FLOAT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
 
 SELECT * FROM read_csv('../../non-existing-file.csv') AS ("sepal.length" FLOAT);
+
+
+-- delta_scan
+
+SELECT duckdb.install_extension('delta');
+
+SELECT count(a) FROM delta_scan('../../data/delta_table') AS (a INT);
+SELECT * FROM delta_scan('../../data/delta_table') AS (a INT, b VARCHAR) WHERE (a = 1 OR b = 'delta_table_3');
