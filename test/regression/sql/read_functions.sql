@@ -56,6 +56,3 @@ LIMIT 1;
 
 SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg');
 SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths => true);
-
-
-
