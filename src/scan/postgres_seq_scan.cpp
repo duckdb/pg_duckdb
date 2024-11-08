@@ -2,6 +2,7 @@
 
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/logger.hpp"
 #include <inttypes.h>
 
 extern "C" {
@@ -20,7 +21,7 @@ PostgresSeqScanGlobalState::PostgresSeqScanGlobalState(Relation rel, duckdb::Tab
 	m_global_state->InitGlobalState(input);
 	m_global_state->m_tuple_desc = RelationGetDescr(m_rel);
 	m_global_state->InitRelationMissingAttrs(m_global_state->m_tuple_desc);
-	elog(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
+	pdlog(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 
 PostgresSeqScanGlobalState::~PostgresSeqScanGlobalState() {
