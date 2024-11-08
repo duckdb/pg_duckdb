@@ -1,5 +1,11 @@
 #pragma once
 
+extern "C" {
+bool errstart(int elevel, const char *domain);
+void errfinish(const char *filename, int lineno, const char *funcname);
+int	errmsg_internal(const char *fmt,...);
+}
+
 namespace pgduckdb {
 
 /* PG Error level codes */
@@ -14,14 +20,29 @@ namespace pgduckdb {
 #define WARNING		19
 #define PGWARNING	19
 #define WARNING_CLIENT_ONLY	20
-#define ERROR		21
-#define PGERROR		21
-#define FATAL		22
-#define PANIC		23
 
-void pgduckdb_logger(int log_level, const char *filename, int lineno, const char *pattern, ...);
+// From PG elog.h
+#if defined(errno) && defined(__linux__)
+#define pd_prevent_errno_in_scope() int __errno_location pg_attribute_unused()
+#elif defined(errno) && (defined(__darwin__) || defined(__FreeBSD__))
+#define pd_prevent_errno_in_scope() int __error pg_attribute_unused()
+#else
+#define pd_prevent_errno_in_scope()
+#endif
 
-#define pdlog(level, ...) \
-	pgduckdb_logger(level, __FILE__, __LINE__, __VA_ARGS__);
+#define pd_ereport_domain(elevel, domain, ...)	\
+	do { \
+		pd_prevent_errno_in_scope(); \
+		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level"); \
+		if (errstart(elevel, domain)) \
+			__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__); \
+	} while(0)
+
+
+#define pd_ereport(elevel, ...)	\
+	pd_ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
+
+#define pdlog(elevel, ...)  \
+	pd_ereport(elevel, errmsg_internal(__VA_ARGS__))
 
 } // namespace pgduckdb
