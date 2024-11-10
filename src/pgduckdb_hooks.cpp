@@ -53,11 +53,11 @@ IsCatalogTable(List *tables) {
 }
 
 static bool
-IsPartitionedTables(List *tables) {
+IsPartitionedTable(List *tables) {
 	foreach_node(RangeTblEntry, table, tables) {
 		if (table->rtekind == RTE_SUBQUERY) {
 			/* Check whether the table in the subquery is a partitioned table */
-			if (IsPartitionedTables(table->subquery->rtable)) {
+			if (IsPartitionedTable(table->subquery->rtable)) {
 				return true;
 			}
 		}
@@ -165,10 +165,10 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	}
 
 	/*
-	 * When accessing the partition table, we temporarily let PG handle it instead of DuckDB.
+	 * When accessing the partitioned table, we temporarily let PG handle it instead of DuckDB.
 	 */
-	if (IsPartitionedTables(query->rtable)) {
-		elog(elevel, "DuckDB does not support querying PG partition tables");
+	if (IsPartitionedTable(query->rtable)) {
+		elog(elevel, "DuckDB does not support querying PG partitioned table");
 		return false;
 	}
 
