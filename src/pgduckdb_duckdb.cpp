@@ -6,7 +6,6 @@
 
 extern "C" {
 #include "postgres.h"
-#include "access/xact.h"
 #include "catalog/namespace.h"
 #include "utils/lsyscache.h"  // get_relname_relid
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
@@ -14,6 +13,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
@@ -300,52 +300,7 @@ DuckDBManager::CreateConnection() {
 }
 
 static bool transaction_handler_configured = false;
-static bool started_duckdb_transaction = false;
-
-void
-DuckDBManager::DuckdbXactCallback_Cpp(XactEvent event, void *arg) {
-	if (!started_duckdb_transaction) {
-		return;
-	}
-	auto &instance = DuckDBManager::Get();
-	auto &context = *instance.connection->context;
-
-	switch (event) {
-	case XACT_EVENT_PRE_COMMIT:
-	case XACT_EVENT_PARALLEL_PRE_COMMIT:
-		// Commit the DuckDB transaction too
-		context.transaction.Commit();
-		started_duckdb_transaction = false;
-		break;
-
-	case XACT_EVENT_ABORT:
-	case XACT_EVENT_PARALLEL_ABORT:
-		// Abort the Postgres transaction too
-		context.transaction.Rollback(nullptr);
-		started_duckdb_transaction = false;
-		break;
-
-	case XACT_EVENT_PREPARE:
-	case XACT_EVENT_PRE_PREPARE:
-		// Throw an error for prepare events
-		throw duckdb::NotImplementedException("Prepared transactions are not implemented in DuckDB.");
-
-	case XACT_EVENT_COMMIT:
-	case XACT_EVENT_PARALLEL_COMMIT:
-		// No action needed for commit event, we already did committed the
-		// DuckDB transaction in the PRE_COMMIT event.
-		break;
-
-	default:
-		// Fail hard if future PG versions introduce a new event
-		throw duckdb::NotImplementedException("Not implemented XactEvent: %d", event);
-	}
-}
-
-void
-DuckDBManager::DuckdbXactCallback(XactEvent event, void *arg) {
-	InvokeCPPFunc(DuckdbXactCallback_Cpp, event, arg);
-}
+bool started_duckdb_transaction = false;
 
 /* Returns the cached connection to the global DuckDB instance. */
 duckdb::Connection *
@@ -358,7 +313,7 @@ DuckDBManager::GetConnection() {
 	auto &context = *instance.connection->context;
 
 	if (!transaction_handler_configured) {
-		PostgresFunctionGuard(RegisterXactCallback, DuckdbXactCallback, nullptr);
+		RegisterDuckdbXactCallback();
 	}
 
 	if (!started_duckdb_transaction) {
@@ -368,6 +323,17 @@ DuckDBManager::GetConnection() {
 	}
 	instance.RefreshConnectionState(context);
 
+	return instance.connection.get();
+}
+
+/*
+ * Returns the cached connection to the global DuckDB instance, but does not do
+ * any checks nor refreshes the connection state. Only use this in rare cases
+ * where you know the connection is already in a good state.
+ */
+duckdb::Connection *
+DuckDBManager::GetConnectionUnsafe() {
+	auto &instance = Get();
 	return instance.connection.get();
 }
 

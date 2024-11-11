@@ -2,13 +2,9 @@
 
 #include "duckdb.hpp"
 
-// FIXME: Make sure we don't need this
-extern "C" {
-#include "postgres.h"
-#include "access/xact.h"
-}
-
 namespace pgduckdb {
+
+extern bool started_duckdb_transaction;
 
 class DuckDBManager {
 public:
@@ -24,6 +20,7 @@ public:
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
 
 	static duckdb::Connection *GetConnection();
+	static duckdb::Connection *GetConnectionUnsafe();
 
 	inline const std::string &
 	GetDefaultDBName() const {
@@ -48,9 +45,6 @@ private:
 	void LoadExtensions(duckdb::ClientContext &);
 	void LoadFunctions(duckdb::ClientContext &);
 	void RefreshConnectionState(duckdb::ClientContext &);
-
-	static void DuckdbXactCallback_Cpp(XactEvent event, void *arg);
-	static void DuckdbXactCallback(XactEvent event, void *arg);
 
 	inline bool
 	IsSecretSeqLessThan(int64_t seq) const {
