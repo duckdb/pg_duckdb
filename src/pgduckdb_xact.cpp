@@ -26,7 +26,7 @@ DuckdbXactCallback_Cpp(XactEvent event, void *arg) {
 
 	case XACT_EVENT_ABORT:
 	case XACT_EVENT_PARALLEL_ABORT:
-		// Abort the Postgres transaction too
+		// Abort the DuckDB transaction too
 		context.transaction.Rollback(nullptr);
 		started_duckdb_transaction = false;
 		break;
