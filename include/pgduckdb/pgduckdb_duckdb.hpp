@@ -18,7 +18,6 @@ public:
 	}
 
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
-
 	static duckdb::Connection *GetConnection();
 	static duckdb::Connection *GetConnectionUnsafe();
 
