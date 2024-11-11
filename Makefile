@@ -103,12 +103,7 @@ clean-all: clean clean-regression clean-duckdb
 
 $(CPP_ONLY_FILE):
 	@rm -f $(CPP_ONLY_FILE)
-	@echo "// Auto-generated file, run 'make update_cpp_guard' to update" > $(CPP_ONLY_FILE)
-	@echo "#if \\" >> $(CPP_ONLY_FILE)
-	for m in $$(grep -R '_H$$' "$(INCLUDEDIR)" | grep define | cut -d \: -f 2 | cut -d \  -f 2 | sort); do echo "defined($$m) || \\"; done >> $(CPP_ONLY_FILE)
-	@echo "false" >> $(CPP_ONLY_FILE)
-	@echo "static_assert(false, \"No Postgres header should be included in this file.\");" >> $(CPP_ONLY_FILE)
-	@echo "#endif" >> $(CPP_ONLY_FILE)
+	./scripts/generate-pg-include-guard.sh $(CPP_ONLY_FILE) $(INCLUDEDIR)
 
 lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
