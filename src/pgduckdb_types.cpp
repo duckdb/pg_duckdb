@@ -1072,6 +1072,13 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 	auto &values = scan_local_state->values;
 	auto &nulls = scan_local_state->nulls;
 
+	// Track detoasted values and their cleanup status
+	struct DetoastedValue {
+		Datum value;
+		bool should_free;
+	};
+	std::unordered_map<idx_t, DetoastedValue> detoasted_values;
+
 	/* First we are fetching all required columns ordered by column id
 	 * and than we need to write this tuple into output vector. Output column id list
 	 * could be out of order so we need to match column values from ordered list.
@@ -1089,9 +1096,32 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 			continue;
 		}
 
+		// If this is a varlena type and needs output later, detoast it now
+		auto attr = scan_global_state->m_tuple_desc->attrs[attr_num - 1];
+		if (!is_null && attr.attlen == -1) {
+			// Check if this column needs output
+			for (const auto &[_, output_attr] : scan_global_state->m_output_columns) {
+				if (output_attr == attr_num) {
+					bool should_free = false;
+					Datum detoasted = DetoastPostgresDatum(reinterpret_cast<varlena *>(values[duckdb_scanned_index]), &should_free);
+					detoasted_values[attr_num] = {detoasted, should_free};
+					values[duckdb_scanned_index] = detoasted; // Use detoasted value for filtering
+					break;
+				}
+			}
+		}
+
+		// It's safe to use ApplyValueFilter directly for the detoasted values.
+		// Because DetoastPostgresDatum handles already detoasted values correctly
 		const auto valid_tuple = ApplyValueFilter(*filter, values[duckdb_scanned_index], is_null,
 		                                          scan_global_state->m_tuple_desc->attrs[attr_num - 1].atttypid);
 		if (!valid_tuple) {
+			// Clean up any detoasted values we've created
+			for (auto &[_, dv] : detoasted_values) {
+				if (dv.should_free) {
+					duckdb_free(reinterpret_cast<void *>(dv.value));
+				}
+			}
 			return;
 		}
 	}
@@ -1100,26 +1130,43 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 	int duckdb_output_index = 0;
 	for (auto const &[duckdb_scanned_index, attr_num] : scan_global_state->m_output_columns) {
 		auto &result = output.data[duckdb_output_index];
-		if (nulls[duckdb_scanned_index]) {
-			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
+
+		// Check if we have a pre-detoasted value
+		auto it = detoasted_values.find(attr_num);
+		if (it != detoasted_values.end()) {
+			// Use existing detoasted value
+			ConvertPostgresToDuckValue(scan_global_state->m_tuple_desc->attrs[attr_num - 1].atttypid, it->second.value,
+			                           result, scan_local_state->m_output_vector_size);
 		} else {
-			auto attr = scan_global_state->m_tuple_desc->attrs[attr_num - 1];
-			if (attr.attlen == -1) {
-				bool should_free = false;
-				values[duckdb_scanned_index] =
-				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[duckdb_scanned_index]), &should_free);
-				ConvertPostgresToDuckValue(attr.atttypid, values[duckdb_scanned_index], result,
-				                           scan_local_state->m_output_vector_size);
-				if (should_free) {
-					duckdb_free(reinterpret_cast<void *>(values[duckdb_scanned_index]));
-				}
+			// Process new value
+			if (nulls[duckdb_scanned_index]) {
+				auto &array_mask = duckdb::FlatVector::Validity(result);
+				array_mask.SetInvalid(scan_local_state->m_output_vector_size);
 			} else {
-				ConvertPostgresToDuckValue(attr.atttypid, values[duckdb_scanned_index], result,
-				                           scan_local_state->m_output_vector_size);
+				auto attr = scan_global_state->m_tuple_desc->attrs[attr_num - 1];
+				if (attr.attlen == -1) {
+					bool should_free = false;
+					values[duckdb_scanned_index] =
+						DetoastPostgresDatum(reinterpret_cast<varlena *>(values[duckdb_scanned_index]), &should_free);
+					ConvertPostgresToDuckValue(attr.atttypid, values[duckdb_scanned_index], result,
+											   scan_local_state->m_output_vector_size);
+					if (should_free) {
+						duckdb_free(reinterpret_cast<void *>(values[duckdb_scanned_index]));
+					}
+				} else {
+					ConvertPostgresToDuckValue(attr.atttypid, values[duckdb_scanned_index], result,
+											   scan_local_state->m_output_vector_size);
+				}
 			}
 		}
 		duckdb_output_index++;
+	}
+
+	// Cleanup detoasted values
+	for (auto &[_, dv] : detoasted_values) {
+		if (dv.should_free) {
+			duckdb_free(reinterpret_cast<void *>(dv.value));
+		}
 	}
 
 	scan_local_state->m_output_vector_size++;
