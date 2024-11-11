@@ -6,6 +6,7 @@
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/logger.hpp"
 
 extern "C" {
 #include "utils/rel.h"         // RelationGetDescr
@@ -41,7 +42,7 @@ PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, Relation rel) {
 		auto duck_type = ConvertPostgresToDuckColumnType(attr);
 		info.columns.AddColumn(duckdb::ColumnDefinition(col_name, duck_type));
 		/* Log column name and type */
-		elog(DEBUG2, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
+		pd_log(DEBUG2, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
 		     duck_type.ToString().c_str());
 	}
 }
