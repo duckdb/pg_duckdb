@@ -1,5 +1,7 @@
 #pragma once
 
+#include "pgduckdb/pgduckdb_process_lock.hpp"
+
 extern "C" {
 bool errstart(int elevel, const char *domain);
 void errfinish(const char *filename, int lineno, const char *funcname);
@@ -34,15 +36,19 @@ namespace pgduckdb {
 	do { \
 		pd_prevent_errno_in_scope(); \
 		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level"); \
-		if (errstart(elevel, domain)) \
-			__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__); \
+		if (message_level_is_interesting(elevel)) { \
+			std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock()); \
+			if (errstart(elevel, domain)) \
+				__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__); \
+		} \
 	} while(0)
 
+#define TEXTDOMAIN NULL
 
 #define pd_ereport(elevel, ...)	\
 	pd_ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
 
-#define pdlog(elevel, ...)  \
+#define pd_log(elevel, ...)  \
 	pd_ereport(elevel, errmsg_internal(__VA_ARGS__))
 
 } // namespace pgduckdb
