@@ -102,15 +102,6 @@ CreatePlan(Query *query, bool throw_error) {
 	duckdb_node->custom_private = list_make1(query);
 	duckdb_node->methods = &duckdb_scan_scan_methods;
 
-	/*
-	 * We close the relations here, to make sure we don't leak references to
-	 * the execution phase, because a different ResourceOwner is used there.
-	 * So we re-open them during actual query execution with the correct
-	 * ResourceOwner.
-	 */
-	auto duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
-	pgduckdb::ClosePostgresRelations(*duckdb_connection->context);
-
 	return (Plan *)duckdb_node;
 }
 

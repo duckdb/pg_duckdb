@@ -24,14 +24,34 @@ PostgresTable::PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntr
 PostgresTable::~PostgresTable() {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
 
+	/*
+	 * We always open & close the relation using the
+	 * TopTransactionResourceOwner to avoid having to close the relation
+	 * whenever Postgres switches resource owners, because opening a relation
+	 * with one resource owner and closing it with another is not allowed.
+	 */
+	ResourceOwner saveResourceOwner = CurrentResourceOwner;
+	CurrentResourceOwner = TopTransactionResourceOwner;
 	PostgresFunctionGuard(relation_close, rel, NoLock);
+
+	CurrentResourceOwner = saveResourceOwner;
 }
 
 Relation
 PostgresTable::OpenRelation(Oid relid) {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-	/* We lock the tables as well just to be sure */
-	return PostgresFunctionGuard(relation_open, relid, AccessShareLock);
+
+	/*
+	 * We always open & close the relation using the
+	 * TopTransactionResourceOwner to avoid having to close the relation
+	 * whenever Postgres switches resource owners, because opening a relation
+	 * with one resource owner and closing it with another is not allowed.
+	 */
+	ResourceOwner saveResourceOwner = CurrentResourceOwner;
+	CurrentResourceOwner = TopTransactionResourceOwner;
+	auto relation = PostgresFunctionGuard(relation_open, relid, AccessShareLock);
+	CurrentResourceOwner = saveResourceOwner;
+	return relation;
 }
 
 void
