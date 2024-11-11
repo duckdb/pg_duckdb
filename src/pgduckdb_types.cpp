@@ -1087,29 +1087,33 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 	/* Read heap tuple with all required columns. */
 	for (auto const &[attr_num, duckdb_scanned_index] : scan_global_state->m_columns_to_scan) {
 		bool is_null = false;
-		values[duckdb_scanned_index] =
+		Datum value =
 		    HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state, attr_num,
 		                                  &is_null, scan_global_state->m_relation_missing_attrs);
-		nulls[duckdb_scanned_index] = is_null;
+
+		bool needs_output = scan_global_state->m_attr_to_output_map.find(attr_num) != scan_global_state->m_attr_to_output_map.end();
+		if (needs_output) {
+			values[duckdb_scanned_index] = value;
+			nulls[duckdb_scanned_index] = is_null;
+		}
+
 		auto filter = scan_global_state->m_column_filters[duckdb_scanned_index];
 		if (!filter) {
 			continue;
 		}
 
-        bool needs_output = scan_global_state->m_attr_to_output_map.find(attr_num) != scan_global_state->m_attr_to_output_map.end();
-
 		// If this is a varlena type and needs output later, detoast it now
 		auto attr = scan_global_state->m_tuple_desc->attrs[attr_num - 1];
 		if (!is_null && attr.attlen == -1 && needs_output) {
 			bool should_free = false;
-			Datum detoasted = DetoastPostgresDatum(reinterpret_cast<varlena *>(values[duckdb_scanned_index]), &should_free);
+			Datum detoasted = DetoastPostgresDatum(reinterpret_cast<varlena *>(value), &should_free);
 			detoasted_values[attr_num] = {detoasted, should_free};
-			values[duckdb_scanned_index] = detoasted; // Use detoasted value for filtering
+			value = detoasted; // Use detoasted value for filtering
 		}
 
 		// It's safe to use ApplyValueFilter directly for the detoasted values.
 		// Because DetoastPostgresDatum handles already detoasted values correctly
-		const auto valid_tuple = ApplyValueFilter(*filter, values[duckdb_scanned_index], is_null,
+		const auto valid_tuple = ApplyValueFilter(*filter, value, is_null,
 		                                          scan_global_state->m_tuple_desc->attrs[attr_num - 1].atttypid);
 		if (!valid_tuple) {
 			// Clean up any detoasted values we've created
