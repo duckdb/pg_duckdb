@@ -41,8 +41,8 @@ DuckdbXactCallback_Cpp(XactEvent event, void *arg) {
 		// No action needed for commit event, we already did committed the
 		// DuckDB transaction in the PRE_COMMIT event. We don't commit the
 		// DuckDB transaction here, because any failure to commit would
-		// then turn into a Postgres PANIC (i.e. a crash). To quote the relevant postgres
-		// comment:
+		// then turn into a Postgres PANIC (i.e. a crash). To quote the
+		// relevant Postgres comment:
 		// > Note that if an error is raised here, it's too late to abort
 		// > the transaction. This should be just noncritical resource
 		// > releasing.

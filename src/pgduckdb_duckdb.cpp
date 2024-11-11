@@ -328,8 +328,10 @@ DuckDBManager::GetConnection() {
 
 /*
  * Returns the cached connection to the global DuckDB instance, but does not do
- * any checks nor refreshes the connection state. Only use this in rare cases
- * where you know the connection is already in a good state.
+ * any checks required to correctly initialize the DuckDB transaction nor
+ * refreshes the secrets/extensions/etc. Only use this in rare cases where you
+ * know for sure that the connection is already initialized for the correctly
+ * for the current query, and you just want a pointer to it.
  */
 duckdb::Connection *
 DuckDBManager::GetConnectionUnsafe() {
