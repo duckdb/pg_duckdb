@@ -1,16 +1,12 @@
 #include "pgduckdb/catalog/pgduckdb_transaction_manager.hpp"
 #include "duckdb/main/client_context.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
-#include "pgduckdb/catalog/pgduckdb_schema.hpp"
-#include "pgduckdb/catalog/pgduckdb_table.hpp"
+#include "pgduckdb/pg/snapshots.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 
 #include "duckdb/main/attached_database.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "utils/snapmgr.h" // GetActiveSnapshot
-}
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
 

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pgduckdb/pg_declarations.hpp"
+#include "pgduckdb/pg/declarations.hpp"
 
 namespace pgduckdb {
 bool IsExtensionRegistered();

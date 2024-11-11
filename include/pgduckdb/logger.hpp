@@ -6,6 +6,7 @@ extern "C" {
 bool errstart(int elevel, const char *domain);
 void errfinish(const char *filename, int lineno, const char *funcname);
 int	errmsg_internal(const char *fmt,...);
+bool message_level_is_interesting(int elevel);
 }
 
 namespace pgduckdb {
@@ -24,6 +25,12 @@ namespace pgduckdb {
 #define WARNING_CLIENT_ONLY	20
 
 // From PG elog.h
+#ifdef __GNUC__
+#define pg_attribute_unused() __attribute__((unused))
+#else
+#define pg_attribute_unused()
+#endif
+
 #if defined(errno) && defined(__linux__)
 #define pd_prevent_errno_in_scope() int __errno_location pg_attribute_unused()
 #elif defined(errno) && (defined(__darwin__) || defined(__FreeBSD__))
