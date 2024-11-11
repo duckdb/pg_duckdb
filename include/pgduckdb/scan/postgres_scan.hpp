@@ -34,6 +34,8 @@ public:
 	std::vector<duckdb::TableFilter *> m_column_filters;
 	/* Duckdb output vector idx with information about postgres column id */
 	duckdb::vector<duckdb::pair<duckdb::idx_t, AttrNumber>> m_output_columns;
+	/* Maps attribute number to output index for quick lookup */
+    duckdb::map<duckdb::idx_t, duckdb::idx_t> m_attr_to_output_map;
 	std::atomic<std::uint32_t> m_total_row_count;
 	duckdb::map<int, Datum> m_relation_missing_attrs;
 };

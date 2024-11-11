@@ -84,6 +84,10 @@ PostgresScanGlobalState::InitGlobalState(duckdb::TableFunctionInitInput &input) 
 			m_output_columns.emplace_back(output_index++, column_id + 1);
 		}
 	}
+
+	for (const auto &[duckdb_scanned_index, attr_num] : m_output_columns) {
+		m_attr_to_output_map.emplace(attr_num, duckdb_scanned_index);
+	}
 }
 
 void

@@ -1077,7 +1077,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		Datum value;
 		bool should_free;
 	};
-	std::unordered_map<idx_t, DetoastedValue> detoasted_values;
+	duckdb::map<idx_t, DetoastedValue> detoasted_values;
 
 	/* First we are fetching all required columns ordered by column id
 	 * and than we need to write this tuple into output vector. Output column id list
@@ -1096,19 +1096,15 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 			continue;
 		}
 
+        bool needs_output = scan_global_state->m_attr_to_output_map.find(attr_num) != scan_global_state->m_attr_to_output_map.end();
+
 		// If this is a varlena type and needs output later, detoast it now
 		auto attr = scan_global_state->m_tuple_desc->attrs[attr_num - 1];
-		if (!is_null && attr.attlen == -1) {
-			// Check if this column needs output
-			for (const auto &[_, output_attr] : scan_global_state->m_output_columns) {
-				if (output_attr == attr_num) {
-					bool should_free = false;
-					Datum detoasted = DetoastPostgresDatum(reinterpret_cast<varlena *>(values[duckdb_scanned_index]), &should_free);
-					detoasted_values[attr_num] = {detoasted, should_free};
-					values[duckdb_scanned_index] = detoasted; // Use detoasted value for filtering
-					break;
-				}
-			}
+		if (!is_null && attr.attlen == -1 && needs_output) {
+			bool should_free = false;
+			Datum detoasted = DetoastPostgresDatum(reinterpret_cast<varlena *>(values[duckdb_scanned_index]), &should_free);
+			detoasted_values[attr_num] = {detoasted, should_free};
+			values[duckdb_scanned_index] = detoasted; // Use detoasted value for filtering
 		}
 
 		// It's safe to use ApplyValueFilter directly for the detoasted values.
