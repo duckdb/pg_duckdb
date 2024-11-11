@@ -16,7 +16,7 @@ PostgresSeqScanGlobalState::PostgresSeqScanGlobalState(Relation rel, duckdb::Tab
     : m_global_state(duckdb::make_shared_ptr<PostgresScanGlobalState>()),
       m_heap_reader_global_state(duckdb::make_shared_ptr<HeapReaderGlobalState>(rel)), m_rel(rel) {
 	m_global_state->InitGlobalState(input);
-	m_global_state->m_tuple_desc = RelationGetDescr(m_rel);
+	m_global_state->m_tuple_desc = PDRelationGetDescr(m_rel);
 	m_global_state->InitRelationMissingAttrs(m_global_state->m_tuple_desc);
 	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
