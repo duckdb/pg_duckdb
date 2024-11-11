@@ -4,6 +4,8 @@
 #include "duckdb/common/reference_map.hpp"
 #include "pgduckdb/pg_declarations.hpp"
 
+#include "generated/cpp_only_file.hpp" // Must be last include.
+
 namespace pgduckdb {
 
 class PostgresCatalog;

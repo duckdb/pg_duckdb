@@ -3,6 +3,8 @@
 #include "duckdb/transaction/transaction.hpp"
 #include "pgduckdb/pg_declarations.hpp"
 
+#include "generated/cpp_only_file.hpp" // Must be last include.
+
 namespace pgduckdb {
 
 class PostgresCatalog;

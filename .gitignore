@@ -1,3 +1,4 @@
+include/generated/
 .clangd
 .depend
 .deps

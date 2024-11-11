@@ -22,6 +22,8 @@ DUCKDB_CMAKE_VARS = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
 # DuckDB agains the release build of MotherDuck.
 DUCKDB_DISABLE_ASSERTIONS ?= 0
 
+CPP_ONLY_FILE = include/generated/cpp_only_file.hpp
+
 DUCKDB_BUILD_CXX_FLAGS=
 DUCKDB_BUILD_TYPE=
 ifeq ($(DUCKDB_BUILD), Debug)
@@ -47,7 +49,7 @@ include Makefile.global
 # includes those header files. This does mean that we rebuild our .o files
 # whenever we change the DuckDB version, but that seems like a fairly
 # reasonable thing to do anyway, even if not always strictly necessary always.
-$(OBJS): .git/modules/third_party/duckdb/HEAD
+$(OBJS): .git/modules/third_party/duckdb/HEAD $(CPP_ONLY_FILE)
 
 COMPILE.cc.bc += $(PG_CPPFLAGS)
 COMPILE.cxx.bc += $(PG_CXXFLAGS)
@@ -97,6 +99,16 @@ clean-duckdb:
 install: install-duckdb
 
 clean-all: clean clean-regression clean-duckdb
+	rm -f $(CPP_ONLY_FILE)
+
+$(CPP_ONLY_FILE):
+	@rm -f $(CPP_ONLY_FILE)
+	@echo "// Auto-generated file, run 'make update_cpp_guard' to update" > $(CPP_ONLY_FILE)
+	@echo "#if \\" >> $(CPP_ONLY_FILE)
+	for m in $$(grep -R '_H$$' "$(INCLUDEDIR)" | grep define | cut -d \: -f 2 | cut -d \  -f 2 | sort); do echo "defined($$m) || \\"; done >> $(CPP_ONLY_FILE)
+	@echo "false" >> $(CPP_ONLY_FILE)
+	@echo "static_assert(false, \"No Postgres header should be included in this file.\");" >> $(CPP_ONLY_FILE)
+	@echo "#endif" >> $(CPP_ONLY_FILE)
 
 lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17
