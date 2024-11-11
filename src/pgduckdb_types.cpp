@@ -1091,7 +1091,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 		    HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state, attr_num,
 		                                  &is_null, scan_global_state->m_relation_missing_attrs);
 
-		bool needs_output = scan_global_state->m_attr_to_output_map.find(attr_num) != scan_global_state->m_attr_to_output_map.end();
+		bool needs_output = scan_global_state->attr_to_output_set.find(attr_num) != scan_global_state->attr_to_output_set.end();
 		if (needs_output) {
 			values[duckdb_scanned_index] = value;
 			nulls[duckdb_scanned_index] = is_null;
