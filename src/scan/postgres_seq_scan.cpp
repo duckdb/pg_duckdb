@@ -3,11 +3,8 @@
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/logger.hpp"
-#include <inttypes.h>
-
-extern "C" {
-#include "utils/rel.h" // RelationGetDescr
-}
+#include "pgduckdb/scan/heap_reader.hpp"
+#include "pgduckdb/pg/relations.hpp"
 
 namespace pgduckdb {
 

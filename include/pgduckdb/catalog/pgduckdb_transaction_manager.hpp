@@ -2,7 +2,7 @@
 
 #include "duckdb/transaction/transaction_manager.hpp"
 #include "duckdb/common/reference_map.hpp"
-#include "pgduckdb/pg_declarations.hpp"
+#include "pgduckdb/pg/declarations.hpp"
 
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 

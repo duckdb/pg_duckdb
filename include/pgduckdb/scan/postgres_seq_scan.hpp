@@ -3,10 +3,14 @@
 #include "duckdb.hpp"
 
 #include "pgduckdb/pgduckdb_guc.h"
-#include "pgduckdb/scan/postgres_scan.hpp"
-#include "pgduckdb/scan/heap_reader.hpp"
+#include "pgduckdb/pg/declarations.hpp"
 
 namespace pgduckdb {
+
+class HeapReaderGlobalState;
+class HeapReader;
+class PostgresScanGlobalState;
+class PostgresScanLocalState;
 
 // Global State
 
