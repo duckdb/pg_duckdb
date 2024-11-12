@@ -71,12 +71,17 @@ void EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, dou
 }
 
 Oid
-GetRelidFromSchemaAndTable(const char *schema_name, const char *entry_name) {
+PGGetRelidFromSchemaAndTable(const char *schema_name, const char *entry_name) {
 	List *name_list = NIL;
 	name_list = lappend(name_list, makeString(pstrdup(schema_name)));
 	name_list = lappend(name_list, makeString(pstrdup(entry_name)));
 	RangeVar *table_range_var = makeRangeVarFromNameList(name_list);
 	return RangeVarGetRelid(table_range_var, AccessShareLock, true);
+}
+
+Oid
+GetRelidFromSchemaAndTable(const char *schema_name, const char *entry_name) {
+	return PostgresFunctionGuard(PGGetRelidFromSchemaAndTable, schema_name, entry_name);
 }
 
 bool
