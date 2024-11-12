@@ -2,12 +2,12 @@
 
 #include "duckdb.hpp"
 
+#include "pgduckdb/scan/postgres_scan.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "storage/bufmgr.h"
 }
-
-#include "pgduckdb/scan/postgres_scan.hpp"
 
 namespace pgduckdb {
 

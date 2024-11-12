@@ -3,15 +3,13 @@
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pg/relations.hpp"
+
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
 #include "duckdb/catalog/catalog.hpp"
 
-extern "C" {
-#include "catalog/namespace.h" // makeRangeVarFromNameList
-#include "utils/syscache.h"    // RELOID
-#include "utils/rel.h"         // Form_pg_class, RELKIND_VIEW
-}
+#include "pgduckdb/utility/cpp_only_file.hpp"
 
 namespace pgduckdb {
 
@@ -40,30 +38,19 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 		return it->second.get();
 	}
 
-	auto snapshot = schema->snapshot;
-	auto &catalog = schema->catalog;
-
-	List *name_list = NIL;
-	name_list = lappend(name_list, makeString(pstrdup(name.c_str())));
-	name_list = lappend(name_list, makeString(pstrdup(entry_name.c_str())));
-
-	RangeVar *table_range_var = makeRangeVarFromNameList(name_list);
-	Oid rel_oid = RangeVarGetRelid(table_range_var, AccessShareLock, true);
-	if (rel_oid == InvalidOid) {
-		// Table could not be found
-		return nullptr;
+	Oid rel_oid = GetRelidFromSchemaAndTable(name.c_str(), entry_name.c_str());
+	if (!IsValidOid(rel_oid)) {
+		return nullptr; // Table could not be found
 	}
 
 	// Check if the Relation is a VIEW
-	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(rel_oid));
-	if (!HeapTupleIsValid(tuple)) {
+	auto tuple = SearchSysCacheForRel(rel_oid);
+	if (!IsValidHeapTuple(tuple)) {
 		throw duckdb::CatalogException("Cache lookup failed for relation %u", rel_oid);
 	}
 
-	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
-
 	// Check if the relation is a view
-	if (relForm->relkind == RELKIND_VIEW) {
+	if (IsRelView(tuple)) {
 		ReleaseSysCache(tuple);
 		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which
 		// will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
@@ -79,8 +66,8 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	PostgresTable::SetTableInfo(info, rel);
 
 	auto cardinality = PostgresTable::GetTableCardinality(rel);
-	auto table = duckdb::make_uniq<PostgresHeapTable>(catalog, *schema, info, rel, cardinality, snapshot);
-	tables[entry_name] = std::move(table);
+	tables.emplace(entry_name, duckdb::make_uniq<PostgresHeapTable>(schema->catalog, *schema, info, rel, cardinality,
+	                                                                schema->snapshot));
 	return tables[entry_name].get();
 }
 

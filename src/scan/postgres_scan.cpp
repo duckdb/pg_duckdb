@@ -12,8 +12,11 @@
 #include "duckdb/common/enums/statement_type.hpp"
 #include "duckdb/common/enums/expression_type.hpp"
 
+#include "pgduckdb/scan/postgres_scan.hpp"
+
 extern "C" {
 #include "postgres.h"
+#include "access/htup_details.h"
 #include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "optimizer/planmain.h"
@@ -25,7 +28,6 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
-#include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 

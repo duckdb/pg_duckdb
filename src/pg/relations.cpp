@@ -4,10 +4,13 @@
 
 extern "C" {
 #include "postgres.h"
-#include "access/relation.h"   // relation_open and relation_close
-#include "optimizer/plancat.h" // estimate_rel_size
+#include "access/htup_details.h" // GETSTRUCT
+#include "access/relation.h"     // relation_open and relation_close
+#include "catalog/namespace.h"   // makeRangeVarFromNameList, RangeVarGetRelid
+#include "optimizer/plancat.h"   // estimate_rel_size
 #include "utils/rel.h"
 #include "utils/resowner.h" // CurrentResourceOwner and TopTransactionResourceOwner
+#include "utils/syscache.h" // RELOID
 }
 
 namespace pgduckdb {
@@ -18,19 +21,23 @@ TupleDesc RelationGetDescr(Relation rel) {
 	return rel->rd_att;
 }
 
-int GetTupleDescNatts(const TupleDesc tupleDesc) {
+int
+GetTupleDescNatts(const TupleDesc tupleDesc) {
 	return tupleDesc->natts;
 }
 
-const char *GetAttName(const Form_pg_attribute att) {
+const char *
+GetAttName(const Form_pg_attribute att) {
 	return NameStr(att->attname);
 }
 
-Form_pg_attribute GetAttr(const TupleDesc tupleDesc, int i) {
+Form_pg_attribute
+GetAttr(const TupleDesc tupleDesc, int i) {
 	return &tupleDesc->attrs[i];
 }
 
-Relation OpenRelation(Oid relationId) {
+Relation
+OpenRelation(Oid relationId) {
 	/*
 	 * We always open & close the relation using the
 	 * TopTransactionResourceOwner to avoid having to close the relation
@@ -44,7 +51,8 @@ Relation OpenRelation(Oid relationId) {
 	return rel;
 }
 
-void CloseRelation(Relation rel) {
+void
+CloseRelation(Relation rel) {
 	/*
 	 * We always open & close the relation using the
 	 * TopTransactionResourceOwner to avoid having to close the relation
@@ -60,6 +68,40 @@ void CloseRelation(Relation rel) {
 
 void EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
 	PostgresFunctionGuard(estimate_rel_size, rel, attr_widths, pages, tuples, allvisfrac);
+}
+
+Oid
+GetRelidFromSchemaAndTable(const char *schema_name, const char *entry_name) {
+	List *name_list = NIL;
+	name_list = lappend(name_list, makeString(pstrdup(schema_name)));
+	name_list = lappend(name_list, makeString(pstrdup(entry_name)));
+	RangeVar *table_range_var = makeRangeVarFromNameList(name_list);
+	return RangeVarGetRelid(table_range_var, AccessShareLock, true);
+}
+
+bool
+IsValidOid(Oid oid) {
+	return oid != InvalidOid;
+}
+
+HeapTuple
+SearchSysCacheForRel(Oid oid) {
+	return SearchSysCache1(RELOID, ObjectIdGetDatum(oid));
+}
+
+bool
+IsValidHeapTuple(HeapTuple tuple) {
+	return HeapTupleIsValid(tuple);
+}
+
+bool
+IsRelView(HeapTuple tuple) {
+	return ((Form_pg_class)GETSTRUCT(tuple))->relkind == RELKIND_VIEW;
+}
+
+void
+ReleaseSysCache(HeapTuple tuple) {
+	::ReleaseSysCache(tuple);
 }
 
 } // namespace pgduckdb

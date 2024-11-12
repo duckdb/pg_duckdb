@@ -1,5 +1,7 @@
 #include "duckdb.hpp"
 
+#include "pgduckdb/scan/heap_reader.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "pgstat.h"
@@ -10,7 +12,6 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
-#include "pgduckdb/scan/heap_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 

@@ -2,15 +2,10 @@
 
 #include "duckdb.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "miscadmin.h"
-#include "access/relscan.h"
-#include "executor/executor.h"
-#include "nodes/pathnodes.h"
-}
-
+#include "pgduckdb/pg/declarations.hpp"
 #include "pgduckdb/utility/allocator.hpp"
+
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
 

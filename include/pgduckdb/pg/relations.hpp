@@ -20,4 +20,16 @@ Form_pg_attribute GetAttr(const TupleDesc tupleDesc, int i);
 
 void EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac);
 
-}
+Oid GetRelidFromSchemaAndTable(const char *, const char *);
+
+bool IsValidOid(Oid);
+
+HeapTuple SearchSysCacheForRel(Oid);
+
+bool IsValidHeapTuple(HeapTuple);
+
+bool IsRelView(HeapTuple);
+
+void ReleaseSysCache(HeapTuple);
+
+} // namespace pgduckdb
