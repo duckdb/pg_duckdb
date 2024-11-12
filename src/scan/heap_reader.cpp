@@ -58,6 +58,7 @@ HeapReaderLocalState::HeapReaderLocalState(Relation relation,
                                            duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state) {
 
 	m_nblocks = heap_reader_global_state->m_nblocks;
+	diff_t = 0;
 
 	/* Empty table so nothing to do */
 	if (heap_reader_global_state->m_nblocks == 0) {
@@ -81,7 +82,10 @@ HeapReaderLocalState::HeapReaderLocalState(Relation relation,
 
 	m_thread_worker_shared_state->workers_global_shared_state = dsm_segment_handle(heap_reader_global_state->m_segment);
 	m_thread_worker_shared_state->buffer = InvalidBuffer;
-	pg_atomic_init_flag_impl(&m_thread_worker_shared_state->buffer_ready);
+
+	sem_init(&m_thread_worker_shared_state->buffer_ready, 1, 0);
+	sem_init(&m_thread_worker_shared_state->buffer_consumed, 1, 1);
+
 	pg_atomic_init_flag(&m_thread_worker_shared_state->worker_done);
 	pg_atomic_test_set_flag(&m_thread_worker_shared_state->thread_running);
 
@@ -99,6 +103,7 @@ HeapReaderLocalState::~HeapReaderLocalState() {
 			dsm_detach(m_segment);
 		}
 	}
+	elog(WARNING, "[THREAD] Busy wait: %f", diff_t);
 	DuckdbProcessLock::GetLock().unlock();
 }
 
@@ -115,18 +120,26 @@ HeapReaderLocalState::GetWorkerBuffer(Buffer *buffer) {
 		return;
 	}
 
+	// elog(WARNING, "*buffer %d", *buffer);
+
 	if (BufferIsValid(*buffer)) {
-		pg_atomic_clear_flag(&m_thread_worker_shared_state->buffer_ready);
+		sem_post(&m_thread_worker_shared_state->buffer_consumed);
 	}
 
+	time_t start_t, end_t;
+	time(&start_t);
 	/* Is buffer ready for reading */
-	while (pg_atomic_unlocked_test_flag(&m_thread_worker_shared_state->buffer_ready)) {
-		/* No workers - scan done*/
+	int sem_error_status;
+
+	do {
+		sem_error_status = sem_wait(&m_thread_worker_shared_state->buffer_ready);
 		if (!pg_atomic_unlocked_test_flag(&m_thread_worker_shared_state->worker_done)) {
 			*buffer = InvalidBuffer;
 			return;
 		}
-	}
+	} while (sem_error_status < 0 && errno == EINTR);
+	time(&end_t);
+	diff_t += difftime(end_t, start_t);
 
 	*buffer = m_thread_worker_shared_state->buffer;
 }
@@ -144,9 +157,10 @@ HeapReaderLocalState::GetLocalBuffer(Buffer *buffer, duckdb::shared_ptr<HeapRead
 		return;
 	}
 
-	*buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, hrgs->m_last_assigned_local_block_number, RBM_NORMAL, m_buffer_access_strategy);
+	*buffer = ReadBufferExtended(m_relation, MAIN_FORKNUM, hrgs->m_last_assigned_local_block_number, RBM_NORMAL,
+	                             m_buffer_access_strategy);
 	LockBuffer(*buffer, BUFFER_LOCK_SHARE);
-	 hrgs->m_last_assigned_local_block_number++;
+	hrgs->m_last_assigned_local_block_number++;
 }
 
 //

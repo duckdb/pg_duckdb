@@ -27,7 +27,7 @@ static constexpr int32_t block_thread_threshold = 2024;
 
 idx_t
 PostgresSeqScanGlobalState::MaxThreads() const {
-	return RelationGetNumberOfBlocks(m_rel) < block_thread_threshold ? 1 : 2;
+	return RelationGetNumberOfBlocks(m_rel) < block_thread_threshold ? 1 : std::max(2, duckdb_max_threads_per_postgres_scan);
 }
 
 

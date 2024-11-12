@@ -7,6 +7,9 @@ extern "C" {
 #include "storage/bufmgr.h"
 #include "storage/dsm.h"
 #include "tcop/tcopprot.h"
+#include "utils/wait_event.h"
+
+#include <time.h>
 }
 
 #include "pgduckdb/scan/heap_reader_worker.hpp"
@@ -18,6 +21,7 @@ PGDuckDBHeapReaderWorker(Datum arg) {
 	pqsignal(SIGTERM, die);
 	dsm_segment *thread_worker_segment = nullptr, *worker_shared_state_segment = nullptr;
 	BufferAccessStrategy strategy = GetAccessStrategy(BAS_BULKREAD);
+	int semaphore_error_status;
 
 	BackgroundWorkerUnblockSignals();
 
@@ -35,6 +39,7 @@ PGDuckDBHeapReaderWorker(Datum arg) {
 
 	Relation relation = RelationIdGetRelation(worker_shared_state->relid);
 	bool thread_running = true;
+ 	double diff_t = 0;
 
 	while (thread_running) {
 
@@ -56,8 +61,12 @@ PGDuckDBHeapReaderWorker(Datum arg) {
 
 		SpinLockRelease(&worker_shared_state->worker_lock);
 
+		Buffer previous_buffer = InvalidBuffer;
+
 		/* Let's fetch */
 		for (int i = worker_start_scan_block; i < worker_end_scan_block; i++) {
+
+			time_t start_t, end_t;
 
 			if (!thread_running) {
 				break;
@@ -66,23 +75,34 @@ PGDuckDBHeapReaderWorker(Datum arg) {
 			Buffer buffer = ReadBufferExtended(relation, MAIN_FORKNUM, i, RBM_NORMAL, strategy);
 			LockBuffer(buffer, BUFFER_LOCK_SHARE);
 
+			//elog(WARNING, "[WORKER] %d", buffer);
+
 			/* is previous buffer done */
-			while (!pg_atomic_unlocked_test_flag(&thread_worker_shared_state->buffer_ready)) {
+			do
+			{
+				semaphore_error_status = sem_wait(&thread_worker_shared_state->buffer_consumed);
 				if (pg_atomic_unlocked_test_flag(&thread_worker_shared_state->thread_running)) {
 					thread_running = false;
 					break;
 				}
-			}
+			} while (semaphore_error_status < 0 && errno == EINTR);
+			time(&start_t);
+
+			time(&end_t);
+			diff_t += difftime(end_t, start_t);
 
 			/* Thread exited so we need do cleanup current buffer */
 			if (!thread_running) {
+				UnlockReleaseBuffer(thread_worker_shared_state->buffer);
 				UnlockReleaseBuffer(buffer);
+				break;
 			}
 
-			Buffer previous_buffer = thread_worker_shared_state->buffer;
-
+			previous_buffer = thread_worker_shared_state->buffer;
 			thread_worker_shared_state->buffer = buffer;
-			pg_atomic_test_set_flag(&thread_worker_shared_state->buffer_ready);
+			sem_post(&thread_worker_shared_state->buffer_ready);
+
+			//elog(WARNING, "[WORKER] AFTER RELEASE %d", previous_buffer);
 
 			if (BufferIsValid(previous_buffer)) {
 				UnlockReleaseBuffer(previous_buffer);
@@ -90,18 +110,30 @@ PGDuckDBHeapReaderWorker(Datum arg) {
 		}
 	}
 
+	//elog(WARNING, "[WORKER] thread_running", thread_running);
 	if (thread_running) {
-		/* We are out of blocks fo reading so wait for last buffer to be done */
-		while (!pg_atomic_unlocked_test_flag(&thread_worker_shared_state->buffer_ready)) {
-			if (pg_atomic_unlocked_test_flag(&thread_worker_shared_state->thread_running)) {
-				thread_running = false;
-				break;
-			}
-		}
+			/* We are out of blocks fo reading so wait for last buffer to be done */
+			do
+			{
+				semaphore_error_status = sem_wait(&thread_worker_shared_state->buffer_consumed);
+				int falco;
+				sem_getvalue(&thread_worker_shared_state->buffer_consumed, &falco);
+				//elog(WARNING, "[WORKER thread_running] %d %d", falco, semaphore_error_status);
+				if (pg_atomic_unlocked_test_flag(&thread_worker_shared_state->thread_running)) {
+					thread_running = false;
+					break;
+				}
+			} while (semaphore_error_status < 0 && errno == EINTR);
+		//elog(WARNING, "thead_worker_shared_state->buffer %d", thread_worker_shared_state->buffer);
 		UnlockReleaseBuffer(thread_worker_shared_state->buffer);
 	}
 
+
 	pg_atomic_test_set_flag(&thread_worker_shared_state->worker_done);
+	sem_post(&thread_worker_shared_state->buffer_ready);
+
+
+	elog(WARNING, "[WORKER] Busy wait: %f", diff_t);
 
 	FreeAccessStrategy(strategy);
 	RelationClose(relation);

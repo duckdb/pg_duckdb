@@ -39,6 +39,7 @@ public:
 	dsm_segment *m_segment;
 	PostgresScanThreadWorker *m_thread_worker_shared_state;
 	BufferAccessStrategy m_buffer_access_strategy;
+	double diff_t;
 };
 
 // HeapReader

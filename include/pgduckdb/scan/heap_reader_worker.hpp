@@ -10,13 +10,15 @@ extern "C" {
 #include "storage/s_lock.h"
 }
 
+#include <semaphore.h>
+
 extern "C" {
 PGDLLEXPORT void PGDuckDBHeapReaderWorker(Datum arg);
 }
 
 namespace pgduckdb {
 
-constexpr int32_t WORKER_SCAN_BLOCK = 32;
+constexpr int32_t WORKER_SCAN_BLOCK = 16;
 
 typedef struct PostgresScanWorkerSharedState {
 	/* Relation */
@@ -31,7 +33,8 @@ typedef struct PostgresScanWorkerSharedState {
 typedef struct PostgresScanThreadWorker {
 	dsm_handle workers_global_shared_state;
 	Buffer buffer;
-	pg_atomic_flag buffer_ready;
+	sem_t buffer_ready;
+	sem_t buffer_consumed;
 	pg_atomic_flag worker_done;
 	pg_atomic_flag thread_running;
 } PostgresScanThreadWorker;
