@@ -45,14 +45,14 @@ body:
       required: true
   - type: input
     attributes:
-      label: "pg_duckdb Version:"
-      placeholder: e.g., 0.1.0
+      label: "pg_duckdb Version (if built from source use commit hash):"
+      placeholder: e.g., 0.1.0, a1b2c3d
     validations:
       required: true
   - type: input
     attributes:
-      label: "Postgres Version:"
-      placeholder: e.g., 16.5
+      label: "Postgres Version (if built from source use commit hash):"
+      placeholder: e.g., 16.5, a1b2c3d
     validations:
       required: true
   - type: input
