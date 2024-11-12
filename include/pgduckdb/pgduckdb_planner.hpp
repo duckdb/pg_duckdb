@@ -2,12 +2,10 @@
 
 #include "duckdb.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "optimizer/planner.h"
-}
-
+#include "pgduckdb/pg/declarations.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 extern bool duckdb_explain_analyze;
 

@@ -40,8 +40,15 @@ typedef uint16_t OffsetNumber;
 
 typedef unsigned int Oid;
 
+struct ParamListInfoData;
+typedef struct ParamListInfoData *ParamListInfo;
+
+struct PlannedStmt;
+
 typedef char *Pointer;
 typedef Pointer Page;
+
+struct Query;
 
 struct RelationData;
 typedef struct RelationData *Relation;

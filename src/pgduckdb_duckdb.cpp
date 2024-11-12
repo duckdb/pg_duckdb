@@ -6,6 +6,7 @@
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/scan/postgres_seq_scan.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -19,7 +20,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 #include <sys/stat.h>

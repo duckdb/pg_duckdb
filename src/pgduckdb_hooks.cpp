@@ -1,5 +1,7 @@
 #include "duckdb.hpp"
 
+#include "pgduckdb/pgduckdb_planner.hpp"
+
 extern "C" {
 #include "postgres.h"
 
@@ -13,13 +15,13 @@ extern "C" {
 #include "utils/rel.h"
 #include "utils/relcache.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/planner.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
-#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
