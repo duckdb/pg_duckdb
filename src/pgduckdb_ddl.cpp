@@ -74,8 +74,14 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 		stmt->into->skipData = true;
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
 		auto stmt = castNode(CreateSchemaStmt, parsetree);
-		if (strncmp("ddb$", stmt->schemaname, 4) == 0) {
-			elog(ERROR, "Creating ddb$ schemas is currently not supported");
+		if (stmt->schemaname) {
+			if (strncmp("ddb$", stmt->schemaname, 4) == 0) {
+				elog(ERROR, "Creating ddb$ schemas is currently not supported");
+			}
+		} else if (stmt->authrole && stmt->authrole->roletype == ROLESPEC_CSTRING) {
+			if (strncmp("ddb$", stmt->authrole->rolename, 4) == 0) {
+				elog(ERROR, "Creating ddb$ schemas is currently not supported");
+			}
 		}
 		return;
 	} else if (IsA(parsetree, RenameStmt)) {
@@ -275,16 +281,12 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	 */
 	std::string create_table_string(pgduckdb_get_tabledef(relid));
 
-	auto connection = pgduckdb::DuckDBManager::Get().CreateConnection();
+	auto connection = pgduckdb::DuckDBManager::GetConnection();
 	Query *ctas_query = nullptr;
 
 	if (IsA(parsetree, CreateTableAsStmt) && !ctas_skip_data) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
 		ctas_query = (Query *)stmt->query;
-	}
-
-	if (ctas_query) {
-		pgduckdb::DuckDBQueryOrThrow(*connection, "BEGIN TRANSACTION");
 	}
 
 	pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
@@ -295,8 +297,6 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		std::string insert_string =
 		    std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
 		pgduckdb::DuckDBQueryOrThrow(*connection, insert_string);
-
-		pgduckdb::DuckDBQueryOrThrow(*connection, "COMMIT");
 	}
 
 	PG_RETURN_NULL();
@@ -399,7 +399,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * block" restriction unnecessarily. Otherwise users won't be able to drop
 	 * regular heap tables in transactions anymore.
 	 */
-	duckdb::unique_ptr<duckdb::Connection> connection;
+	duckdb::Connection *connection = nullptr;
 
 	/*
 	 * Now forward the DROP to DuckDB... but only if MotherDuck is actually
@@ -425,8 +425,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 				 * their transaction lifecycles.
 				 */
 				PreventInTransactionBlock(true, "DuckDB queries");
-				connection = pgduckdb::DuckDBManager::CreateConnection();
-				pgduckdb::DuckDBQueryOrThrow(*connection, "BEGIN TRANSACTION");
+				connection = pgduckdb::DuckDBManager::GetConnection();
 			}
 			HeapTuple tuple = SPI_tuptable->vals[proc];
 
@@ -473,8 +472,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 			 * their transaction lifecycles.
 			 */
 			PreventInTransactionBlock(true, "DuckDB queries");
-			connection = pgduckdb::DuckDBManager::CreateConnection();
-			pgduckdb::DuckDBQueryOrThrow(*connection, "BEGIN TRANSACTION");
+			connection = pgduckdb::DuckDBManager::GetConnection();
 		}
 		char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
 		pgduckdb::DuckDBQueryOrThrow(*connection,
@@ -485,9 +483,6 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	AtEOXact_GUC(false, save_nestlevel);
 	SPI_finish();
 
-	if (connection) {
-		pgduckdb::DuckDBQueryOrThrow(*connection, "COMMIT");
-	}
 	PG_RETURN_NULL();
 }
 

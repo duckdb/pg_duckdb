@@ -164,17 +164,3 @@ SELECT * FROM t_heap2;
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
 DROP TABLE webpages, t, t_heap, t_heap2;
-
-
-CREATE TEMP TABLE t(a int);
-ALTER TABLE t ADD COLUMN b int;
--- XXX: A better error message would be nice here, but for now this is acceptable.
-ALTER TABLE t SET ACCESS METHOD heap;
--- XXX: A better error message would be nice here, but for now this is acceptable.
-CREATE INDEX ON t(a);
-
-DROP TABLE t;
-CREATE TEMP TABLE t(a int) USING heap;
-ALTER TABLE t ADD COLUMN b int;
-ALTER TABLE t SET ACCESS METHOD duckdb;
-

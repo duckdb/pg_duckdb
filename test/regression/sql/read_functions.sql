@@ -22,3 +22,43 @@ SELECT "sepal.length", filename
     AS ("sepal.length" FLOAT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
 
 SELECT * FROM read_csv('../../non-existing-file.csv') AS ("sepal.length" FLOAT);
+
+
+-- delta_scan
+
+SELECT duckdb.install_extension('delta');
+
+SELECT count(a) FROM delta_scan('../../data/delta_table') AS (a INT);
+SELECT * FROM delta_scan('../../data/delta_table') AS (a INT, b VARCHAR) WHERE (a = 1 OR b = 'delta_table_3');
+
+
+-- iceberg_*
+
+SELECT duckdb.install_extension('iceberg');
+
+SELECT COUNT(l_orderkey) FROM iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) AS (l_orderkey BIGINT);
+
+-- TPCH query #6
+SELECT
+	sum(l_extendedprice * l_discount) as revenue
+FROM
+	iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) AS
+        (l_extendedprice DOUBLE PRECISION,
+         l_discount DOUBLE PRECISION,
+         l_shipdate DATE,
+         l_quantity DOUBLE PRECISION)
+WHERE
+	l_shipdate >= date '1997-01-01'
+	AND l_shipdate < date '1997-01-01' + interval '1' year
+	AND l_discount between 0.08 - 0.01 and 0.08 + 0.01
+	AND l_quantity < 25
+LIMIT 1;
+
+SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg');
+SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths => true);
+
+-- read_json
+
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT);
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT, c FLOAT) WHERE c > 50.4;
+SELECT a, b, c FROM read_json('../../data/table.json') AS (a INT, b VARCHAR, c FLOAT) WHERE c > 50.4 AND c < 51.2;

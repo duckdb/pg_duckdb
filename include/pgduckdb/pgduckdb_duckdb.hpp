@@ -4,6 +4,8 @@
 
 namespace pgduckdb {
 
+extern bool started_duckdb_transaction;
+
 class DuckDBManager {
 public:
 	static inline DuckDBManager &
@@ -16,6 +18,8 @@ public:
 	}
 
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
+	static duckdb::Connection *GetConnection();
+	static duckdb::Connection *GetConnectionUnsafe();
 
 	inline const std::string &
 	GetDefaultDBName() const {
@@ -39,6 +43,7 @@ private:
 	void DropSecrets(duckdb::ClientContext &);
 	void LoadExtensions(duckdb::ClientContext &);
 	void LoadFunctions(duckdb::ClientContext &);
+	void RefreshConnectionState(duckdb::ClientContext &);
 
 	inline bool
 	IsSecretSeqLessThan(int64_t seq) const {
@@ -60,7 +65,6 @@ private:
 		extensions_table_current_seq = seq;
 	}
 
-	bool disabled_filesystems_is_set;
 	int secret_table_num_rows;
 	int64_t secret_table_current_seq;
 	int64_t extensions_table_current_seq;
@@ -76,6 +80,7 @@ private:
 	 * as the one reported in #279).
 	 */
 	duckdb::DuckDB *database;
+	duckdb::unique_ptr<duckdb::Connection> connection;
 	std::string default_dbname;
 };
 

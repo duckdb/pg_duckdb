@@ -7,6 +7,9 @@ extern "C" {
 #include "utils/builtins.h"
 #include "utils/date.h"
 #include "utils/timestamp.h"
+#if PG_VERSION_NUM >= 160000
+#include "varatt.h"
+#endif
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"

@@ -72,3 +72,12 @@ SELECT COUNT(b) FROM t WHERE a > 3;
 (1 row)
 
 DROP TABLE t;
+CREATE TABLE t (a INT) PARTITION BY LIST (a);
+CREATE TABLE s (b INT);
+SELECT * FROM t JOIN s ON a = b;
+ a | b 
+---+---
+(0 rows)
+
+DROP TABLE t;
+DROP TABLE s;

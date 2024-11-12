@@ -55,7 +55,7 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 }
 
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
-	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>("##FUNC##", __VA_ARGS__)
+	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(__func__, __VA_ARGS__)
 
 template <typename Func, Func func, typename... FuncArgs>
 typename std::invoke_result<Func, FuncArgs...>::type

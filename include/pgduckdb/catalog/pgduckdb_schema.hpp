@@ -1,7 +1,9 @@
 #pragma once
 
 #include "duckdb/catalog/catalog_entry/schema_catalog_entry.hpp"
-#include "pgduckdb/pg_declarations.hpp"
+#include "pgduckdb/pg/declarations.hpp"
+
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
 

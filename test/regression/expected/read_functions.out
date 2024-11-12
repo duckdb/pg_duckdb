@@ -60,3 +60,89 @@ SELECT "sepal.length", filename
 
 SELECT * FROM read_csv('../../non-existing-file.csv') AS ("sepal.length" FLOAT);
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'IO Error: No files found that match the pattern "../../non-existing-file.csv"
+-- delta_scan
+SELECT duckdb.install_extension('delta');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT count(a) FROM delta_scan('../../data/delta_table') AS (a INT);
+ count 
+-------
+   100
+(1 row)
+
+SELECT * FROM delta_scan('../../data/delta_table') AS (a INT, b VARCHAR) WHERE (a = 1 OR b = 'delta_table_3');
+ a |       b       
+---+---------------
+ 1 | delta_table_1
+ 3 | delta_table_3
+(2 rows)
+
+-- iceberg_*
+SELECT duckdb.install_extension('iceberg');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+SELECT COUNT(l_orderkey) FROM iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) AS (l_orderkey BIGINT);
+ count 
+-------
+ 51793
+(1 row)
+
+-- TPCH query #6
+SELECT
+	sum(l_extendedprice * l_discount) as revenue
+FROM
+	iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) AS
+        (l_extendedprice DOUBLE PRECISION,
+         l_discount DOUBLE PRECISION,
+         l_shipdate DATE,
+         l_quantity DOUBLE PRECISION)
+WHERE
+	l_shipdate >= date '1997-01-01'
+	AND l_shipdate < date '1997-01-01' + interval '1' year
+	AND l_discount between 0.08 - 0.01 and 0.08 + 0.01
+	AND l_quantity < 25
+LIMIT 1;
+   revenue    
+--------------
+ 1520873.7806
+(1 row)
+
+SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg');
+ sequence_number |     snapshot_id     |         timestamp_ms         |                                         manifest_list                                          
+-----------------+---------------------+------------------------------+------------------------------------------------------------------------------------------------
+               1 | 3776207205136740581 | Wed Feb 15 15:07:54.504 2023 | lineitem_iceberg/metadata/snap-3776207205136740581-1-cf3d0be5-cf70-453d-ad8f-48fdc412e608.avro
+               2 | 7635660646343998149 | Wed Feb 15 15:08:14.73 2023  | lineitem_iceberg/metadata/snap-7635660646343998149-1-10eaca8a-1e1c-421e-ad6d-b232e5ee23d3.avro
+(2 rows)
+
+SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths => true);
+                             manifest_path                              | manifest_sequence_number | manifest_content | status  | content  |                                     file_path                                      
+------------------------------------------------------------------------+--------------------------+------------------+---------+----------+------------------------------------------------------------------------------------
+ lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m1.avro |                        2 | DATA             | ADDED   | EXISTING | lineitem_iceberg/data/00041-414-f3c73457-bbd6-4b92-9c15-17b241171b16-00001.parquet
+ lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro |                        2 | DATA             | DELETED | EXISTING | lineitem_iceberg/data/00000-411-0792dcfe-4e25-4ca3-8ada-175286069a47-00001.parquet
+(2 rows)
+
+-- read_json
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT);
+ count 
+-------
+   100
+(1 row)
+
+SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT, c FLOAT) WHERE c > 50.4;
+ count 
+-------
+    51
+(1 row)
+
+SELECT a, b, c FROM read_json('../../data/table.json') AS (a INT, b VARCHAR, c FLOAT) WHERE c > 50.4 AND c < 51.2;
+ a  |    b    |  c   
+----+---------+------
+ 50 | json_50 | 50.5
+(1 row)
+

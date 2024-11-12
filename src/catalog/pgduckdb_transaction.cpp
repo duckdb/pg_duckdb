@@ -15,6 +15,12 @@ extern "C" {
 
 namespace pgduckdb {
 
+void
+ClosePostgresRelations(duckdb::ClientContext &context) {
+	auto context_state = context.registered_state->GetOrCreate<PostgresContextState>("pgduckdb");
+	context_state->QueryEnd();
+}
+
 PostgresTransaction::PostgresTransaction(duckdb::TransactionManager &manager, duckdb::ClientContext &context,
                                          PostgresCatalog &catalog, Snapshot snapshot)
     : duckdb::Transaction(manager, context), catalog(catalog), snapshot(snapshot) {
@@ -24,7 +30,7 @@ PostgresTransaction::~PostgresTransaction() {
 }
 
 SchemaItems::SchemaItems(duckdb::unique_ptr<PostgresSchema> &&schema, const duckdb::string &name)
-	: name(name), schema(std::move(schema)) {
+    : name(name), schema(std::move(schema)) {
 }
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
@@ -51,7 +57,7 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	// Check if the Relation is a VIEW
 	auto tuple = SearchSysCache1(RELOID, ObjectIdGetDatum(rel_oid));
 	if (!HeapTupleIsValid(tuple)) {
-		elog(ERROR, "Cache lookup failed for relation %u", rel_oid);
+		throw duckdb::CatalogException("Cache lookup failed for relation %u", rel_oid);
 	}
 
 	auto relForm = (Form_pg_class)GETSTRUCT(tuple);
@@ -85,16 +91,23 @@ SchemaItems::GetSchema() const {
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
 PostgresTransaction::GetSchema(const duckdb::string &name) {
-	auto it = schemas.find(name);
-	if (it != schemas.end()) {
+	auto context_state = context.lock()->registered_state->GetOrCreate<PostgresContextState>("pgduckdb");
+	auto schemas = &context_state->schemas;
+	auto it = schemas->find(name);
+	if (it != schemas->end()) {
 		return it->second.GetSchema();
 	}
 
 	duckdb::CreateSchemaInfo create_schema;
 	create_schema.schema = name;
 	auto pg_schema = duckdb::make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
-	schemas.emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
-	return schemas.at(name).GetSchema();
+	schemas->emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
+	return schemas->at(name).GetSchema();
+}
+
+void
+PostgresContextState::QueryEnd() {
+	schemas.clear();
 }
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
@@ -102,8 +115,10 @@ PostgresTransaction::GetCatalogEntry(duckdb::CatalogType type, const duckdb::str
                                      const duckdb::string &name) {
 	switch (type) {
 	case duckdb::CatalogType::TABLE_ENTRY: {
-		auto it = schemas.find(schema);
-		if (it == schemas.end()) {
+		auto context_state = context.lock()->registered_state->GetOrCreate<PostgresContextState>("pgduckdb");
+		auto schemas = &context_state->schemas;
+		auto it = schemas->find(schema);
+		if (it == schemas->end()) {
 			return nullptr;
 		}
 

@@ -28,6 +28,7 @@ USER postgres
 # for each directory, because docker puts only the contents of the source
 # directory into the target directory, and not the directory itself too.
 COPY --chown=postgres:postgres Makefile Makefile.global pg_duckdb.control .
+COPY --chown=postgres:postgres .git/modules/third_party/duckdb/HEAD .git/modules/third_party/duckdb/HEAD
 COPY --chown=postgres:postgres sql sql
 COPY --chown=postgres:postgres src src
 COPY --chown=postgres:postgres include include

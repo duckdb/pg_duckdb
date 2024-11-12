@@ -1,13 +1,12 @@
 #include "pgduckdb/catalog/pgduckdb_transaction_manager.hpp"
+#include "duckdb/main/client_context.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
+#include "pgduckdb/pg/snapshots.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 
 #include "duckdb/main/attached_database.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "utils/snapmgr.h" // GetActiveSnapshot
-}
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
 
@@ -27,6 +26,7 @@ PostgresTransactionManager::StartTransaction(duckdb::ClientContext &context) {
 duckdb::ErrorData
 PostgresTransactionManager::CommitTransaction(duckdb::ClientContext &context, duckdb::Transaction &transaction) {
 	duckdb::lock_guard<duckdb::mutex> l(transaction_lock);
+	ClosePostgresRelations(context);
 	transactions.erase(transaction);
 	return duckdb::ErrorData();
 }
@@ -34,6 +34,10 @@ PostgresTransactionManager::CommitTransaction(duckdb::ClientContext &context, du
 void
 PostgresTransactionManager::RollbackTransaction(duckdb::Transaction &transaction) {
 	duckdb::lock_guard<duckdb::mutex> l(transaction_lock);
+	duckdb::shared_ptr<duckdb::ClientContext> context = transaction.context.lock();
+	if (context) {
+		ClosePostgresRelations(*context);
+	}
 	transactions.erase(transaction);
 }
 

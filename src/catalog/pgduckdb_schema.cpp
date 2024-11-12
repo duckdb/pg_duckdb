@@ -3,6 +3,8 @@
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
+
 namespace pgduckdb {
 
 PostgresSchema::PostgresSchema(duckdb::Catalog &catalog, duckdb::CreateSchemaInfo &info, Snapshot snapshot)

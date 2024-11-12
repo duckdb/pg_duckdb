@@ -18,9 +18,8 @@ DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query) {
 
 duckdb::unique_ptr<duckdb::QueryResult>
 DuckDBQueryOrThrow(const std::string &query) {
-	auto connection = pgduckdb::DuckDBManager::CreateConnection();
+	auto connection = pgduckdb::DuckDBManager::GetConnection();
 	return DuckDBQueryOrThrow(*connection, query);
 }
 
 } // namespace pgduckdb
-

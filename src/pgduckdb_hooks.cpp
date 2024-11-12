@@ -31,22 +31,39 @@ static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
 
 static bool
-IsCatalogTable(List *tables) {
-	foreach_node(RangeTblEntry, table, tables) {
-		if (table->rtekind == RTE_SUBQUERY) {
+ContainsCatalogTable(List *rtes) {
+	foreach_node(RangeTblEntry, rte, rtes) {
+		if (rte->rtekind == RTE_SUBQUERY) {
 			/* Check Subquery rtable list if any table is from PG catalog */
-			if (IsCatalogTable(table->subquery->rtable)) {
+			if (ContainsCatalogTable(rte->subquery->rtable)) {
 				return true;
 			}
 		}
 
-		if (table->relid) {
-			auto rel = RelationIdGetRelation(table->relid);
+		if (rte->relid) {
+			auto rel = RelationIdGetRelation(rte->relid);
 			auto namespace_oid = RelationGetNamespace(rel);
 			RelationClose(rel);
 			if (namespace_oid == PG_CATALOG_NAMESPACE || namespace_oid == PG_TOAST_NAMESPACE) {
 				return true;
 			}
+		}
+	}
+	return false;
+}
+
+static bool
+ContainsPartitionedTable(List *rtes) {
+	foreach_node(RangeTblEntry, rte, rtes) {
+		if (rte->rtekind == RTE_SUBQUERY) {
+			/* Check whether any table in the subquery is a partitioned table */
+			if (ContainsPartitionedTable(rte->subquery->rtable)) {
+				return true;
+			}
+		}
+
+		if (rte->relkind == RELKIND_PARTITIONED_TABLE) {
+			return true;
 		}
 	}
 	return false;
@@ -142,8 +159,16 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	 * because DuckDB has its own pg_catalog tables that contain different data
 	 * then Postgres its pg_catalog tables.
 	 */
-	if (IsCatalogTable(query->rtable)) {
+	if (ContainsCatalogTable(query->rtable)) {
 		elog(elevel, "DuckDB does not support querying PG catalog tables");
+		return false;
+	}
+
+	/*
+	 * When accessing the partitioned table, we temporarily let PG handle it instead of DuckDB.
+	 */
+	if (ContainsPartitionedTable(query->rtable)) {
+		elog(elevel, "DuckDB does not support querying PG partitioned table");
 		return false;
 	}
 

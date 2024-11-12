@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  * This file contains the renaming of the functions exposed by
  * vendor/pg_ruleutils.h functions to avoid conflicts with the PostgreSQL

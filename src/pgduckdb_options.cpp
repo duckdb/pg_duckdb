@@ -160,6 +160,8 @@ DuckdbCacheObject(Datum object, Datum type) {
 		return false;
 	}
 
+	/* Use a separate connection to cache the objects, so we are sure not to
+	 * leak the value change of enable_http_file_cache in case of an error */
 	auto con = DuckDBManager::CreateConnection();
 	auto &context = *con->context;
 
@@ -169,7 +171,6 @@ DuckdbCacheObject(Datum object, Datum type) {
 	auto cache_object_query =
 	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
 	DuckDBQueryOrThrow(context, cache_object_query);
-	DuckDBQueryOrThrow(context, "SET enable_http_file_cache TO false;");
 
 	return true;
 }
