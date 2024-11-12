@@ -12,6 +12,7 @@ It should not include any C++ code, only Postgres C declarations.
 */
 
 extern "C" {
+typedef int16_t AttrNumber;
 typedef uint32_t BlockNumber;
 
 typedef double Cardinality;
@@ -25,6 +26,7 @@ struct FormData_pg_class;
 typedef FormData_pg_class *Form_pg_class;
 
 struct HeapTupleData;
+typedef HeapTupleData *HeapTuple;
 
 struct Node;
 
@@ -40,5 +42,4 @@ struct TupleDescData;
 typedef struct TupleDescData *TupleDesc;
 
 struct TupleTableSlot;
-
 }

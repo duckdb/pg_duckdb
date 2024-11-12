@@ -1,6 +1,8 @@
 #include "duckdb.hpp"
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 
+#include "pgduckdb/scan/postgres_scan.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "access/xact.h"
@@ -17,7 +19,6 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
-#include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"

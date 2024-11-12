@@ -5,6 +5,7 @@
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -12,12 +13,12 @@ extern "C" {
 #include "utils/lsyscache.h"  // get_relname_relid
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "common/file_perm.h"
+#include "miscadmin.h" // superuser
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
