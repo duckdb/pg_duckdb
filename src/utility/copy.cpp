@@ -72,7 +72,12 @@ appendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *co
 
 	appendStringInfo(info, "(");
 	bool first = true;
+
+#if PG_VERSION_NUM >= 150000
 	foreach_node(String, attr, copy_stmt->attlist) {
+#else
+	foreach_ptr(Value, attr, copy_stmt->attlist) {
+#endif
 		if (first) {
 			first = false;
 		} else {
@@ -135,7 +140,9 @@ appendCreateCopyOptions(StringInfo info, CopyStmt *copy_stmt) {
 			switch (nodeTag(defel->arg)) {
 			case T_Integer:
 			case T_Float:
+#if PG_VERSION_NUM >= 150000
 			case T_Boolean:
+#endif
 				appendStringInfoString(info, defGetString(defel));
 				break;
 			case T_String:
@@ -220,7 +227,11 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 		raw_stmt->stmt_location = pstmt->stmt_location;
 		raw_stmt->stmt_len = pstmt->stmt_len;
 
+#if PG_VERSION_NUM >= 150000
 		List *rewritten = pg_analyze_and_rewrite_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
+#else
+		List *rewritten = pg_analyze_and_rewrite(raw_stmt, query_string, NULL, 0, NULL);
+#endif
 		CheckRewritten(rewritten);
 
 		Query *query = linitial_node(Query, rewritten);

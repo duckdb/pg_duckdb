@@ -33,7 +33,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [REL_15_STABLE, REL_16_STABLE, REL_17_STABLE]
+        version: [REL_14_STABLE, REL_15_STABLE, REL_16_STABLE, REL_17_STABLE]
     runs-on: ubuntu-24.04
 
     steps:
