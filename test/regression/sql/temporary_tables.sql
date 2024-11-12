@@ -41,11 +41,12 @@ SELECT * FROM t2 ORDER BY a;
 TRUNCATE t2;
 SELECT * FROM t2 ORDER BY a;
 
--- We shouldn't be able to run DuckDB queries in transactions (yet).
+-- Writing to a DuckDB table in a transaction is allowed
 BEGIN;
     INSERT INTO t2 VALUES (1), (2), (3);
 END;
 
+-- We shouldn't be able to run DuckDB DDL in transactions (yet).
 BEGIN;
     CREATE TEMP TABLE t3(a int);
 END;

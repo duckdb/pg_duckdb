@@ -4,21 +4,26 @@
 
 namespace pgduckdb {
 
-extern bool started_duckdb_transaction;
+bool DuckdbDidWrites();
+bool DuckdbDidWrites(duckdb::ClientContext &context);
 
 class DuckDBManager {
 public:
+	static inline bool
+	IsInitialized() {
+		return manager_instance.database != nullptr;
+	}
+
 	static inline DuckDBManager &
 	Get() {
-		static DuckDBManager instance;
-		if (!instance.database) {
-			instance.Initialize();
+		if (!manager_instance.database) {
+			manager_instance.Initialize();
 		}
-		return instance;
+		return manager_instance;
 	}
 
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
-	static duckdb::Connection *GetConnection();
+	static duckdb::Connection *GetConnection(bool force_transaction = false);
 	static duckdb::Connection *GetConnectionUnsafe();
 
 	inline const std::string &
@@ -28,12 +33,14 @@ public:
 
 	void
 	Reset() {
+		connection = nullptr;
 		delete database;
 		database = nullptr;
 	}
 
 private:
 	DuckDBManager();
+	static DuckDBManager manager_instance;
 
 	void Initialize();
 

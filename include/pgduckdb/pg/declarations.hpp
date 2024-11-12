@@ -60,4 +60,10 @@ struct TupleDescData;
 typedef struct TupleDescData *TupleDesc;
 
 struct TupleTableSlot;
+
+struct TableAmRoutine;
+
+typedef uint32_t CommandId;
+
+typedef uint32_t SubTransactionId;
 }

@@ -1,6 +1,8 @@
 CREATE TABLE foo AS SELECT 'bar'::text AS t;
 BEGIN; SET duckdb.force_execution = true; SELECT t::integer AS t1 FROM foo; ROLLBACK;
-ERROR:  invalid input syntax for type integer: "bar"
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan) Conversion Error: Could not convert string 'bar' to INT32
+LINE 1: SELECT (t)::integer AS t1 FROM pgduckdb.public.fo...
+                  ^
 SET duckdb.force_execution = true;
 SELECT 1 FROM foo;
  ?column? 

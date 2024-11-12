@@ -25,6 +25,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
 
 namespace pgduckdb {
 
@@ -203,7 +204,7 @@ DuckdbGetCachedFilesInfos() {
 			if (metadata_tokens.size() != 4) {
 				elog(WARNING, "(PGDuckDB/DuckdbGetCachedFilesInfos) Invalid '%s' cache metadata file",
 				     p.path().c_str());
-					 break;
+				break;
 			}
 			cache_info.push_back(CacheFileInfo {metadata_tokens[0], metadata_tokens[1], std::stoi(metadata_tokens[2]),
 			                                    std::stoi(metadata_tokens[3])});
@@ -296,6 +297,12 @@ DECLARE_PG_FUNCTION(cache_delete) {
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
+	/*
+	 * We cannot safely run this in a transaction block, because a DuckDB
+	 * transaction might have already started. Recycling the database will
+	 * violate our assumptions about DuckDB its transaction lifecycle
+	 */
+	pgduckdb::PreventInTransactionBlock("duckdb.recycle_ddb()");
 	pgduckdb::DuckDBManager::Get().Reset();
 	PG_RETURN_BOOL(true);
 }

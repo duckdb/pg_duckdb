@@ -10,6 +10,8 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  */
 
+#include "pgduckdb/pgduckdb_ddl.hpp"
+
 extern "C" {
 #include "postgres.h"
 
@@ -23,8 +25,6 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
-
-#include "pgduckdb/pgduckdb_ddl.hpp"
 
 extern "C" {
 

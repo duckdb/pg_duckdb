@@ -125,8 +125,8 @@ def test_prepared_pipeline(conn: Connection):
         # the duckdb table that should fail because the insert into the heap
         # table opens an implicit transaction.
         with pytest.raises(
-            psycopg.errors.ActiveSqlTransaction,
-            match="DuckDB queries cannot be executed within a pipeline",
+            psycopg.errors.InternalError,
+            match="Writing to DuckDB and Postgres tables in the same transaction block is not supported",
         ):
             cur.execute("INSERT INTO heapt VALUES (%s), (%s), (%s)", (1, 2, 3))
             cur.execute("INSERT INTO duckt VALUES (%s)", (5,))
