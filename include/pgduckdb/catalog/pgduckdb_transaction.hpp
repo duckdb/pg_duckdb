@@ -1,5 +1,7 @@
 #pragma once
 
+#include "duckdb/main/client_context.hpp"
+#include "duckdb/main/client_context_state.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "pgduckdb/pg_declarations.hpp"
 
@@ -10,6 +12,8 @@ namespace pgduckdb {
 class PostgresCatalog;
 class PostgresSchema;
 class PostgresTable;
+
+void ClosePostgresRelations(duckdb::ClientContext &context);
 
 class SchemaItems {
 public:
@@ -25,6 +29,12 @@ private:
 	duckdb::case_insensitive_map_t<duckdb::unique_ptr<PostgresTable>> tables;
 };
 
+class PostgresContextState : public duckdb::ClientContextState {
+public:
+	duckdb::case_insensitive_map_t<SchemaItems> schemas;
+	void QueryEnd() override;
+};
+
 class PostgresTransaction : public duckdb::Transaction {
 public:
 	PostgresTransaction(duckdb::TransactionManager &manager, duckdb::ClientContext &context, PostgresCatalog &catalog,
@@ -37,7 +47,6 @@ public:
 private:
 	duckdb::optional_ptr<duckdb::CatalogEntry> GetSchema(const duckdb::string &name);
 
-	duckdb::case_insensitive_map_t<SchemaItems> schemas;
 	PostgresCatalog &catalog;
 	Snapshot snapshot;
 };

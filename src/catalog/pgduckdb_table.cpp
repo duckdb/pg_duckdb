@@ -9,6 +9,7 @@
 #include "pgduckdb/logger.hpp"
 
 extern "C" {
+#include "access/relation.h"   // relation_open and relation_close
 #include "utils/rel.h"         // RelationGetDescr
 #include "optimizer/plancat.h" // estimate_rel_size
 #include "catalog/namespace.h" // makeRangeVarFromNameList
@@ -23,13 +24,35 @@ PostgresTable::PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntr
 
 PostgresTable::~PostgresTable() {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-	RelationClose(rel);
+
+	/*
+	 * We always open & close the relation using the
+	 * TopTransactionResourceOwner to avoid having to close the relation
+	 * whenever Postgres switches resource owners, because opening a relation
+	 * with one resource owner and closing it with another is not allowed.
+	 */
+	ResourceOwner saveResourceOwner = CurrentResourceOwner;
+	CurrentResourceOwner = TopTransactionResourceOwner;
+	PostgresFunctionGuard(relation_close, rel, NoLock);
+
+	CurrentResourceOwner = saveResourceOwner;
 }
 
 Relation
 PostgresTable::OpenRelation(Oid relid) {
 	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-	return PostgresFunctionGuard(RelationIdGetRelation, relid);
+
+	/*
+	 * We always open & close the relation using the
+	 * TopTransactionResourceOwner to avoid having to close the relation
+	 * whenever Postgres switches resource owners, because opening a relation
+	 * with one resource owner and closing it with another is not allowed.
+	 */
+	ResourceOwner saveResourceOwner = CurrentResourceOwner;
+	CurrentResourceOwner = TopTransactionResourceOwner;
+	auto relation = PostgresFunctionGuard(relation_open, relid, AccessShareLock);
+	CurrentResourceOwner = saveResourceOwner;
+	return relation;
 }
 
 void

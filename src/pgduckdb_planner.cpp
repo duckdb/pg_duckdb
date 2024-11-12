@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+#include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -24,7 +25,7 @@ extern "C" {
 
 bool duckdb_explain_analyze = false;
 
-std::tuple<duckdb::unique_ptr<duckdb::PreparedStatement>, duckdb::unique_ptr<duckdb::Connection>>
+duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query) {
 	/*
 	 * For now, we don't support DuckDB queries in transactions. To support
@@ -46,9 +47,9 @@ DuckdbPrepare(const Query *query) {
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
-	auto duckdb_connection = pgduckdb::DuckDBManager::CreateConnection();
+	auto duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
 	auto prepared_query = duckdb_connection->context->Prepare(query_string);
-	return {std::move(prepared_query), std::move(duckdb_connection)};
+	return prepared_query;
 }
 
 static Plan *
@@ -57,8 +58,8 @@ CreatePlan(Query *query, bool throw_error) {
 	/*
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
-	auto prepare_result = DuckdbPrepare(query);
-	auto prepared_query = std::move(std::get<0>(prepare_result));
+
+	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(query);
 
 	if (prepared_query->HasError()) {
 		elog(elevel, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s", prepared_query->GetError().c_str());

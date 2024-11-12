@@ -49,11 +49,6 @@ CleanupDuckdbScanState(DuckdbScanState *state) {
 		delete state->prepared_statement;
 		state->prepared_statement = nullptr;
 	}
-
-	if (state->duckdb_connection) {
-		delete state->duckdb_connection;
-		state->duckdb_connection = nullptr;
-	}
 }
 
 /* static callbacks */
@@ -77,16 +72,14 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 void
 Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int eflags) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
-	auto prepare_result = DuckdbPrepare(duckdb_scan_state->query);
-	auto prepared_query = std::move(std::get<0>(prepare_result));
-	auto duckdb_connection = std::move(std::get<1>(prepare_result));
+	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(duckdb_scan_state->query);
 
 	if (prepared_query->HasError()) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
 		                        "DuckDB re-planning failed: " + prepared_query->GetError());
 	}
 
-	duckdb_scan_state->duckdb_connection = duckdb_connection.release();
+	duckdb_scan_state->duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
 	duckdb_scan_state->prepared_statement = prepared_query.release();
 	duckdb_scan_state->params = estate->es_param_list_info;
 	duckdb_scan_state->is_executed = false;
