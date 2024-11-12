@@ -1,6 +1,8 @@
-#include "duckdb.hpp"
-#include "pgduckdb/catalog/pgduckdb_transaction.hpp"
+#include "pgduckdb/pgduckdb_planner.hpp"
 
+#include "duckdb.hpp"
+
+#include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 
 extern "C" {
@@ -11,6 +13,7 @@ extern "C" {
 #include "nodes/nodes.h"
 #include "nodes/params.h"
 #include "optimizer/optimizer.h"
+#include "optimizer/planner.h"
 #include "tcop/pquery.h"
 #include "utils/syscache.h"
 #include "utils/guc.h"
@@ -20,7 +23,6 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
-#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
