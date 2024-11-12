@@ -22,8 +22,6 @@ DUCKDB_CMAKE_VARS = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
 # DuckDB agains the release build of MotherDuck.
 DUCKDB_DISABLE_ASSERTIONS ?= 0
 
-CPP_ONLY_FILE = include/generated/cpp_only_file.hpp
-
 DUCKDB_BUILD_CXX_FLAGS=
 DUCKDB_BUILD_TYPE=
 ifeq ($(DUCKDB_BUILD), Debug)
@@ -49,7 +47,7 @@ include Makefile.global
 # includes those header files. This does mean that we rebuild our .o files
 # whenever we change the DuckDB version, but that seems like a fairly
 # reasonable thing to do anyway, even if not always strictly necessary always.
-$(OBJS): .git/modules/third_party/duckdb/HEAD $(CPP_ONLY_FILE)
+$(OBJS): .git/modules/third_party/duckdb/HEAD
 
 COMPILE.cc.bc += $(PG_CPPFLAGS)
 COMPILE.cxx.bc += $(PG_CXXFLAGS)
@@ -99,11 +97,6 @@ clean-duckdb:
 install: install-duckdb
 
 clean-all: clean clean-regression clean-duckdb
-	rm -f $(CPP_ONLY_FILE)
-
-$(CPP_ONLY_FILE):
-	@rm -f $(CPP_ONLY_FILE)
-	./scripts/generate-pg-include-guard.sh $(CPP_ONLY_FILE) $(INCLUDEDIR)
 
 lintcheck:
 	clang-tidy $(SRCS) -- -I$(INCLUDEDIR) -I$(INCLUDEDIR_SERVER) -Iinclude $(CPPFLAGS) -std=c++17

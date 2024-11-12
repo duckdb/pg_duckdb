@@ -3,7 +3,7 @@
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
-#include "generated/cpp_only_file.hpp" // Must be last include.
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
 

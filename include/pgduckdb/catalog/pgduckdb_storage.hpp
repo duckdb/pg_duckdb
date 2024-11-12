@@ -2,7 +2,7 @@
 
 #include "duckdb/storage/storage_extension.hpp"
 
-#include "generated/cpp_only_file.hpp" // Must be last include.
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
 
