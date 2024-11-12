@@ -14,9 +14,7 @@ struct PostgresSeqScanGlobalState : public duckdb::GlobalTableFunctionState {
 	explicit PostgresSeqScanGlobalState(Relation rel, duckdb::TableFunctionInitInput &input);
 	~PostgresSeqScanGlobalState();
 	idx_t
-	MaxThreads() const override {
-		return duckdb_max_threads_per_postgres_scan;
-	}
+	MaxThreads() const override;
 
 public:
 	duckdb::shared_ptr<PostgresScanGlobalState> m_global_state;
@@ -26,7 +24,7 @@ public:
 
 // Local State
 
-struct PostgresSeqScanLocalState : public duckdb::LocalTableFunctionState {
+struct  PostgresSeqScanLocalState : public duckdb::LocalTableFunctionState {
 public:
 	PostgresSeqScanLocalState(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
 	                          duckdb::shared_ptr<PostgresScanGlobalState> global_state);
@@ -34,6 +32,7 @@ public:
 
 public:
 	duckdb::shared_ptr<PostgresScanLocalState> m_local_state;
+	duckdb::shared_ptr<HeapReaderLocalState> m_heap_reader_local_state;
 	duckdb::unique_ptr<HeapReader> m_heap_table_reader;
 };
 
