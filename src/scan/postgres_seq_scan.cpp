@@ -6,6 +6,8 @@
 #include "pgduckdb/scan/heap_reader.hpp"
 #include "pgduckdb/pg/relations.hpp"
 
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
+
 namespace pgduckdb {
 
 //
@@ -98,7 +100,7 @@ PostgresSeqScanFunction::PostgresSeqScanFunc(duckdb::ClientContext &context, duc
 
 	auto hasTuple = local_state.m_heap_table_reader->ReadPageTuples(output);
 
-	if (!hasTuple || local_state.m_heap_table_reader->GetCurrentBlockNumber() == InvalidBlockNumber) {
+	if (!hasTuple || !IsValidBlockNumber(local_state.m_heap_table_reader->GetCurrentBlockNumber())) {
 		local_state.m_local_state->m_exhausted_scan = true;
 	}
 }
