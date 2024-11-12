@@ -3,6 +3,8 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
+#include "pgduckdb/scan/postgres_scan.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "fmgr.h"
@@ -21,7 +23,6 @@ extern "C" {
 #include "utils/timestamp.h"
 }
 
-#include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
