@@ -28,7 +28,7 @@ HeapTuple SearchSysCacheForRel(Oid);
 
 bool IsValidHeapTuple(HeapTuple);
 
-bool IsRelView(HeapTuple);
+bool IsRelView(Relation);
 
 void ReleaseSysCache(HeapTuple);
 

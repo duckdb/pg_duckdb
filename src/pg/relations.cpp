@@ -95,8 +95,8 @@ IsValidHeapTuple(HeapTuple tuple) {
 }
 
 bool
-IsRelView(HeapTuple tuple) {
-	return ((Form_pg_class)GETSTRUCT(tuple))->relkind == RELKIND_VIEW;
+IsRelView(Relation rel) {
+	return rel->rd_rel->relkind == RELKIND_VIEW;
 }
 
 void

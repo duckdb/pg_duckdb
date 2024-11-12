@@ -43,23 +43,13 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 		return nullptr; // Table could not be found
 	}
 
-	// Check if the Relation is a VIEW
-	auto tuple = SearchSysCacheForRel(rel_oid);
-	if (!IsValidHeapTuple(tuple)) {
-		throw duckdb::CatalogException("Cache lookup failed for relation %u", rel_oid);
-	}
 
-	// Check if the relation is a view
-	if (IsRelView(tuple)) {
-		ReleaseSysCache(tuple);
+	Relation rel = PostgresTable::OpenRelation(rel_oid);
+	if (IsRelView(rel)) {
 		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which
 		// will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
 		return nullptr;
 	}
-
-	ReleaseSysCache(tuple);
-
-	Relation rel = PostgresTable::OpenRelation(rel_oid);
 
 	duckdb::CreateTableInfo info;
 	info.table = entry_name;
