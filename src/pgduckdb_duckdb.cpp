@@ -4,6 +4,8 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+#include "pgduckdb/catalog/pgduckdb_storage.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "catalog/namespace.h"
@@ -17,7 +19,6 @@ extern "C" {
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
-#include "pgduckdb/catalog/pgduckdb_storage.hpp"
 
 
 #include <sys/stat.h>
