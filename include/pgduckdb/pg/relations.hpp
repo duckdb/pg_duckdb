@@ -24,12 +24,6 @@ Oid GetRelidFromSchemaAndTable(const char *, const char *);
 
 bool IsValidOid(Oid);
 
-HeapTuple SearchSysCacheForRel(Oid);
-
-bool IsValidHeapTuple(HeapTuple);
-
 bool IsRelView(Relation);
-
-void ReleaseSysCache(HeapTuple);
 
 } // namespace pgduckdb

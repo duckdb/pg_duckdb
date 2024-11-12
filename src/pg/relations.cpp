@@ -84,24 +84,9 @@ IsValidOid(Oid oid) {
 	return oid != InvalidOid;
 }
 
-HeapTuple
-SearchSysCacheForRel(Oid oid) {
-	return SearchSysCache1(RELOID, ObjectIdGetDatum(oid));
-}
-
-bool
-IsValidHeapTuple(HeapTuple tuple) {
-	return HeapTupleIsValid(tuple);
-}
-
 bool
 IsRelView(Relation rel) {
 	return rel->rd_rel->relkind == RELKIND_VIEW;
-}
-
-void
-ReleaseSysCache(HeapTuple tuple) {
-	::ReleaseSysCache(tuple);
 }
 
 } // namespace pgduckdb
