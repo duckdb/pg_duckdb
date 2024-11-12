@@ -74,8 +74,14 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 		stmt->into->skipData = true;
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
 		auto stmt = castNode(CreateSchemaStmt, parsetree);
-		if (strncmp("ddb$", stmt->schemaname, 4) == 0) {
-			elog(ERROR, "Creating ddb$ schemas is currently not supported");
+		if (stmt->schemaname) {
+			if (strncmp("ddb$", stmt->schemaname, 4) == 0) {
+				elog(ERROR, "Creating ddb$ schemas is currently not supported");
+			}
+		} else if(stmt->authrole && stmt->authrole->roletype == ROLESPEC_CSTRING) {
+			if (strncmp("ddb$", stmt->authrole->rolename, 4) == 0) {
+				elog(ERROR, "Creating ddb$ schemas is currently not supported");
+			}
 		}
 		return;
 	} else if (IsA(parsetree, RenameStmt)) {
