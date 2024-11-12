@@ -78,7 +78,7 @@ DuckdbHandleDDL(Node *parsetree, const char *queryString) {
 			if (strncmp("ddb$", stmt->schemaname, 4) == 0) {
 				elog(ERROR, "Creating ddb$ schemas is currently not supported");
 			}
-		} else if(stmt->authrole && stmt->authrole->roletype == ROLESPEC_CSTRING) {
+		} else if (stmt->authrole && stmt->authrole->roletype == ROLESPEC_CSTRING) {
 			if (strncmp("ddb$", stmt->authrole->rolename, 4) == 0) {
 				elog(ERROR, "Creating ddb$ schemas is currently not supported");
 			}
