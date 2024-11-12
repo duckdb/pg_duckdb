@@ -23,6 +23,10 @@ namespace pgduckdb {
 // HeapReaderGlobalState
 //
 
+HeapReaderGlobalState::HeapReaderGlobalState(Relation rel)
+: m_nblocks(RelationGetNumberOfBlocks(rel)), m_last_assigned_block_number(InvalidBlockNumber) {
+}
+
 BlockNumber
 HeapReaderGlobalState::AssignNextBlockNumber(std::mutex &lock) {
 	lock.lock();
@@ -46,9 +50,10 @@ HeapReader::HeapReader(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> h
     : m_global_state(global_state), m_heap_reader_global_state(heap_reader_global_state), m_local_state(local_state),
       m_rel(rel), m_inited(false), m_read_next_page(true), m_block_number(InvalidBlockNumber), m_buffer(InvalidBuffer),
       m_current_tuple_index(InvalidOffsetNumber), m_page_tuples_left(0) {
-	m_tuple.t_data = NULL;
-	m_tuple.t_tableOid = RelationGetRelid(m_rel);
-	ItemPointerSetInvalid(&m_tuple.t_self);
+	m_tuple = duckdb::make_uniq<HeapTupleData>();
+	m_tuple->t_data = NULL;
+	m_tuple->t_tableOid = RelationGetRelid(m_rel);
+	ItemPointerSetInvalid(&m_tuple->t_self);
 	DuckdbProcessLock::GetLock().lock();
 	m_buffer_access_strategy = GetAccessStrategy(BAS_BULKREAD);
 	DuckdbProcessLock::GetLock().unlock();
@@ -118,20 +123,20 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 			if (!ItemIdIsNormal(lpp))
 				continue;
 
-			m_tuple.t_data = (HeapTupleHeader)PageGetItem(page, lpp);
-			m_tuple.t_len = ItemIdGetLength(lpp);
-			ItemPointerSet(&(m_tuple.t_self), block, m_current_tuple_index);
+			m_tuple->t_data = (HeapTupleHeader)PageGetItem(page, lpp);
+			m_tuple->t_len = ItemIdGetLength(lpp);
+			ItemPointerSet(&(m_tuple->t_self), block, m_current_tuple_index);
 
 			if (!m_page_tuples_all_visible) {
 				std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
-				visible = HeapTupleSatisfiesVisibility(&m_tuple, m_global_state->m_snapshot, m_buffer);
+				visible = HeapTupleSatisfiesVisibility(m_tuple.get(), m_global_state->m_snapshot, m_buffer);
 				/* skip tuples not visible to this snapshot */
 				if (!visible)
 					continue;
 			}
 
 			pgstat_count_heap_getnext(m_rel);
-			InsertTupleIntoChunk(output, m_global_state, m_local_state, &m_tuple);
+			InsertTupleIntoChunk(output, m_global_state, m_local_state, m_tuple.get());
 		}
 
 		/* No more items on current page */
@@ -167,7 +172,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 
 	m_buffer = InvalidBuffer;
 	m_block_number = InvalidBlockNumber;
-	m_tuple.t_data = NULL;
+	m_tuple->t_data = NULL;
 	m_read_next_page = false;
 
 	return false;

@@ -3,11 +3,7 @@
 #include "duckdb.hpp"
 
 #include "pgduckdb/scan/postgres_scan.hpp"
-
-extern "C" {
-#include "postgres.h"
-#include "storage/bufmgr.h"
-}
+#include "pgduckdb/pg/declarations.hpp"
 
 namespace pgduckdb {
 
@@ -15,10 +11,10 @@ namespace pgduckdb {
 
 class HeapReaderGlobalState {
 public:
-	HeapReaderGlobalState(Relation rel)
-	    : m_nblocks(RelationGetNumberOfBlocks(rel)), m_last_assigned_block_number(InvalidBlockNumber) {
-	}
+	HeapReaderGlobalState(Relation rel);
 	BlockNumber AssignNextBlockNumber(std::mutex &lock);
+
+private:
 	BlockNumber m_nblocks;
 	BlockNumber m_last_assigned_block_number;
 };
@@ -26,7 +22,6 @@ public:
 // HeapReader
 
 class HeapReader {
-private:
 public:
 	HeapReader(Relation rel, duckdb::shared_ptr<HeapReaderGlobalState> heap_reader_global_state,
 	           duckdb::shared_ptr<PostgresScanGlobalState> global_state,
@@ -45,7 +40,6 @@ public:
 private:
 	Page PreparePageRead();
 
-private:
 	duckdb::shared_ptr<PostgresScanGlobalState> m_global_state;
 	duckdb::shared_ptr<HeapReaderGlobalState> m_heap_reader_global_state;
 	duckdb::shared_ptr<PostgresScanLocalState> m_local_state;
@@ -57,7 +51,7 @@ private:
 	Buffer m_buffer;
 	OffsetNumber m_current_tuple_index;
 	int m_page_tuples_left;
-	HeapTupleData m_tuple;
+	duckdb::unique_ptr<HeapTupleData> m_tuple;
 	BufferAccessStrategy m_buffer_access_strategy;
 };
 

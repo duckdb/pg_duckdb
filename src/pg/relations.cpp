@@ -94,4 +94,9 @@ IsRelView(Relation rel) {
 	return rel->rd_rel->relkind == RELKIND_VIEW;
 }
 
+bool
+IsValidBlockNumber(BlockNumber block_number) {
+	return block_number != InvalidBlockNumber;
+}
+
 } // namespace pgduckdb

@@ -24,6 +24,8 @@ Oid GetRelidFromSchemaAndTable(const char *, const char *);
 
 bool IsValidOid(Oid);
 
+bool IsValidBlockNumber(BlockNumber);
+
 bool IsRelView(Relation);
 
 } // namespace pgduckdb
