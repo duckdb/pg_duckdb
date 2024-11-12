@@ -4,7 +4,7 @@
 
 namespace pgduckdb {
 
-TupleDesc PDRelationGetDescr(Relation relation);
+TupleDesc RelationGetDescr(Relation relation);
 
 // Not thread-safe. Must be called under a lock.
 Relation OpenRelation(Oid relationId);

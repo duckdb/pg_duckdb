@@ -31,7 +31,7 @@ PostgresTable::OpenRelation(Oid relid) {
 
 void
 PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, Relation rel) {
-	auto tupleDesc = PDRelationGetDescr(rel);
+	auto tupleDesc = RelationGetDescr(rel);
 
 	const auto n = GetTupleDescNatts(tupleDesc);
 	for (int i = 0; i < n; ++i) {

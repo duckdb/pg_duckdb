@@ -12,8 +12,10 @@ extern "C" {
 
 namespace pgduckdb {
 
-TupleDesc PDRelationGetDescr(Relation relation) {
-	return relation->rd_att;
+#undef RelationGetDescr
+
+TupleDesc RelationGetDescr(Relation rel) {
+	return rel->rd_att;
 }
 
 int GetTupleDescNatts(const TupleDesc tupleDesc) {
@@ -57,7 +59,7 @@ void CloseRelation(Relation rel) {
 }
 
 void EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
-	::estimate_rel_size(rel, attr_widths, pages, tuples, allvisfrac);
+	PostgresFunctionGuard(estimate_rel_size, rel, attr_widths, pages, tuples, allvisfrac);
 }
 
 } // namespace pgduckdb
