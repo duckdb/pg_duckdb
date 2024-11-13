@@ -554,7 +554,14 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
 
 	initial_cache_version = pgduckdb::CacheVersion();
 
-	auto connection = pgduckdb::DuckDBManager::GetConnection();
+	/*
+	 * We don't use GetConnection, because we want to be able to precisely
+	 * control the transaction lifecycle. We commit Postgres connections
+	 * throughout this function, and the GetConnect its cached connection its
+	 * lifecycle would be linked to those postgres transactions, which we
+	 * don't want.
+	 */
+	auto connection = pgduckdb::DuckDBManager::Get().CreateConnection();
 	auto &context = *connection->context;
 
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
