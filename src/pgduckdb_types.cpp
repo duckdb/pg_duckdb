@@ -30,17 +30,17 @@ extern "C" {
 
 namespace pgduckdb {
 
-static Datum
+static inline Datum
 ConvertBoolDatum(const duckdb::Value &value) {
 	return value.GetValue<bool>();
 }
 
-static Datum
+static inline Datum
 ConvertCharDatum(const duckdb::Value &value) {
 	return value.GetValue<int8_t>();
 }
 
-static Datum
+static inline Datum
 ConvertInt2Datum(const duckdb::Value &value) {
 	if (value.type().id() == duckdb::LogicalTypeId::UTINYINT) {
 		return UInt8GetDatum(value.GetValue<uint8_t>());
@@ -48,7 +48,7 @@ ConvertInt2Datum(const duckdb::Value &value) {
 	return Int16GetDatum(value.GetValue<int16_t>());
 }
 
-static Datum
+static inline Datum
 ConvertInt4Datum(const duckdb::Value &value) {
 	if (value.type().id() == duckdb::LogicalTypeId::USMALLINT) {
 		return UInt16GetDatum(value.GetValue<uint16_t>());
@@ -56,7 +56,7 @@ ConvertInt4Datum(const duckdb::Value &value) {
 	return Int32GetDatum(value.GetValue<int32_t>());
 }
 
-static Datum
+static inline Datum
 ConvertInt8Datum(const duckdb::Value &value) {
 	if (value.type().id() == duckdb::LogicalTypeId::UINTEGER) {
 		return UInt32GetDatum(value.GetValue<uint32_t>());
@@ -76,24 +76,24 @@ ConvertVarCharDatum(const duckdb::Value &value) {
 	return PointerGetDatum(result);
 }
 
-static Datum
+static inline Datum
 ConvertDateDatum(const duckdb::Value &value) {
 	duckdb::date_t date = value.GetValue<duckdb::date_t>();
 	return date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
 }
 
-static Datum
+static inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
 	duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
 	return timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
 
-static Datum
+static inline Datum
 ConvertFloatDatum(const duckdb::Value &value) {
 	return Float4GetDatum(value.GetValue<float>());
 }
 
-static Datum
+static inline Datum
 ConvertDoubleDatum(const duckdb::Value &value) {
 	return Float8GetDatum(value.GetValue<double>());
 }
@@ -242,7 +242,7 @@ struct PostgresTypeTraits<BOOLOID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'c';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertBoolDatum(val);
 	}
@@ -255,7 +255,7 @@ struct PostgresTypeTraits<CHAROID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'c';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertCharDatum(val);
 	}
@@ -268,7 +268,7 @@ struct PostgresTypeTraits<INT2OID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 's';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertInt2Datum(val);
 	}
@@ -281,7 +281,7 @@ struct PostgresTypeTraits<INT4OID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'i';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertInt4Datum(val);
 	}
@@ -294,7 +294,7 @@ struct PostgresTypeTraits<INT8OID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'd';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertInt8Datum(val);
 	}
@@ -307,7 +307,7 @@ struct PostgresTypeTraits<FLOAT4OID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'i';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertFloatDatum(val);
 	}
@@ -320,7 +320,7 @@ struct PostgresTypeTraits<FLOAT8OID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'd';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertDoubleDatum(val);
 	}
@@ -333,7 +333,7 @@ struct PostgresTypeTraits<TIMESTAMPOID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'd';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertTimestampDatum(val);
 	}
@@ -346,7 +346,7 @@ struct PostgresTypeTraits<DATEOID> {
 	static constexpr bool typbyval = true;
 	static constexpr char typalign = 'i';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertDateDatum(val);
 	}
@@ -359,7 +359,7 @@ struct PostgresTypeTraits<UUIDOID> {
 	static constexpr bool typbyval = false;
 	static constexpr char typalign = 'c';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertUUIDDatum(val);
 	}
@@ -372,7 +372,7 @@ struct PostgresTypeTraits<NUMERICOID> {
 	static constexpr bool typbyval = false;
 	static constexpr char typalign = 'i';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertNumericDatum(val);
 	}
@@ -385,7 +385,7 @@ struct PostgresTypeTraits<VARCHAROID> {
 	static constexpr bool typbyval = false;
 	static constexpr char typalign = 'i';
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return ConvertVarCharDatum(val);
 	}
@@ -398,7 +398,7 @@ struct PostgresOIDMapping {
 	static constexpr bool typbyval = PostgresTypeTraits<OID>::typbyval;
 	static constexpr char typalign = PostgresTypeTraits<OID>::typalign;
 
-	static Datum
+	static inline Datum
 	ToDatum(const duckdb::Value &val) {
 		return PostgresTypeTraits<OID>::ToDatum(val);
 	}
