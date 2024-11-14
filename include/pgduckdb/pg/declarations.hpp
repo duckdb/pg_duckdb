@@ -13,7 +13,13 @@ It should not include any C++ code, only Postgres C declarations.
 
 extern "C" {
 typedef int16_t AttrNumber;
+
 typedef uint32_t BlockNumber;
+
+typedef int Buffer;
+
+struct BufferAccessStrategyData;
+typedef struct BufferAccessStrategyData *BufferAccessStrategy;
 
 typedef double Cardinality;
 
@@ -30,7 +36,19 @@ typedef HeapTupleData *HeapTuple;
 
 struct Node;
 
+typedef uint16_t OffsetNumber;
+
 typedef unsigned int Oid;
+
+struct ParamListInfoData;
+typedef struct ParamListInfoData *ParamListInfo;
+
+struct PlannedStmt;
+
+typedef char *Pointer;
+typedef Pointer Page;
+
+struct Query;
 
 struct RelationData;
 typedef struct RelationData *Relation;

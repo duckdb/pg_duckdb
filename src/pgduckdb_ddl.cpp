@@ -1,6 +1,8 @@
 #include "duckdb.hpp"
 #include <regex>
 
+#include "pgduckdb/pgduckdb_planner.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "access/tableam.h"
@@ -28,7 +30,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>

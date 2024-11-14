@@ -3,6 +3,8 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/exception.hpp"
 
+#include "pgduckdb/pgduckdb_planner.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
@@ -14,7 +16,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
-#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 /* global variables */
