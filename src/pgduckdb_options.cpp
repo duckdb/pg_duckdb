@@ -1,8 +1,13 @@
 
 #include "duckdb.hpp"
 
+#include <filesystem>
+#include <fstream>
+
 extern "C" {
 #include "postgres.h"
+#include "miscadmin.h"
+#include "funcapi.h"
 #include "access/genam.h"
 #include "access/relation.h"
 #include "access/table.h"
@@ -175,6 +180,39 @@ DuckdbCacheObject(Datum object, Datum type) {
 	return true;
 }
 
+typedef struct CacheInfo {
+	std::string cache_key;
+	std::string remote_path;
+	std::string file_size;
+} CacheInfo;
+
+static std::vector<CacheInfo>
+DuckdbGetCachedFile() {
+	std::string ext(".meta");
+	std::vector<CacheInfo> cache_info;
+	for (auto &p : std::filesystem::recursive_directory_iterator(CreateOrGetDirectoryPath("duckdb_cache"))) {
+		if (p.path().extension() == ext) {
+			std::ifstream cache_file_metadata(p.path());
+			std::string metadata;
+			std::vector<std::string> metadata_tokens;
+			while (std::getline(cache_file_metadata, metadata, ',')) {
+				metadata_tokens.push_back(metadata);
+			};
+			cache_info.push_back(CacheInfo {metadata_tokens[0], metadata_tokens[1], metadata_tokens[2]});
+		}
+	}
+	return cache_info;
+}
+
+static bool
+DuckdbCacheDelete(Datum cache_key_datum) {
+	auto cache_key = DatumToString(cache_key_datum);
+	auto cache_filename = CreateOrGetDirectoryPath("duckdb_cache") + "/" + cache_key;
+	bool removed = !std::remove(cache_filename.c_str());
+	std::remove(std::string(cache_filename + ".meta").c_str());
+	return removed;
+}
+
 } // namespace pgduckdb
 
 extern "C" {
@@ -196,6 +234,69 @@ DECLARE_PG_FUNCTION(cache) {
 	Datum object = PG_GETARG_DATUM(0);
 	Datum type = PG_GETARG_DATUM(1);
 	bool result = pgduckdb::DuckdbCacheObject(object, type);
+	PG_RETURN_BOOL(result);
+}
+
+DECLARE_PG_FUNCTION(cache_info) {
+	ReturnSetInfo *rsinfo = (ReturnSetInfo *)fcinfo->resultinfo;
+	Tuplestorestate *tuple_store;
+	TupleDesc cache_info_tuple_desc;
+	AttInMetadata *attinmeta;
+
+	auto result = pgduckdb::DuckdbGetCachedFile();
+
+	cache_info_tuple_desc = CreateTemplateTupleDesc(3);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)1, "cache_file_name", TEXTOID, -1, 0);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)2, "remote_path", TEXTOID, -1, 0);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)3, "cache_file_size", TEXTOID, -1, 0);
+
+	// We need to switch to long running memory context
+	MemoryContext oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
+	attinmeta = TupleDescGetAttInMetadata(cache_info_tuple_desc);
+	tuple_store = tuplestore_begin_heap(rsinfo->allowedModes & SFRM_Materialize_Random, false, work_mem);
+	MemoryContextSwitchTo(oldcontext);
+
+	char **values = (char **)palloc0((3) * sizeof(char *));
+
+	for (int i = 0; i < result.size(); i++) {
+
+		auto &cache_info = result[i];
+
+		// Local cache file key
+		char *cache_key = (char *)palloc0(cache_info.cache_key.length() + 1);
+		memcpy(cache_key, cache_info.cache_key.c_str(), cache_info.cache_key.length());
+		values[0] = cache_key;
+
+		// Remote path
+		char *remote_path = (char *)palloc0(cache_info.remote_path.length() + 1);
+		memcpy(remote_path, cache_info.remote_path.c_str(), cache_info.remote_path.length());
+		values[1] = remote_path;
+
+		// Cached file size
+		char *file_size = (char *)palloc0(cache_info.file_size.length() + 1);
+		memcpy(file_size, cache_info.file_size.c_str(), cache_info.file_size.length());
+		values[2] = file_size;
+
+		HeapTuple tuple;
+		tuple = BuildTupleFromCStrings(attinmeta, values);
+		tuplestore_puttuple(tuple_store, tuple);
+		heap_freetuple(tuple);
+
+		pfree(file_size);
+		pfree(remote_path);
+		pfree(cache_key);
+	}
+
+	rsinfo->returnMode = SFRM_Materialize;
+	rsinfo->setResult = tuple_store;
+	rsinfo->setDesc = cache_info_tuple_desc;
+
+	return (Datum)0;
+}
+
+DECLARE_PG_FUNCTION(cache_delete) {
+	Datum cache_key = PG_GETARG_DATUM(0);
+	bool result = pgduckdb::DuckdbCacheDelete(cache_key);
 	PG_RETURN_BOOL(result);
 }
 
