@@ -171,15 +171,16 @@ ConvertNumeric(T value, idx_t scale) {
 
 static Datum
 ConvertNumericDatum(const duckdb::Value &value) {
-	if (value.type().id() == duckdb::LogicalTypeId::DOUBLE) {
+	auto value_type_id = value.type().id();
+	if (value_type_id == duckdb::LogicalTypeId::DOUBLE) {
 		return ConvertDoubleDatum(value);
 	}
 	NumericVar numeric_var;
-	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::DECIMAL ||
-	         value.type().id() == duckdb::LogicalTypeId::HUGEINT ||
-	         value.type().id() == duckdb::LogicalTypeId::UBIGINT);
+	D_ASSERT(value_type_id == duckdb::LogicalTypeId::DECIMAL ||
+	         value_type_id == duckdb::LogicalTypeId::HUGEINT ||
+	         value_type_id == duckdb::LogicalTypeId::UBIGINT);
 	auto physical_type = value.type().InternalType();
-	const bool is_decimal = value.type().id() == duckdb::LogicalTypeId::DECIMAL;
+	const bool is_decimal = value_type_id == duckdb::LogicalTypeId::DECIMAL;
 	uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
 
 	switch (physical_type) {
@@ -539,8 +540,6 @@ static void
 ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
 	auto &child_type = GetChildTypeRecursive(value.type());
-	auto child_id = child_type.id();
-	(void)child_id;
 
 	auto number_of_dimensions = GetDuckDBListDimensionality(value.type());
 
