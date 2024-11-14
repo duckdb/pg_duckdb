@@ -777,6 +777,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 
 	if (current_file_cache) {
 		MD5Context md5_context;
+
 		// NO ETag header
 		if (res->headers.find("ETag") == res->headers.end() || res->headers["ETag"].empty()) {
 			md5_context.Add(StringUtil::Lower(path));
@@ -797,10 +798,10 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 					                    full_download_result->http_url, to_string(full_download_result->code),
 					                    full_download_result->error);
 				}
-
+				// Write metadata for cached file
+				cached_file_handle->WriteMetadata(md5_key, StringUtil::Lower(path), length);
 				// Mark the file as initialized, set its final length, and unlock it to allowing parallel reads
 				cached_file_handle->SetInitialized(length);
-
 				// We shouldn't write these to cache
 				should_write_cache = false;
 			} else {

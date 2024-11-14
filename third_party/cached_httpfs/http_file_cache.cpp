@@ -2,7 +2,7 @@
 
 namespace duckdb {
 
-CachedFile::CachedFile(const string &cache_dir, FileSystem &fs, const std::string &key, bool cache_file) : fs(fs) {
+CachedFile::CachedFile(const string &cache_dir, FileSystem &fs, const string &key, bool cache_file) : cache_directory(cache_dir), fs(fs) {
 	file_name = cache_dir + "/" + key;
 
 	GetDirectoryCacheLock(cache_dir);
@@ -26,7 +26,7 @@ CachedFile::~CachedFile() {
 }
 
 void CachedFile::GetDirectoryCacheLock(const string &cache_dir) {
-	std::string lock_file = cache_dir + "/.lock";
+	string lock_file = cache_dir + "/.lock";
 	FileOpenFlags flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                      FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE | FileFlags::FILE_FLAGS_NULL_IF_EXISTS |
 	                      FileLockType::WRITE_LOCK;
@@ -46,6 +46,17 @@ void CachedFile::ReleaseDirectoryCacheLock() {
 
 CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile> &file_p) {
 	file = file_p;
+}
+
+void CachedFileHandle::WriteMetadata(const string &cache_key, const string &remote_path, idx_t total_size) {
+	D_ASSERT(!file->initialized);
+	string metadata_file_name = file->cache_directory + "/" + cache_key + ".meta";
+	FileOpenFlags flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileLockType::WRITE_LOCK;
+	auto handle = file->fs.OpenFile(metadata_file_name, flags);
+	string metadata_info = cache_key + "," + remote_path + "," + std::to_string(total_size);
+	handle->Write((void *)metadata_info.c_str(), metadata_info.length(), 0);
+	handle->Close();
+
 }
 
 void CachedFileHandle::SetInitialized(idx_t total_size) {
