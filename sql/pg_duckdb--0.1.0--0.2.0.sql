@@ -49,9 +49,10 @@ END;
 $func$;
 
 CREATE TYPE duckdb.cache_info AS (
-  cache_key TEXT,
   remote_path TEXT,
-  file_size TEXT
+  cache_key TEXT,
+  cache_file_size BIGINT,
+  cache_file_timestamp TIMESTAMPTZ
 );
 
 CREATE FUNCTION duckdb.cache_info()

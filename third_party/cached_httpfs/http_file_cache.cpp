@@ -53,7 +53,8 @@ void CachedFileHandle::WriteMetadata(const string &cache_key, const string &remo
 	string metadata_file_name = file->cache_directory + "/" + cache_key + ".meta";
 	FileOpenFlags flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileLockType::WRITE_LOCK;
 	auto handle = file->fs.OpenFile(metadata_file_name, flags);
-	string metadata_info = cache_key + "," + remote_path + "," + std::to_string(total_size);
+	auto cached_file_timestamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+	string metadata_info = cache_key + "," + remote_path + "," + std::to_string(total_size) + "," + std::to_string(cached_file_timestamp);
 	handle->Write((void *)metadata_info.c_str(), metadata_info.length(), 0);
 	handle->Close();
 

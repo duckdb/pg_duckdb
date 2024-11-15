@@ -24,6 +24,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
 namespace pgduckdb {
 
@@ -183,7 +184,8 @@ DuckdbCacheObject(Datum object, Datum type) {
 typedef struct CacheInfo {
 	std::string cache_key;
 	std::string remote_path;
-	std::string file_size;
+	int64_t file_size;
+	Timestamp file_timestamp;
 } CacheInfo;
 
 static std::vector<CacheInfo>
@@ -198,7 +200,8 @@ DuckdbGetCachedFile() {
 			while (std::getline(cache_file_metadata, metadata, ',')) {
 				metadata_tokens.push_back(metadata);
 			};
-			cache_info.push_back(CacheInfo {metadata_tokens[0], metadata_tokens[1], metadata_tokens[2]});
+			cache_info.push_back(CacheInfo {metadata_tokens[0], metadata_tokens[1], std::stoi(metadata_tokens[2]),
+			                                std::stoi(metadata_tokens[3])});
 		}
 	}
 	return cache_info;
@@ -241,50 +244,36 @@ DECLARE_PG_FUNCTION(cache_info) {
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *)fcinfo->resultinfo;
 	Tuplestorestate *tuple_store;
 	TupleDesc cache_info_tuple_desc;
-	AttInMetadata *attinmeta;
 
 	auto result = pgduckdb::DuckdbGetCachedFile();
 
-	cache_info_tuple_desc = CreateTemplateTupleDesc(3);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)1, "cache_file_name", TEXTOID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)2, "remote_path", TEXTOID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)3, "cache_file_size", TEXTOID, -1, 0);
+	cache_info_tuple_desc = CreateTemplateTupleDesc(4);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)1, "remote_path", TEXTOID, -1, 0);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)2, "cache_file_name", TEXTOID, -1, 0);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)3, "cache_file_size", INT8OID, -1, 0);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)4, "timestamp", TIMESTAMPTZOID, -1, 0);
 
 	// We need to switch to long running memory context
 	MemoryContext oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
-	attinmeta = TupleDescGetAttInMetadata(cache_info_tuple_desc);
 	tuple_store = tuplestore_begin_heap(rsinfo->allowedModes & SFRM_Materialize_Random, false, work_mem);
 	MemoryContextSwitchTo(oldcontext);
 
-	char **values = (char **)palloc0((3) * sizeof(char *));
-
 	for (int i = 0; i < result.size(); i++) {
+
+		Datum values[4] = {0};
+		bool nulls[4] = {0};
 
 		auto &cache_info = result[i];
 
-		// Local cache file key
-		char *cache_key = (char *)palloc0(cache_info.cache_key.length() + 1);
-		memcpy(cache_key, cache_info.cache_key.c_str(), cache_info.cache_key.length());
-		values[0] = cache_key;
+		values[0] = CStringGetTextDatum(cache_info.remote_path.c_str());
+		values[1] = CStringGetTextDatum(cache_info.cache_key.c_str());
+		values[2] = cache_info.file_size;
+		/* We have stored timestamp in *seconds* from epoch. We need to convert this to PG timestamptz. */
+		values[3] = (cache_info.file_timestamp * 1000000) - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 
-		// Remote path
-		char *remote_path = (char *)palloc0(cache_info.remote_path.length() + 1);
-		memcpy(remote_path, cache_info.remote_path.c_str(), cache_info.remote_path.length());
-		values[1] = remote_path;
-
-		// Cached file size
-		char *file_size = (char *)palloc0(cache_info.file_size.length() + 1);
-		memcpy(file_size, cache_info.file_size.c_str(), cache_info.file_size.length());
-		values[2] = file_size;
-
-		HeapTuple tuple;
-		tuple = BuildTupleFromCStrings(attinmeta, values);
+		HeapTuple tuple = heap_form_tuple(cache_info_tuple_desc, values, nulls);
 		tuplestore_puttuple(tuple_store, tuple);
 		heap_freetuple(tuple);
-
-		pfree(file_size);
-		pfree(remote_path);
-		pfree(cache_key);
 	}
 
 	rsinfo->returnMode = SFRM_Materialize;
