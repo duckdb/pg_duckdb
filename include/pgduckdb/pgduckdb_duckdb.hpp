@@ -84,4 +84,6 @@ private:
 	std::string default_dbname;
 };
 
+std::string CreateOrGetDirectoryPath(const char *directory_name);
+
 } // namespace pgduckdb

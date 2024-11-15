@@ -28,6 +28,7 @@ private:
 	void ReleaseDirectoryCacheLock();
 
 private:
+	string cache_directory;
 	// FileSystem
 	FileSystem &fs;
 	// File name
@@ -52,6 +53,8 @@ public:
 	void Allocate(idx_t size);
 	//! Grow file to new size, copying over `bytes_to_copy` to the new buffer
 	void GrowFile(idx_t new_capacity, idx_t bytes_to_copy);
+	//! Write cached file metadata
+	void WriteMetadata(const string &cache_key, const string &remote_path, idx_t total_size);
 	//! Indicate the file is fully downloaded and safe for parallel reading without lock
 	void SetInitialized(idx_t total_size);
 	//! Write to the buffer
