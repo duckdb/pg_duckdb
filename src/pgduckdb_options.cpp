@@ -181,17 +181,17 @@ DuckdbCacheObject(Datum object, Datum type) {
 	return true;
 }
 
-typedef struct CacheInfo {
+typedef struct CacheFileInfo {
 	std::string cache_key;
 	std::string remote_path;
 	int64_t file_size;
 	Timestamp file_timestamp;
-} CacheInfo;
+} CacheFileInfo;
 
-static std::vector<CacheInfo>
-DuckdbGetCachedFile() {
+static std::vector<CacheFileInfo>
+DuckdbGetCachedFilesInfos() {
 	std::string ext(".meta");
-	std::vector<CacheInfo> cache_info;
+	std::vector<CacheFileInfo> cache_info;
 	for (auto &p : std::filesystem::recursive_directory_iterator(CreateOrGetDirectoryPath("duckdb_cache"))) {
 		if (p.path().extension() == ext) {
 			std::ifstream cache_file_metadata(p.path());
@@ -199,9 +199,14 @@ DuckdbGetCachedFile() {
 			std::vector<std::string> metadata_tokens;
 			while (std::getline(cache_file_metadata, metadata, ',')) {
 				metadata_tokens.push_back(metadata);
-			};
-			cache_info.push_back(CacheInfo {metadata_tokens[0], metadata_tokens[1], std::stoi(metadata_tokens[2]),
-			                                std::stoi(metadata_tokens[3])});
+			}
+			if (metadata_tokens.size() != 4) {
+				elog(WARNING, "(PGDuckDB/DuckdbGetCachedFilesInfos) Invalid '%s' cache metadata file",
+				     p.path().c_str());
+					 break;
+			}
+			cache_info.push_back(CacheFileInfo {metadata_tokens[0], metadata_tokens[1], std::stoi(metadata_tokens[2]),
+			                                    std::stoi(metadata_tokens[3])});
 		}
 	}
 	return cache_info;
@@ -210,6 +215,10 @@ DuckdbGetCachedFile() {
 static bool
 DuckdbCacheDelete(Datum cache_key_datum) {
 	auto cache_key = DatumToString(cache_key_datum);
+	if (!cache_key.size()) {
+		elog(WARNING, "(PGDuckDB/DuckdbGetCachedFilesInfos) Empty cache key");
+		return false;
+	}
 	auto cache_filename = CreateOrGetDirectoryPath("duckdb_cache") + "/" + cache_key;
 	bool removed = !std::remove(cache_filename.c_str());
 	std::remove(std::string(cache_filename + ".meta").c_str());
@@ -245,25 +254,22 @@ DECLARE_PG_FUNCTION(cache_info) {
 	Tuplestorestate *tuple_store;
 	TupleDesc cache_info_tuple_desc;
 
-	auto result = pgduckdb::DuckdbGetCachedFile();
+	auto result = pgduckdb::DuckdbGetCachedFilesInfos();
 
 	cache_info_tuple_desc = CreateTemplateTupleDesc(4);
 	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)1, "remote_path", TEXTOID, -1, 0);
 	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)2, "cache_file_name", TEXTOID, -1, 0);
 	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)3, "cache_file_size", INT8OID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)4, "timestamp", TIMESTAMPTZOID, -1, 0);
+	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)4, "cache_file_timestamp", TIMESTAMPTZOID, -1, 0);
 
 	// We need to switch to long running memory context
 	MemoryContext oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
 	tuple_store = tuplestore_begin_heap(rsinfo->allowedModes & SFRM_Materialize_Random, false, work_mem);
 	MemoryContextSwitchTo(oldcontext);
 
-	for (int i = 0; i < result.size(); i++) {
-
+	for (auto &cache_info : result) {
 		Datum values[4] = {0};
 		bool nulls[4] = {0};
-
-		auto &cache_info = result[i];
 
 		values[0] = CStringGetTextDatum(cache_info.remote_path.c_str());
 		values[1] = CStringGetTextDatum(cache_info.cache_key.c_str());
