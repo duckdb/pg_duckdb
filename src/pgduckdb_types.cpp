@@ -433,16 +433,6 @@ using UUIDArray = PODArray<PostgresOIDMapping<UUIDOID>>;
 using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
 using NumericArray = PODArray<PostgresOIDMapping<NUMERICOID>>;
 
-static const duckdb::LogicalType &
-GetChildTypeRecursive(const duckdb::LogicalType &list_type) {
-	D_ASSERT(list_type.id() == duckdb::LogicalTypeId::LIST);
-	auto &child = duckdb::ListType::GetChildType(list_type);
-	if (child.id() == duckdb::LogicalTypeId::LIST) {
-		return GetChildTypeRecursive(child);
-	}
-	return child;
-}
-
 static idx_t
 GetDuckDBListDimensionality(const duckdb::LogicalType &list_type, idx_t depth = 0) {
 	D_ASSERT(list_type.id() == duckdb::LogicalTypeId::LIST);
@@ -539,8 +529,6 @@ template <class OP>
 static void
 ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
-	auto &child_type = GetChildTypeRecursive(value.type());
-
 	auto number_of_dimensions = GetDuckDBListDimensionality(value.type());
 
 	PostgresArrayAppendState<OP> append_state(number_of_dimensions);
