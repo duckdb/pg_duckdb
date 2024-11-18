@@ -447,6 +447,7 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
                                               .relation_size = duckdb_relation_size,
                                               .relation_needs_toast_table = duckdb_relation_needs_toast_table,
                                               /* can be null because relation_needs_toast_table returns false */
+                                              .relation_toast_am = NULL,
                                               .relation_fetch_toast_slice = NULL,
 
                                               .relation_estimate_size = duckdb_estimate_rel_size,
