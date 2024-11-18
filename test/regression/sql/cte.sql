@@ -5,8 +5,6 @@ WITH modifying_cte AS (
     INSERT INTO t VALUES (1) RETURNING *
 ) select * from modifying_cte;
 
-DROP TABLE t;
-
 WITH RECURSIVE outermost(x) AS (
  SELECT 1
  UNION (WITH innermost1 AS (
@@ -30,3 +28,5 @@ WITH RECURSIVE outermost(x) AS (
   UNION SELECT * FROM innermost1)
  )
  SELECT * FROM outermost ORDER BY 1;
+
+DROP TABLE t;

@@ -8,7 +8,6 @@ WITH modifying_cte AS (
  1
 (1 row)
 
-DROP TABLE t;
 WITH RECURSIVE outermost(x) AS (
  SELECT 1
  UNION (WITH innermost1 AS (
@@ -43,3 +42,4 @@ WITH RECURSIVE outermost(x) AS (
  7
 (7 rows)
 
+DROP TABLE t;
