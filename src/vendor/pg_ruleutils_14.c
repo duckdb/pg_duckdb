@@ -6121,7 +6121,6 @@ get_setop_query(Node *setOp, Query *query, deparse_context *context,
 		Query	   *subquery = rte->subquery;
 
 		Assert(subquery != NULL);
-		Assert(subquery->setOperations == NULL);
 		/* Need parens if WITH, ORDER BY, FOR UPDATE, or LIMIT; see gram.y */
 		need_paren = (subquery->cteList ||
 					  subquery->sortClause ||
