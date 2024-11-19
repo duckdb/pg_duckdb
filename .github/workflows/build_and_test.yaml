@@ -108,7 +108,7 @@ jobs:
       - name: Install pytest and other test requirements
         run: python3 -m pip install -r duckdb/requirements.txt
 
-      - name: Build and test pg_duckdb extension
+      - name: Build pg_duckdb extension
         id: build
         run: |
           pushd duckdb
@@ -127,6 +127,11 @@ jobs:
           make pycheck
 
       - name: Print regression.diffs if regression tests failed
-        if: failure() && steps.installcheck.outcome != 'success'
+        if: failure() && steps.installcheck.outcome == 'failure'
         run: |
           cat duckdb/test/regression/regression.diffs
+
+      - name: Print postmaster.log if regression tests failed
+        if: failure() && steps.installcheck.outcome == 'failure'
+        run: |
+          cat duckdb/test/regression/log/postmaster.log
