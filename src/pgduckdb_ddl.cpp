@@ -51,7 +51,7 @@ DuckdbTruncateTable(Oid relation_oid) {
 }
 
 void
-DuckdbHandleDDL(Node *parsetree, const char *queryString) {
+DuckdbHandleDDL(Node *parsetree) {
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/* We're not installed, so don't mess with the query */
 		return;
@@ -418,7 +418,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * a new version.
 	 */
 	if (pgduckdb::IsMotherDuckEnabled() && !pgduckdb::doing_motherduck_sync) {
-		for (auto proc = 0; proc < SPI_processed; ++proc) {
+		for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
 			if (!connection) {
 				/*
 				 * For now, we don't support DuckDB queries in transactions. To support
@@ -453,7 +453,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	if (ret != SPI_OK_SELECT)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 
-	for (auto proc = 0; proc < SPI_processed; ++proc) {
+	for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
 
 		bool isnull;

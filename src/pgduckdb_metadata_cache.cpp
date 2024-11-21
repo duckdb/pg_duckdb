@@ -75,7 +75,7 @@ uint32 schema_hash_value;
  * IsExtensionRegistered for details).
  */
 static void
-InvalidateCaches(Datum arg, int cache_id, uint32 hash_value) {
+InvalidateCaches(Datum /*arg*/, int /*cache_id*/, uint32 hash_value) {
 	if (hash_value != schema_hash_value) {
 		return;
 	}
@@ -112,7 +112,7 @@ BuildDuckdbOnlyFunctions() {
 	const char *function_names[] = {"read_parquet", "read_csv", "iceberg_scan", "iceberg_metadata",
 	                                "iceberg_snapshots", "delta_scan", "read_json"};
 
-	for (int i = 0; i < lengthof(function_names); i++) {
+	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
 
 		for (int j = 0; j < catlist->n_members; j++) {

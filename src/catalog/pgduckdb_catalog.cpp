@@ -9,24 +9,21 @@
 
 namespace pgduckdb {
 
-PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &db, const duckdb::string &connection_string,
-                                 duckdb::AccessMode access_mode)
-    : Catalog(db), path(connection_string), access_mode(access_mode) {
+PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &_db, const duckdb::string &connection_string,
+                                 duckdb::AccessMode _access_mode)
+    : Catalog(_db), path(connection_string), access_mode(_access_mode) {
 }
 
 duckdb::unique_ptr<duckdb::Catalog>
-PostgresCatalog::Attach(duckdb::StorageExtensionInfo *storage_info_p, duckdb::ClientContext &context,
-                        duckdb::AttachedDatabase &db, const duckdb::string &name, duckdb::AttachInfo &info,
-                        duckdb::AccessMode access_mode) {
-	auto connection_string = info.path;
-	return duckdb::make_uniq<PostgresCatalog>(db, connection_string, access_mode);
+PostgresCatalog::Attach(duckdb::StorageExtensionInfo *, duckdb::ClientContext &, duckdb::AttachedDatabase &db,
+                        const duckdb::string &, duckdb::AttachInfo &info, duckdb::AccessMode access_mode) {
+	return duckdb::make_uniq<PostgresCatalog>(db, info.path, access_mode);
 }
 
 // ------------------ Catalog API ---------------------
 
 void
-PostgresCatalog::Initialize(bool load_builtin) {
-	return;
+PostgresCatalog::Initialize(bool /*load_builtin*/) {
 }
 
 duckdb::string
@@ -35,14 +32,14 @@ PostgresCatalog::GetCatalogType() {
 }
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
-PostgresCatalog::CreateSchema(duckdb::CatalogTransaction transaction, duckdb::CreateSchemaInfo &info) {
+PostgresCatalog::CreateSchema(duckdb::CatalogTransaction, duckdb::CreateSchemaInfo &) {
 	throw duckdb::NotImplementedException("CreateSchema not supported yet");
 }
 
 duckdb::optional_ptr<duckdb::SchemaCatalogEntry>
-PostgresCatalog::GetSchema(duckdb::CatalogTransaction transaction, const duckdb::string &schema_name,
-                           duckdb::OnEntryNotFound if_not_found, duckdb::QueryErrorContext error_context) {
-	auto &pg_transaction = transaction.transaction->Cast<PostgresTransaction>();
+PostgresCatalog::GetSchema(duckdb::CatalogTransaction catalog_transaction, const duckdb::string &schema_name,
+                           duckdb::OnEntryNotFound, duckdb::QueryErrorContext) {
+	auto &pg_transaction = catalog_transaction.transaction->Cast<PostgresTransaction>();
 	auto res = pg_transaction.GetCatalogEntry(duckdb::CatalogType::SCHEMA_ENTRY, schema_name, "");
 	D_ASSERT(res);
 	D_ASSERT(res->type == duckdb::CatalogType::SCHEMA_ENTRY);
@@ -50,43 +47,41 @@ PostgresCatalog::GetSchema(duckdb::CatalogTransaction transaction, const duckdb:
 }
 
 void
-PostgresCatalog::ScanSchemas(duckdb::ClientContext &context,
-                             std::function<void(duckdb::SchemaCatalogEntry &)> callback) {
-	return;
+PostgresCatalog::ScanSchemas(duckdb::ClientContext &, std::function<void(duckdb::SchemaCatalogEntry &)>) {
 }
 
 duckdb::unique_ptr<duckdb::PhysicalOperator>
-PostgresCatalog::PlanCreateTableAs(duckdb::ClientContext &context, duckdb::LogicalCreateTable &op,
-                                   duckdb::unique_ptr<duckdb::PhysicalOperator> plan) {
+PostgresCatalog::PlanCreateTableAs(duckdb::ClientContext &, duckdb::LogicalCreateTable &,
+                                   duckdb::unique_ptr<duckdb::PhysicalOperator>) {
 	throw duckdb::NotImplementedException("PlanCreateTableAs not supported yet");
 }
 
 duckdb::unique_ptr<duckdb::PhysicalOperator>
-PostgresCatalog::PlanInsert(duckdb::ClientContext &context, duckdb::LogicalInsert &op,
-                            duckdb::unique_ptr<duckdb::PhysicalOperator> plan) {
+PostgresCatalog::PlanInsert(duckdb::ClientContext &, duckdb::LogicalInsert &,
+                            duckdb::unique_ptr<duckdb::PhysicalOperator>) {
 	throw duckdb::NotImplementedException("PlanInsert not supported yet");
 }
 
 duckdb::unique_ptr<duckdb::PhysicalOperator>
-PostgresCatalog::PlanDelete(duckdb::ClientContext &context, duckdb::LogicalDelete &op,
-                            duckdb::unique_ptr<duckdb::PhysicalOperator> plan) {
+PostgresCatalog::PlanDelete(duckdb::ClientContext &, duckdb::LogicalDelete &,
+                            duckdb::unique_ptr<duckdb::PhysicalOperator>) {
 	throw duckdb::NotImplementedException("PlanDelete not supported yet");
 }
 
 duckdb::unique_ptr<duckdb::PhysicalOperator>
-PostgresCatalog::PlanUpdate(duckdb::ClientContext &context, duckdb::LogicalUpdate &op,
-                            duckdb::unique_ptr<duckdb::PhysicalOperator> plan) {
+PostgresCatalog::PlanUpdate(duckdb::ClientContext &, duckdb::LogicalUpdate &,
+                            duckdb::unique_ptr<duckdb::PhysicalOperator>) {
 	throw duckdb::NotImplementedException("PlanUpdate not supported yet");
 }
 
 duckdb::unique_ptr<duckdb::LogicalOperator>
-PostgresCatalog::BindCreateIndex(duckdb::Binder &binder, duckdb::CreateStatement &stmt,
-                                 duckdb::TableCatalogEntry &table, duckdb::unique_ptr<duckdb::LogicalOperator> plan) {
+PostgresCatalog::BindCreateIndex(duckdb::Binder &, duckdb::CreateStatement &, duckdb::TableCatalogEntry &,
+                                 duckdb::unique_ptr<duckdb::LogicalOperator>) {
 	throw duckdb::NotImplementedException("BindCreateIndex not supported yet");
 }
 
 duckdb::DatabaseSize
-PostgresCatalog::GetDatabaseSize(duckdb::ClientContext &context) {
+PostgresCatalog::GetDatabaseSize(duckdb::ClientContext &) {
 	throw duckdb::NotImplementedException("GetDatabaseSize not supported yet");
 }
 
@@ -101,7 +96,7 @@ PostgresCatalog::GetDBPath() {
 }
 
 void
-PostgresCatalog::DropSchema(duckdb::ClientContext &context, duckdb::DropInfo &info) {
+PostgresCatalog::DropSchema(duckdb::ClientContext &, duckdb::DropInfo &) {
 	throw duckdb::NotImplementedException("DropSchema not supported yet");
 }
 

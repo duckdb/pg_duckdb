@@ -10,8 +10,8 @@
 
 namespace pgduckdb {
 
-PostgresTransactionManager::PostgresTransactionManager(duckdb::AttachedDatabase &db_p, PostgresCatalog &catalog)
-    : TransactionManager(db_p), catalog(catalog) {
+PostgresTransactionManager::PostgresTransactionManager(duckdb::AttachedDatabase &_db_p, PostgresCatalog &_catalog)
+    : TransactionManager(_db_p), catalog(_catalog) {
 }
 
 duckdb::Transaction &
@@ -42,8 +42,7 @@ PostgresTransactionManager::RollbackTransaction(duckdb::Transaction &transaction
 }
 
 void
-PostgresTransactionManager::Checkpoint(duckdb::ClientContext &context, bool force) {
-	return;
+PostgresTransactionManager::Checkpoint(duckdb::ClientContext &, bool /*force*/) {
 }
 
 } // namespace pgduckdb
