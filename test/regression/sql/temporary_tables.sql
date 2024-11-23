@@ -163,4 +163,15 @@ SELECT * FROM t_heap2;
 
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
-DROP TABLE webpages, t, t_heap, t_heap2;
+CREATE TEMP TABLE ta (a int DEFAULT 3, b int) USING duckdb;
+INSERT INTO ta (b) VALUES (123), (456);
+INSERT INTO ta (a, b) VALUES (123, 456), (456, 123);
+SELECT * FROM ta;
+
+CREATE TEMP TABLE tb (a int DEFAULT 3, b int, c varchar DEFAULT 'pg_duckdb') USING duckdb;
+INSERT INTO tb (a) VALUES (123), (456);
+INSERT INTO tb (b) VALUES (123), (456);
+INSERT INTO tb (c) VALUES ('ta'), ('tb');
+SELECT * FROM tb;
+
+DROP TABLE webpages, t, t_heap, t_heap2, ta, tb;

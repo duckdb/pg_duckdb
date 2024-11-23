@@ -246,4 +246,31 @@ pg_temp	main	CREATE TABLE webpages(column00 INTEGER, column01 VARCHAR, column02 
  
 (1 row)
 
-DROP TABLE webpages, t, t_heap, t_heap2;
+CREATE TEMP TABLE ta (a int DEFAULT 3, b int) USING duckdb;
+INSERT INTO ta (b) VALUES (123), (456);
+INSERT INTO ta (a, b) VALUES (123, 456), (456, 123);
+SELECT * FROM ta;
+  a  |  b  
+-----+-----
+   3 | 123
+   3 | 456
+ 123 | 456
+ 456 | 123
+(4 rows)
+
+CREATE TEMP TABLE tb (a int DEFAULT 3, b int, c varchar DEFAULT 'pg_duckdb') USING duckdb;
+INSERT INTO tb (a) VALUES (123), (456);
+INSERT INTO tb (b) VALUES (123), (456);
+INSERT INTO tb (c) VALUES ('ta'), ('tb');
+SELECT * FROM tb;
+  a  |  b  |     c     
+-----+-----+-----------
+ 123 |     | pg_duckdb
+ 456 |     | pg_duckdb
+   3 | 123 | pg_duckdb
+   3 | 456 | pg_duckdb
+   3 |     | ta
+   3 |     | tb
+(6 rows)
+
+DROP TABLE webpages, t, t_heap, t_heap2, ta, tb;
