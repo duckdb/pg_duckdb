@@ -6689,7 +6689,7 @@ get_insert_query_def(Query *query, deparse_context *context,
 			continue;			/* ignore junk entries */
 
 		/* When multi-VALUES, ignore an entry with a default value unless it is specified */
-		if (values_rte != NULL && !(IsA(tle->expr, Var)))
+		if (values_rte && (IsA(tle->expr, Const) || IsA(tle->expr, FuncExpr)))
 			continue;
 
 		appendStringInfoString(buf, sep);
