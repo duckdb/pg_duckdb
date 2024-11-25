@@ -525,12 +525,12 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		ObjectAddress schema_address = {
 		    .classId = NamespaceRelationId,
 		    .objectId = schema_oid,
-			.objectSubId = 0,
+		    .objectSubId = 0,
 		};
 		ObjectAddress extension_address = {
 		    .classId = ExtensionRelationId,
 		    .objectId = pgduckdb::ExtensionOid(),
-			.objectSubId = 0,
+		    .objectSubId = 0,
 		};
 		recordDependencyOn(&schema_address, &extension_address, DEPENDENCY_NORMAL);
 	}

@@ -14,7 +14,8 @@
 namespace pgduckdb {
 
 PostgresTable::PostgresTable(duckdb::Catalog &_catalog, duckdb::SchemaCatalogEntry &_schema,
-                             duckdb::CreateTableInfo &_info, Relation _rel, Cardinality _cardinality, Snapshot _snapshot)
+                             duckdb::CreateTableInfo &_info, Relation _rel, Cardinality _cardinality,
+                             Snapshot _snapshot)
     : duckdb::TableCatalogEntry(_catalog, _schema, _info), rel(_rel), cardinality(_cardinality), snapshot(_snapshot) {
 }
 
