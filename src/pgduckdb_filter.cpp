@@ -1,5 +1,6 @@
 #include "duckdb.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -14,7 +15,6 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
 
 namespace pgduckdb {
 

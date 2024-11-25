@@ -4,6 +4,8 @@
 #include <filesystem>
 #include <fstream>
 
+#include "pgduckdb/pgduckdb_types.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
@@ -24,7 +26,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 
 namespace pgduckdb {

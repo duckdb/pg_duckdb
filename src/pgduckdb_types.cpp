@@ -3,7 +3,9 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
+#include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/types/decimal.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -26,7 +28,6 @@ extern "C" {
 #include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
 
 namespace pgduckdb {
 

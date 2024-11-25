@@ -1,5 +1,7 @@
 #include "duckdb.hpp"
 
+#include "pgduckdb/pgduckdb_types.hpp"
+
 extern "C" {
 #include "postgres.h"
 #include "pg_config.h"
@@ -20,7 +22,6 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
