@@ -58,7 +58,7 @@ static uint64 initial_cache_version = 0;
 
 extern "C" {
 PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum) {
+pgduckdb_background_worker_main(Datum /* main_arg */) {
 	elog(LOG, "started pg_duckdb background worker");
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
