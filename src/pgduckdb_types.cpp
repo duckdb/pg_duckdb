@@ -7,6 +7,7 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/types/decimal.hpp"
+#include "pgduckdb/pg/numeric.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -29,6 +30,8 @@ extern "C" {
 #include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
+
+#define DEC_DIGITS 4 /* decimal digits per NBASE digit */
 
 namespace pgduckdb {
 
