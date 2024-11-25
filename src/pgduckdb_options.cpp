@@ -5,7 +5,6 @@
 #include <fstream>
 
 #include "pgduckdb/pgduckdb_types.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
 #include "postgres.h"
