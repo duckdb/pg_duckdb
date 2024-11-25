@@ -58,6 +58,12 @@ Docker images are [available on Dockerhub](https://hub.docker.com/r/pgduckdb/pgd
 docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:16-main
 ```
 
+And with MotherDuck, it is as simple as:
+```shell
+$ export MOTHERDUCK_TOKEN=<your personal MD token>
+$ docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:16-main -e duckdb.motherduck_enabled=true
+```
+
 Or you can use the docker compose in this repo:
 
 ```shell
