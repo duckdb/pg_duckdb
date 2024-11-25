@@ -13,6 +13,10 @@
 
 #if PG_VERSION_NUM >= 140000 && PG_VERSION_NUM < 150000
 
+#pragma GCC diagnostic ignored "-Wshadow" // ignore any compiler warnings
+#pragma GCC diagnostic ignored "-Wsign-compare" // ignore any compiler warnings
+#pragma GCC diagnostic ignored "-Wunused-parameter" // ignore any compiler warnings
+
 #include <ctype.h>
 #include <unistd.h>
 #include <fcntl.h>

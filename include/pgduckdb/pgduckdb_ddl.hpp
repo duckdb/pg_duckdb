@@ -2,5 +2,5 @@
 
 #include "pgduckdb/pg/declarations.hpp"
 
-void DuckdbHandleDDL(Node *ParseTree, const char *queryString);
+void DuckdbHandleDDL(Node *ParseTree);
 void DuckdbTruncateTable(Oid relation_oid);

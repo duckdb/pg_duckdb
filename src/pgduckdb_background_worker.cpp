@@ -58,7 +58,7 @@ static uint64 initial_cache_version = 0;
 
 extern "C" {
 PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum main_arg) {
+pgduckdb_background_worker_main(Datum /* main_arg */) {
 	elog(LOG, "started pg_duckdb background worker");
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
@@ -98,7 +98,7 @@ pgduckdb_background_worker_main(Datum main_arg) {
 		ResetLatch(MyLatch);
 	}
 
-	proc_exit(0);
+	// Unreachable
 }
 
 PG_FUNCTION_INFO_V1(force_motherduck_sync);
@@ -525,10 +525,12 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		ObjectAddress schema_address = {
 		    .classId = NamespaceRelationId,
 		    .objectId = schema_oid,
+		    .objectSubId = 0,
 		};
 		ObjectAddress extension_address = {
 		    .classId = ExtensionRelationId,
 		    .objectId = pgduckdb::ExtensionOid(),
+		    .objectSubId = 0,
 		};
 		recordDependencyOn(&schema_address, &extension_address, DEPENDENCY_NORMAL);
 	}

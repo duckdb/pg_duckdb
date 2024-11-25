@@ -110,7 +110,11 @@ ToastFetchDatum(struct varlena *attr) {
 
 	struct varlena *result = (struct varlena *)duckdb_malloc(attrsize + VARHDRSZ);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored                                                                                         \
+    "-Wsign-compare" // Ignore sign comparison warning that VARATT_EXTERNAL_IS_COMPRESSED generatess
 	if (VARATT_EXTERNAL_IS_COMPRESSED(toast_pointer)) {
+#pragma GCC diagnostic pop
 		SET_VARSIZE_COMPRESSED(result, attrsize + VARHDRSZ);
 	} else {
 		SET_VARSIZE(result, attrsize + VARHDRSZ);

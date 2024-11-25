@@ -146,8 +146,8 @@ ReplaceView(Oid view) {
 }
 
 duckdb::unique_ptr<duckdb::TableRef>
-PostgresReplacementScan(duckdb::ClientContext &context, duckdb::ReplacementScanInput &input,
-                        duckdb::optional_ptr<duckdb::ReplacementScanData> data) {
+PostgresReplacementScan(duckdb::ClientContext &, duckdb::ReplacementScanInput &input,
+                        duckdb::optional_ptr<duckdb::ReplacementScanData>) {
 
 	auto &schema_name = input.schema_name;
 	auto &table_name = input.table_name;

@@ -240,7 +240,7 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	}
 
 	if (pgduckdb::IsExtensionRegistered()) {
-		DuckdbHandleDDL(parsetree, query_string);
+		DuckdbHandleDDL(parsetree);
 	}
 
 	if (prev_process_utility_hook) {
