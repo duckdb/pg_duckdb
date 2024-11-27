@@ -73,7 +73,7 @@ PostgresSeqScanFunction::PostgresSeqScanInitGlobal(duckdb::ClientContext &, duck
 	auto global_state = duckdb::make_uniq<PostgresSeqScanGlobalState>(bind_data.m_rel, input);
 	global_state->m_global_state->m_snapshot = bind_data.m_snapshot;
 #pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Werror=redundant-move"
+#pragma GCC diagnostic ignored "-Wredundant-move"
 	return std::move(global_state);
 #pragma GCC diagnostic pop
 }
