@@ -72,7 +72,7 @@ PostgresSeqScanFunction::PostgresSeqScanInitGlobal(duckdb::ClientContext &, duck
 	auto &bind_data = input.bind_data->CastNoConst<PostgresSeqScanFunctionData>();
 	auto global_state = duckdb::make_uniq<PostgresSeqScanGlobalState>(bind_data.m_rel, input);
 	global_state->m_global_state->m_snapshot = bind_data.m_snapshot;
-	return global_state;
+	return std::move(global_state);
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
