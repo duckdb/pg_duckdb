@@ -21,5 +21,6 @@ test: standard_conforming_strings
 test: query_filter
 test: temporary_tables
 test: altered_tables
+test: transactions
 test: transaction_errors
 test: secrets

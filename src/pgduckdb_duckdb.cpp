@@ -1,4 +1,6 @@
+#include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
 #include "duckdb/main/extension_util.hpp"
@@ -7,6 +9,7 @@
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
+#include "pgduckdb/pg/transactions.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -73,6 +76,28 @@ CreateOrGetDirectoryPath(const char *directory_name) {
 
 	return duckdb_data_directory;
 }
+
+namespace ddb {
+bool
+DidWrites() {
+	if (!DuckDBManager::IsInitialized()) {
+		return false;
+	}
+	auto connection = DuckDBManager::GetConnectionUnsafe();
+	auto &context = *connection->context;
+	return DidWrites(context);
+}
+
+bool
+DidWrites(duckdb::ClientContext &context) {
+	if (!context.transaction.HasActiveTransaction()) {
+		return false;
+	}
+	return context.ActiveTransaction().ModifiedDatabase() != nullptr;
+}
+} // namespace ddb
+
+DuckDBManager DuckDBManager::manager_instance;
 
 DuckDBManager::DuckDBManager() {
 }
@@ -301,12 +326,9 @@ DuckDBManager::CreateConnection() {
 	return connection;
 }
 
-static bool transaction_handler_configured = false;
-bool started_duckdb_transaction = false;
-
 /* Returns the cached connection to the global DuckDB instance. */
 duckdb::Connection *
-DuckDBManager::GetConnection() {
+DuckDBManager::GetConnection(bool force_transaction) {
 	if (!pgduckdb::IsDuckdbExecutionAllowed()) {
 		elog(ERROR, "DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role");
 	}
@@ -314,15 +336,25 @@ DuckDBManager::GetConnection() {
 	auto &instance = Get();
 	auto &context = *instance.connection->context;
 
-	if (!transaction_handler_configured) {
-		RegisterDuckdbXactCallback();
+	if (!context.transaction.HasActiveTransaction()) {
+		if (IsSubTransaction()) {
+			throw duckdb::NotImplementedException("SAVEPOINT and subtransactions are not supported in DuckDB");
+		}
+
+		if (force_transaction || pg::IsInTransactionBlock()) {
+			/*
+			 * We only want to open a new DuckDB transaction if we're already
+			 * in a Postgres transaction block. Always opening a transaction
+			 * incurs a significant performance penalty for single statement
+			 * queries on MotherDuck. This is because a second round-trip is
+			 * needed to send the COMMIT to MotherDuck when Postgres its
+			 * transaction finishes. So we only want to do this when actually
+			 * necessary.
+			 */
+			instance.connection->BeginTransaction();
+		}
 	}
 
-	if (!started_duckdb_transaction) {
-		// context.transaction.SetAutoCommit(false);
-		instance.connection->BeginTransaction();
-		started_duckdb_transaction = true;
-	}
 	instance.RefreshConnectionState(context);
 
 	return instance.connection.get();

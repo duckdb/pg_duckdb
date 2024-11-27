@@ -1,0 +1,161 @@
+-- For this test we duckdb set execution to false
+SET duckdb.force_execution = false;
+CREATE TABLE t(a int);
+INSERT INTO t VALUES (1);
+CREATE TEMP TABLE t_ddb(a int) USING duckdb;
+INSERT INTO t_ddb VALUES (1);
+BEGIN;
+SELECT * FROM t_ddb;
+ a 
+---
+ 1
+(1 row)
+
+INSERT INTO t_ddb VALUES (2);
+SELECT * FROM t_ddb ORDER BY a;
+ a 
+---
+ 1
+ 2
+(2 rows)
+
+ROLLBACK;
+SELECT * FROM t_ddb;
+ a 
+---
+ 1
+(1 row)
+
+-- Writing to PG and DDB tables in the same transaction is not supported. We
+-- fail early for simple DML (no matter the order).
+BEGIN;
+INSERT INTO t_ddb VALUES (2);
+INSERT INTO t VALUES (2);
+ERROR:  Writing to DuckDB and Postgres tables in the same transaction block is not supported
+ROLLBACK;
+BEGIN;
+INSERT INTO t VALUES (2);
+INSERT INTO t_ddb VALUES (2);
+ERROR:  Writing to DuckDB and Postgres tables in the same transaction block is not supported
+ROLLBACK;
+-- And for other writes that are not easy to detect, such as CREATE TABLE, we
+-- fail on COMMIT.
+BEGIN;
+INSERT INTO t_ddb VALUES (2);
+CREATE TABLE t2(a int);
+COMMIT;
+ERROR:  (PGDuckDB/DuckdbXactCallback) Not implemented Error: Writing to DuckDB and Postgres tables in the same transaction block is not supported
+-- Savepoints in PG-only transactions should still work
+BEGIN;
+INSERT INTO t VALUES (2);
+SAVEPOINT my_savepoint;
+INSERT INTO t VALUES (3);
+ROLLBACK TO SAVEPOINT my_savepoint;
+COMMIT;
+-- But savepoints are not allowed in DuckDB transactions
+BEGIN;
+INSERT INTO t_ddb VALUES (2);
+SAVEPOINT my_savepoint;
+ERROR:  (PGDuckDB/DuckdbSubXactCallback) Not implemented Error: SAVEPOINT is not supported in DuckDB
+ROLLBACK;;
+-- Also not already started ones
+BEGIN;
+SAVEPOINT my_savepoint;
+INSERT INTO t_ddb VALUES (2);
+ERROR:  (PGDuckDB/DuckdbPlanNode) Not implemented Error: SAVEPOINT and subtransactions are not supported in DuckDB
+ROLLBACK;;
+-- Unless the subtransaction is already completed
+BEGIN;
+SAVEPOINT my_savepoint;
+SELECT count(*) FROM t;
+ count 
+-------
+     2
+(1 row)
+
+RELEASE SAVEPOINT my_savepoint;
+INSERT INTO t_ddb VALUES (2);
+COMMIT;
+-- Statements in functions should be run inside a single transaction. So a
+-- failure later in the function should roll back.
+CREATE OR REPLACE FUNCTION f(fail boolean) RETURNS void
+    LANGUAGE plpgsql
+    RETURNS NULL ON NULL INPUT
+    AS
+$$
+BEGIN
+INSERT INTO t_ddb VALUES (8);
+IF fail THEN
+    RAISE EXCEPTION 'fail';
+END IF;
+END;
+$$;
+-- After executing the function the table should not contain the value 8,
+-- because that change was rolled back
+SELECT * FROM f(true);
+ERROR:  fail
+CONTEXT:  PL/pgSQL function f(boolean) line 5 at RAISE
+SELECT * FROM t_ddb ORDER BY a;
+ a 
+---
+ 1
+ 2
+(2 rows)
+
+-- But if the function succeeds we should see the new value
+SELECT * FROM f(false);
+ f 
+---
+ 
+(1 row)
+
+SELECT * FROM t_ddb ORDER BY a;
+ a 
+---
+ 1
+ 2
+ 8
+(3 rows)
+
+-- DuckDB DDL in transactions is not allowed for now
+BEGIN;
+    CREATE TABLE t_ddb2(a int) USING duckdb;
+ERROR:  DuckDB DDL statements cannot run inside a transaction block
+END;
+-- Neither is DDL in functions
+CREATE OR REPLACE FUNCTION f2() RETURNS void
+    LANGUAGE plpgsql
+    RETURNS NULL ON NULL INPUT
+    AS
+$$
+BEGIN
+    CREATE TABLE t_ddb2(a int) USING duckdb;
+END;
+$$;
+SELECT * FROM f2();
+ERROR:  DuckDB DDL statements cannot be executed from a function
+CONTEXT:  SQL statement "CREATE TABLE t_ddb2(a int) USING duckdb"
+PL/pgSQL function f2() line 3 at SQL statement
+TRUNCATE t_ddb;
+INSERT INTO t_ddb VALUES (1);
+BEGIN;
+DECLARE c SCROLL CURSOR FOR SELECT a FROM t_ddb;
+FETCH NEXT FROM c;
+ a 
+---
+ 1
+(1 row)
+
+FETCH NEXT FROM c;
+ a 
+---
+(0 rows)
+
+FETCH PRIOR FROM c;
+ a 
+---
+ 1
+(1 row)
+
+COMMIT;
+DROP FUNCTION f, f2;

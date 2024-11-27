@@ -31,6 +31,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
 
@@ -41,16 +42,10 @@ extern "C" {
  */
 static bool ctas_skip_data = false;
 
-/*
- * Truncates the given table in DuckDB.
- */
-void
-DuckdbTruncateTable(Oid relation_oid) {
-	auto name = PostgresFunctionGuard(pgduckdb_relation_name, relation_oid);
-	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
-}
+static bool top_level_ddl = true;
+static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
-void
+static void
 DuckdbHandleDDL(Node *parsetree) {
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/* We're not installed, so don't mess with the query */
@@ -99,6 +94,68 @@ DuckdbHandleDDL(Node *parsetree) {
 		}
 		return;
 	}
+}
+
+static void
+DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
+                      ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
+                      QueryCompletion *qc) {
+	Node *parsetree = pstmt->utilityStmt;
+	if (IsA(parsetree, CopyStmt)) {
+		auto copy_query = PostgresFunctionGuard(MakeDuckdbCopyQuery, pstmt, query_string, query_env);
+		if (copy_query) {
+			auto res = pgduckdb::DuckDBQueryOrThrow(copy_query);
+			auto chunk = res->Fetch();
+			auto processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
+			if (qc) {
+				SetQueryCompletion(qc, CMDTAG_COPY, processed);
+			}
+			return;
+		}
+	}
+
+	/*
+	 * We need this prev_top_level_ddl variable because top_level_ddl because
+	 * its possible that the first DDL command then triggers a second DDL
+	 * command. The first of which is at the top level, but the second of which
+	 * is not. So this way we make sure that the global top_level_ddl
+	 * variable matches whichever level we're currently executing.
+	 *
+	 * NOTE: We don't care about resetting the global variable in case of an
+	 * error, because we'll set it correctly for the next command anyway.
+	 */
+	bool prev_top_level_ddl = top_level_ddl;
+	top_level_ddl = context == PROCESS_UTILITY_TOPLEVEL;
+
+	DuckdbHandleDDL(parsetree);
+	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+
+	top_level_ddl = prev_top_level_ddl;
+}
+
+static void
+DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
+                  ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
+	if (!pgduckdb::IsExtensionRegistered()) {
+		return prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+	}
+
+	InvokeCPPFunc(DuckdbUtilityHook_Cpp, pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+}
+
+void
+DuckdbInitUtilityHook() {
+	prev_process_utility_hook = ProcessUtility_hook ? ProcessUtility_hook : standard_ProcessUtility;
+	ProcessUtility_hook = DuckdbUtilityHook;
+}
+
+/*
+ * Truncates the given table in DuckDB.
+ */
+void
+DuckdbTruncateTable(Oid relation_oid) {
+	auto name = PostgresFunctionGuard(pgduckdb_relation_name, relation_oid);
+	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
 }
 
 /*
@@ -259,11 +316,10 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	}
 
 	/*
-	 * For now, we don't support DuckDB queries in transactions. To support
-	 * write queries in transactions we'll need to link Postgres and DuckdB
-	 * their transaction lifecycles.
+	 * For now, we don't support DuckDB DDL queries in transactions,
+	 * because they write to both the Postgres and the DuckDB database.
 	 */
-	PreventInTransactionBlock(true, "DuckDB queries");
+	PreventInTransactionBlock(top_level_ddl, "DuckDB DDL statements");
 
 	if (IsA(parsetree, CreateStmt)) {
 		auto stmt = castNode(CreateStmt, parsetree);
@@ -282,7 +338,9 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	 */
 	std::string create_table_string(pgduckdb_get_tabledef(relid));
 
-	auto connection = pgduckdb::DuckDBManager::GetConnection();
+	/* We're going to run multiple queries in DuckDB, so we need to start a
+	 * transaction to ensure ACID guarantees hold. */
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
 	Query *ctas_query = nullptr;
 
 	if (IsA(parsetree, CreateTableAsStmt) && !ctas_skip_data) {
@@ -421,12 +479,14 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
 			if (!connection) {
 				/*
-				 * For now, we don't support DuckDB queries in transactions. To support
-				 * write queries in transactions we'll need to link Postgres and DuckdB
-				 * their transaction lifecycles.
+				 * For now, we don't support DuckDB DDL queries in
+				 * transactions, because they write to both the Postgres and
+				 * the DuckDB database.
 				 */
-				PreventInTransactionBlock(true, "DuckDB queries");
-				connection = pgduckdb::DuckDBManager::GetConnection();
+				PreventInTransactionBlock(top_level_ddl, "DuckDB DDL statements");
+				/* We're going to run multiple queries in DuckDB, so we need to
+				 * start a transaction to ensure ACID guarantees hold. */
+				connection = pgduckdb::DuckDBManager::GetConnection(true);
 			}
 			HeapTuple tuple = SPI_tuptable->vals[proc];
 
@@ -468,12 +528,13 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		}
 		if (!connection) {
 			/*
-			 * For now, we don't support DuckDB queries in transactions. To support
-			 * write queries in transactions we'll need to link Postgres and DuckdB
-			 * their transaction lifecycles.
+			 * For now, we don't support DuckDB DDL queries in transactions,
+			 * because they write to both the Postgres and the DuckDB database.
 			 */
-			PreventInTransactionBlock(true, "DuckDB queries");
-			connection = pgduckdb::DuckDBManager::GetConnection();
+			PreventInTransactionBlock(top_level_ddl, "DuckDB DDL statements");
+			/* We're going to run multiple queries in DuckDB, so we need to
+			 * start a transaction to ensure ACID guarantees hold. */
+			connection = pgduckdb::DuckDBManager::GetConnection(true);
 		}
 		char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
 		pgduckdb::DuckDBQueryOrThrow(*connection,

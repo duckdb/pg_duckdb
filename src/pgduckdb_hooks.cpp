@@ -1,6 +1,8 @@
 #include "duckdb.hpp"
 
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -9,6 +11,7 @@ extern "C" {
 #include "commands/extension.h"
 #include "nodes/nodes.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/print.h"
 #include "nodes/primnodes.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
@@ -27,9 +30,11 @@ extern "C" {
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_node.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
-static ProcessUtility_hook_type prev_process_utility_hook = NULL;
+static ExecutorStart_hook_type prev_executor_start_hook = NULL;
+static ExecutorFinish_hook_type prev_executor_finish_hook = NULL;
 static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
 
 static bool
@@ -145,6 +150,12 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 			elog(elevel, "DuckDB does not support modififying Postgres tables");
 			return false;
 		}
+		if (pgduckdb::pg::IsInTransactionBlock(true)) {
+			if (pgduckdb::pg::DidWalWrites()) {
+				elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
+				return false;
+			}
+		}
 	}
 
 	/*
@@ -174,21 +185,6 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 		return false;
 	}
 
-	/*
-	 * We don't support multi-statement transactions yet, so don't try to
-	 * execute queries in them even if duckdb.force_execution is enabled.
-	 */
-	if (IsInTransactionBlock(true)) {
-		if (throw_error) {
-			/*
-			 * We don't elog manually here, because PreventInTransactionBlock
-			 * provides very detailed errors.
-			 */
-			PreventInTransactionBlock(true, "DuckDB queries");
-		}
-		return false;
-	}
-
 	/* Anything else is hopefully fine... */
 	return true;
 }
@@ -207,7 +203,21 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 			}
 			/* If we can't create a plan, we'll fall back to Postgres */
 		}
+		if (parse->commandType != CMD_SELECT && pgduckdb::ddb::DidWrites() &&
+		    pgduckdb::pg::IsInTransactionBlock(true)) {
+			elog(ERROR, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
+		}
 	}
+
+	/*
+	 * If we're executing a PG query, then if we'll execute a DuckDB
+	 * later in the same transaction that means that DuckDB query was
+	 * not executed at the top level, but internally by that PG query.
+	 * A common case where this happens is a plpgsql function that
+	 * executes a DuckDB query.
+	 */
+
+	pgduckdb::MarkStatementNotTopLevel();
 
 	if (prev_planner_hook) {
 		return prev_planner_hook(parse, query_string, cursor_options, bound_params);
@@ -221,44 +231,114 @@ DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, Pa
 	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params);
 }
 
-static void
-DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
-                      ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
-                      QueryCompletion *qc) {
-	Node *parsetree = pstmt->utilityStmt;
-	if (pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
-		auto copy_query = PostgresFunctionGuard(MakeDuckdbCopyQuery, pstmt, query_string, query_env);
-		if (copy_query) {
-			auto res = pgduckdb::DuckDBQueryOrThrow(copy_query);
-			auto chunk = res->Fetch();
-			auto processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
-			if (qc) {
-				SetQueryCompletion(qc, CMDTAG_COPY, processed);
-			}
-			return;
+bool
+IsDuckdbPlan(PlannedStmt *stmt) {
+	Plan *plan = stmt->planTree;
+	if (!plan) {
+		return false;
+	}
+
+	/* If the plan is a Material node, we need to extract the actual plan to
+	 * see if it is our CustomScan node. A Matarial containing our CustomScan
+	 * node gets created for backward scanning cursors. See our usage of.
+	 * materialize_finished_plan. */
+	if (IsA(plan, Material)) {
+		Material *material = castNode(Material, plan);
+		plan = material->plan.lefttree;
+		if (!plan) {
+			return false;
 		}
 	}
 
-	if (pgduckdb::IsExtensionRegistered()) {
-		DuckdbHandleDDL(parsetree);
+	if (!IsA(plan, CustomScan)) {
+		return false;
 	}
 
-	if (prev_process_utility_hook) {
-		(*prev_process_utility_hook)(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
-	} else {
-		standard_ProcessUtility(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+	CustomScan *custom_scan = castNode(CustomScan, plan);
+	if (custom_scan->methods != &duckdb_scan_scan_methods) {
+		return false;
 	}
+
+	return true;
+}
+
+/*
+ * Claim the current command id for obvious DuckDB writes.
+ *
+ * If we're not in a transaction, this triggers the command to be executed
+ * outside of any implicit transaction.
+ *
+ * This claims the command ID if we're doing a INSERT/UPDATE/DELETE on a DuckDB
+ * table. This isn't strictly necessary for safety, as the ExecutorFinishHook
+ * would catch it anyway, but this allows us to fail early, i.e. before doing
+ * the potentially time-consuming write operation.
+ */
+static void
+DuckdbExecutorStartHook_Cpp(QueryDesc *queryDesc) {
+	if (!IsDuckdbPlan(queryDesc->plannedstmt)) {
+		/*
+		 * If we're executing a PG query, then if we'll execute a DuckDB
+		 * later in the same transaction that means that DuckDB query was
+		 * not executed at the top level, but internally by that PG query.
+		 * A common case where this happens is a plpgsql function that
+		 * executes a DuckDB query.
+		 */
+
+		pgduckdb::MarkStatementNotTopLevel();
+		return;
+	}
+
+	pgduckdb::AutocommitSingleStatementQueries();
+
+	if (queryDesc->operation == CMD_SELECT) {
+		return;
+	}
+	pgduckdb::ClaimCurrentCommandId();
 }
 
 static void
-DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
-                  ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
-	InvokeCPPFunc(DuckdbUtilityHook_Cpp, pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+DuckdbExecutorStartHook(QueryDesc *queryDesc, int eflags) {
+	if (!pgduckdb::IsExtensionRegistered()) {
+		pgduckdb::MarkStatementNotTopLevel();
+		prev_executor_start_hook(queryDesc, eflags);
+		return;
+	}
+
+	prev_executor_start_hook(queryDesc, eflags);
+	InvokeCPPFunc(DuckdbExecutorStartHook_Cpp, queryDesc);
 }
 
-extern "C" {
-#include "nodes/print.h"
+/*
+ * Claim the current command id for non-obvious DuckDB writes.
+ *
+ * It's possible that a Postgres SELECT query writes to DuckDB, for example
+ * when using one of our UDFs that that internally writes to DuckDB. This
+ * function claims the command ID in those cases.
+ */
+static void
+DuckdbExecutorFinishHook_Cpp(QueryDesc *queryDesc) {
+	if (!IsDuckdbPlan(queryDesc->plannedstmt)) {
+		return;
+	}
+
+	if (!pgduckdb::ddb::DidWrites()) {
+		return;
+	}
+
+	pgduckdb::ClaimCurrentCommandId();
 }
+
+static void
+DuckdbExecutorFinishHook(QueryDesc *queryDesc) {
+	if (!pgduckdb::IsExtensionRegistered()) {
+		prev_executor_finish_hook(queryDesc);
+		return;
+	}
+
+	prev_executor_finish_hook(queryDesc);
+	InvokeCPPFunc(DuckdbExecutorFinishHook_Cpp, queryDesc);
+}
+
 void
 DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, ExplainState *es, const char *queryString,
                           ParamListInfo params, QueryEnvironment *queryEnv) {
@@ -282,9 +362,14 @@ DuckdbInitHooks(void) {
 	prev_planner_hook = planner_hook;
 	planner_hook = DuckdbPlannerHook;
 
-	prev_process_utility_hook = ProcessUtility_hook ? ProcessUtility_hook : standard_ProcessUtility;
-	ProcessUtility_hook = DuckdbUtilityHook;
+	prev_executor_start_hook = ExecutorStart_hook ? ExecutorStart_hook : standard_ExecutorStart;
+	ExecutorStart_hook = DuckdbExecutorStartHook;
+
+	prev_executor_finish_hook = ExecutorFinish_hook ? ExecutorFinish_hook : standard_ExecutorFinish;
+	ExecutorFinish_hook = DuckdbExecutorFinishHook;
 
 	prev_explain_one_query_hook = ExplainOneQuery_hook ? ExplainOneQuery_hook : standard_ExplainOneQuery;
 	ExplainOneQuery_hook = DuckdbExplainOneQueryHook;
+
+	DuckdbInitUtilityHook();
 }

@@ -14,6 +14,7 @@ extern "C" {
 #include "nodes/params.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
+#include "optimizer/planmain.h"
 #include "tcop/pquery.h"
 #include "utils/syscache.h"
 #include "utils/guc.h"
@@ -30,13 +31,6 @@ bool duckdb_explain_analyze = false;
 
 duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query) {
-	/*
-	 * For now, we don't support DuckDB queries in transactions. To support
-	 * write queries in transactions we'll need to link Postgres and DuckdB
-	 * their transaction lifecycles.
-	 */
-	PreventInTransactionBlock(true, "DuckDB queries");
-
 	Query *copied_query = (Query *)copyObjectImpl(query);
 	const char *query_string = pgduckdb_get_querydef(copied_query);
 
@@ -95,9 +89,15 @@ CreatePlan(Query *query, bool throw_error) {
 
 		Var *var = makeVar(INDEX_VAR, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
 
-		duckdb_node->custom_scan_tlist =
-		    lappend(duckdb_node->custom_scan_tlist,
-		            makeTargetEntry((Expr *)var, i + 1, (char *)pstrdup(prepared_query->GetNames()[i].c_str()), false));
+		TargetEntry *target_entry =
+		    makeTargetEntry((Expr *)var, i + 1, (char *)pstrdup(prepared_query->GetNames()[i].c_str()), false);
+
+		/* Our custom scan node needs the custom_scan_tlist to be set */
+		duckdb_node->custom_scan_tlist = lappend(duckdb_node->custom_scan_tlist, copyObjectImpl(target_entry));
+
+		/* But we also need an actual target list, because Postgres expects it
+		 * for things like materialization */
+		duckdb_node->scan.plan.targetlist = lappend(duckdb_node->scan.plan.targetlist, target_entry);
 
 		ReleaseSysCache(tp);
 	}
@@ -118,6 +118,14 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 
 	if (!duckdb_plan) {
 		return nullptr;
+	}
+
+	/*
+	 * If creating a plan for a scrollable cursor add a Material node at the
+	 * top because or CustomScan does not support backwards scanning.
+	 */
+	if (cursor_options & CURSOR_OPT_SCROLL) {
+		duckdb_plan = materialize_finished_plan(duckdb_plan);
 	}
 
 	/*
