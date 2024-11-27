@@ -100,10 +100,6 @@ static void
 DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                       ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
                       QueryCompletion *qc) {
-	if (!pgduckdb::IsExtensionRegistered()) {
-		return prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
-	}
-
 	Node *parsetree = pstmt->utilityStmt;
 	if (IsA(parsetree, CopyStmt)) {
 		auto copy_query = PostgresFunctionGuard(MakeDuckdbCopyQuery, pstmt, query_string, query_env);
@@ -140,6 +136,10 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 static void
 DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
+	if (!pgduckdb::IsExtensionRegistered()) {
+		return prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+	}
+
 	InvokeCPPFunc(DuckdbUtilityHook_Cpp, pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 }
 
