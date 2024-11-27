@@ -6692,8 +6692,11 @@ get_insert_query_def(Query *query, deparse_context *context,
 		if (tle->resjunk)
 			continue;			/* ignore junk entries */
 
-		/* When multi-VALUES, ignore an entry with a default value unless it is specified */
-		if (values_rte && (IsA(tle->expr, Const) || IsA(tle->expr, FuncExpr)))
+		/*
+		 * If it's an INSERT ... SELECT or multi-row VALUES, the entry
+		 * with the default value is ignored unless it is specified
+		 */
+		if ((select_rte || values_rte) && !(IsA(tle->expr, Var)))
 			continue;
 
 		appendStringInfoString(buf, sep);

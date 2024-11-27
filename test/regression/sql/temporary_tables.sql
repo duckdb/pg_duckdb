@@ -164,6 +164,7 @@ SELECT * FROM t_heap2;
 
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
+-- multi-VALUES
 CREATE TEMP TABLE ta (a int DEFAULT 3, b int) USING duckdb;
 INSERT INTO ta (b) VALUES (123), (456);
 INSERT INTO ta (a, b) VALUES (123, 456), (456, 123);
@@ -174,5 +175,22 @@ INSERT INTO tb (a) VALUES (123), (456);
 INSERT INTO tb (b) VALUES (123), (456);
 INSERT INTO tb (c) VALUES ('ta'), ('tb');
 SELECT * FROM tb;
+
+-- INSERT ... SELECT
+TRUNCATE TABLE ta;
+INSERT INTO ta (a) SELECT 789;
+INSERT INTO ta (b) SELECT 789;
+INSERT INTO ta (a) SELECT * FROM t_heap;
+INSERT INTO ta (b) SELECT * FROM t_heap;
+SELECT * FROM ta;
+INSERT INTO ta (a) SELECT generate_series(1, 3); -- no support
+
+TRUNCATE TABLE tb;
+INSERT INTO tb (a) SELECT 789;
+INSERT INTO tb (b) SELECT 789;
+INSERT INTO tb (a) SELECT * FROM t_heap;
+INSERT INTO tb (b) SELECT * FROM t_heap;
+SELECT * FROM tb;
+INSERT INTO tb (c) SELECT 'ta'; -- no support
 
 DROP TABLE webpages, t, t_heap, t_heap2, ta, tb;
