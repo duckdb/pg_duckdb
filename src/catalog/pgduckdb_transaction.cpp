@@ -19,16 +19,16 @@ ClosePostgresRelations(duckdb::ClientContext &context) {
 	context_state->QueryEnd();
 }
 
-PostgresTransaction::PostgresTransaction(duckdb::TransactionManager &manager, duckdb::ClientContext &context,
-                                         PostgresCatalog &catalog, Snapshot snapshot)
-    : duckdb::Transaction(manager, context), catalog(catalog), snapshot(snapshot) {
+PostgresTransaction::PostgresTransaction(duckdb::TransactionManager &_manager, duckdb::ClientContext &_context,
+                                         PostgresCatalog &_catalog, Snapshot _snapshot)
+    : duckdb::Transaction(_manager, _context), catalog(_catalog), snapshot(_snapshot) {
 }
 
 PostgresTransaction::~PostgresTransaction() {
 }
 
-SchemaItems::SchemaItems(duckdb::unique_ptr<PostgresSchema> &&schema, const duckdb::string &name)
-    : name(name), schema(std::move(schema)) {
+SchemaItems::SchemaItems(duckdb::unique_ptr<PostgresSchema> &&_schema, const duckdb::string &_name)
+    : name(_name), schema(std::move(_schema)) {
 }
 
 duckdb::optional_ptr<duckdb::CatalogEntry>

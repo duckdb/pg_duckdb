@@ -110,9 +110,8 @@ jobs:
 
       - name: Build pg_duckdb extension
         id: build
-        run: |
-          pushd duckdb
-          make -j8 install
+        working-directory: duckdb
+        run: ERROR_ON_WARNING=1 make -j8 install
 
       - name: Run make installcheck
         id: installcheck

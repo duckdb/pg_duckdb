@@ -294,7 +294,7 @@ struct DecimalConversionInteger {
 
 	template <class T>
 	static T
-	Finalize(const NumericVar &numeric, T result) {
+	Finalize(const NumericVar &, T result) {
 		return result;
 	}
 };
@@ -349,7 +349,7 @@ struct DecimalConversionHugeint {
 	}
 
 	static hugeint_t
-	Finalize(const NumericVar &numeric, hugeint_t result) {
+	Finalize(const NumericVar &, hugeint_t result) {
 		return result;
 	}
 };

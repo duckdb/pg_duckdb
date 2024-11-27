@@ -140,7 +140,7 @@ ConvertNumeric(T value, idx_t scale) {
 	// count the amount of digits required for the fractional part
 	// note that while it is technically possible to leave out zeros here this adds even more complications
 	// so we just always write digits for the full "scale", even if not strictly required
-	int32_t fractional_ndigits = (scale + DEC_DIGITS - 1) / DEC_DIGITS;
+	idx_t fractional_ndigits = (scale + DEC_DIGITS - 1) / DEC_DIGITS;
 	// fractional digits are LEFT aligned (for some unknown reason)
 	// that means if we write ".12" with a scale of 2 we actually need to write "1200", instead of "12"
 	// this means we need to "correct" the number 12 by multiplying by 100 in this case
@@ -448,7 +448,7 @@ namespace {
 template <class OP>
 struct PostgresArrayAppendState {
 public:
-	PostgresArrayAppendState(idx_t number_of_dimensions) : number_of_dimensions(number_of_dimensions) {
+	PostgresArrayAppendState(idx_t _number_of_dimensions) : number_of_dimensions(_number_of_dimensions) {
 		dimensions = (int *)palloc(number_of_dimensions * sizeof(int));
 		lower_bounds = (int *)palloc(number_of_dimensions * sizeof(int));
 		for (idx_t i = 0; i < number_of_dimensions; i++) {
@@ -466,7 +466,7 @@ public:
 	AppendValueAtDimension(const duckdb::Value &value, idx_t dimension) {
 		// FIXME: verify that the amount of values does not overflow an `int` ?
 		auto &values = duckdb::ListValue::GetChildren(value);
-		idx_t to_append = values.size();
+		int to_append = values.size();
 
 		D_ASSERT(dimension < number_of_dimensions);
 		if (dimensions[dimension] == -1) {
@@ -482,8 +482,7 @@ public:
 
 		auto &child_type = duckdb::ListType::GetChildType(value.type());
 		if (child_type.id() == duckdb::LogicalTypeId::LIST) {
-			for (idx_t i = 0; i < to_append; i++) {
-				auto &child_val = values[i];
+			for (auto &child_val : values) {
 				if (child_val.IsNull()) {
 					// Postgres arrays can not contains nulls at the array level
 					// i.e {{1,2}, NULL, {3,4}} is not supported
@@ -500,14 +499,13 @@ public:
 				nulls = (bool *)palloc(expected_values * sizeof(bool));
 			}
 
-			for (idx_t i = 0; i < to_append; i++) {
-				auto &child_val = values[i];
-				nulls[count + i] = child_val.IsNull();
-				if (!nulls[count + i]) {
-					datums[count + i] = OP::ConvertToPostgres(values[i]);
+			for (auto &child_val : values) {
+				nulls[count] = child_val.IsNull();
+				if (!nulls[count]) {
+					datums[count] = OP::ConvertToPostgres(child_val);
 				}
+				++count;
 			}
-			count += to_append;
 		}
 	}
 
@@ -949,7 +947,7 @@ ConvertDecimal(const NumericVar &numeric) {
 	T integral_part = 0, fractional_part = 0;
 
 	if (numeric.weight >= 0) {
-		idx_t digit_index = 0;
+		int32_t digit_index = 0;
 		integral_part = numeric.digits[digit_index++];
 		for (; digit_index <= numeric.weight; digit_index++) {
 			integral_part *= NBASE;

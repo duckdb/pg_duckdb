@@ -9,7 +9,7 @@ extern "C" {
 namespace pgduckdb {
 
 static void
-DuckdbXactCallback_Cpp(XactEvent event, void *arg) {
+DuckdbXactCallback_Cpp(XactEvent event, void *) {
 	if (!started_duckdb_transaction) {
 		return;
 	}

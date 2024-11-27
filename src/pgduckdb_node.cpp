@@ -71,7 +71,7 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 }
 
 void
-Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int eflags) {
+Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*eflags*/) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
 	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(duckdb_scan_state->query);
 
@@ -226,11 +226,11 @@ Duckdb_EndCustomScan(CustomScanState *node) {
 }
 
 void
-Duckdb_ReScanCustomScan(CustomScanState *node) {
+Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 }
 
 void
-Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, List *ancestors, ExplainState *es) {
+Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	ExecuteQuery(duckdb_scan_state);
 
@@ -254,8 +254,8 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, List *ancestors, ExplainStat
 }
 
 void
-Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es) {
-	InvokeCPPFunc(Duckdb_ExplainCustomScan_Cpp, node, ancestors, es);
+Duckdb_ExplainCustomScan(CustomScanState *node, List * /*ancestors*/, ExplainState *es) {
+	InvokeCPPFunc(Duckdb_ExplainCustomScan_Cpp, node, es);
 }
 
 extern "C" void

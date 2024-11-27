@@ -43,7 +43,7 @@ public:
 		}
 	}
 
-	int m_output_vector_size;
+	uint32_t m_output_vector_size;
 	bool m_exhausted_scan;
 	std::vector<Datum, DuckDBMallocator<Datum>> values;
 	std::vector<bool, DuckDBMallocator<bool>> nulls;

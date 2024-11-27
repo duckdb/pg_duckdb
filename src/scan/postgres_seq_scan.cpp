@@ -68,17 +68,15 @@ PostgresSeqScanFunction::PostgresSeqScanFunction()
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
-PostgresSeqScanFunction::PostgresSeqScanInitGlobal(duckdb::ClientContext &context,
-                                                   duckdb::TableFunctionInitInput &input) {
+PostgresSeqScanFunction::PostgresSeqScanInitGlobal(duckdb::ClientContext &, duckdb::TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresSeqScanFunctionData>();
 	auto global_state = duckdb::make_uniq<PostgresSeqScanGlobalState>(bind_data.m_rel, input);
 	global_state->m_global_state->m_snapshot = bind_data.m_snapshot;
-	return std::move(global_state);
+	return global_state;
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
-PostgresSeqScanFunction::PostgresSeqScanInitLocal(duckdb::ExecutionContext &context,
-                                                  duckdb::TableFunctionInitInput &input,
+PostgresSeqScanFunction::PostgresSeqScanInitLocal(duckdb::ExecutionContext &, duckdb::TableFunctionInitInput &,
                                                   duckdb::GlobalTableFunctionState *gstate) {
 	auto global_state = reinterpret_cast<PostgresSeqScanGlobalState *>(gstate);
 	return duckdb::make_uniq<PostgresSeqScanLocalState>(
@@ -86,7 +84,7 @@ PostgresSeqScanFunction::PostgresSeqScanInitLocal(duckdb::ExecutionContext &cont
 }
 
 void
-PostgresSeqScanFunction::PostgresSeqScanFunc(duckdb::ClientContext &context, duckdb::TableFunctionInput &data,
+PostgresSeqScanFunction::PostgresSeqScanFunc(duckdb::ClientContext &, duckdb::TableFunctionInput &data,
                                              duckdb::DataChunk &output) {
 	auto &local_state = data.local_state->Cast<PostgresSeqScanLocalState>();
 
@@ -106,7 +104,7 @@ PostgresSeqScanFunction::PostgresSeqScanFunc(duckdb::ClientContext &context, duc
 }
 
 duckdb::unique_ptr<duckdb::NodeStatistics>
-PostgresSeqScanFunction::PostgresSeqScanCardinality(duckdb::ClientContext &context, const duckdb::FunctionData *data) {
+PostgresSeqScanFunction::PostgresSeqScanCardinality(duckdb::ClientContext &, const duckdb::FunctionData *data) {
 	auto &bind_data = data->Cast<PostgresSeqScanFunctionData>();
 	return duckdb::make_uniq<duckdb::NodeStatistics>(bind_data.m_cardinality, bind_data.m_cardinality);
 }

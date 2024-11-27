@@ -50,8 +50,8 @@ DuckdbPrepare(const Query *query) {
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
-	auto duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
-	auto prepared_query = duckdb_connection->context->Prepare(query_string);
+	auto con = pgduckdb::DuckDBManager::GetConnection();
+	auto prepared_query = con->context->Prepare(query_string);
 	return prepared_query;
 }
 
@@ -73,7 +73,7 @@ CreatePlan(Query *query, bool throw_error) {
 
 	auto &prepared_result_types = prepared_query->GetTypes();
 
-	for (auto i = 0; i < prepared_result_types.size(); i++) {
+	for (size_t i = 0; i < prepared_result_types.size(); i++) {
 		auto &column = prepared_result_types[i];
 		Oid postgresColumnOid = pgduckdb::GetPostgresDuckDBType(column);
 

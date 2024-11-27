@@ -26,7 +26,7 @@ struct DuckDBMallocator {
 	}
 
 	void
-	deallocate(T *p, std::size_t n) noexcept {
+	deallocate(T *p, std::size_t) noexcept {
 		duckdb_free(p);
 	}
 };

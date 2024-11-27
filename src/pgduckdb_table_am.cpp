@@ -39,7 +39,7 @@ PG_FUNCTION_INFO_V1(duckdb_am_handler);
  */
 
 static const TupleTableSlotOps *
-duckdb_slot_callbacks(Relation relation) {
+duckdb_slot_callbacks(Relation /*relation*/) {
 	/*
 	 * Here we would most likely want to invent your own set of slot
 	 * callbacks for our AM. For now we just use the minimal tuple slot, we
@@ -61,7 +61,7 @@ typedef struct DuckdbScanDescData {
 typedef struct DuckdbScanDescData *DuckdbScanDesc;
 
 static TableScanDesc
-duckdb_scan_begin(Relation relation, Snapshot snapshot, int nkeys, ScanKey key, ParallelTableScanDesc parallel_scan,
+duckdb_scan_begin(Relation relation, Snapshot snapshot, int nkeys, ScanKey /*key*/, ParallelTableScanDesc parallel_scan,
                   uint32 flags) {
 	DuckdbScanDesc scan = (DuckdbScanDesc)palloc(sizeof(DuckdbScanDescData));
 
@@ -82,13 +82,13 @@ duckdb_scan_end(TableScanDesc sscan) {
 }
 
 static void
-duckdb_scan_rescan(TableScanDesc sscan, ScanKey key, bool set_params, bool allow_strat, bool allow_sync,
-                   bool allow_pagemode) {
+duckdb_scan_rescan(TableScanDesc /*sscan*/, ScanKey /*key*/, bool /*set_params*/, bool /*allow_strat*/,
+                   bool /*allow_sync*/, bool /*allow_pagemode*/) {
 	NOT_IMPLEMENTED();
 }
 
 static bool
-duckdb_scan_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTableSlot *slot) {
+duckdb_scan_getnextslot(TableScanDesc /*sscan*/, ScanDirection /*direction*/, TupleTableSlot * /*slot*/) {
 	NOT_IMPLEMENTED();
 }
 
@@ -98,23 +98,23 @@ duckdb_scan_getnextslot(TableScanDesc sscan, ScanDirection direction, TupleTable
  */
 
 static IndexFetchTableData *
-duckdb_index_fetch_begin(Relation rel) {
+duckdb_index_fetch_begin(Relation /*rel*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_index_fetch_reset(IndexFetchTableData *scan) {
+duckdb_index_fetch_reset(IndexFetchTableData * /*scan*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_index_fetch_end(IndexFetchTableData *scan) {
+duckdb_index_fetch_end(IndexFetchTableData * /*scan*/) {
 	NOT_IMPLEMENTED();
 }
 
 static bool
-duckdb_index_fetch_tuple(struct IndexFetchTableData *scan, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot,
-                         bool *call_again, bool *all_dead) {
+duckdb_index_fetch_tuple(struct IndexFetchTableData * /*scan*/, ItemPointer /*tid*/, Snapshot /*snapshot*/,
+                         TupleTableSlot * /*slot*/, bool * /*call_again*/, bool * /*all_dead*/) {
 	NOT_IMPLEMENTED();
 }
 
@@ -125,27 +125,27 @@ duckdb_index_fetch_tuple(struct IndexFetchTableData *scan, ItemPointer tid, Snap
  */
 
 static bool
-duckdb_fetch_row_version(Relation relation, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot) {
+duckdb_fetch_row_version(Relation /*relation*/, ItemPointer /*tid*/, Snapshot /*snapshot*/, TupleTableSlot * /*slot*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_get_latest_tid(TableScanDesc sscan, ItemPointer tid) {
+duckdb_get_latest_tid(TableScanDesc /*sscan*/, ItemPointer /*tid*/) {
 	NOT_IMPLEMENTED();
 }
 
 static bool
-duckdb_tuple_tid_valid(TableScanDesc scan, ItemPointer tid) {
+duckdb_tuple_tid_valid(TableScanDesc /*scan*/, ItemPointer /*tid*/) {
 	NOT_IMPLEMENTED();
 }
 
 static bool
-duckdb_tuple_satisfies_snapshot(Relation rel, TupleTableSlot *slot, Snapshot snapshot) {
+duckdb_tuple_satisfies_snapshot(Relation /*rel*/, TupleTableSlot * /*slot*/, Snapshot /*snapshot*/) {
 	NOT_IMPLEMENTED();
 }
 
 static TransactionId
-duckdb_index_delete_tuples(Relation rel, TM_IndexDeleteOp *delstate) {
+duckdb_index_delete_tuples(Relation /*rel*/, TM_IndexDeleteOp * /*delstate*/) {
 	NOT_IMPLEMENTED();
 }
 
@@ -155,61 +155,64 @@ duckdb_index_delete_tuples(Relation rel, TM_IndexDeleteOp *delstate) {
  */
 
 static void
-duckdb_tuple_insert(Relation relation, TupleTableSlot *slot, CommandId cid, int options, BulkInsertState bistate) {
+duckdb_tuple_insert(Relation /*relation*/, TupleTableSlot * /*slot*/, CommandId /*cid*/, int /*options*/,
+                    BulkInsertState /*bistate*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_tuple_insert_speculative(Relation relation, TupleTableSlot *slot, CommandId cid, int options,
-                                BulkInsertState bistate, uint32 specToken) {
+duckdb_tuple_insert_speculative(Relation /*relation*/, TupleTableSlot * /*slot*/, CommandId /*cid*/, int /*options*/,
+                                BulkInsertState /*bistate*/, uint32 /*specToken*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_tuple_complete_speculative(Relation relation, TupleTableSlot *slot, uint32 spekToken, bool succeeded) {
+duckdb_tuple_complete_speculative(Relation /*relation*/, TupleTableSlot * /*slot*/, uint32 /*spekToken*/,
+                                  bool /*succeeded*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_multi_insert(Relation relation, TupleTableSlot **slots, int ntuples, CommandId cid, int options,
-                    BulkInsertState bistate) {
+duckdb_multi_insert(Relation /*relation*/, TupleTableSlot ** /*slots*/, int /*ntuples*/, CommandId /*cid*/,
+                    int /*options*/, BulkInsertState /*bistate*/) {
 	NOT_IMPLEMENTED();
 }
 
 static TM_Result
-duckdb_tuple_delete(Relation relation, ItemPointer tid, CommandId cid, Snapshot snapshot, Snapshot crosscheck,
-                    bool wait, TM_FailureData *tmfd, bool changingPart) {
+duckdb_tuple_delete(Relation /*relation*/, ItemPointer /*tid*/, CommandId /*cid*/, Snapshot /*snapshot*/,
+                    Snapshot /*crosscheck*/, bool /*wait*/, TM_FailureData * /*tmfd*/, bool /*changingPart*/) {
 	NOT_IMPLEMENTED();
 }
 
 #if PG_VERSION_NUM >= 160000
 
 static TM_Result
-duckdb_tuple_update(Relation relation, ItemPointer otid, TupleTableSlot *slot, CommandId cid, Snapshot snapshot,
-                    Snapshot crosscheck, bool wait, TM_FailureData *tmfd, LockTupleMode *lockmode,
-                    TU_UpdateIndexes *update_indexes) {
+duckdb_tuple_update(Relation /*relation*/, ItemPointer /*otid*/, TupleTableSlot * /*slot*/, CommandId /*cid*/,
+                    Snapshot /*snapshot*/, Snapshot /*crosscheck*/, bool /*wait*/, TM_FailureData * /*tmfd*/,
+                    LockTupleMode * /*lockmode*/, TU_UpdateIndexes * /*update_indexes*/) {
 	NOT_IMPLEMENTED();
 }
 
 #else
 
 static TM_Result
-duckdb_tuple_update(Relation rel, ItemPointer otid, TupleTableSlot *slot, CommandId cid, Snapshot snapshot,
-                    Snapshot crosscheck, bool wait, TM_FailureData *tmfd, LockTupleMode *lockmode,
-                    bool *update_indexes) {
+duckdb_tuple_update(Relation /*rel*/, ItemPointer /*otid*/, TupleTableSlot * /*slot*/, CommandId /*cid*/,
+                    Snapshot /*snapshot*/, Snapshot /*crosscheck*/, bool /*wait*/, TM_FailureData * /*tmfd*/,
+                    LockTupleMode * /*lockmode*/, bool * /*update_indexes*/) {
 	NOT_IMPLEMENTED();
 }
 
 #endif
 
 static TM_Result
-duckdb_tuple_lock(Relation relation, ItemPointer tid, Snapshot snapshot, TupleTableSlot *slot, CommandId cid,
-                  LockTupleMode mode, LockWaitPolicy wait_policy, uint8 flags, TM_FailureData *tmfd) {
+duckdb_tuple_lock(Relation /*relation*/, ItemPointer /*tid*/, Snapshot /*snapshot*/, TupleTableSlot * /*slot*/,
+                  CommandId /*cid*/, LockTupleMode /*mode*/, LockWaitPolicy /*wait_policy*/, uint8 /*flags*/,
+                  TM_FailureData * /*tmfd*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_finish_bulk_insert(Relation relation, int options) {
+duckdb_finish_bulk_insert(Relation /*relation*/, int /*options*/) {
 	NOT_IMPLEMENTED();
 }
 
@@ -221,8 +224,8 @@ duckdb_finish_bulk_insert(Relation relation, int options) {
 #if PG_VERSION_NUM >= 160000
 
 static void
-duckdb_relation_set_new_filelocator(Relation rel, const RelFileLocator *newrnode, char persistence,
-                                    TransactionId *freezeXid, MultiXactId *minmulti) {
+duckdb_relation_set_new_filelocator(Relation rel, const RelFileLocator * /*newrnode*/, char /*persistence*/,
+                                    TransactionId * /*freezeXid*/, MultiXactId * /*minmulti*/) {
 	HeapTuple tp = SearchSysCache1(RELOID, ObjectIdGetDatum(rel->rd_id));
 	if (!HeapTupleIsValid(tp)) {
 		/* nothing to do, the table will be created in DuckDB later by the
@@ -236,8 +239,8 @@ duckdb_relation_set_new_filelocator(Relation rel, const RelFileLocator *newrnode
 #else
 
 static void
-duckdb_relation_set_new_filenode(Relation rel, const RelFileNode *newrnode, char persistence, TransactionId *freezeXid,
-                                 MultiXactId *minmulti) {
+duckdb_relation_set_new_filenode(Relation rel, const RelFileNode * /*newrnode*/, char /*persistence*/,
+                                 TransactionId * /*freezeXid*/, MultiXactId * /*minmulti*/) {
 	HeapTuple tp = SearchSysCache1(RELOID, ObjectIdGetDatum(rel->rd_id));
 	if (!HeapTupleIsValid(tp)) {
 		/* nothing to do, the table will be created in DuckDB later by the
@@ -258,35 +261,35 @@ duckdb_relation_nontransactional_truncate(Relation rel) {
 #if PG_VERSION_NUM >= 160000
 
 static void
-duckdb_copy_data(Relation rel, const RelFileLocator *newrnode) {
+duckdb_copy_data(Relation /*rel*/, const RelFileLocator * /*newrnode*/) {
 	NOT_IMPLEMENTED();
 }
 
 #else
 
 static void
-duckdb_copy_data(Relation rel, const RelFileNode *newrnode) {
+duckdb_copy_data(Relation /*rel*/, const RelFileNode * /*newrnode*/) {
 	NOT_IMPLEMENTED();
 }
 
 #endif
 
 static void
-duckdb_copy_for_cluster(Relation OldTable, Relation NewTable, Relation OldIndex, bool use_sort,
-                        TransactionId OldestXmin, TransactionId *xid_cutoff, MultiXactId *multi_cutoff,
-                        double *num_tuples, double *tups_vacuumed, double *tups_recently_dead) {
+duckdb_copy_for_cluster(Relation /*OldTable*/, Relation /*NewTable*/, Relation /*OldIndex*/, bool /*use_sort*/,
+                        TransactionId /*OldestXmin*/, TransactionId * /*xid_cutoff*/, MultiXactId * /*multi_cutoff*/,
+                        double * /*num_tuples*/, double * /*tups_vacuumed*/, double * /*tups_recently_dead*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_vacuum(Relation onerel, VacuumParams *params, BufferAccessStrategy bstrategy) {
+duckdb_vacuum(Relation /*onerel*/, VacuumParams * /*params*/, BufferAccessStrategy /*bstrategy*/) {
 	NOT_IMPLEMENTED();
 }
 
 #if PG_VERSION_NUM >= 170000
 
 static bool
-duckdb_scan_analyze_next_block(TableScanDesc scan, ReadStream *stream) {
+duckdb_scan_analyze_next_block(TableScanDesc /*scan*/, ReadStream * /*stream*/) {
 	/* no data in postgres, so no point to analyze next block */
 	return false;
 }
@@ -294,28 +297,29 @@ duckdb_scan_analyze_next_block(TableScanDesc scan, ReadStream *stream) {
 #else
 
 static bool
-duckdb_scan_analyze_next_block(TableScanDesc scan, BlockNumber blockno, BufferAccessStrategy bstrategy) {
+duckdb_scan_analyze_next_block(TableScanDesc /*scan*/, BlockNumber /*blockno*/, BufferAccessStrategy /*bstrategy*/) {
 	/* no data in postgres, so no point to analyze next block */
 	return false;
 }
 #endif
 
 static bool
-duckdb_scan_analyze_next_tuple(TableScanDesc scan, TransactionId OldestXmin, double *liverows, double *deadrows,
-                               TupleTableSlot *slot) {
+duckdb_scan_analyze_next_tuple(TableScanDesc /*scan*/, TransactionId /*OldestXmin*/, double * /*liverows*/, double * /*deadrows*/,
+                               TupleTableSlot * /*slot*/) {
 	NOT_IMPLEMENTED();
 }
 
 static double
-duckdb_index_build_range_scan(Relation tableRelation, Relation indexRelation, IndexInfo *indexInfo, bool allow_sync,
-                              bool anyvisible, bool progress, BlockNumber start_blockno, BlockNumber numblocks,
-                              IndexBuildCallback callback, void *callback_state, TableScanDesc scan) {
+duckdb_index_build_range_scan(Relation /*tableRelation*/, Relation /*indexRelation*/, IndexInfo * /*indexInfo*/,
+                              bool /*allow_sync*/, bool /*anyvisible*/, bool /*progress*/,
+                              BlockNumber /*start_blockno*/, BlockNumber /*numblocks*/, IndexBuildCallback /*callback*/,
+                              void * /*callback_state*/, TableScanDesc /*scan*/) {
 	NOT_IMPLEMENTED();
 }
 
 static void
-duckdb_index_validate_scan(Relation tableRelation, Relation indexRelation, IndexInfo *indexInfo, Snapshot snapshot,
-                           ValidateIndexState *state) {
+duckdb_index_validate_scan(Relation /*tableRelation*/, Relation /*indexRelation*/, IndexInfo * /*indexInfo*/,
+                           Snapshot /*snapshot*/, ValidateIndexState * /*state*/) {
 	NOT_IMPLEMENTED();
 }
 
@@ -325,7 +329,7 @@ duckdb_index_validate_scan(Relation tableRelation, Relation indexRelation, Index
  */
 
 static uint64
-duckdb_relation_size(Relation rel, ForkNumber forkNumber) {
+duckdb_relation_size(Relation /*rel*/, ForkNumber /*forkNumber*/) {
 	/*
 	 * For now we just return 0. We should probably want return something more
 	 * useful in the future though.
@@ -337,7 +341,7 @@ duckdb_relation_size(Relation rel, ForkNumber forkNumber) {
  * Check to see whether the table needs a TOAST table.
  */
 static bool
-duckdb_relation_needs_toast_table(Relation rel) {
+duckdb_relation_needs_toast_table(Relation /*rel*/) {
 
 	/* we don't need toast, because everything is stored in duckdb */
 	return false;
@@ -349,7 +353,7 @@ duckdb_relation_needs_toast_table(Relation rel) {
  */
 
 static void
-duckdb_estimate_rel_size(Relation rel, int32 *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
+duckdb_estimate_rel_size(Relation /*rel*/, int32 *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
 	/* no data available */
 	if (attr_widths)
 		*attr_widths = 0;
@@ -367,22 +371,22 @@ duckdb_estimate_rel_size(Relation rel, int32 *attr_widths, BlockNumber *pages, d
  */
 
 static bool
-duckdb_scan_bitmap_next_block(TableScanDesc scan, TBMIterateResult *tbmres) {
+duckdb_scan_bitmap_next_block(TableScanDesc /*scan*/, TBMIterateResult * /*tbmres*/) {
 	NOT_IMPLEMENTED();
 }
 
 static bool
-duckdb_scan_bitmap_next_tuple(TableScanDesc scan, TBMIterateResult *tbmres, TupleTableSlot *slot) {
+duckdb_scan_bitmap_next_tuple(TableScanDesc /*scan*/, TBMIterateResult * /*tbmres*/, TupleTableSlot * /*slot*/) {
 	NOT_IMPLEMENTED();
 }
 
 static bool
-duckdb_scan_sample_next_block(TableScanDesc scan, SampleScanState *scanstate) {
+duckdb_scan_sample_next_block(TableScanDesc /*scan*/, SampleScanState * /*scanstate*/) {
 	NOT_IMPLEMENTED();
 }
 
 static bool
-duckdb_scan_sample_next_tuple(TableScanDesc scan, SampleScanState *scanstate, TupleTableSlot *slot) {
+duckdb_scan_sample_next_tuple(TableScanDesc /*scan*/, SampleScanState * /*scanstate*/, TupleTableSlot * /*slot*/) {
 	NOT_IMPLEMENTED();
 }
 
@@ -458,7 +462,7 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
                                               .scan_sample_next_tuple = duckdb_scan_sample_next_tuple};
 
 Datum
-duckdb_am_handler(PG_FUNCTION_ARGS) {
+duckdb_am_handler(FunctionCallInfo /*funcinfo*/) {
 	PG_RETURN_POINTER(&duckdb_methods);
 }
 }
