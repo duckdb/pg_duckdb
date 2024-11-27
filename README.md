@@ -182,7 +182,7 @@ After doing this (and possibly restarting Postgres). You can then you create tab
 CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
 CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
 ```
-
+test
 [tam]: https://www.postgresql.org/docs/current/tableam.html
 
 
