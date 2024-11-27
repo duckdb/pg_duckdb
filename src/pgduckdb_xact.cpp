@@ -8,6 +8,8 @@ namespace pgduckdb {
 static int64_t duckdb_command_id = -1;
 static bool top_level_statement = true;
 
+namespace pg {
+
 /*
  * Returns if we're currently in a transaction block. To determine if we are in
  * a function or not, this uses the tracked top_level_statement variable.
@@ -25,6 +27,23 @@ void
 PreventInTransactionBlock(const char *statement_type) {
 	PreventInTransactionBlock(top_level_statement, statement_type);
 }
+
+/*
+ * Check if Postgres did any writes at the end of a transaction.
+ *
+ * We do this by both checking if there were any WAL writes and as an added
+ * measure if the current command id was incremented more than once after the
+ * last known DuckDB command.
+ *
+ * IMPORTANT: This function should only be called at trasaction commit. At
+ * other points in the transaction lifecycle its return value is not reliable.
+ */
+static bool
+DidWritesAtTransactionEnd() {
+	return pg::DidWalWrites() || pg::GetCurrentCommandId() > duckdb_command_id + 1;
+}
+
+} // namespace pg
 
 /*
  * Claim the current command id as being executed by a DuckDB write query.
@@ -50,13 +69,13 @@ ClaimCurrentCommandId() {
 	 * cross-database write.
 	 */
 	bool used = duckdb_command_id == -1;
-	CommandId new_command_id = GetCurrentCommandId(used);
+	CommandId new_command_id = pg::GetCurrentCommandId(used);
 
 	if (new_command_id == duckdb_command_id) {
 		return;
 	}
 
-	if (!IsInTransactionBlock()) {
+	if (!pg::IsInTransactionBlock()) {
 		/*
 		 * Allow mixed writes outside of a transaction block, this is needed
 		 * for DDL.
@@ -97,28 +116,13 @@ MarkStatementNotTopLevel() {
  */
 void
 AutocommitSingleStatementQueries() {
-	if (IsInTransactionBlock()) {
+	if (pg::IsInTransactionBlock()) {
 		/* We're in a transaction block, we can just execute the query */
 		return;
 	}
 
-	PreventInTransactionBlock(top_level_statement,
-	                          "BUG: You should never see this error we checked IsInTransactionBlock before.");
-}
-
-/*
- * Check if Postgres did any writes at the end of a transaction.
- *
- * We do this by both checking if there were any WAL writes and as an added
- * measure if the current command id was incremented more than once after the
- * last known DuckDB command.
- *
- * IMPORTANT: This function should only be called at trasaction commit. At
- * other points in the transaction lifecycle its return value is not reliable.
- */
-static bool
-PostgresDidWritesAtTransactionEnd() {
-	return PostgresDidWalWrites() || GetCurrentCommandId() > duckdb_command_id + 1;
+	pg::PreventInTransactionBlock(top_level_statement,
+	                              "BUG: You should never see this error we checked IsInTransactionBlock before.");
 }
 
 static void
@@ -144,8 +148,8 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 	switch (event) {
 	case XACT_EVENT_PRE_COMMIT:
 	case XACT_EVENT_PARALLEL_PRE_COMMIT:
-		if (IsInTransactionBlock(top_level_statement)) {
-			if (PostgresDidWritesAtTransactionEnd() && DuckdbDidWrites(context)) {
+		if (pg::IsInTransactionBlock(top_level_statement)) {
+			if (pg::DidWritesAtTransactionEnd() && ddb::DidWrites(context)) {
 				throw duckdb::NotImplementedException(
 				    "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 			}
@@ -227,8 +231,8 @@ RegisterDuckdbXactCallback() {
 	if (transaction_handler_configured) {
 		return;
 	}
-	RegisterXactCallback(DuckdbXactCallback, nullptr);
-	RegisterSubXactCallback(DuckdbSubXactCallback, nullptr);
+	pg::RegisterXactCallback(DuckdbXactCallback, nullptr);
+	pg::RegisterSubXactCallback(DuckdbSubXactCallback, nullptr);
 	transaction_handler_configured = true;
 }
 } // namespace pgduckdb

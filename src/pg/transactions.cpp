@@ -6,10 +6,10 @@ extern "C" {
 #include "access/xlog.h" // XactLastRecEnd
 }
 
-namespace pgduckdb {
+namespace pgduckdb::pg {
 
 bool
-PostgresDidWalWrites() {
+DidWalWrites() {
 	return XactLastRecEnd != InvalidXLogRecPtr;
 }
 
@@ -48,4 +48,4 @@ UnregisterSubXactCallback(SubXactCallback callback, void *arg) {
 	return PostgresFunctionGuard(::UnregisterSubXactCallback, callback, arg);
 }
 
-} // namespace pgduckdb
+} // namespace pgduckdb::pg

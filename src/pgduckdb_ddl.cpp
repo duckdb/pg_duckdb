@@ -100,8 +100,12 @@ static void
 DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                       ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
                       QueryCompletion *qc) {
+	if (!pgduckdb::IsExtensionRegistered()) {
+		return prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+	}
+
 	Node *parsetree = pstmt->utilityStmt;
-	if (pgduckdb::IsExtensionRegistered() && IsA(parsetree, CopyStmt)) {
+	if (IsA(parsetree, CopyStmt)) {
 		auto copy_query = PostgresFunctionGuard(MakeDuckdbCopyQuery, pstmt, query_string, query_env);
 		if (copy_query) {
 			auto res = pgduckdb::DuckDBQueryOrThrow(copy_query);
@@ -127,9 +131,7 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	bool prev_top_level_ddl = top_level_ddl;
 	top_level_ddl = context == PROCESS_UTILITY_TOPLEVEL;
 
-	if (pgduckdb::IsExtensionRegistered()) {
-		DuckdbHandleDDL(parsetree);
-	}
+	DuckdbHandleDDL(parsetree);
 	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 
 	top_level_ddl = prev_top_level_ddl;

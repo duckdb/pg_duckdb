@@ -20,5 +20,4 @@ LINE 1: SELECT * FROM do_not_exist;
                       ^
 END;
 WARNING:  pgduckdb: IsExtensionRegistered called in an aborted transaction
-WARNING:  pgduckdb: IsExtensionRegistered called in an aborted transaction
 CREATE EXTENSION pg_duckdb;

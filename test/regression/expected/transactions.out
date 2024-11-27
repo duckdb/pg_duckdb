@@ -62,7 +62,7 @@ ROLLBACK;;
 BEGIN;
 SAVEPOINT my_savepoint;
 INSERT INTO t_ddb VALUES (2);
-ERROR:  SAVEPOINT is not supported in DuckDB
+ERROR:  (PGDuckDB/DuckdbPlanNode) Not implemented Error: SAVEPOINT and subtransactions are not supported in DuckDB
 ROLLBACK;;
 -- Unless the subtransaction is already completed
 BEGIN;

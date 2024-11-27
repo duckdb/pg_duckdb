@@ -121,8 +121,8 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	}
 
 	/*
-	 * If creating a plan for a scrollable cursor, make sure it can run
-	 * backwards on demand.  Add a Material node at the top at need.
+	 * If creating a plan for a scrollable cursor add a Material node at the
+	 * top because or CustomScan does not support backwards scanning.
 	 */
 	if (cursor_options & CURSOR_OPT_SCROLL) {
 		duckdb_plan = materialize_finished_plan(duckdb_plan);

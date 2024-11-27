@@ -32,8 +32,8 @@ typedef enum {
 typedef void (*SubXactCallback)(SubXactEvent event, SubTransactionId mySubid, SubTransactionId parentSubid, void *arg);
 }
 
-namespace pgduckdb {
-bool PostgresDidWalWrites();
+namespace pgduckdb::pg {
+bool DidWalWrites();
 CommandId GetCurrentCommandId(bool used = false);
 bool IsInTransactionBlock(bool top_level);
 void PreventInTransactionBlock(bool is_top_level, const char *statement_type);
@@ -41,4 +41,4 @@ void RegisterXactCallback(XactCallback callback, void *arg);
 void UnregisterXactCallback(XactCallback callback, void *arg);
 void RegisterSubXactCallback(SubXactCallback callback, void *arg);
 void UnregisterSubXactCallback(SubXactCallback callback, void *arg);
-} // namespace pgduckdb
+} // namespace pgduckdb::pg

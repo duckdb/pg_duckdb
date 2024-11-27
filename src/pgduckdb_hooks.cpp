@@ -150,8 +150,8 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 			elog(elevel, "DuckDB does not support modififying Postgres tables");
 			return false;
 		}
-		if (pgduckdb::IsInTransactionBlock(true)) {
-			if (pgduckdb::PostgresDidWalWrites()) {
+		if (pgduckdb::pg::IsInTransactionBlock(true)) {
+			if (pgduckdb::pg::DidWalWrites()) {
 				elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 				return false;
 			}
@@ -203,7 +203,8 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 			}
 			/* If we can't create a plan, we'll fall back to Postgres */
 		}
-		if (parse->commandType != CMD_SELECT && pgduckdb::DuckdbDidWrites() && pgduckdb::IsInTransactionBlock(true)) {
+		if (parse->commandType != CMD_SELECT && pgduckdb::ddb::DidWrites() &&
+		    pgduckdb::pg::IsInTransactionBlock(true)) {
 			elog(ERROR, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 		}
 	}
@@ -320,7 +321,7 @@ DuckdbExecutorFinishHook_Cpp(QueryDesc *queryDesc) {
 		return;
 	}
 
-	if (!pgduckdb::DuckdbDidWrites()) {
+	if (!pgduckdb::ddb::DidWrites()) {
 		return;
 	}
 

@@ -302,7 +302,7 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 	 * transaction might have already started. Recycling the database will
 	 * violate our assumptions about DuckDB its transaction lifecycle
 	 */
-	pgduckdb::PreventInTransactionBlock("duckdb.recycle_ddb()");
+	pgduckdb::pg::PreventInTransactionBlock("duckdb.recycle_ddb()");
 	pgduckdb::DuckDBManager::Get().Reset();
 	PG_RETURN_BOOL(true);
 }

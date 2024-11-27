@@ -1,5 +1,6 @@
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "duckdb.hpp"
+#include "duckdb/common/exception.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
 #include "duckdb/main/extension_util.hpp"
@@ -76,23 +77,25 @@ CreateOrGetDirectoryPath(const char *directory_name) {
 	return duckdb_data_directory;
 }
 
+namespace ddb {
 bool
-DuckdbDidWrites() {
+DidWrites() {
 	if (!DuckDBManager::IsInitialized()) {
 		return false;
 	}
 	auto connection = DuckDBManager::GetConnectionUnsafe();
 	auto &context = *connection->context;
-	return DuckdbDidWrites(context);
+	return DidWrites(context);
 }
 
 bool
-DuckdbDidWrites(duckdb::ClientContext &context) {
+DidWrites(duckdb::ClientContext &context) {
 	if (!context.transaction.HasActiveTransaction()) {
 		return false;
 	}
 	return context.ActiveTransaction().ModifiedDatabase() != nullptr;
 }
+} // namespace ddb
 
 DuckDBManager DuckDBManager::manager_instance;
 
@@ -335,13 +338,18 @@ DuckDBManager::GetConnection(bool force_transaction) {
 
 	if (!context.transaction.HasActiveTransaction()) {
 		if (IsSubTransaction()) {
-			elog(ERROR, "SAVEPOINT is not supported in DuckDB");
+			throw duckdb::NotImplementedException("SAVEPOINT and subtransactions are not supported in DuckDB");
 		}
-		if (IsInTransactionBlock() || force_transaction) {
+
+		if (force_transaction || pg::IsInTransactionBlock()) {
 			/*
 			 * We only want to open a new DuckDB transaction if we're already
 			 * in a Postgres transaction block. Always opening a transaction
-			 * incurs a performance penalty when connecting to
+			 * incurs a significant performance penalty for single statement
+			 * queries on MotherDuck. This is because a second round-trip is
+			 * needed to send the COMMIT to MotherDuck when Postgres its
+			 * transaction finishes. So we only want to do this when actually
+			 * necessary.
 			 */
 			instance.connection->BeginTransaction();
 		}

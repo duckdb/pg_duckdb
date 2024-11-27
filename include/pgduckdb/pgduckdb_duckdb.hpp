@@ -4,8 +4,10 @@
 
 namespace pgduckdb {
 
-bool DuckdbDidWrites();
-bool DuckdbDidWrites(duckdb::ClientContext &context);
+namespace ddb {
+bool DidWrites();
+bool DidWrites(duckdb::ClientContext &context);
+} // namespace ddb
 
 class DuckDBManager {
 public:
