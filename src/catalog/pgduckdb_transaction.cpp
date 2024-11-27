@@ -43,7 +43,6 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 		return nullptr; // Table could not be found
 	}
 
-
 	Relation rel = PostgresTable::OpenRelation(rel_oid);
 	if (IsRelView(rel)) {
 		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which

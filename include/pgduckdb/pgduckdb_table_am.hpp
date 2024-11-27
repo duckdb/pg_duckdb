@@ -1,7 +1,4 @@
-extern "C" {
-#include "postgres.h"
-#include "access/tableam.h"
-}
+#include "pgduckdb/pg/declarations.hpp"
 
 namespace pgduckdb {
 bool IsDuckdbTableAm(const TableAmRoutine *am);

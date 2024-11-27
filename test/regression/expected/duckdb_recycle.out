@@ -24,12 +24,7 @@ EXPLAIN SELECT count(*) FROM ta;
  
 (19 rows)
 
-SELECT duckdb.recycle_ddb();
- recycle_ddb 
--------------
- 
-(1 row)
-
+CALL duckdb.recycle_ddb();
 EXPLAIN SELECT count(*) FROM ta;
                          QUERY PLAN                         
 ------------------------------------------------------------
@@ -54,4 +49,25 @@ EXPLAIN SELECT count(*) FROM ta;
  
 (19 rows)
 
+-- Not allowed in a transaction
+BEGIN;
+CALL duckdb.recycle_ddb();
+ERROR:  (PGDuckDB/pgduckdb_recycle_ddb) Executor Error: (PGDuckDB/PreventInTransactionBlock) duckdb.recycle_ddb() cannot run inside a transaction block
+END;
+-- Nor in a function
+CREATE OR REPLACE FUNCTION f() RETURNS void
+    LANGUAGE plpgsql
+    RETURNS NULL ON NULL INPUT
+    AS
+$$
+BEGIN
+    CALL duckdb.recycle_ddb();
+END;
+$$;
+SET duckdb.force_execution = false;
+SELECT * FROM f();
+ERROR:  (PGDuckDB/pgduckdb_recycle_ddb) Executor Error: (PGDuckDB/PreventInTransactionBlock) duckdb.recycle_ddb() cannot be executed from a function
+CONTEXT:  SQL statement "CALL duckdb.recycle_ddb()"
+PL/pgSQL function f() line 3 at CALL
 DROP TABLE ta;
+DROP FUNCTION f;

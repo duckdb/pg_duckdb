@@ -66,3 +66,9 @@ CREATE FUNCTION duckdb.cache_delete(cache_key TEXT)
     SET search_path = pg_catalog, pg_temp
     LANGUAGE C AS 'MODULE_PATHNAME', 'cache_delete';
 REVOKE ALL ON FUNCTION duckdb.cache_delete(cache_key TEXT) FROM PUBLIC;
+
+DROP FUNCTION duckdb.recycle_ddb();
+CREATE PROCEDURE duckdb.recycle_ddb()
+    SET search_path = pg_catalog, pg_temp
+    LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_recycle_ddb';
+REVOKE ALL ON PROCEDURE duckdb.recycle_ddb() FROM PUBLIC;
