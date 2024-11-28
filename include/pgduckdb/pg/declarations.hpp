@@ -66,4 +66,17 @@ struct TableAmRoutine;
 typedef uint32_t CommandId;
 
 typedef uint32_t SubTransactionId;
+
+struct QueryDesc;
+
+struct ParallelExecutorInfo;
+
+struct MinimalTupleData;
+typedef MinimalTupleData *MinimalTuple;
+
+struct TupleQueueReader;
+
+struct PlanState;
+
+struct Plan;
 }
