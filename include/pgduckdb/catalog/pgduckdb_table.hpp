@@ -11,7 +11,17 @@ namespace pgduckdb {
 
 class PostgresTable : public duckdb::TableCatalogEntry {
 public:
+	PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema, duckdb::CreateTableInfo &info,
+	              Relation rel, Cardinality cardinality, Snapshot snapshot);
+
 	virtual ~PostgresTable();
+
+public:
+	duckdb::unique_ptr<duckdb::BaseStatistics> GetStatistics(duckdb::ClientContext &context,
+	                                                         duckdb::column_t column_id) override;
+	duckdb::TableFunction GetScanFunction(duckdb::ClientContext &context,
+	                                      duckdb::unique_ptr<duckdb::FunctionData> &bind_data) override;
+	duckdb::TableStorageInfo GetStorageInfo(duckdb::ClientContext &context) override;
 
 public:
 	static Relation OpenRelation(Oid relid);
@@ -19,27 +29,9 @@ public:
 	static Cardinality GetTableCardinality(Relation rel);
 
 protected:
-	PostgresTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema, duckdb::CreateTableInfo &info,
-	              Relation rel, Cardinality cardinality, Snapshot snapshot);
-
-protected:
 	Relation rel;
 	Cardinality cardinality;
 	Snapshot snapshot;
-};
-
-class PostgresHeapTable : public PostgresTable {
-public:
-	PostgresHeapTable(duckdb::Catalog &catalog, duckdb::SchemaCatalogEntry &schema, duckdb::CreateTableInfo &info,
-	                  Relation rel, Cardinality cardinality, Snapshot snapshot);
-
-public:
-	// -- Table API --
-	duckdb::unique_ptr<duckdb::BaseStatistics> GetStatistics(duckdb::ClientContext &context,
-	                                                         duckdb::column_t column_id) override;
-	duckdb::TableFunction GetScanFunction(duckdb::ClientContext &context,
-	                                      duckdb::unique_ptr<duckdb::FunctionData> &bind_data) override;
-	duckdb::TableStorageInfo GetStorageInfo(duckdb::ClientContext &context) override;
 };
 
 } // namespace pgduckdb

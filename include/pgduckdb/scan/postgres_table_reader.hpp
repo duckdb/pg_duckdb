@@ -1,0 +1,34 @@
+#pragma once
+
+#include "duckdb.hpp"
+
+#include "pgduckdb/pg/declarations.hpp"
+
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
+
+namespace pgduckdb {
+
+// PostgresTableReader
+
+class PostgresTableReader {
+public:
+	PostgresTableReader(Cardinality cardinality, const char *table_scan_query);
+	~PostgresTableReader();
+	TupleTableSlot *GetNextTuple();
+
+private:
+	MinimalTuple GetNextWorkerTuple();
+	int ParalleWorkerNumber(Cardinality cardinality);
+
+private:
+	QueryDesc *table_scan_query_desc;
+	PlanState *table_scan_planstate;
+	ParallelExecutorInfo *pei;
+	void **parallel_worker_readers;
+	TupleTableSlot *slot;
+	int nworkers_launched;
+	int nreaders;
+	int next_parallel_reader;
+};
+
+} // namespace pgduckdb

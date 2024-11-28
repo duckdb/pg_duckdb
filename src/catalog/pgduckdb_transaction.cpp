@@ -55,8 +55,8 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	PostgresTable::SetTableInfo(info, rel);
 
 	auto cardinality = PostgresTable::GetTableCardinality(rel);
-	tables.emplace(entry_name, duckdb::make_uniq<PostgresHeapTable>(schema->catalog, *schema, info, rel, cardinality,
-	                                                                schema->snapshot));
+	tables.emplace(entry_name, duckdb::make_uniq<PostgresTable>(schema->catalog, *schema, info, rel, cardinality,
+	                                                            schema->snapshot));
 	return tables[entry_name].get();
 }
 

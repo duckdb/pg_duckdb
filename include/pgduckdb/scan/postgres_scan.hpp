@@ -5,52 +5,79 @@
 #include "pgduckdb/pg/declarations.hpp"
 #include "pgduckdb/utility/allocator.hpp"
 
+#include "pgduckdb/scan/postgres_table_reader.hpp"
+
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
 
-class PostgresScanGlobalState {
-public:
-	PostgresScanGlobalState() : m_snapshot(nullptr), m_count_tuples_only(false), m_total_row_count(0) {
+// Global State
+
+struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
+	explicit PostgresScanGlobalState(Snapshot, Relation rel, Cardinality cardinality,
+	                                 duckdb::TableFunctionInitInput &input);
+	~PostgresScanGlobalState();
+	idx_t
+	MaxThreads() const override {
+		return 1;
 	}
+	void ConstructTableScanQuery(duckdb::TableFunctionInitInput &input);
 
-	void InitGlobalState(duckdb::TableFunctionInitInput &input);
-
-	void InitRelationMissingAttrs(TupleDesc tuple_desc);
-
-	Snapshot m_snapshot;
-	TupleDesc m_tuple_desc;
-	std::mutex m_lock; // Lock for one replacement scan
-	bool m_count_tuples_only;
-	/* Postgres column id to duckdb scanned index. The scanned index is DuckDB
-	 * its scan order of the columns. */
-	std::vector<duckdb::pair<AttrNumber, duckdb::idx_t>> m_columns_to_scan;
-	/* These are indexed by the DuckDB scan index */
-	std::vector<duckdb::TableFilter *> m_column_filters;
-	/* Duckdb output vector idx with information about postgres column id */
-	duckdb::vector<duckdb::pair<duckdb::idx_t, AttrNumber>> m_output_columns;
-	std::atomic<std::uint32_t> m_total_row_count;
-	duckdb::map<int, Datum> m_relation_missing_attrs;
+public:
+	Snapshot snapshot;
+	Relation rel;
+	TupleDesc table_tuple_desc;
+	std::mutex lock; // Lock for one replacement scan
+	bool count_tuples_only;
+	duckdb::vector<duckdb::pair<duckdb::idx_t, AttrNumber>> output_columns;
+	std::atomic<std::uint32_t> total_row_count;
+	std::ostringstream scan_query;
+	duckdb::shared_ptr<PostgresTableReader> table_reader_global_state;
 };
 
-class PostgresScanLocalState {
-public:
-	PostgresScanLocalState(const PostgresScanGlobalState *psgs) : m_output_vector_size(0), m_exhausted_scan(false) {
-		if (!psgs->m_count_tuples_only) {
-			const auto s = psgs->m_columns_to_scan.size();
-			values.resize(s);
-			nulls.resize(s);
-		}
-	}
+// Local State
 
-	uint32_t m_output_vector_size;
-	bool m_exhausted_scan;
-	std::vector<Datum, DuckDBMallocator<Datum>> values;
-	std::vector<bool, DuckDBMallocator<bool>> nulls;
+struct PostgresScanLocalState : public duckdb::LocalTableFunctionState {
+public:
+	PostgresScanLocalState(PostgresScanGlobalState *global_state);
+	~PostgresScanLocalState() override;
+
+public:
+	PostgresScanGlobalState *global_state;
+	int output_vector_size;
+	bool exhausted_scan;
 };
 
-duckdb::unique_ptr<duckdb::TableRef> PostgresReplacementScan(duckdb::ClientContext &context,
-                                                             duckdb::ReplacementScanInput &input,
-                                                             duckdb::optional_ptr<duckdb::ReplacementScanData> data);
+// PostgresScanFunctionData
+
+struct PostgresScanFunctionData : public duckdb::TableFunctionData {
+public:
+	PostgresScanFunctionData(Relation rel, uint64_t cardinality, Snapshot snapshot);
+	~PostgresScanFunctionData() override;
+
+public:
+	duckdb::vector<duckdb::string> complex_filters;
+	Relation rel;
+	uint64_t cardinality;
+	Snapshot snapshot;
+};
+
+// PostgresScanTableFunction
+
+struct PostgresScanTableFunction : public duckdb::TableFunction {
+public:
+	PostgresScanTableFunction();
+
+public:
+	static duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
+	PostgresScanInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input);
+	static duckdb::unique_ptr<duckdb::LocalTableFunctionState>
+	PostgresScanInitLocal(duckdb::ExecutionContext &context, duckdb::TableFunctionInitInput &input,
+	                      duckdb::GlobalTableFunctionState *gstate);
+	static void PostgresScanFunction(duckdb::ClientContext &context, duckdb::TableFunctionInput &data,
+	                                 duckdb::DataChunk &output);
+	static duckdb::unique_ptr<duckdb::NodeStatistics> PostgresScanCardinality(duckdb::ClientContext &context,
+	                                                                          const duckdb::FunctionData *data);
+};
 
 } // namespace pgduckdb
