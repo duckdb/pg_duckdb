@@ -228,6 +228,9 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		if (!secret.use_ssl) {
 			query << ", USE_SSL 'FALSE'";
 		}
+		if (secret.scope.length()) {
+			query << ", SCOPE '" << secret.scope << "'";
+		}
 		query << ");";
 
 		DuckDBQueryOrThrow(context, query.str());

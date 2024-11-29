@@ -72,3 +72,5 @@ CREATE PROCEDURE duckdb.recycle_ddb()
     SET search_path = pg_catalog, pg_temp
     LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_recycle_ddb';
 REVOKE ALL ON PROCEDURE duckdb.recycle_ddb() FROM PUBLIC;
+
+ALTER TABLE duckdb.secrets ADD COLUMN scope TEXT;
