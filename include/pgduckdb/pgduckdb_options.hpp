@@ -6,7 +6,7 @@
 namespace pgduckdb {
 
 /* constants for duckdb.secrets */
-#define Natts_duckdb_secret              9
+#define Natts_duckdb_secret              10
 #define Anum_duckdb_secret_name          1
 #define Anum_duckdb_secret_type          2
 #define Anum_duckdb_secret_key_id        3
@@ -16,6 +16,7 @@ namespace pgduckdb {
 #define Anum_duckdb_secret_endpoint      7
 #define Anum_duckdb_secret_r2_account_id 8
 #define Anum_duckdb_secret_use_ssl       9
+#define Anum_duckdb_secret_scope         10
 
 typedef struct DuckdbSecret {
 	std::string name;
@@ -27,6 +28,7 @@ typedef struct DuckdbSecret {
 	std::string endpoint;
 	std::string r2_account_id;
 	bool use_ssl;
+	std::string scope;
 } DuckdbSecret;
 
 extern std::vector<DuckdbSecret> ReadDuckdbSecrets();

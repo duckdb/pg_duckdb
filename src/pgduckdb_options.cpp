@@ -88,6 +88,10 @@ ReadDuckdbSecrets() {
 			secret.use_ssl = DatumGetBool(DatumGetBool(datum_array[Anum_duckdb_secret_use_ssl - 1]));
 		else
 			secret.use_ssl = true;
+
+		if (!is_null_array[Anum_duckdb_secret_scope - 1])
+			secret.scope = DatumToString(datum_array[Anum_duckdb_secret_scope - 1]);
+
 		duckdb_secrets.push_back(secret);
 	}
 
