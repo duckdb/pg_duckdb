@@ -24,3 +24,4 @@ test: altered_tables
 test: transactions
 test: transaction_errors
 test: secrets
+test: explain

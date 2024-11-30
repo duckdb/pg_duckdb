@@ -354,6 +354,15 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	 * standard_ExplainOneQuery).
 	 */
 	duckdb_explain_analyze = es->analyze;
+
+	/*
+	 * Postgres doesn't need to check too much for this to avoid exceeding
+	 * the limit of stack depth. And the actual operation runs in Duckdb.
+	 */
+	if (es->verbose) {
+		es->verbose = false;
+	}
+
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }
 

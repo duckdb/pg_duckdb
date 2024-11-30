@@ -1,0 +1,135 @@
+SET duckdb.force_execution = true;
+CREATE TABLE ta(a INT);
+EXPLAIN SELECT * FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │       Projections: a      │
+ │                           │
+ │         ~2550 Rows        │
+ └───────────────────────────┘
+ 
+ 
+(15 rows)
+
+EXPLAIN VERBOSE SELECT * FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │       Projections: a      │
+ │                           │
+ │         ~2550 Rows        │
+ └───────────────────────────┘
+ 
+ 
+(15 rows)
+
+INSERT INTO ta VALUES(1);
+INSERT INTO ta VALUES(2);
+INSERT INTO ta VALUES(3);
+ANALYZE ta;
+EXPLAIN SELECT * FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │       Projections: a      │
+ │                           │
+ │          ~3 Rows          │
+ └───────────────────────────┘
+ 
+ 
+(15 rows)
+
+EXPLAIN VERBOSE SELECT * FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │       Projections: a      │
+ │                           │
+ │          ~3 Rows          │
+ └───────────────────────────┘
+ 
+ 
+(15 rows)
+
+EXPLAIN SELECT count(*) FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │    UNGROUPED_AGGREGATE    │
+ │    ────────────────────   │
+ │        Aggregates:        │
+ │        count_star()       │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │          ~3 Rows          │
+ └───────────────────────────┘
+ 
+ 
+(19 rows)
+
+EXPLAIN VERBOSE SELECT count(*) FROM ta;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │    UNGROUPED_AGGREGATE    │
+ │    ────────────────────   │
+ │        Aggregates:        │
+ │        count_star()       │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │     POSTGRES_SEQ_SCAN     │
+ │    ────────────────────   │
+ │         Function:         │
+ │     POSTGRES_SEQ_SCAN     │
+ │                           │
+ │          ~3 Rows          │
+ └───────────────────────────┘
+ 
+ 
+(19 rows)
+
+DROP TABLE ta;
