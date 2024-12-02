@@ -90,7 +90,7 @@ CreatePlan(Query *query, bool throw_error) {
 		/* We fill in the varno later, once we know the index of the custom RTE
 		 * that we create. We'll know this at the end of DuckdbPlanNode. This
 		 * can probably be simplified when we don't call the standard_planner
-		 * anymore innside DuckdbPlanNodei, because then we only need a single
+		 * anymore inside DuckdbPlanNode, because then we only need a single
 		 * RTE. */
 		Var *var = makeVar(0, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
 
