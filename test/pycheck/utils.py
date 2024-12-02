@@ -119,7 +119,16 @@ def get_pg_major_version():
     return int(major_version_string.group(0))
 
 
+def get_bin_dir():
+    pg_config_bin = (
+        os.environ["PG_CONFIG"] if "PG_CONFIG" in os.environ else "pg_config"
+    )
+    return capture([pg_config_bin, "--bindir"], silent=True).strip()
+
+
 PG_MAJOR_VERSION = get_pg_major_version()
+
+PG_BIN_DIR = get_bin_dir()
 
 # this is out of ephemeral port range for many systems hence
 # it is a lower change that it will conflict with "in-use" ports
@@ -129,6 +138,10 @@ PORT_LOWER_BOUND = 10200
 PORT_UPPER_BOUND = 32768
 
 next_port = PORT_LOWER_BOUND
+
+
+def pg_bin(b):
+    return os.path.join(PG_BIN_DIR, b)
 
 
 class NoResultClass:
@@ -393,7 +406,15 @@ class Postgres:
         self.set_default_connection_options(kwargs)
         connect_options = " ".join([f"{k}={v}" for k, v in kwargs.items()])
 
-        run(["psql", f"port={self.port} {connect_options}", "-c", query], shell=False)
+        run(
+            [
+                pg_bin("psql"),
+                f"port={self.port} {connect_options}",
+                "-c",
+                query,
+            ],
+            shell=False,
+        )
 
     @contextmanager
     def transaction(self, **kwargs):
@@ -541,13 +562,14 @@ class Postgres:
     def psql_debug(self, **kwargs):
         conninfo = self.make_conninfo(**kwargs)
         run(
-            ["psql", conninfo],
+            [pg_bin("psql"), conninfo],
             silent=True,
         )
 
     def initdb(self):
+        initdb = pg_bin("initdb")
         run(
-            f"initdb -A trust --nosync --username postgres --pgdata {self.pgdata}",
+            f"'{initdb}' -A trust --nosync --username postgres --pgdata {self.pgdata}",
             stdout=subprocess.DEVNULL,
         )
 
@@ -595,11 +617,17 @@ class Postgres:
             pgconf.write("duckdb.force_execution = 'true'\n")
 
     def pgctl(self, command, **kwargs):
-        run(f"pg_ctl -w --pgdata {self.pgdata} {command}", **kwargs)
+        pg_ctl = pg_bin("pg_ctl")
+        run(
+            f"'{pg_ctl}' -w --pgdata {self.pgdata} {command}",
+            **kwargs,
+        )
 
     def apgctl(self, command, **kwargs):
+        pg_ctl = pg_bin("pg_ctl")
         return asyncio.create_subprocess_shell(
-            f"pg_ctl -w --pgdata {self.pgdata} {command}", **kwargs
+            f"'{pg_ctl}' -w --pgdata {self.pgdata} {command}",
+            **kwargs,
         )
 
     def start(self):
