@@ -13,6 +13,8 @@
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/attached_database.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 #include <string>
 #include <unordered_map>
 
@@ -50,7 +52,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 
 static bool is_background_worker = false;
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
