@@ -67,7 +67,7 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 		}
 	} // PG_END_TRY();
 
-	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, GetErrorDataMessage(edata));
+	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, pg::GetErrorDataMessage(edata));
 	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
 }
 

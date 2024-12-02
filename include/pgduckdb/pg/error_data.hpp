@@ -4,6 +4,6 @@ extern "C" {
 struct ErrorData;
 }
 
-namespace pgduckdb {
+namespace pgduckdb::pg {
 const char* GetErrorDataMessage(ErrorData* error_data);
 }
