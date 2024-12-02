@@ -3,6 +3,7 @@
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -29,8 +30,8 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
 static ExecutorStart_hook_type prev_executor_start_hook = NULL;
