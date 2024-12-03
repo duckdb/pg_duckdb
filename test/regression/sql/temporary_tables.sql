@@ -203,4 +203,28 @@ INSERT INTO tb (a, b, c) SELECT 1, 2, 'tb';
 INSERT INTO tb  SELECT * FROM (SELECT (3)::numeric AS a, (3)::numeric AS b, 'ta' || 'tb' AS c) t;
 SELECT * FROM tb;
 
-DROP TABLE webpages, t, t_heap, t_heap2, ta, tb;
+CREATE TEMP TABLE tc (a int DEFAULT 3, b int, c varchar DEFAULT 'pg_duckdb', d varchar DEFAULT 'a' || 'b', e int DEFAULT 1 + 2) USING duckdb;
+INSERT INTO tc (a) VALUES (123), (456);
+INSERT INTO tc (b) VALUES (123), (456);
+INSERT INTO tc (c) VALUES ('ta'), ('tb');
+SELECT * FROM tc;
+
+TRUNCATE TABLE tc;
+INSERT INTO tc (a) SELECT 789;
+INSERT INTO tc (b) SELECT 789;
+INSERT INTO tc (a) SELECT * FROM t_heap;
+INSERT INTO tc (b) SELECT * FROM t_heap;
+SELECT * FROM tc;
+
+TRUNCATE TABLE tc;
+INSERT INTO tc (c) SELECT 'ta';
+INSERT INTO tc (c) SELECT 'ta' || 'tb';
+INSERT INTO tc (a) SELECT (2)::numeric;
+INSERT INTO tc (b) SELECT (3)::numeric;
+INSERT INTO tc (c) SELECT t.a FROM (SELECT 'ta' || 'tb' AS a) t;
+INSERT INTO tc (b, c) SELECT t.b, t.c FROM (SELECT (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+INSERT INTO tc (a, b, c) SELECT 1, 2, 'tb';
+INSERT INTO tc  SELECT * FROM (SELECT (3)::numeric AS a, (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+SELECT * FROM tc;
+
+DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc;
