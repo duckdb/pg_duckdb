@@ -78,24 +78,24 @@ ConvertVarCharDatum(const duckdb::Value &value) {
 	return PointerGetDatum(result);
 }
 
-static inline Datum
+inline Datum
 ConvertDateDatum(const duckdb::Value &value) {
 	duckdb::date_t date = value.GetValue<duckdb::date_t>();
 	return date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
 }
 
-static inline Datum
+inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
 	duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
 	return timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
 
-static inline Datum
+inline Datum
 ConvertFloatDatum(const duckdb::Value &value) {
 	return Float4GetDatum(value.GetValue<float>());
 }
 
-static inline Datum
+inline Datum
 ConvertDoubleDatum(const duckdb::Value &value) {
 	return Float8GetDatum(value.GetValue<double>());
 }
@@ -176,10 +176,8 @@ ConvertNumericDatum(const duckdb::Value &value) {
 	}
 
 	NumericVar numeric_var;
-	D_ASSERT(value_type_id == duckdb::LogicalTypeId::DECIMAL ||
-	         value_type_id == duckdb::LogicalTypeId::HUGEINT ||
+	D_ASSERT(value_type_id == duckdb::LogicalTypeId::DECIMAL || value_type_id == duckdb::LogicalTypeId::HUGEINT ||
 	         value_type_id == duckdb::LogicalTypeId::UBIGINT);
-
 	const bool is_decimal = value_type_id == duckdb::LogicalTypeId::DECIMAL;
 	uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
 
@@ -203,7 +201,6 @@ ConvertNumericDatum(const duckdb::Value &value) {
 		throw duckdb::InvalidInputException(
 		    "(PGDuckDB/ConvertDuckToPostgresValue) Unrecognized physical type for DECIMAL value");
 	}
-
 	auto numeric = PostgresFunctionGuard(CreateNumeric, numeric_var, (bool*)NULL);
 	return NumericGetDatum(numeric);
 }
@@ -688,113 +685,130 @@ numeric_typmod_scale(int32 typmod) {
 }
 
 duckdb::LogicalType
-ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
-	auto &type = attribute->atttypid;
-	auto &typmod = attribute->atttypmod;
-	auto dimensions = attribute->attndims;
-	duckdb::LogicalType base_type;
-	switch (type) {
+ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
+	switch (attribute->atttypid) {
 	case BOOLOID:
-	case BOOLARRAYOID: {
-		base_type = duckdb::LogicalTypeId::BOOLEAN;
-		break;
-	}
+	case BOOLARRAYOID:
+		return duckdb::LogicalTypeId::BOOLEAN;
 	case CHAROID:
-	case CHARARRAYOID: {
-		base_type = duckdb::LogicalTypeId::TINYINT;
-		break;
-	}
+	case CHARARRAYOID:
+		return duckdb::LogicalTypeId::TINYINT;
 	case INT2OID:
-	case INT2ARRAYOID: {
-		base_type = duckdb::LogicalTypeId::SMALLINT;
-		break;
-	}
+	case INT2ARRAYOID:
+		return duckdb::LogicalTypeId::SMALLINT;
 	case INT4OID:
-	case INT4ARRAYOID: {
-		base_type = duckdb::LogicalTypeId::INTEGER;
-		break;
-	}
+	case INT4ARRAYOID:
+		return duckdb::LogicalTypeId::INTEGER;
 	case INT8OID:
-	case INT8ARRAYOID: {
-		base_type = duckdb::LogicalTypeId::BIGINT;
-		break;
-	}
+	case INT8ARRAYOID:
+		return duckdb::LogicalTypeId::BIGINT;
 	case BPCHAROID:
 	case BPCHARARRAYOID:
 	case TEXTOID:
 	case TEXTARRAYOID:
 	case VARCHAROID:
-	case VARCHARARRAYOID: {
-		base_type = duckdb::LogicalTypeId::VARCHAR;
-		break;
-	}
+	case VARCHARARRAYOID:
+		return duckdb::LogicalTypeId::VARCHAR;
 	case DATEOID:
-	case DATEARRAYOID: {
-		base_type = duckdb::LogicalTypeId::DATE;
-		break;
-	}
+	case DATEARRAYOID:
+		return duckdb::LogicalTypeId::DATE;
 	case TIMESTAMPOID:
-	case TIMESTAMPARRAYOID: {
-		base_type = duckdb::LogicalTypeId::TIMESTAMP;
-		break;
-	}
-	case TIMESTAMPTZOID: {
-		base_type = duckdb::LogicalTypeId::TIMESTAMP_TZ;
-		break;
-	}
+	case TIMESTAMPARRAYOID:
+		return duckdb::LogicalTypeId::TIMESTAMP;
+	case TIMESTAMPTZOID:
+		return duckdb::LogicalTypeId::TIMESTAMP_TZ;
 	case FLOAT4OID:
-	case FLOAT4ARRAYOID: {
-		base_type = duckdb::LogicalTypeId::FLOAT;
-		break;
-	}
+	case FLOAT4ARRAYOID:
+		return duckdb::LogicalTypeId::FLOAT;
 	case FLOAT8OID:
-	case FLOAT8ARRAYOID: {
-		base_type = duckdb::LogicalTypeId::DOUBLE;
-		break;
-	}
+	case FLOAT8ARRAYOID:
+		return duckdb::LogicalTypeId::DOUBLE;
 	case NUMERICOID:
 	case NUMERICARRAYOID: {
+		auto &typmod = attribute->atttypmod;
 		auto precision = numeric_typmod_precision(typmod);
 		auto scale = numeric_typmod_scale(typmod);
 		if (typmod == -1 || precision < 0 || scale < 0 || precision > 38) {
 			auto extra_type_info = duckdb::make_shared_ptr<NumericAsDouble>();
-			base_type = duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
-		} else {
-			base_type = duckdb::LogicalType::DECIMAL(precision, scale);
+			return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
 		}
-		break;
+
+		return duckdb::LogicalType::DECIMAL(precision, scale);
 	}
 	case UUIDOID:
-	case UUIDARRAYOID: {
-		base_type = duckdb::LogicalTypeId::UUID;
-		break;
-	}
+	case UUIDARRAYOID:
+		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
-	case JSONARRAYOID: {
-		base_type = duckdb::LogicalType::JSON();
-		break;
-	}
+	case JSONARRAYOID:
+		return duckdb::LogicalType::JSON();
 	case REGCLASSOID:
-	case REGCLASSARRAYOID: {
-		base_type = duckdb::LogicalTypeId::UINTEGER;
-		break;
+	case REGCLASSARRAYOID:
+		return duckdb::LogicalTypeId::UINTEGER;
+	default:
+		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
-	default: {
-		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(type) + ")");
+}
+
+duckdb::LogicalType
+ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
+	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
+	auto dimensions = attribute->attndims;
+	if (dimensions == 0) {
+		return base_type;
 	}
-	}
-	if (dimensions > 0) {
-		for (int i = 0; i < dimensions; i++) {
-			base_type = duckdb::LogicalType::LIST(base_type);
-		}
+
+	for (int i = 0; i < dimensions; i++) {
+		base_type = duckdb::LogicalType::LIST(base_type);
 	}
 	return base_type;
 }
 
 Oid
-GetPostgresDuckDBType(duckdb::LogicalType type) {
-	auto id = type.id();
-	switch (id) {
+GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
+	switch (type.id()) {
+	case duckdb::LogicalTypeId::BOOLEAN:
+		return BOOLARRAYOID;
+	case duckdb::LogicalTypeId::TINYINT:
+		return CHARARRAYOID;
+	case duckdb::LogicalTypeId::SMALLINT:
+		return INT2ARRAYOID;
+	case duckdb::LogicalTypeId::INTEGER:
+		return INT4ARRAYOID;
+	case duckdb::LogicalTypeId::BIGINT:
+		return INT8ARRAYOID;
+	case duckdb::LogicalTypeId::HUGEINT:
+		return NUMERICARRAYOID;
+	case duckdb::LogicalTypeId::UTINYINT:
+		return INT2ARRAYOID;
+	case duckdb::LogicalTypeId::USMALLINT:
+		return INT4ARRAYOID;
+	case duckdb::LogicalTypeId::UINTEGER:
+		return INT8ARRAYOID;
+	case duckdb::LogicalTypeId::VARCHAR:
+		return type.IsJSONType() ? JSONARRAYOID : VARCHARARRAYOID;
+	case duckdb::LogicalTypeId::DATE:
+		return DATEARRAYOID;
+	case duckdb::LogicalTypeId::TIMESTAMP:
+		return TIMESTAMPARRAYOID;
+	case duckdb::LogicalTypeId::FLOAT:
+		return FLOAT4ARRAYOID;
+	case duckdb::LogicalTypeId::DOUBLE:
+		return FLOAT8ARRAYOID;
+	case duckdb::LogicalTypeId::DECIMAL:
+		return NUMERICARRAYOID;
+	case duckdb::LogicalTypeId::UUID:
+		return UUIDARRAYOID;
+	default: {
+		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %d to Postgres type",
+		     static_cast<uint8_t>(type.id()));
+		return InvalidOid;
+	}
+	}
+}
+
+Oid
+GetPostgresDuckDBType(const duckdb::LogicalType &type) {
+	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
 	case duckdb::LogicalTypeId::TINYINT:
@@ -814,12 +828,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 		return INT4OID;
 	case duckdb::LogicalTypeId::UINTEGER:
 		return INT8OID;
-	case duckdb::LogicalTypeId::VARCHAR: {
-		if (type.IsJSONType()) {
-			return JSONOID;
-		}
-		return VARCHAROID;
-	}
+	case duckdb::LogicalTypeId::VARCHAR:
+		return type.IsJSONType() ? JSONOID : VARCHAROID;
 	case duckdb::LogicalTypeId::DATE:
 		return DATEOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
@@ -840,50 +850,7 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 			auto &child_type = duckdb::ListType::GetChildType(*duck_type);
 			duck_type = &child_type;
 		}
-		auto child_type_id = duck_type->id();
-		switch (child_type_id) {
-		case duckdb::LogicalTypeId::BOOLEAN:
-			return BOOLARRAYOID;
-		case duckdb::LogicalTypeId::TINYINT:
-			return CHARARRAYOID;
-		case duckdb::LogicalTypeId::SMALLINT:
-			return INT2ARRAYOID;
-		case duckdb::LogicalTypeId::INTEGER:
-			return INT4ARRAYOID;
-		case duckdb::LogicalTypeId::BIGINT:
-			return INT8ARRAYOID;
-		case duckdb::LogicalTypeId::HUGEINT:
-			return NUMERICARRAYOID;
-		case duckdb::LogicalTypeId::UTINYINT:
-			return INT2ARRAYOID;
-		case duckdb::LogicalTypeId::USMALLINT:
-			return INT4ARRAYOID;
-		case duckdb::LogicalTypeId::UINTEGER:
-			return INT8ARRAYOID;
-		case duckdb::LogicalTypeId::VARCHAR: {
-			if (type.IsJSONType()) {
-				return JSONARRAYOID;
-			}
-			return VARCHARARRAYOID;
-		}
-		case duckdb::LogicalTypeId::DATE:
-			return DATEARRAYOID;
-		case duckdb::LogicalTypeId::TIMESTAMP:
-			return TIMESTAMPARRAYOID;
-		case duckdb::LogicalTypeId::FLOAT:
-			return FLOAT4ARRAYOID;
-		case duckdb::LogicalTypeId::DOUBLE:
-			return FLOAT8ARRAYOID;
-		case duckdb::LogicalTypeId::DECIMAL:
-			return NUMERICARRAYOID;
-		case duckdb::LogicalTypeId::UUID:
-			return UUIDARRAYOID;
-		default: {
-			elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %d to Postgres type",
-			     (uint8)child_type_id);
-			return InvalidOid;
-		}
-		}
+		return GetPostgresArrayDuckDBType(*duck_type);
 	}
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
@@ -894,9 +861,8 @@ GetPostgresDuckDBType(duckdb::LogicalType type) {
 }
 
 int32
-GetPostgresDuckDBTypemod(duckdb::LogicalType type) {
-	auto id = type.id();
-	switch (id) {
+GetPostgresDuckDBTypemod(const duckdb::LogicalType &type) {
+	switch (type.id()) {
 	case duckdb::LogicalTypeId::DECIMAL: {
 		uint8_t width, scale;
 		type.GetDecimalProperties(width, scale);
@@ -925,11 +891,6 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 	data[offset] = duckdb::StringVector::AddString(result, str);
 }
 
-static bool
-NumericIsNegative(const NumericVar &numeric) {
-	return numeric.sign == NUMERIC_NEG;
-}
-
 template <class T, class OP = DecimalConversionInteger>
 T
 ConvertDecimal(const NumericVar &numeric) {
@@ -938,8 +899,8 @@ ConvertDecimal(const NumericVar &numeric) {
 	if (numeric.ndigits == 0) {
 		return 0;
 	}
-	T integral_part = 0, fractional_part = 0;
 
+	T integral_part = 0, fractional_part = 0;
 	if (numeric.weight >= 0) {
 		int32_t digit_index = 0;
 		integral_part = numeric.digits[digit_index++];
@@ -989,7 +950,7 @@ ConvertDecimal(const NumericVar &numeric) {
 
 	// finally
 	auto base_res = OP::Finalize(numeric, integral_part + fractional_part);
-	return (NumericIsNegative(numeric) ? -base_res : base_res);
+	return numeric.sign == NUMERIC_NEG ? -base_res : base_res;
 }
 
 /*
@@ -1122,11 +1083,9 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 			Append(result, ConvertDecimal<hugeint_t, DecimalConversionHugeint>(numeric_var), offset);
 			break;
 		}
-		default: {
+		default:
 			throw duckdb::InternalException("Unrecognized physical type (%s) for DECIMAL value",
 			                                duckdb::EnumUtil::ToString(physical_type));
-			break;
-		}
 		}
 		break;
 	}
@@ -1215,7 +1174,6 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	default:
 		throw duckdb::NotImplementedException("(DuckDB/ConvertPostgresToDuckValue) Unsupported pgduckdb type: %s",
 		                                      result.GetType().ToString().c_str());
-		break;
 	}
 }
 
