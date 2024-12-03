@@ -6696,8 +6696,21 @@ get_insert_query_def(Query *query, deparse_context *context,
 		 * If it's an INSERT ... SELECT or multi-row VALUES, the entry
 		 * with the default value is ignored unless it is specified
 		 */
-		if ((select_rte || values_rte) && !(IsA(tle->expr, Var)))
-			continue;
+		if (values_rte)
+		{
+			if (!(IsA(tle->expr, Var)))
+				continue;
+		}
+		else if (select_rte)
+		{
+		   /*
+			* If it's INSERT... SELECT needs to make more careful decisions about
+			* Const structures. If location is -1, it comes from the DEFAULT clause
+			*/
+			if (IsA(tle->expr, Const) &&
+			   ((Const *) tle->expr)->location == -1)
+				continue;
+		}
 
 		appendStringInfoString(buf, sep);
 		sep = ", ";

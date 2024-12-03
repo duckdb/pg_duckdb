@@ -191,6 +191,16 @@ INSERT INTO tb (b) SELECT 789;
 INSERT INTO tb (a) SELECT * FROM t_heap;
 INSERT INTO tb (b) SELECT * FROM t_heap;
 SELECT * FROM tb;
-INSERT INTO tb (c) SELECT 'ta'; -- no support
+
+TRUNCATE TABLE tb;
+INSERT INTO tb (c) SELECT 'ta';
+INSERT INTO tb (c) SELECT 'ta' || 'tb';
+INSERT INTO tb (a) SELECT (2)::numeric;
+INSERT INTO tb (b) SELECT (3)::numeric;
+INSERT INTO tb (c) SELECT t.a FROM (SELECT 'ta' || 'tb' AS a) t;
+INSERT INTO tb (b, c) SELECT t.b, t.c FROM (SELECT (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+INSERT INTO tb (a, b, c) SELECT 1, 2, 'tb';
+INSERT INTO tb  SELECT * FROM (SELECT (3)::numeric AS a, (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+SELECT * FROM tb;
 
 DROP TABLE webpages, t, t_heap, t_heap2, ta, tb;
