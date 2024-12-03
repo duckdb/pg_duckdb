@@ -10,6 +10,7 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -23,7 +24,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -227,6 +227,9 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		}
 		if (!secret.use_ssl) {
 			query << ", USE_SSL 'FALSE'";
+		}
+		if (secret.scope.length()) {
+			query << ", SCOPE '" << secret.scope << "'";
 		}
 		query << ");";
 
