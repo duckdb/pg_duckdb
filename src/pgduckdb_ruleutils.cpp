@@ -369,7 +369,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 }
 
 /*
- * Recursively check Const nodes and Var nodes for handling more complex Const nodes
+ * Recursively check Const nodes and Var nodes for handling more complex DEFAULT clauses
  */
 bool
 pgduckdb_contains_insert_target_entry(Node *node, void *context) {
