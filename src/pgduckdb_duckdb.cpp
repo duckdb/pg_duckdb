@@ -15,6 +15,7 @@
 extern "C" {
 #include "postgres.h"
 #include "catalog/namespace.h"
+#include "lib/stringinfo.h"
 #include "utils/lsyscache.h"  // get_relname_relid
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "common/file_perm.h"
@@ -75,6 +76,28 @@ CreateOrGetDirectoryPath(const char *directory_name) {
 	};
 
 	return duckdb_data_directory;
+}
+
+char *
+uri_escape(const char *str)
+{
+    StringInfoData buf;
+    initStringInfo(&buf);
+
+    while (*str)
+    {
+        char c = *str++;
+        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
+        {
+            appendStringInfoChar(&buf, c);
+        }
+        else
+        {
+            appendStringInfo(&buf, "%%%02X", (unsigned char)c);
+        }
+    }
+
+    return buf.data;
 }
 
 namespace ddb {
@@ -145,10 +168,11 @@ DuckDBManager::Initialize() {
 		 * is not trivial, so for now we simply disable the web login.
 		 */
 		setenv("motherduck_disable_web_login", "1", 1);
+		duckdb_motherduck_default_database = uri_escape(duckdb_motherduck_default_database);
 		if (duckdb_motherduck_token[0] == '\0') {
-			connection_string = "md:";
+			connection_string = psprintf("md:%s", duckdb_motherduck_default_database);
 		} else {
-			connection_string = psprintf("md:?motherduck_token=%s", duckdb_motherduck_token);
+			connection_string = psprintf("md:%s?motherduck_token=%s", duckdb_motherduck_default_database, duckdb_motherduck_token);
 		}
 	}
 
@@ -164,11 +188,7 @@ DuckDBManager::Initialize() {
 	auto &context = *connection->context;
 
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
-	if (duckdb_motherduck_default_database[0] == '\0') {
-		default_dbname = db_manager.GetDefaultDatabase(context);
-	} else {
-		default_dbname = duckdb_motherduck_default_database;
-	}
+	default_dbname = db_manager.GetDefaultDatabase(context);
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 

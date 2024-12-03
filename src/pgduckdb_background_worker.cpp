@@ -605,9 +605,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
 		last_known_motherduck_catalog_versions[motherduck_db] = catalog_version;
 		auto schemas = duckdb::Catalog::GetSchemas(context, motherduck_db);
 		bool is_default_db = motherduck_db == default_db;
-		if (duckdb_motherduck_default_database[0] != '\0') {
-			is_default_db = motherduck_db == duckdb_motherduck_default_database;
-		}
 		bool all_tables_synced_successfully = true;
 		for (duckdb::SchemaCatalogEntry &schema : schemas) {
 			if (schema.name == "information_schema" || schema.name == "pg_catalog") {
