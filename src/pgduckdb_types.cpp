@@ -3,7 +3,10 @@
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
+#include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/types/decimal.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -26,7 +29,6 @@ extern "C" {
 #include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
 
 namespace pgduckdb {
 
@@ -99,21 +101,18 @@ ConvertDoubleDatum(const duckdb::Value &value) {
 }
 
 template <class T, class OP = DecimalConversionInteger>
-NumericVar
-ConvertNumeric(T value, idx_t scale) {
-	NumericVar result;
-	auto &sign = result.sign;
+void
+ConvertNumeric(const duckdb::Value& ddb_value, idx_t scale, NumericVar& result) {
 	result.dscale = scale;
-	auto &weight = result.weight;
-	auto &ndigits = result.ndigits;
 
-	constexpr idx_t MAX_DIGITS = sizeof(T) * 4;
+	T value = ddb_value.GetValueUnsafe<T>();
 	if (value < 0) {
 		value = -value;
-		sign = NUMERIC_NEG;
+		result.sign = NUMERIC_NEG;
 	} else {
-		sign = NUMERIC_POS;
+		result.sign = NUMERIC_POS;
 	}
+
 	// divide the decimal into the integer part (before the decimal point) and fractional part (after the point)
 	T integer_part;
 	T fractional_part;
@@ -125,6 +124,7 @@ ConvertNumeric(T value, idx_t scale) {
 		fractional_part = value % OP::GetPowerOfTen(scale);
 	}
 
+	constexpr idx_t MAX_DIGITS = sizeof(T) * 4;
 	uint16_t integral_digits[MAX_DIGITS];
 	uint16_t fractional_digits[MAX_DIGITS];
 	int32_t integral_ndigits;
@@ -135,7 +135,8 @@ ConvertNumeric(T value, idx_t scale) {
 		integral_digits[integral_ndigits++] = uint16_t(integer_part % T(NBASE));
 		integer_part /= T(NBASE);
 	}
-	weight = integral_ndigits - 1;
+
+	result.weight = integral_ndigits - 1;
 	// split the fractional part into parts of up to NBASE (4 digits => 0..9999)
 	// count the amount of digits required for the fractional part
 	// note that while it is technically possible to leave out zeros here this adds even more complications
@@ -152,9 +153,9 @@ ConvertNumeric(T value, idx_t scale) {
 		fractional_part /= NBASE;
 	}
 
-	ndigits = integral_ndigits + fractional_ndigits;
+	result.ndigits = integral_ndigits + fractional_ndigits;
 
-	result.buf = (NumericDigit *)palloc(ndigits * sizeof(NumericDigit));
+	result.buf = (NumericDigit *)palloc(result.ndigits * sizeof(NumericDigit));
 	result.digits = result.buf;
 	auto &digits = result.digits;
 
@@ -165,8 +166,6 @@ ConvertNumeric(T value, idx_t scale) {
 	for (idx_t i = fractional_ndigits; i > 0; i--) {
 		digits[digits_idx++] = fractional_digits[i - 1];
 	}
-
-	return result;
 }
 
 static Datum
@@ -175,43 +174,38 @@ ConvertNumericDatum(const duckdb::Value &value) {
 	if (value_type_id == duckdb::LogicalTypeId::DOUBLE) {
 		return ConvertDoubleDatum(value);
 	}
+
 	NumericVar numeric_var;
 	D_ASSERT(value_type_id == duckdb::LogicalTypeId::DECIMAL ||
 	         value_type_id == duckdb::LogicalTypeId::HUGEINT ||
 	         value_type_id == duckdb::LogicalTypeId::UBIGINT);
-	auto physical_type = value.type().InternalType();
+
 	const bool is_decimal = value_type_id == duckdb::LogicalTypeId::DECIMAL;
 	uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
 
-	switch (physical_type) {
-	case duckdb::PhysicalType::INT16: {
-		numeric_var = ConvertNumeric<int16_t>(value.GetValueUnsafe<int16_t>(), scale);
+	switch (value.type().InternalType()) {
+	case duckdb::PhysicalType::INT16:
+		ConvertNumeric<int16_t>(value, scale, numeric_var);
 		break;
-	}
-	case duckdb::PhysicalType::INT32: {
-		numeric_var = ConvertNumeric<int32_t>(value.GetValueUnsafe<int32_t>(), scale);
+	case duckdb::PhysicalType::INT32:
+		ConvertNumeric<int32_t>(value, scale, numeric_var);
 		break;
-	}
-	case duckdb::PhysicalType::INT64: {
-		numeric_var = ConvertNumeric<int64_t>(value.GetValueUnsafe<int64_t>(), scale);
+	case duckdb::PhysicalType::INT64:
+		ConvertNumeric<int64_t>(value, scale, numeric_var);
 		break;
-	}
-	case duckdb::PhysicalType::UINT64: {
-		numeric_var = ConvertNumeric<uint64_t>(value.GetValueUnsafe<uint64_t>(), scale);
+	case duckdb::PhysicalType::UINT64:
+		ConvertNumeric<uint64_t>(value, scale, numeric_var);
 		break;
-	}
-	case duckdb::PhysicalType::INT128: {
-		numeric_var = ConvertNumeric<hugeint_t, DecimalConversionHugeint>(value.GetValueUnsafe<hugeint_t>(), scale);
+	case duckdb::PhysicalType::INT128:
+		ConvertNumeric<hugeint_t, DecimalConversionHugeint>(value, scale, numeric_var);
 		break;
-	}
-	default: {
+	default:
 		throw duckdb::InvalidInputException(
 		    "(PGDuckDB/ConvertDuckToPostgresValue) Unrecognized physical type for DECIMAL value");
 	}
-	}
-	auto numeric = CreateNumeric(numeric_var, NULL);
-	auto datum = NumericGetDatum(numeric);
-	return datum;
+
+	auto numeric = PostgresFunctionGuard(CreateNumeric, numeric_var, (bool*)NULL);
+	return NumericGetDatum(numeric);
 }
 
 static Datum

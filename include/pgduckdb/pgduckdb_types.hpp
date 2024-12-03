@@ -2,6 +2,8 @@
 
 #include "pgduckdb/pg/declarations.hpp"
 
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
+
 namespace pgduckdb {
 
 class PostgresScanGlobalState;

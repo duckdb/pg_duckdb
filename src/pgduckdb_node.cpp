@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -14,9 +15,8 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_node.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;

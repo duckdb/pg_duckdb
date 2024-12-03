@@ -1,7 +1,9 @@
 #include "duckdb/common/exception.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+
 #include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 namespace pgduckdb {
 

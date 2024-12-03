@@ -2,6 +2,7 @@
 #include <regex>
 
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -27,10 +28,10 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
