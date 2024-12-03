@@ -1,3 +1,9 @@
+"""Tests for EXPLAIN
+
+These tests are using Python mainly because the output of EXPLAIN ANALYZE
+contains timings, so the output is not deterministic.
+"""
+
 from .utils import Cursor
 
 import pytest
@@ -10,18 +16,21 @@ def test_explain(cur: Cursor):
     plan = "\n".join(result)
     assert "UNGROUPED_AGGREGATE" in plan
     assert "Total Time:" not in plan
+    assert "Output:" not in plan
 
     result = cur.sql("EXPLAIN ANALYZE SELECT count(*) FROM test_table")
     plan = "\n".join(result)
     assert "Query Profiling Information" in plan
     assert "UNGROUPED_AGGREGATE" in plan
     assert "Total Time:" in plan
+    assert "Output:" not in plan
 
     result = cur.sql("EXPLAIN SELECT count(*) FROM test_table where id = %s", (1,))
     plan = "\n".join(result)
     assert "UNGROUPED_AGGREGATE" in plan
     assert "id=1 AND id IS NOT NULL" in plan
     assert "Total Time:" not in plan
+    assert "Output:" not in plan
 
     result = cur.sql(
         "EXPLAIN ANALYZE SELECT count(*) FROM test_table where id = %s", (1,)
@@ -30,6 +39,20 @@ def test_explain(cur: Cursor):
     assert "UNGROUPED_AGGREGATE" in plan
     assert "id=1 AND id IS NOT NULL" in plan
     assert "Total Time:" in plan
+    assert "Output:" not in plan
+
+    result = cur.sql("EXPLAIN VERBOSE SELECT count(*) FROM test_table")
+    plan = "\n".join(result)
+    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Total Time:" not in plan
+    assert "Output:" in plan
+
+    result = cur.sql("EXPLAIN (VERBOSE, ANALYZE) SELECT count(*) FROM test_table")
+    plan = "\n".join(result)
+    assert "Query Profiling Information" in plan
+    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Total Time:" in plan
+    assert "Output:" in plan
 
 
 def test_explain_ctas(cur: Cursor):
