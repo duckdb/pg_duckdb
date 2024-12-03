@@ -27,6 +27,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
 bool duckdb_explain_analyze = false;
 

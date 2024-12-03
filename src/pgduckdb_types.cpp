@@ -6,9 +6,11 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
-#include "pgduckdb/types/decimal.hpp"
 
 extern "C" {
+
+#include "pgduckdb/vendor/pg_numeric_c.hpp"
+
 #include "postgres.h"
 #include "fmgr.h"
 #include "miscadmin.h"
@@ -26,11 +28,130 @@ extern "C" {
 #include "utils/timestamp.h"
 }
 
-#include "pgduckdb/types/decimal.hpp"
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 
 namespace pgduckdb {
+
+NumericVar FromNumeric(Numeric num);
+
+struct NumericAsDouble : public duckdb::ExtraTypeInfo {
+	// Dummy struct to indicate at conversion that the source is a Numeric
+public:
+	NumericAsDouble() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {
+	}
+};
+
+// FIXME: perhaps we want to just make a generic ExtraTypeInfo that holds the Postgres type OID
+struct IsBpChar : public duckdb::ExtraTypeInfo {
+public:
+	IsBpChar() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {
+	}
+};
+
+using duckdb::hugeint_t;
+
+struct DecimalConversionInteger {
+	static int64_t
+	GetPowerOfTen(idx_t index) {
+		static const int64_t POWERS_OF_TEN[] {1,
+		                                      10,
+		                                      100,
+		                                      1000,
+		                                      10000,
+		                                      100000,
+		                                      1000000,
+		                                      10000000,
+		                                      100000000,
+		                                      1000000000,
+		                                      10000000000,
+		                                      100000000000,
+		                                      1000000000000,
+		                                      10000000000000,
+		                                      100000000000000,
+		                                      1000000000000000,
+		                                      10000000000000000,
+		                                      100000000000000000,
+		                                      1000000000000000000};
+		if (index >= 19) {
+			throw duckdb::InternalException("DecimalConversionInteger::GetPowerOfTen - Out of range");
+		}
+		return POWERS_OF_TEN[index];
+	}
+
+	template <class T>
+	static T
+	Finalize(const NumericVar &, T result) {
+		return result;
+	}
+};
+
+struct DecimalConversionHugeint {
+	static hugeint_t
+	GetPowerOfTen(idx_t index) {
+		static const hugeint_t POWERS_OF_TEN[] {
+		    hugeint_t(1),
+		    hugeint_t(10),
+		    hugeint_t(100),
+		    hugeint_t(1000),
+		    hugeint_t(10000),
+		    hugeint_t(100000),
+		    hugeint_t(1000000),
+		    hugeint_t(10000000),
+		    hugeint_t(100000000),
+		    hugeint_t(1000000000),
+		    hugeint_t(10000000000),
+		    hugeint_t(100000000000),
+		    hugeint_t(1000000000000),
+		    hugeint_t(10000000000000),
+		    hugeint_t(100000000000000),
+		    hugeint_t(1000000000000000),
+		    hugeint_t(10000000000000000),
+		    hugeint_t(100000000000000000),
+		    hugeint_t(1000000000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(10),
+		    hugeint_t(1000000000000000000) * hugeint_t(100),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000),
+		    hugeint_t(1000000000000000000) * hugeint_t(10000),
+		    hugeint_t(1000000000000000000) * hugeint_t(100000),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(10000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(100000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(10000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(100000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(10000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(100000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(10000000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(100000000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(10),
+		    hugeint_t(1000000000000000000) * hugeint_t(1000000000000000000) * hugeint_t(100)};
+		if (index >= 39) {
+			throw duckdb::InternalException("DecimalConversionHugeint::GetPowerOfTen - Out of range");
+		}
+		return POWERS_OF_TEN[index];
+	}
+
+	static hugeint_t
+	Finalize(const NumericVar &, hugeint_t result) {
+		return result;
+	}
+};
+
+struct DecimalConversionDouble {
+	static double
+	GetPowerOfTen(idx_t index) {
+		return pow(10, double(index));
+	}
+
+	static double
+	Finalize(const NumericVar &numeric, double result) {
+		return result / GetPowerOfTen(numeric.dscale);
+	}
+};
 
 static inline Datum
 ConvertBoolDatum(const duckdb::Value &value) {
@@ -199,9 +320,10 @@ ConvertNumericDatum(const duckdb::Value &value) {
 		break;
 	default:
 		throw duckdb::InvalidInputException(
-		    "(PGDuckDB/ConvertDuckToPostgresValue) Unrecognized physical type for DECIMAL value");
+		    "(PGDuckDB/ConvertNumericDatum) Unrecognized physical type for DECIMAL value");
 	}
-	auto numeric = PostgresFunctionGuard(CreateNumeric, numeric_var, (bool*)NULL);
+
+	auto numeric = PostgresFunctionGuard(make_result, &numeric_var);
 	return NumericGetDatum(numeric);
 }
 
@@ -1328,6 +1450,18 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanG
 
 	scan_local_state->m_output_vector_size++;
 	scan_global_state->m_total_row_count++;
+}
+
+NumericVar
+FromNumeric(Numeric num) {
+	NumericVar dest;
+	dest.ndigits = NUMERIC_NDIGITS(num);
+	dest.weight = NUMERIC_WEIGHT(num);
+	dest.sign = NUMERIC_SIGN(num);
+	dest.dscale = NUMERIC_DSCALE(num);
+	dest.digits = NUMERIC_DIGITS(num);
+	dest.buf = NULL; /* digits array is not palloc'd */
+	return dest;
 }
 
 } // namespace pgduckdb
