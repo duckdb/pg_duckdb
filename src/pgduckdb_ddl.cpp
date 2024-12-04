@@ -281,20 +281,21 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		int sec_context;
 		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
 		const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
+		auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
 		GetUserIdAndSecContext(&saved_userid, &sec_context);
 		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
-		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID};
-		Datum values[] = {relid_datum, CStringGetTextDatum(duckdb_db), 0};
-		char nulls[] = {' ', ' ', 'n'};
+		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
+		Datum values[] = {relid_datum, CStringGetTextDatum(duckdb_db), 0, CStringGetTextDatum(default_db.c_str())};
+		char nulls[] = {' ', ' ', 'n', ' '};
 
 		if (pgduckdb::doing_motherduck_sync) {
 			values[2] = CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version);
 			nulls[2] = ' ';
 		}
 		ret = SPI_execute_with_args(R"(
-			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version)
-			VALUES ($1, $2, $3)
+			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version, default_database)
+			VALUES ($1, $2, $3, $4)
 			)",
 		                            lengthof(arg_types), arg_types, values, nulls, false, 0);
 

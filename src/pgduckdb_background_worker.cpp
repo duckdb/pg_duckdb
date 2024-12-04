@@ -682,9 +682,10 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
 			continue;
 		}
 
-		Oid arg_types[] = {TEXTOID, TEXTOID};
+		Oid arg_types[] = {TEXTOID, TEXTOID, TEXTOID};
 		Datum values[] = {CStringGetTextDatum(motherduck_db.c_str()),
-		                  CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version)};
+		                  CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version),
+		                  CStringGetTextDatum(default_db.c_str())};
 
 		/*
 		 * We use a cursor here instead of plain SPI_execute, to put a limit on
@@ -695,7 +696,10 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
 		Portal deleted_tables_portal =
 		    SPI_cursor_open_with_args(nullptr, R"(
 			SELECT relid::text FROM duckdb.tables
-			WHERE duckdb_db = $1 AND motherduck_catalog_version != $2
+			WHERE duckdb_db = $1 AND (
+				motherduck_catalog_version != $2 OR
+				default_database != $3
+			)
 			)",
 		                              lengthof(arg_types), arg_types, values, NULL, false, 0);
 
