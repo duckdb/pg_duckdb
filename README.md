@@ -177,6 +177,12 @@ If you installed `pg_duckdb` in a different Postgres database than the default o
 duckdb.motherduck_postgres_database = 'your_database_name'
 ```
 
+The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`. If you want to specify which MotherDuck database is your default database, then you can also add the following line to your `postgresql.conf` file:
+
+```ini
+duckdb.motherduck_default_database = 'your_motherduck_database_name'
+```
+
 After doing this (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
 ```sql
 CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
@@ -189,7 +195,7 @@ CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
 Any tables that you already had in MotherDuck are automatically available in Postgres. Since DuckDB and MotherDuck allow accessing multiple databases from a single connection and Postgres does not, we map database+schema in DuckDB to a schema name in Postgres.
 
 This is done in the following way:
-1. Each schema in your default MotherDuck database are simply merged with the Postgres schemas with the same name.
+1. Each schema in your default MotherDuck database (see above on how to specify which database is the default) are simply merged with the Postgres schemas with the same name.
 2. Except for the `main` DuckDB schema in your default database, which is merged with the Postgres `public` schema.
 3. Tables in other databases are put into dedicated DuckDB-only schemas. These schemas are of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
 4. Except for the `main` schema in those other databases. That schema should be accessed using the shorter name `ddb$<db_name>` instead.

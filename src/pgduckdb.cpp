@@ -18,6 +18,7 @@ int duckdb_max_threads_per_postgres_scan = 1;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
+char *duckdb_motherduck_default_database = strdup("");
 char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
@@ -164,4 +165,8 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.motherduck_postgres_database", "Which database to enable MotherDuck support in",
 	                     &duckdb_motherduck_postgres_database);
+
+	DefineCustomVariable("duckdb.motherduck_default_database",
+	                     "Which database in MotherDuck to designate as default (in place of my_db)",
+	                     &duckdb_motherduck_default_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 }

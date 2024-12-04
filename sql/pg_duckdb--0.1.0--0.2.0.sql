@@ -74,3 +74,6 @@ CREATE PROCEDURE duckdb.recycle_ddb()
 REVOKE ALL ON PROCEDURE duckdb.recycle_ddb() FROM PUBLIC;
 
 ALTER TABLE duckdb.secrets ADD COLUMN scope TEXT;
+
+ALTER TABLE duckdb.tables ADD COLUMN default_database TEXT NOT NULL DEFAULT 'my_db';
+ALTER TABLE duckdb.tables ALTER COLUMN default_database DROP DEFAULT;

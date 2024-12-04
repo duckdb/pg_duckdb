@@ -38,6 +38,17 @@ Default: `"postgres"`
 
 Access: General
 
+### `duckdb.motherduck_default_database`
+
+Which MotherDuck database to use as the default database, i.e. the one that
+gets merged with Postgres schemas instead of getting dedicated `ddb$` prefixed
+schemas. The empty string means that pg_duckdb should use the default database
+set by MotherDuck, which is currently always `my_db`.
+
+Default: `""`
+
+Access: Needs to be in the `postgresql.conf` file and requires a restart
+
 ## Security
 
 ### `duckdb.postgres_role`
