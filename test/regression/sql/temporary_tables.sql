@@ -164,4 +164,71 @@ SELECT * FROM t_heap2;
 
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
-DROP TABLE webpages, t, t_heap, t_heap2;
+-- multi-VALUES
+CREATE TEMP TABLE ta (a int DEFAULT 3, b int) USING duckdb;
+INSERT INTO ta (b) VALUES (123), (456);
+INSERT INTO ta (a, b) VALUES (123, 456), (456, 123);
+SELECT * FROM ta;
+
+CREATE TEMP TABLE tb (a int DEFAULT 3, b int, c varchar DEFAULT 'pg_duckdb') USING duckdb;
+INSERT INTO tb (a) VALUES (123), (456);
+INSERT INTO tb (b) VALUES (123), (456);
+INSERT INTO tb (c) VALUES ('ta'), ('tb');
+SELECT * FROM tb;
+
+-- INSERT ... SELECT
+TRUNCATE TABLE ta;
+INSERT INTO ta (a) SELECT 789;
+INSERT INTO ta (b) SELECT 789;
+INSERT INTO ta (a) SELECT * FROM t_heap;
+INSERT INTO ta (b) SELECT * FROM t_heap;
+SELECT * FROM ta;
+INSERT INTO ta (a) SELECT generate_series(1, 3); -- no support
+
+TRUNCATE TABLE tb;
+INSERT INTO tb (a) SELECT 789;
+INSERT INTO tb (b) SELECT 789;
+INSERT INTO tb (a) SELECT * FROM t_heap;
+INSERT INTO tb (b) SELECT * FROM t_heap;
+SELECT * FROM tb;
+
+TRUNCATE TABLE tb;
+INSERT INTO tb (c) SELECT 'ta';
+INSERT INTO tb (c) SELECT 'ta' || 'tb';
+INSERT INTO tb (a) SELECT (2)::numeric;
+INSERT INTO tb (b) SELECT (3)::numeric;
+INSERT INTO tb (c) SELECT t.a FROM (SELECT 'ta' || 'tb' AS a) t;
+INSERT INTO tb (b, c) SELECT t.b, t.c FROM (SELECT (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+INSERT INTO tb (a, b, c) SELECT 1, 2, 'tb';
+INSERT INTO tb  SELECT * FROM (SELECT (3)::numeric AS a, (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+SELECT * FROM tb;
+
+CREATE TEMP TABLE tc (a int DEFAULT 3, b int, c varchar DEFAULT 'pg_duckdb', d varchar DEFAULT 'a' || 'b', e int DEFAULT 1 + 2) USING duckdb;
+INSERT INTO tc (a) VALUES (123), (456);
+INSERT INTO tc (b) VALUES (123), (456);
+INSERT INTO tc (c) VALUES ('ta'), ('tb');
+SELECT * FROM tc;
+
+TRUNCATE TABLE tc;
+INSERT INTO tc (a) SELECT 789;
+INSERT INTO tc (b) SELECT 789;
+INSERT INTO tc (a) SELECT * FROM t_heap;
+INSERT INTO tc (b) SELECT * FROM t_heap;
+SELECT * FROM tc;
+
+TRUNCATE TABLE tc;
+INSERT INTO tc (c) SELECT 'ta';
+INSERT INTO tc (c) SELECT 'ta' || 'tb';
+INSERT INTO tc (a) SELECT (2)::numeric;
+INSERT INTO tc (b) SELECT (3)::numeric;
+INSERT INTO tc (c) SELECT t.a FROM (SELECT 'ta' || 'tb' AS a) t;
+INSERT INTO tc (b, c) SELECT t.b, t.c FROM (SELECT (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+INSERT INTO tc (a, b, c) SELECT 1, 2, 'tb';
+INSERT INTO tc  SELECT * FROM (SELECT (3)::numeric AS a, (3)::numeric AS b, 'ta' || 'tb' AS c) t;
+SELECT * FROM tc;
+
+CREATE TEMP TABLE td (a int, ts timestamp default now()) USING duckdb;
+INSERT INTO td (a) SELECT 1;
+SELECT a FROM td;
+
+DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;

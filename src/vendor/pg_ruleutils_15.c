@@ -6718,6 +6718,16 @@ get_insert_query_def(Query *query, deparse_context *context,
 		if (tle->resjunk)
 			continue;			/* ignore junk entries */
 
+		/*
+		 * If it's an INSERT ... SELECT or multi-row VALUES, the entry
+		 * with the default value is ignored unless it is specified
+		 */
+		if (values_rte || select_rte)
+		{
+			if (!pgduckdb_is_not_default_expr((Node *) tle, NULL))
+				continue;
+		}
+
 		appendStringInfoString(buf, sep);
 		sep = ", ";
 

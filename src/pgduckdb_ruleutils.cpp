@@ -8,6 +8,7 @@ extern "C" {
 #include "catalog/pg_class.h"
 #include "catalog/pg_collation.h"
 #include "commands/dbcommands.h"
+#include "nodes/nodeFuncs.h"
 #include "lib/stringinfo.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
@@ -365,5 +366,31 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	relation_close(relation, AccessShareLock);
 
 	return (buffer.data);
+}
+
+/*
+ * Recursively check Const nodes and Var nodes for handling more complex DEFAULT clauses
+ */
+bool
+pgduckdb_is_not_default_expr(Node *node, void *context) {
+	if (node == NULL) {
+		return false;
+	}
+
+	if (IsA(node, Var)) {
+		return true;
+	} else if (IsA(node, Const)) {
+		/* If location is -1, it comes from the DEFAULT clause */
+		Const *con = (Const *) node;
+		if (con->location != -1) {
+			return true;
+		}
+	}
+
+#if PG_VERSION_NUM >= 160000
+	return expression_tree_walker(node, pgduckdb_is_not_default_expr, context);
+#else
+	return expression_tree_walker(node, (bool (*)())((void *)pgduckdb_is_not_default_expr), context);
+#endif
 }
 }
