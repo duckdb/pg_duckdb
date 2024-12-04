@@ -258,12 +258,10 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		query << "CREATE SECRET pgduckb_secret_" << secret_id << " ";
 		query << "(TYPE " << SecretTypeToString(secret.type) << ", ";
 
-		if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
-			WriteSecretQueryForS3R2OrGCP(secret, query);
-		} else if (secret.type == SecretType::AZURE) {
+		if (secret.type == SecretType::AZURE) {
 			query << "CONNECTION_STRING '" << secret.connection_string << "'";
 		} else {
-			throw std::runtime_error("Invalid secret type: '" + std::to_string(secret.type) + "'");
+			WriteSecretQueryForS3R2OrGCP(secret, query);
 		}
 
 		query << ");";

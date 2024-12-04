@@ -35,8 +35,6 @@ typedef struct DuckdbSecret {
 	std::string connection_string; // Used for Azure
 } DuckdbSecret;
 
-bool DoesSecretRequiresKeyIdOrSecret(const SecretType type);
-
 std::string SecretTypeToString(SecretType type);
 
 extern std::vector<DuckdbSecret> ReadDuckdbSecrets();

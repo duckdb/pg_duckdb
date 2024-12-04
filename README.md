@@ -169,6 +169,8 @@ INSERT INTO duckdb.secrets
 VALUES ('Azure', '<your connection string>');
 ```
 
+Note: writes to Azure are not yet supported, [here][duckdb/duckdb_azure#44] is the current discussion for more information.
+
 ### Connect with MotherDuck
 
 pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token] and then add the following line to your `postgresql.conf` file:

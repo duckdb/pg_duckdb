@@ -84,7 +84,7 @@ ALTER TABLE duckdb.secrets ALTER COLUMN secret DROP NOT NULL;
 
 -- Update "type_constraint" CHECK on "type" to allow "Azure"
 ALTER TABLE duckdb.secrets DROP CONSTRAINT type_constraint;
-ALTER TABLE duckdb.secrets ADD CONSTRAINT type_constraint CHECK (type IN ('S3', 'GCS', 'R2', 'Azure'));
+ALTER TABLE duckdb.secrets ADD CONSTRAINT type_constraint CHECK (upper(type) IN ('S3', 'GCS', 'R2', 'AZURE'));
 
 -- Add "azure_connection_string" column
 ALTER TABLE duckdb.secrets ADD COLUMN connection_string TEXT;
