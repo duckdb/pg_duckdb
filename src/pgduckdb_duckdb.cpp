@@ -298,17 +298,17 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 
 void
 DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
+	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");
+	if (IsExtensionsSeqLessThan(extensions_table_last_seq)) {
+		LoadExtensions(context);
+		UpdateExtensionsSeq(extensions_table_last_seq);
+	}
+
 	const auto secret_table_last_seq = GetSeqLastValue("secrets_table_seq");
 	if (IsSecretSeqLessThan(secret_table_last_seq)) {
 		DropSecrets(context);
 		LoadSecrets(context);
 		UpdateSecretSeq(secret_table_last_seq);
-	}
-
-	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");
-	if (IsExtensionsSeqLessThan(extensions_table_last_seq)) {
-		LoadExtensions(context);
-		UpdateExtensionsSeq(extensions_table_last_seq);
 	}
 
 	auto http_file_cache_set_dir_query =
