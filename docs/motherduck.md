@@ -55,7 +55,13 @@ CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
 
 Any tables that you already had in MotherDuck are automatically available in Postgres. Since DuckDB and MotherDuck allow accessing multiple databases from a single connection and Postgres does not, we map database+schema in DuckDB to a schema name in Postgres.
 
-This is done in the following way:
+The default MotherDuck database will be easiest to use (see below for details). If you want to specify which MotherDuck database is used as your default database, then you can also add the following line to your `postgresql.conf` file:
+
+```ini
+duckdb.motherduck_default_database = 'your_motherduck_database_name'
+```
+
+The mapping of database+schema to schema name is then done in the following way:
 
 1. Each schema in your default MotherDuck database are simply merged with the Postgres schemas with the same name.
 2. Except for the `main` DuckDB schema in your default database, which is merged with the Postgres `public` schema.
