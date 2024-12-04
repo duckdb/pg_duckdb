@@ -181,10 +181,10 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	/*
 	 * When accessing the partitioned table, we temporarily let PG handle it instead of DuckDB.
 	 */
-	// if (ContainsPartitionedTable(query->rtable)) {
-	// 	elog(elevel, "DuckDB does not support querying PG partitioned table");
-	// 	return false;
-	// }
+	if (ContainsPartitionedTable(query->rtable)) {
+		elog(elevel, "DuckDB does not support querying PG partitioned table");
+		return false;
+	}
 
 	/* Anything else is hopefully fine... */
 	return true;
