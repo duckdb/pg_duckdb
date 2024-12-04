@@ -166,6 +166,7 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.motherduck_postgres_database", "Which database to enable MotherDuck support in",
 	                     &duckdb_motherduck_postgres_database);
 
-	DefineCustomVariable("duckdb.motherduck_default_database", "Which database in MotherDuck to designate as default (in place of my_db)",
-						 &duckdb_motherduck_default_database);
+	DefineCustomVariable("duckdb.motherduck_default_database",
+	                     "Which database in MotherDuck to designate as default (in place of my_db)",
+	                     &duckdb_motherduck_default_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 }
