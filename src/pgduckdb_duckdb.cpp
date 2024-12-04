@@ -78,26 +78,22 @@ CreateOrGetDirectoryPath(const char *directory_name) {
 	return duckdb_data_directory;
 }
 
-char *
-uri_escape(const char *str)
-{
-    StringInfoData buf;
-    initStringInfo(&buf);
+static char *
+uri_escape(const char *str) {
+	StringInfoData buf;
+	initStringInfo(&buf);
 
-    while (*str)
-    {
-        char c = *str++;
-        if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' || c == '.' || c == '~')
-        {
-            appendStringInfoChar(&buf, c);
-        }
-        else
-        {
-            appendStringInfo(&buf, "%%%02X", (unsigned char)c);
-        }
-    }
+	while (*str) {
+		char c = *str++;
+		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+		    c == '.' || c == '~') {
+			appendStringInfoChar(&buf, c);
+		} else {
+			appendStringInfo(&buf, "%%%02X", (unsigned char)c);
+		}
+	}
 
-    return buf.data;
+	return buf.data;
 }
 
 namespace ddb {
@@ -172,7 +168,8 @@ DuckDBManager::Initialize() {
 		if (duckdb_motherduck_token[0] == '\0') {
 			connection_string = psprintf("md:%s", duckdb_motherduck_default_database);
 		} else {
-			connection_string = psprintf("md:%s?motherduck_token=%s", duckdb_motherduck_default_database, duckdb_motherduck_token);
+			connection_string =
+			    psprintf("md:%s?motherduck_token=%s", duckdb_motherduck_default_database, duckdb_motherduck_token);
 		}
 	}
 
