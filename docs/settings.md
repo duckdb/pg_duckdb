@@ -36,7 +36,7 @@ Which database to enable MotherDuck support in
 
 Default: `"postgres"`
 
-Access: General
+Access: Needs to be in the `postgresql.conf` file and requires a restart
 
 ### `duckdb.motherduck_default_database`
 
