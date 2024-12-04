@@ -97,6 +97,10 @@ PostgresTableReader::~PostgresTableReader() {
 	FreeQueryDesc(table_scan_query_desc);
 }
 
+/*
+ * This is simple calculation how much postgresql workers we will wanted to spawn for this
+ * postgres table scan.
+ */
 int
 PostgresTableReader::ParalleWorkerNumber(Cardinality cardinality) {
 	static const int base_log = 8;
