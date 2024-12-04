@@ -177,7 +177,7 @@ If you installed `pg_duckdb` in a different Postgres database than the default o
 duckdb.motherduck_postgres_database = 'your_database_name'
 ```
 
-If you want to specify MotherDuck database as the default database (the default database is the easiest to use, see below for details), then you can also add the following line to your `postgresql.conf` file:
+The default MotherDuck database will be easiest to use (see below for details). If you want to specify which MotherDuck database is your default database, then you can also add the following line to your `postgresql.conf` file:
 
 ```ini
 duckdb.motherduck_default_database = 'your_motherduck_database_name'
