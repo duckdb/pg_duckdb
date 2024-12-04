@@ -6643,7 +6643,7 @@ get_insert_query_def(Query *query, deparse_context *context,
 		 */
 		if (values_rte || select_rte)
 		{
-			if (pgduckdb_contains_insert_target_entry((Node *) tle, NULL))
+			if (!pgduckdb_is_not_default_expr((Node *) tle, NULL))
 				continue;
 		}
 

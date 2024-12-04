@@ -227,4 +227,8 @@ INSERT INTO tc (a, b, c) SELECT 1, 2, 'tb';
 INSERT INTO tc  SELECT * FROM (SELECT (3)::numeric AS a, (3)::numeric AS b, 'ta' || 'tb' AS c) t;
 SELECT * FROM tc;
 
-DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc;
+CREATE TEMP TABLE td (a int, ts timestamp default now()) USING duckdb;
+INSERT INTO td (a) SELECT 1;
+SELECT a FROM td;
+
+DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;

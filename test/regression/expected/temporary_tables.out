@@ -380,4 +380,12 @@ SELECT * FROM tc;
  3 | 3 | tatb      | ab | 3
 (8 rows)
 
-DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc;
+CREATE TEMP TABLE td (a int, ts timestamp default now()) USING duckdb;
+INSERT INTO td (a) SELECT 1;
+SELECT a FROM td;
+ a 
+---
+ 1
+(1 row)
+
+DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;

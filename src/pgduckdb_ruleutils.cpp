@@ -372,25 +372,25 @@ pgduckdb_get_tabledef(Oid relation_oid) {
  * Recursively check Const nodes and Var nodes for handling more complex DEFAULT clauses
  */
 bool
-pgduckdb_contains_insert_target_entry(Node *node, void *context) {
+pgduckdb_is_not_default_expr(Node *node, void *context) {
 	if (node == NULL) {
 		return false;
 	}
 
 	if (IsA(node, Var)) {
-		return false;
+		return true;
 	} else if (IsA(node, Const)) {
 		/* If location is -1, it comes from the DEFAULT clause */
 		Const *con = (Const *) node;
-		if (con->location == -1) {
+		if (con->location != -1) {
 			return true;
 		}
 	}
 
 #if PG_VERSION_NUM >= 160000
-	return expression_tree_walker(node, pgduckdb_contains_insert_target_entry, context);
+	return expression_tree_walker(node, pgduckdb_is_not_default_expr, context);
 #else
-	return expression_tree_walker(node, (bool (*)())((void *)pgduckdb_contains_insert_target_entry), context);
+	return expression_tree_walker(node, (bool (*)())((void *)pgduckdb_is_not_default_expr), context);
 #endif
 }
 }
