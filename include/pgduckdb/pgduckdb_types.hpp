@@ -15,8 +15,8 @@ constexpr int64_t PGDUCKDB_DUCK_TIMESTAMP_OFFSET =
     static_cast<int64_t>(PGDUCKDB_DUCK_DATE_OFFSET) * static_cast<int64_t>(86400000000) /* USECS_PER_DAY */;
 
 duckdb::LogicalType ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute);
-Oid GetPostgresDuckDBType(duckdb::LogicalType type);
-int32_t GetPostgresDuckDBTypemod(duckdb::LogicalType type);
+Oid GetPostgresDuckDBType(const duckdb::LogicalType &type);
+int32_t GetPostgresDuckDBTypemod(const duckdb::LogicalType &type);
 duckdb::Value ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type);
 void ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, uint64_t offset);
 bool ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, uint64_t col);
