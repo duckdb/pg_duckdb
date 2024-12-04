@@ -55,6 +55,43 @@ DatumToString(Datum datum) {
 	return column_value;
 }
 
+bool
+DoesSecretRequiresKeyIdOrSecret(const SecretType type) {
+	return type == SecretType::S3 || type == SecretType::GCS || type == SecretType::R2;
+}
+
+SecretType
+StringToSecretType(const std::string &type) {
+	auto uc_type = duckdb::StringUtil::Upper(type);
+	if (uc_type == "S3") {
+		return SecretType::S3;
+	} else if (uc_type == "R2") {
+		return SecretType::R2;
+	} else if (uc_type == "GCS") {
+		return SecretType::GCS;
+	} else if (uc_type == "AZURE") {
+		return SecretType::AZURE;
+	} else {
+		throw std::runtime_error("Invalid secret type: '" + type + "'");
+	}
+}
+
+std::string
+SecretTypeToString(SecretType type) {
+	switch (type) {
+	case SecretType::S3:
+		return "S3";
+	case SecretType::R2:
+		return "R2";
+	case SecretType::GCS:
+		return "GCS";
+	case SecretType::AZURE:
+		return "AZURE";
+	default:
+		throw std::runtime_error("Invalid secret type: '" + std::to_string(type) + "'");
+	}
+}
+
 std::vector<DuckdbSecret>
 ReadDuckdbSecrets() {
 	HeapTuple tuple = NULL;
@@ -70,9 +107,21 @@ ReadDuckdbSecrets() {
 		heap_deform_tuple(tuple, RelationGetDescr(duckdb_secret_relation), datum_array, is_null_array);
 		DuckdbSecret secret;
 
-		secret.type = DatumToString(datum_array[Anum_duckdb_secret_type - 1]);
-		secret.key_id = DatumToString(datum_array[Anum_duckdb_secret_key_id - 1]);
-		secret.secret = DatumToString(datum_array[Anum_duckdb_secret_secret - 1]);
+		auto type_str = DatumToString(datum_array[Anum_duckdb_secret_type - 1]);
+		secret.type = StringToSecretType(type_str);
+		if (!is_null_array[Anum_duckdb_secret_key_id - 1])
+			secret.key_id = DatumToString(datum_array[Anum_duckdb_secret_key_id - 1]);
+		else if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
+			elog(WARNING, "Invalid '%s' secret: key id is required.", type_str.c_str());
+			continue;
+		}
+
+		if (!is_null_array[Anum_duckdb_secret_secret - 1])
+			secret.secret = DatumToString(datum_array[Anum_duckdb_secret_secret - 1]);
+		else if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
+			elog(WARNING, "Invalid '%s' secret: secret is required.", type_str.c_str());
+			continue;
+		}
 
 		if (!is_null_array[Anum_duckdb_secret_region - 1])
 			secret.region = DatumToString(datum_array[Anum_duckdb_secret_region - 1]);
@@ -93,6 +142,9 @@ ReadDuckdbSecrets() {
 
 		if (!is_null_array[Anum_duckdb_secret_scope - 1])
 			secret.scope = DatumToString(datum_array[Anum_duckdb_secret_scope - 1]);
+
+		if (!is_null_array[Anum_duckdb_secret_connection_string - 1])
+			secret.connection_string = DatumToString(datum_array[Anum_duckdb_secret_connection_string - 1]);
 
 		duckdb_secrets.push_back(secret);
 	}

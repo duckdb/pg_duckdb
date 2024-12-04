@@ -77,3 +77,14 @@ ALTER TABLE duckdb.secrets ADD COLUMN scope TEXT;
 
 ALTER TABLE duckdb.tables ADD COLUMN default_database TEXT NOT NULL DEFAULT 'my_db';
 ALTER TABLE duckdb.tables ALTER COLUMN default_database DROP DEFAULT;
+
+-- Alter duckdb.secrets to allow column "key_id" & "secret" to be NULL
+ALTER TABLE duckdb.secrets ALTER COLUMN key_id DROP NOT NULL;
+ALTER TABLE duckdb.secrets ALTER COLUMN secret DROP NOT NULL;
+
+-- Update "type_constraint" CHECK on "type" to allow "Azure"
+ALTER TABLE duckdb.secrets DROP CONSTRAINT type_constraint;
+ALTER TABLE duckdb.secrets ADD CONSTRAINT type_constraint CHECK (type IN ('S3', 'GCS', 'R2', 'Azure'));
+
+-- Add "azure_connection_string" column
+ALTER TABLE duckdb.secrets ADD COLUMN connection_string TEXT;

@@ -225,33 +225,47 @@ GetSeqLastValue(const char *seq_name) {
 }
 
 void
+WriteSecretQueryForS3R2OrGCP(const DuckdbSecret &secret, std::ostringstream &query) {
+	bool is_r2_cloud_secret = secret.type == SecretType::R2;
+	query << "KEY_ID '" << secret.key_id << "', SECRET '" << secret.secret << "'";
+	if (secret.region.length() && !is_r2_cloud_secret) {
+		query << ", REGION '" << secret.region << "'";
+	}
+	if (secret.session_token.length() && !is_r2_cloud_secret) {
+		query << ", SESSION_TOKEN '" << secret.session_token << "'";
+	}
+	if (secret.endpoint.length() && !is_r2_cloud_secret) {
+		query << ", ENDPOINT '" << secret.endpoint << "'";
+	}
+	if (is_r2_cloud_secret) {
+		query << ", ACCOUNT_ID '" << secret.endpoint << "'";
+	}
+	if (!secret.use_ssl) {
+		query << ", USE_SSL 'FALSE'";
+	}
+	if (secret.scope.length()) {
+		query << ", SCOPE '" << secret.scope << "'";
+	}
+}
+
+void
 DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	auto duckdb_secrets = ReadDuckdbSecrets();
 
 	int secret_id = 0;
 	for (auto &secret : duckdb_secrets) {
 		std::ostringstream query;
-		bool is_r2_cloud_secret = (secret.type.rfind("R2", 0) == 0);
 		query << "CREATE SECRET pgduckb_secret_" << secret_id << " ";
-		query << "(TYPE " << secret.type << ", KEY_ID '" << secret.key_id << "', SECRET '" << secret.secret << "'";
-		if (secret.region.length() && !is_r2_cloud_secret) {
-			query << ", REGION '" << secret.region << "'";
+		query << "(TYPE " << SecretTypeToString(secret.type) << ", ";
+
+		if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
+			WriteSecretQueryForS3R2OrGCP(secret, query);
+		} else if (secret.type == SecretType::AZURE) {
+			query << "CONNECTION_STRING '" << secret.connection_string << "'";
+		} else {
+			throw std::runtime_error("Invalid secret type: '" + std::to_string(secret.type) + "'");
 		}
-		if (secret.session_token.length() && !is_r2_cloud_secret) {
-			query << ", SESSION_TOKEN '" << secret.session_token << "'";
-		}
-		if (secret.endpoint.length() && !is_r2_cloud_secret) {
-			query << ", ENDPOINT '" << secret.endpoint << "'";
-		}
-		if (is_r2_cloud_secret) {
-			query << ", ACCOUNT_ID '" << secret.endpoint << "'";
-		}
-		if (!secret.use_ssl) {
-			query << ", USE_SSL 'FALSE'";
-		}
-		if (secret.scope.length()) {
-			query << ", SCOPE '" << secret.scope << "'";
-		}
+
 		query << ");";
 
 		DuckDBQueryOrThrow(context, query.str());
