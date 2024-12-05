@@ -24,6 +24,7 @@
 - Fix queries inserting into DuckDB tables with `DEFAULT` values. [#448]
 - Fixed assertion failure involving recursive CTEs. [#436]
 - Only allow setting `duckdb.motherduck_postgres_database` in `postgresql.conf`. [#476]
+- Much better separation between C and C++ code, to avoid memory leaks and crashes (many PRs).
 
 [#403]: https://github.com/duckdb/pg_duckdb/pull/403
 [#405]: https://github.com/duckdb/pg_duckdb/pull/405
