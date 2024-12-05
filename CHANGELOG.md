@@ -2,28 +2,28 @@
 
 ## Added
 
-- Support for reading Delta Lake storage using the `duckdb.delta_scan(...)` function. [#403]
-- Support for reading JSON using the `duckdb.read_json(...)` function. [#405]
-- Support for multi-statement transactions. [#433]
-- Support reading from Azure Blob storage. [#478]
-- Support many more array types, such as `float` , `numeric` and `uuid` arrays. [#282]
-- Support for PostgreSQL 14. [#397]
-- Manage cached files using the `duckdb.cache_info()` and `duckdb.cache_delete()` functions. [#434]
-- Add `scope` column to `duckdb.secrets` table. [#461]
-- Allow configuring the default MotherDuck database. [#470]
+- Support for reading Delta Lake storage using the `duckdb.delta_scan(...)` function. ([#403])
+- Support for reading JSON using the `duckdb.read_json(...)` function. ([#405])
+- Support for multi-statement transactions. ([#433])
+- Support reading from Azure Blob storage. ([#478])
+- Support many more array types, such as `float` , `numeric` and `uuid` arrays. ([#282])
+- Support for PostgreSQL 14. ([#397])
+- Manage cached files using the `duckdb.cache_info()` and `duckdb.cache_delete()` functions. ([#434])
+- Add `scope` column to `duckdb.secrets` table. ([#461])
+- Allow configuring the default MotherDuck database. ([#470])
 
 ## Changed
 
-- Improve performance of heap reading. [#366]
-- Bump DuckDB version to 1.1.3. [#400]
+- Improve performance of heap reading. ([#366])
+- Bump DuckDB version to 1.1.3. ([#400])
 
 ## Fixed
 
-- Throw a clear error when reading partitioned tables (reading from partitioned tables is not supported yet). [#412]
-- Fixed crash when using `CREATE SCHEMA AUTHORIZATION`. [#423]
-- Fix queries inserting into DuckDB tables with `DEFAULT` values. [#448]
-- Fixed assertion failure involving recursive CTEs. [#436]
-- Only allow setting `duckdb.motherduck_postgres_database` in `postgresql.conf`. [#476]
+- Throw a clear error when reading partitioned tables (reading from partitioned tables is not supported yet). ([#412])
+- Fixed crash when using `CREATE SCHEMA AUTHORIZATION`. ([#423])
+- Fix queries inserting into DuckDB tables with `DEFAULT` values. ([#448])
+- Fixed assertion failure involving recursive CTEs. ([#436])
+- Only allow setting `duckdb.motherduck_postgres_database` in `postgresql.conf`. ([#476])
 - Much better separation between C and C++ code, to avoid memory leaks and crashes (many PRs).
 
 [#403]: https://github.com/duckdb/pg_duckdb/pull/403
