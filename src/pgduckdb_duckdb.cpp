@@ -253,7 +253,6 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	auto duckdb_secrets = ReadDuckdbSecrets();
 
 	int secret_id = 0;
-	bool azure_loaded = false;
 	for (auto &secret : duckdb_secrets) {
 		std::ostringstream query;
 		query << "CREATE SECRET pgduckb_secret_" << secret_id << " ";
@@ -266,11 +265,6 @@ DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 		}
 
 		query << ");";
-
-		if (secret.type == SecretType::AZURE && !azure_loaded) {
-			DuckDBQueryOrThrow(context, "INSTALL azure; LOAD azure;");
-			azure_loaded = true;
-		}
 
 		DuckDBQueryOrThrow(context, query.str());
 		secret_id++;
