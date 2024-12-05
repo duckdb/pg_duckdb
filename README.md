@@ -17,7 +17,7 @@ See our [official documentation][docs] for further details.
 - `SELECT` queries executed by the DuckDB engine can directly read Postgres tables. (If you only query Postgres tables you need to run `SET duckdb.force_execution TO true`, see the **IMPORTANT** section above for details)
 	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, and arrays.
 	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
-- Read and Write support for object storage (AWS S3, Cloudflare R2, or Google GCS):
+- Read and Write support for object storage (AWS S3, Azure, Cloudflare R2, or Google GCS):
 	- Read parquet, CSV and JSON files:
 		- `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
 		- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
@@ -124,9 +124,9 @@ CREATE EXTENSION pg_duckdb;
 
 See our [official documentation][docs] for more usage information.
 
-pg_duckdb relies on DuckDB's vectorized execution engine to read and write data to object storage bucket (AWS S3, Cloudflare R2, or Google GCS) and/or MotherDuck. The follow two sections describe how to get started with these destinations.
+pg_duckdb relies on DuckDB's vectorized execution engine to read and write data to object storage bucket (AWS S3, Azure, Cloudflare R2, or Google GCS) and/or MotherDuck. The follow two sections describe how to get started with these destinations.
 
-### Object storage bucket (AWS S3, Cloudflare R2, or Google GCS)
+### Object storage bucket (AWS S3, Azure, Cloudflare R2, or Google GCS)
 
 Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done with `read_parquet`, `read_csv`, `read_json`, `iceberg_scan` and `delta_scan` respectively.
 
@@ -156,6 +156,20 @@ Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done
 	ORDER BY total DESC
 	LIMIT 100;
 	```
+
+Note, for Azure, you will need to first install the Azure extension:
+```sql
+SELECT duckdb.install_extension('azure');
+```
+
+You may then store a secret using the `connection_string` parameter as such:
+```sql
+INSERT INTO duckdb.secrets
+(type, connection_string)
+VALUES ('Azure', '<your connection string>');
+```
+
+Note: writes to Azure are not yet supported, [here][duckdb/duckdb_azure#44] is the current discussion for more information.
 
 ### Connect with MotherDuck
 
