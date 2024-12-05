@@ -125,7 +125,7 @@ INSERT INTO float8_array_1d SELECT CAST(a as FLOAT8[]) FROM (VALUES
 SELECT * FROM float8_array_1d;
 
 -- NUMERIC (single dimension)
-CREATE TABLE numeric_array_1d(a NUMERIC[]);
+CREATE TABLE numeric_array_1d(a NUMERIC(2, 1)[]);
 INSERT INTO numeric_array_1d SELECT CAST(a as NUMERIC[]) FROM (VALUES
     ('{1.1, 2.2, 3.3}'),
     (NULL),
@@ -226,7 +226,7 @@ INSERT INTO float8_array_2d VALUES
 SELECT * FROM float8_array_2d;
 
 -- NUMERIC (two dimensions)
-CREATE TABLE numeric_array_2d(a NUMERIC[][]);
+CREATE TABLE numeric_array_2d(a NUMERIC(3, 1)[][]);
 INSERT INTO numeric_array_2d VALUES
     ('{{1.1,2.2},{3.3,4.4}}'),
     ('{{5.5,6.6,7.7},{8.8,9.9,10.1}}'),
