@@ -118,10 +118,10 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 	for (auto const &[attr_num, duckdb_scanned_index] : columns_to_scan) {
 		auto filter = column_filters[duckdb_scanned_index];
 		if (filter) {
-			if (!first) {
-				scan_query << " AND ";
-			} else {
+			if (first) {
 				scan_query << " WHERE ";
+			} else {
+				scan_query << " AND ";
 			}
 			first = false;
 			scan_query << " (";
@@ -140,11 +140,11 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 // PostgresScanGlobalState
 //
 
-PostgresScanGlobalState::PostgresScanGlobalState(Snapshot snapshot, Relation rel, Cardinality cardinality, duckdb::TableFunctionInitInput &input)
+PostgresScanGlobalState::PostgresScanGlobalState(Snapshot snapshot, Relation rel, duckdb::TableFunctionInitInput &input)
     : snapshot(snapshot), rel(rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       total_row_count(0) {
 	ConstructTableScanQuery(input);
-	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>(cardinality, scan_query.str().c_str());
+	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str());
 	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 
@@ -192,7 +192,7 @@ duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresScanTableFunction::PostgresScanInitGlobal(duckdb::ClientContext &context,
                                                   duckdb::TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresScanFunctionData>();
-	auto global_state = duckdb::make_uniq<PostgresScanGlobalState>(bind_data.snapshot, bind_data.rel, bind_data.cardinality, input);
+	auto global_state = duckdb::make_uniq<PostgresScanGlobalState>(bind_data.snapshot, bind_data.rel, input);
 	return std::move(global_state);
 }
 
