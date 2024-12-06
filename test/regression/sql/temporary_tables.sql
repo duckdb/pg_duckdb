@@ -183,7 +183,6 @@ INSERT INTO ta (b) SELECT 789;
 INSERT INTO ta (a) SELECT * FROM t_heap;
 INSERT INTO ta (b) SELECT * FROM t_heap;
 SELECT * FROM ta;
-INSERT INTO ta (a) SELECT generate_series(1, 3); -- no support
 
 TRUNCATE TABLE tb;
 INSERT INTO tb (a) SELECT 789;
@@ -230,5 +229,25 @@ SELECT * FROM tc;
 CREATE TEMP TABLE td (a int, ts timestamp default now()) USING duckdb;
 INSERT INTO td (a) SELECT 1;
 SELECT a FROM td;
+
+-- Single Row Function
+TRUNCATE TABLE td;
+INSERT INTO td (ts) SELECT now();
+SELECT count(*) FROM td;
+
+TRUNCATE TABLE tc;
+EXPLAIN VERBOSE INSERT INTO tc(c) SELECT md5('ta');
+INSERT INTO tc(c) SELECT md5('ta');
+EXPLAIN VERBOSE INSERT INTO tc(d) SELECT md5('test');
+INSERT INTO tc(d) SELECT md5('test');
+SELECT * FROM tc;
+
+-- Set Returning Function
+TRUNCATE TABLE ta;
+INSERT INTO ta (a) SELECT generate_series(1, 3); -- failed. DuckDB expects this "INSERT INTO ta (a) FROM generate_series(1, 3)"
+
+INSERT INTO ta (a) SELECT * FROM generate_series(1, 3); -- OK
+INSERT INTO ta (b) SELECT * FROM generate_series(1, 3); -- OK
+SELECT * FROM ta;
 
 DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;

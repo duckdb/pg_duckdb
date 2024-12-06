@@ -289,10 +289,6 @@ SELECT * FROM ta;
    3 |   1
 (4 rows)
 
-INSERT INTO ta (a) SELECT generate_series(1, 3); -- no support
-ERROR:  (PGDuckDB/Duckdb_ExecCustomScan) Conversion Error: Unimplemented type for cast (BIGINT[] -> INTEGER)
-LINE 1: INSERT INTO pg_temp.main.ta (a) SELECT generate_series(1, 3) AS generate_serie...
-                                               ^
 TRUNCATE TABLE tb;
 INSERT INTO tb (a) SELECT 789;
 INSERT INTO tb (b) SELECT 789;
@@ -387,5 +383,93 @@ SELECT a FROM td;
 ---
  1
 (1 row)
+
+-- Single Row Function
+TRUNCATE TABLE td;
+INSERT INTO td (ts) SELECT now();
+SELECT count(*) FROM td;
+ count 
+-------
+     1
+(1 row)
+
+TRUNCATE TABLE tc;
+EXPLAIN VERBOSE INSERT INTO tc(c) SELECT md5('ta');
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   Output: duckdb_scan.explain_key, duckdb_scan.explain_value
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │           INSERT          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         PROJECTION        │
+ │    ────────────────────   │
+ │'fec8f2a3f2e808ccb17c4d278b│
+ │          4fa469'          │
+ │                           │
+ │          ~1 Rows          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         DUMMY_SCAN        │
+ └───────────────────────────┘
+ 
+ 
+(20 rows)
+
+INSERT INTO tc(c) SELECT md5('ta');
+EXPLAIN VERBOSE INSERT INTO tc(d) SELECT md5('test');
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+   Output: duckdb_scan.explain_key, duckdb_scan.explain_value
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │           INSERT          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         PROJECTION        │
+ │    ────────────────────   │
+ │'098f6bcd4621d373cade4e8326│
+ │          27b4f6'          │
+ │                           │
+ │          ~1 Rows          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         DUMMY_SCAN        │
+ └───────────────────────────┘
+ 
+ 
+(20 rows)
+
+INSERT INTO tc(d) SELECT md5('test');
+SELECT * FROM tc;
+ a | b |                c                 |                d                 | e 
+---+---+----------------------------------+----------------------------------+---
+ 3 |   | fec8f2a3f2e808ccb17c4d278b4fa469 | ab                               | 3
+ 3 |   | pg_duckdb                        | 098f6bcd4621d373cade4e832627b4f6 | 3
+(2 rows)
+
+-- Set Returning Function
+TRUNCATE TABLE ta;
+INSERT INTO ta (a) SELECT generate_series(1, 3); -- failed. DuckDB expects this "INSERT INTO ta (a) FROM generate_series(1, 3)"
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan) Conversion Error: Unimplemented type for cast (BIGINT[] -> INTEGER)
+LINE 1: INSERT INTO pg_temp.main.ta (a) SELECT generate_series(1, 3) AS generate_serie...
+                                               ^
+INSERT INTO ta (a) SELECT * FROM generate_series(1, 3); -- OK
+INSERT INTO ta (b) SELECT * FROM generate_series(1, 3); -- OK
+SELECT * FROM ta;
+ a | b 
+---+---
+ 1 |  
+ 2 |  
+ 3 |  
+ 3 | 1
+ 3 | 2
+ 3 | 3
+(6 rows)
 
 DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;
