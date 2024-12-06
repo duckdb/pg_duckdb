@@ -208,7 +208,6 @@ DuckDBManager::Initialize() {
 
 void
 DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
-	//auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);

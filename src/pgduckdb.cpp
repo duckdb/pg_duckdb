@@ -160,7 +160,7 @@ DuckdbInitGUC(void) {
 	                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
-	                     "Maximum number of PostgreSQL threads used for a single Postgres scan",
+	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
 	                     &max_workers_per_postgres_scan, 2, 8);
 
 	DefineCustomVariable("duckdb.postgres_role",

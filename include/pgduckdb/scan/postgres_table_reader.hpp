@@ -12,13 +12,13 @@ namespace pgduckdb {
 
 class PostgresTableReader {
 public:
-	PostgresTableReader(Cardinality cardinality, const char *table_scan_query);
+	PostgresTableReader(const char *table_scan_query);
 	~PostgresTableReader();
 	TupleTableSlot *GetNextTuple();
 
 private:
 	MinimalTuple GetNextWorkerTuple();
-	int ParalleWorkerNumber(Cardinality cardinality);
+	int ParallelWorkerNumber(Cardinality cardinality);
 
 private:
 	QueryDesc *table_scan_query_desc;
@@ -29,6 +29,7 @@ private:
 	int nworkers_launched;
 	int nreaders;
 	int next_parallel_reader;
+	bool entered_parallel_mode;
 };
 
 } // namespace pgduckdb

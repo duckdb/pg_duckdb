@@ -14,8 +14,7 @@ namespace pgduckdb {
 // Global State
 
 struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
-	explicit PostgresScanGlobalState(Snapshot, Relation rel, Cardinality cardinality,
-	                                 duckdb::TableFunctionInitInput &input);
+	explicit PostgresScanGlobalState(Snapshot, Relation rel, duckdb::TableFunctionInitInput &input);
 	~PostgresScanGlobalState();
 	idx_t
 	MaxThreads() const override {
