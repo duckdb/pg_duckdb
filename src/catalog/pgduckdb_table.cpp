@@ -20,13 +20,13 @@ PostgresTable::PostgresTable(duckdb::Catalog &_catalog, duckdb::SchemaCatalogEnt
 }
 
 PostgresTable::~PostgresTable() {
-	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	CloseRelation(rel);
 }
 
 Relation
 PostgresTable::OpenRelation(Oid relid) {
-	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	return pgduckdb::OpenRelation(relid);
 }
 
