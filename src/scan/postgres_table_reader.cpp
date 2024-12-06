@@ -24,7 +24,7 @@ namespace pgduckdb {
 PostgresTableReader::PostgresTableReader(const char *table_scan_query)
     : parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0) {
 
-	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 
 	pg_stack_base_t current_stack = set_stack_base();
 	List *raw_parsetree_list = pg_parse_query(table_scan_query);
@@ -68,7 +68,7 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query)
 }
 
 PostgresTableReader::~PostgresTableReader() {
-	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 
 	ExecEndNode(table_scan_planstate);
 
@@ -116,7 +116,7 @@ PostgresTableReader::GetNextTuple() {
 			return slot;
 		}
 	} else {
-		std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+		std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 		pg_stack_base_t current_stack = set_stack_base();
 		table_scan_query_desc->estate->es_query_dsa = pei ? pei->area : NULL;
 		slot = ExecProcNode(table_scan_planstate);
