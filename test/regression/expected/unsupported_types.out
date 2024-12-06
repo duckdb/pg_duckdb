@@ -1,0 +1,2 @@
+CREATE TEMP TABLE numeric_tbl (a NUMERIC) USING duckdb;
+ERROR:  Unsupported type when creating column: type precision 40 with scale 5 is not supported by duckdb, which only allows maximum precision 38
