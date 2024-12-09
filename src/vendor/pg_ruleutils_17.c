@@ -6071,8 +6071,10 @@ get_target_list(List *targetList, deparse_context *context,
 		 * directly so that we can tell it to do the right thing, and so that
 		 * we can get the attribute name which is the default AS label.
 		 */
+		Var *var = NULL;
 		if (tle->expr && (IsA(tle->expr, Var)))
 		{
+			var = (Var *) tle->expr;
 			attname = get_variable((Var *) tle->expr, 0, true, context);
 		}
 		else
@@ -6099,7 +6101,7 @@ get_target_list(List *targetList, deparse_context *context,
 			colname = tle->resname;
 
 		/* Show AS unless the column's name is correct as-is */
-		if (colname)			/* resname could be NULL */
+		if (colname && !pgduckdb_var_is_duckdb_row(var))
 		{
 			if (attname == NULL || strcmp(attname, colname) != 0)
 				appendStringInfo(&targetbuf, " AS %s", quote_identifier(colname));
@@ -7504,17 +7506,35 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		if (attnum > colinfo->num_cols)
 			elog(ERROR, "invalid attnum %d for relation \"%s\"",
 				 attnum, rte->eref->aliasname);
-		attname = colinfo->colnames[attnum - 1];
+		if (pgduckdb_var_is_duckdb_row(var)) {
+			if (istoplevel) {
+				/* If the duckdb row is at the top level target list of a
+				 * select, then we want to generate r.*, to unpack all the
+				 * columns instead of returning a STRUCT from the query. */
+				attname = NULL;
+			} else {
+				/* In any other case, we want to simply use the alias of the
+				 * TargetEntry, without the column name that postgres gave to
+				 * it. Because even though according to the Postgres parser we
+				 * are referencing a column of type "duckdb.row", that column
+				 * won't actually exist in the DuckDB query.
+				 */
+				attname = refname;
+				refname = NULL;
+			}
+		} else {
+			attname = colinfo->colnames[attnum - 1];
 
-		/*
-		 * If we find a Var referencing a dropped column, it seems better to
-		 * print something (anything) than to fail.  In general this should
-		 * not happen, but it used to be possible for some cases involving
-		 * functions returning named composite types, and perhaps there are
-		 * still bugs out there.
-		 */
-		if (attname == NULL)
-			attname = "?dropped?column?";
+			/*
+			 * If we find a Var referencing a dropped column, it seems better to
+			 * print something (anything) than to fail.  In general this should
+			 * not happen, but it used to be possible for some cases involving
+			 * functions returning named composite types, and perhaps there are
+			 * still bugs out there.
+			 */
+			if (attname == NULL)
+				attname = "?dropped?column?";
+		}
 	}
 	else
 	{
@@ -7532,7 +7552,7 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	else
 	{
 		appendStringInfoChar(buf, '*');
-		if (istoplevel)
+		if (istoplevel && !pgduckdb_var_is_duckdb_row(var))
 			appendStringInfo(buf, "::%s",
 							 format_type_with_typemod(var->vartype,
 													  var->vartypmod));
@@ -9014,6 +9034,19 @@ get_rule_expr(Node *node, deparse_context *context,
 					refassgnexpr = processIndirection(node, context);
 					appendStringInfoString(buf, " := ");
 					get_rule_expr(refassgnexpr, context, showimplicit);
+				}
+				else if (IsA(sbsref->refexpr, Var) && pgduckdb_var_is_duckdb_row((Var*) sbsref->refexpr)) {
+					Assert(sbsref->refupperindexpr);
+					Assert(!sbsref->reflowerindexpr);
+					Assert(list_length(sbsref->refupperindexpr) == 1);
+					Oid			typoutput;
+					bool		typIsVarlena;
+					Const *constval = castNode(Const, linitial(sbsref->refupperindexpr));
+					getTypeOutputInfo(constval->consttype,
+									&typoutput, &typIsVarlena);
+
+					char *extval = OidOutputFunctionCall(typoutput, constval->constvalue);
+					appendStringInfo(context->buf, ".%s", quote_identifier(extval));
 				}
 				else
 				{
@@ -12121,8 +12154,11 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		/* Print the relation alias, if needed */
 		get_rte_alias(rte, varno, false, context);
 
+		if (pgduckdb_func_returns_duckdb_row(rtfunc1)) {
+			/* Don't print column aliases for functions that return a duckdb.row */
+		}
 		/* Print the column definitions or aliases, if needed */
-		if (rtfunc1 && rtfunc1->funccolnames != NIL)
+		else if (rtfunc1 && rtfunc1->funccolnames != NIL)
 		{
 			/* Reconstruct the columndef list, which is also the aliases */
 			get_from_clause_coldeflist(rtfunc1, colinfo, context);

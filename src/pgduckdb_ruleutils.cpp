@@ -38,6 +38,29 @@ pgduckdb_function_name(Oid function_oid) {
 	return psprintf("system.main.%s", quote_identifier(func_name));
 }
 
+bool
+pgduckdb_var_is_duckdb_row(Var *var) {
+	if (!var) {
+		return false;
+	}
+	return var->vartype == pgduckdb::DuckdbRowOid();
+}
+
+bool
+pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc) {
+	if (!rtfunc) {
+		return false;
+	}
+
+	if (!IsA(rtfunc->funcexpr, FuncExpr)) {
+		return false;
+	}
+
+	FuncExpr *func_expr = castNode(FuncExpr, rtfunc->funcexpr);
+
+	return func_expr->funcresulttype == pgduckdb::DuckdbRowOid();
+}
+
 /*
  * Given a postgres schema name, this returns a list of two elements: the first
  * is the DuckDB database name and the second is the duckdb schema name. These

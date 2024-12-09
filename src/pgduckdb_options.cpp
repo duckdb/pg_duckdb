@@ -17,16 +17,24 @@ extern "C" {
 #include "access/xact.h"
 #include "executor/spi.h"
 #include "catalog/indexing.h"
+#include "parser/parse_coerce.h"
+#include "parser/parse_node.h"
+#include "parser/parse_expr.h"
+#include "nodes/subscripting.h"
+#include "nodes/nodeFuncs.h"
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
+
+#include "nodes/print.h"
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 namespace pgduckdb {
@@ -363,6 +371,107 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 	pgduckdb::pg::PreventInTransactionBlock("duckdb.recycle_ddb()");
 	pgduckdb::DuckDBManager::Get().Reset();
 	PG_RETURN_BOOL(true);
+}
+
+void
+DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
+                            bool isAssignment) {
+	if (isAssignment) {
+		elog(ERROR, "Assignment to duckdb.row is not supported");
+	}
+
+	if (isSlice) {
+		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+	}
+
+	if (indirection == NIL) {
+		elog(ERROR, "Subscripting duckdb.row with an empty subscript is not supported");
+	}
+
+	if (list_length(indirection) != 1) {
+		/* TODO: Fix this, if the column contains an array we should be able to subscript that type */
+		elog(ERROR, "Subscripting duckdb.row is only supported with a single subscript");
+	}
+	pprint(indirection);
+
+	// Transform each subscript expression
+	foreach_node(A_Indices, subscript, indirection) {
+		Assert(!subscript->is_slice);
+		Assert(subscript->uidx);
+
+		Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
+		pprint(subscript_expr);
+		int expr_location = exprLocation(subscript->uidx);
+		Oid subscript_expr_type = exprType(subscript_expr);
+
+		Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
+		                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
+		if (!coerced_expr) {
+			ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must have text type"),
+			                parser_errposition(pstate, expr_location)));
+		}
+
+		if (!IsA(subscript_expr, Const)) {
+			pprint(subscript_expr);
+			ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must be a constant"),
+			                parser_errposition(pstate, expr_location)));
+		}
+		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, coerced_expr);
+	}
+
+	/* TODO: Trigger cache population, probably we should do this somewhere else */
+	pgduckdb::IsExtensionRegistered();
+
+	// Set the result type of the subscripting operation
+	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
+	sbsref->reftypmod = -1;
+}
+
+void
+DuckdbRowSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
+                            SubscriptExecSteps * /*exprstate*/) {
+	elog(ERROR, "Subscripting duckdb.row is not supported in the Postgres Executor");
+}
+
+static SubscriptRoutines duckdb_subscript_routines = {
+    .transform = DuckdbRowSubscriptTransform,
+    .exec_setup = DuckdbRowSubscriptExecSetup,
+    .fetch_strict = false,
+    .fetch_leakproof = true,
+    .store_leakproof = true,
+};
+
+DECLARE_PG_FUNCTION(duckdb_row_in) {
+	elog(ERROR, "Creating the duckdb.row type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_row_out) {
+	elog(ERROR, "Converting a duckdb.row to a string is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_in) {
+	elog(ERROR, "Creating the duckdb.unresolved_type type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_out) {
+	elog(ERROR, "Converting a duckdb.unresolved_type to a string is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_get_row_field_operator) {
+	elog(ERROR, "The 'get field' operator for duckdb.row cannot be executed by Postgres");
+}
+
+DECLARE_PG_FUNCTION(duckdb_row_subscript) {
+	PG_RETURN_POINTER(&duckdb_subscript_routines);
+}
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_operator) {
+	elog(ERROR, "Unresolved duckdb types cannot be used by the Postgres executor");
+}
+
+DECLARE_PG_FUNCTION(duckdb_only_function) {
+	char *function_name = DatumGetCString(DirectFunctionCall1(regprocout, fcinfo->flinfo->fn_oid));
+	elog(ERROR, "Function '%s' only works with DuckDB execution", function_name);
 }
 
 } // extern "C"
