@@ -10,7 +10,7 @@
 - Support for PostgreSQL 14. ([#397])
 - Manage cached files using the `duckdb.cache_info()` and `duckdb.cache_delete()` functions. ([#434])
 - Add `scope` column to `duckdb.secrets` table. ([#461])
-- Allow configuring the default MotherDuck database. ([#470])
+- Allow configuring the default MotherDuck database using the `duckdb.motherduck_default_database` setting. ([#470])
 - Automatically install and load known DuckDB extensions when queries use them. So, `duckdb.install_extension()` is usually not necessary anymore. ([#484])
 
 ## Changed
