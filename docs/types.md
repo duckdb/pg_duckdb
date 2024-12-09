@@ -11,7 +11,7 @@ Able to read many [data types](https://www.postgresql.org/docs/current/datatype.
 - `boolean`
 - `uuid`
 - `json`
-- `arrays` for some of the above types
+- `arrays` for all of the above types
 
 ## Known limitations
 

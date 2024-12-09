@@ -235,6 +235,14 @@ Further information:
 
 TODO
 
+#### <a name="cache_info"></a>`duckdb.cache_info() -> (remote_path text, cache_key text, cache_file_size BIGINT, cache_file_timestamp TIMESTAMPTZ)`
+
+Can be used to inspect which remote files are currently cached in DuckDB.
+
+#### <a name="cache_delete"></a>`duckdb.cache_info(cache_key text) -> bool`
+
+Can be used to delete remote files from the DuckDB cache.
+
 #### <a name="install_extension"></a>`duckdb.install_extension(extension_name TEXT) -> bool`
 
 TODO
