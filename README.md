@@ -157,8 +157,7 @@ Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done
 	LIMIT 100;
 	```
 
-Note, for Azure, you will need to first install the Azure extension:
-You may then store a secret using the `connection_string` parameter as such:
+Note, for Azure, you may store a secret using the `connection_string` parameter as such:
 ```sql
 INSERT INTO duckdb.secrets
 (type, connection_string)
