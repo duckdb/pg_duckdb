@@ -228,20 +228,48 @@ Further information:
 | :--- | :--- | :---------- |
 | path | text | The path, either to a remote httpfs location or a local location (if enabled) of the delta dataset to read. |
 
-##### Optional Parameters
+#### <a name="cache"></a>`duckdb.cache(path TEXT, type TEXT) -> bool`
 
+Caches a parquet or CSV file to local disk. The file is downloaded synchronously during the execution of the function. Once cached, the cached file is used automatically whenever that URL is used in other httpfs calls, provided that the remote data has not changed. Data is stored based on the eTag of the remote file.
 
-#### <a name="cache"></a>`duckdb.cache(path TEXT, /* optional parameters */) -> bool`
+Note that cache management is not automated. Cached data must be deleted manually.
 
-TODO
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text | The path to a remote httpfs location to cache. |
+| type | text | File type, either `parquet` or `csv` |
+
 
 #### <a name="cache_info"></a>`duckdb.cache_info() -> (remote_path text, cache_key text, cache_file_size BIGINT, cache_file_timestamp TIMESTAMPTZ)`
 
-Can be used to inspect which remote files are currently cached in DuckDB.
+Inspects which remote files are currently cached in DuckDB. The returned data is as follows:
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| remote_path | text | The original path to the remote httpfs location that was cached |
+| cache_key | text | The cache key (eTag) used to store the file |
+| cache_file_size | bigint | File size in bytes |
+| cache_file_timestamp | timestamptz | Creation time of the cached file |
 
 #### <a name="cache_delete"></a>`duckdb.cache_delete(cache_key text) -> bool`
 
-Can be used to delete remote files from the DuckDB cache.
+Deletes a file from the DuckDB cache using the `unique cache_key` of the file.
+
+Example: To delete any copies of a particular remote file:
+
+```sql
+SELECT duckdb.cache_delete(cache_key)
+FROM duckdb.cache_info()
+WHERE remote_path = '...';
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| cache_key | text | The cache key (eTag) to delete |
 
 #### <a name="install_extension"></a>`duckdb.install_extension(extension_name TEXT) -> bool`
 
