@@ -95,7 +95,7 @@ Note: due to the use of `shared_preload_libraries`, pgxman's container support i
 
 To build pg_duckdb, you need:
 
-* Postgres 15-17
+* Postgres 14-17
 * Ubuntu 22.04-24.04 or MacOS
 * Standard set of build tools for building Postgres extensions
 * [Build tools that are required to build DuckDB](https://duckdb.org/docs/dev/building/build_instructions)
@@ -164,7 +164,7 @@ INSERT INTO duckdb.secrets
 VALUES ('Azure', '<your connection string>');
 ```
 
-Note: writes to Azure are not yet supported, [here][duckdb/duckdb_azure#44] is the current discussion for more information.
+Note: writes to Azure are not yet supported, please see [the current discussion](duckdb/duckdb_azure#44) for more information.
 
 ### Connect with MotherDuck
 

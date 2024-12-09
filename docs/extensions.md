@@ -8,6 +8,7 @@ The following extensions are installed by default:
 Supported extensions for installation are:
 
 * iceberg
+* delta
 
 Installing other extensions may work, but is at your own risk.
 
@@ -40,4 +41,8 @@ There is currently no practical difference between a disabled and uninstalled ex
 
 ### `iceberg`
 
-Iceberg support adds functions to read iceberg tables and metadata. For a list of iceberg functions, see [pg_duckdb Functions](functions.md).
+Iceberg support adds functions to read Iceberg tables and metadata. For a list of iceberg functions, see [pg_duckdb Functions](functions.md).
+
+### `delta`
+
+Delta support adds the ability to read Delta Lake files via [delta_scan](functions.md#delta_scan).
