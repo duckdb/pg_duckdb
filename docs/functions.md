@@ -16,11 +16,18 @@ Note: `ALTER EXTENSION pg_duckdb WITH SCHEMA schema` is not currently supported.
 | [`iceberg_snapshots`](#iceberg_snapshots) | Read Iceberg snapshot information |
 | [`delta_scan`](#delta_scan) | Read a Delta dataset |
 
-## DuckDB Administration Functions
+## Cache Management Functions
 
 | Name | Description |
 | :--- | :---------- |
 | [`duckdb.cache`](#cache) | Caches a Parquet or CSV file to disk |
+| [`duckdb.cache_info`](#cache_info) | Returns metadata about cached files |
+| [`duckdb.cache_delete`](#cache_delete) | Deletes a file from the cache |
+
+## DuckDB Administration Functions
+
+| Name | Description |
+| :--- | :---------- |
 | [`duckdb.install_extension`](#install_extension) | Installs a DuckDB extension |
 | [`duckdb.raw_query`](#raw_query) | Runs a query directly against DuckDB (meant for debugging)|
 | [`duckdb.recycle_ddb`](#recycle_ddb) | Force a reset the DuckDB instance in the current connection (meant for debugging) |
