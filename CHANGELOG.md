@@ -11,6 +11,7 @@
 - Manage cached files using the `duckdb.cache_info()` and `duckdb.cache_delete()` functions. ([#434])
 - Add `scope` column to `duckdb.secrets` table. ([#461])
 - Allow configuring the default MotherDuck database. ([#470])
+- Default to auto installing and auto loading known DuckDB extensions. So, `duckdb.install_extension()` is usually not necessary anymore. ([#484])
 
 ## Changed
 
@@ -42,6 +43,7 @@
 [#448]: https://github.com/duckdb/pg_duckdb/pull/448
 [#436]: https://github.com/duckdb/pg_duckdb/pull/436
 [#476]: https://github.com/duckdb/pg_duckdb/pull/476
+[#484]: https://github.com/duckdb/pg_duckdb/pull/484
 
 # 0.1.0 (2024-10-24)
 
