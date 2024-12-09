@@ -26,6 +26,8 @@ char *duckdb_maximum_memory = strdup("4GB");
 char *duckdb_disabled_filesystems = strdup("LocalFileSystem");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_unsigned_extensions = false;
+bool duckdb_autoinstall_known_extensions = true;
+bool duckdb_autoload_known_extensions = true;
 
 extern "C" {
 PG_MODULE_MAGIC;
@@ -130,6 +132,14 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.allow_unsigned_extensions",
 	                     "Allow DuckDB to load extensions with invalid or missing signatures",
 	                     &duckdb_allow_unsigned_extensions, PGC_SUSET);
+
+	DefineCustomVariable("duckdb.autoinstall_known_extensions",
+	                     "Whether known extensions are allowed to be automatically installed when a DuckDB query depends on them",
+	                     &duckdb_autoinstall_known_extensions, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.autoload_known_extensions",
+	                     "Whether known extensions are allowed to be automatically loaded when a DuckDB query depends on them",
+	                     &duckdb_autoload_known_extensions, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 
 	DefineCustomVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)", &duckdb_maximum_memory,
 	                     PGC_SUSET);

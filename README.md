@@ -158,10 +158,6 @@ Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done
 	```
 
 Note, for Azure, you will need to first install the Azure extension:
-```sql
-SELECT duckdb.install_extension('azure');
-```
-
 You may then store a secret using the `connection_string` parameter as such:
 ```sql
 INSERT INTO duckdb.secrets
