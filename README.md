@@ -169,7 +169,7 @@ INSERT INTO duckdb.secrets
 VALUES ('Azure', '<your connection string>');
 ```
 
-Note: writes to Azure are not yet supported, [here][duckdb/duckdb_azure#44] is the current discussion for more information.
+Note: writes to Azure are not yet supported, please see [the current discussion](duckdb/duckdb_azure#44) for more information.
 
 ### Connect with MotherDuck
 
