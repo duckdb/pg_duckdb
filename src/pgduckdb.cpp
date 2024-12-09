@@ -135,11 +135,11 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.autoinstall_known_extensions",
 	                     "Whether known extensions are allowed to be automatically installed when a DuckDB query depends on them",
-	                     &duckdb_autoinstall_known_extensions, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+	                     &duckdb_autoinstall_known_extensions, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.autoload_known_extensions",
 	                     "Whether known extensions are allowed to be automatically loaded when a DuckDB query depends on them",
-	                     &duckdb_autoload_known_extensions, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+	                     &duckdb_autoload_known_extensions, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)", &duckdb_maximum_memory,
 	                     PGC_SUSET);
