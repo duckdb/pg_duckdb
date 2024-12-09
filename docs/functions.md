@@ -239,7 +239,7 @@ TODO
 
 Can be used to inspect which remote files are currently cached in DuckDB.
 
-#### <a name="cache_delete"></a>`duckdb.cache_info(cache_key text) -> bool`
+#### <a name="cache_delete"></a>`duckdb.cache_delete(cache_key text) -> bool`
 
 Can be used to delete remote files from the DuckDB cache.
 
