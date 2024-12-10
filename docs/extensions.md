@@ -8,12 +8,15 @@ The following extensions are installed by default:
 Supported extensions for installation are:
 
 * iceberg
+* delta
 
 Installing other extensions may work, but is at your own risk.
 
 ## Installing an extension
 
-Installing an extension requires superuser.
+By default known extensions are allowed to be automatically installed and loaded when a DuckDB query depends on them. This behaviour can be configured using the [`duckdb.autoinstall_known_extensions`](settings.md#duckdbautoinstall_known_extensions) and [`duckdb.autoload_known_extensions`](settings.md#duckdbautoload_known_extensions) settings.
+
+It's also possible to manually install an extension. This can be useful when this autoinstall/autoaload behaviour is disabled, or when DuckDB fails to realise an extension is necessary to execute the query. Installing an extension requires superuser.
 
 ```sql
 SELECT duckdb.install_extension('extname');
@@ -40,4 +43,8 @@ There is currently no practical difference between a disabled and uninstalled ex
 
 ### `iceberg`
 
-Iceberg support adds functions to read iceberg tables and metadata. For a list of iceberg functions, see [pg_duckdb Functions](functions.md).
+Iceberg support adds functions to read Iceberg tables and metadata. For a list of iceberg functions, see [pg_duckdb Functions](functions.md).
+
+### `delta`
+
+Delta support adds the ability to read Delta Lake files via [delta_scan](functions.md#delta_scan).

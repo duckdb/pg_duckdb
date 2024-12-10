@@ -67,6 +67,20 @@ Default: `"LocalFileSystem"`
 
 Access: Superuser-only
 
+### `duckdb.autoinstall_known_extensions`
+
+Whether known extensions are allowed to be automatically installed when a DuckDB query depends on them.
+
+Default: `true`
+
+Access: Superuser-only
+
+### `duckdb.autoload_known_extensions`
+
+Whether known extensions are allowed to be automatically loaded when a DuckDB query depends on them.
+
+Default: `true`
+
 ### `duckdb.enable_external_access` (experimental)
 
 Allow the DuckDB to access external access (e.g., HTTP, S3, etc.). This setting is not tested very well yet and disabling it may break unintended `pg_duckdb` functionality.
