@@ -40,7 +40,7 @@ sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
 sudo apt install postgresql-17 postgresql-server-dev-17
 ```
 
-If you do not install from PGDG, please note that you must have the `dev` package installed to compile extensions.
+If you do not install from PGDG, please note that you must have the `server-dev` package installed to compile extensions.
 
 ### Install Build Dependencies
 
@@ -54,10 +54,14 @@ sudo apt install \
 
 ### Clone, Build, and Install pg_duckdb
 
+Checkout pg_duckdb:
+
 ```sh
 git clone https://github.com/duckdb/pg_duckdb
 cd pg_duckdb
 ```
+
+Build and install:
 
 ```sh
 make -j16
@@ -67,9 +71,7 @@ sudo make install
 ### Add pg_duckdb to shared_preload_libraries
 
 ```sh
-sudo -s
-echo "shared_preload_libraries = 'pg_duckdb'" >/etc/postgresql/17/main/conf.d/pg_duckdb.conf
-exit
+echo "shared_preload_libraries = 'pg_duckdb'" | sudo tee /etc/postgresql/17/main/conf.d/pg_duckdb.conf
 ```
 
 Alternatively, you can directly edit `/etc/postgresql/17/main/postgresql.conf` if desired.
@@ -94,3 +96,17 @@ postgres=# CREATE EXTENSION pg_duckdb;
 # MacOS
 
 TODO
+
+# FAQ
+
+Q: How do I build for multiple versions of Postgres?<br />
+A: If you have multiple versions of Postgres installed, set `PG_CONFIG` to the path of the `pg_config`
+binary that you would like to use for building before compilation.
+
+  ```sh
+  export PG_CONFIG=/usr/bin/pg_config
+  ```
+
+Q: `make clean` didn't remove all the build artifacts. How do I clean the entire project?<br />
+A: `make clean` will clean the pg_duckdb build files, but not libduckdb, which only needs to rebuilt on a DuckDB
+version change. To clean both pg_duckdb and libduckdb, use `make clean-all`.
