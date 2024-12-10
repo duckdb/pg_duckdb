@@ -6,6 +6,8 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pgduckdb_detoast.hpp"
+#include "pgduckdb/pgduckdb_filter.hpp"
 
 extern "C" {
 
@@ -27,9 +29,6 @@ extern "C" {
 #include "utils/date.h"
 #include "utils/timestamp.h"
 }
-
-#include "pgduckdb/pgduckdb_filter.hpp"
-#include "pgduckdb/pgduckdb_detoast.hpp"
 
 namespace pgduckdb {
 

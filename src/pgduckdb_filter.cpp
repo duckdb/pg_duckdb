@@ -1,20 +1,21 @@
+#include "pgduckdb/pgduckdb_filter.hpp"
+
 #include "duckdb.hpp"
 #include "duckdb/planner/filter/constant_filter.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pg/declarations.hpp"
+#include "pgduckdb/pg/datum.hpp"
+#include "pgduckdb/pgduckdb_detoast.hpp"
+
 
 extern "C" {
-#include "postgres.h"
-#include "catalog/pg_type.h"
-#include "utils/builtins.h"
-#include "utils/date.h"
-#include "utils/timestamp.h"
-#if PG_VERSION_NUM >= 160000
-#include "varatt.h"
-#endif
+// Exceptional include of PG Header which doesn't contain any function declaration
+// only macro definitions and types.
+#include "catalog/pg_type_d.h"
 }
 
-#include "pgduckdb/pgduckdb_filter.hpp"
-#include "pgduckdb/pgduckdb_detoast.hpp"
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
+
 
 namespace pgduckdb {
 
@@ -26,7 +27,7 @@ TemplatedFilterOperation(const T &value, const duckdb::Value &constant) {
 
 template <class OP>
 bool
-StringFilterOperation(const Datum &value, const duckdb::Value &constant, bool is_bpchar) {
+StringFilterOperation(const Datum value, const duckdb::Value &constant, bool is_bpchar) {
 	if (value == (Datum)0 || constant.IsNull()) {
 		return false; // Comparison to NULL always returns false.
 	}
@@ -35,10 +36,10 @@ StringFilterOperation(const Datum &value, const duckdb::Value &constant, bool is
 	const auto detoasted_value = DetoastPostgresDatum(reinterpret_cast<varlena *>(value), &should_free);
 
 	/* bpchar adds zero padding so we need to read true len of bpchar */
-	auto detoasted_val_len = is_bpchar ? bpchartruelen(VARDATA_ANY(detoasted_value), VARSIZE_ANY_EXHDR(detoasted_value))
-	                                   : VARSIZE_ANY_EXHDR(detoasted_value);
+	const auto detoasted_val_len = pg::GetDetoastedDatumLen(detoasted_value, is_bpchar);
+	const auto detoasted_val = pg::GetDetoastedDatumVal(detoasted_value);
 
-	const auto datum_sv = std::string_view((const char *)VARDATA_ANY(detoasted_value), detoasted_val_len);
+	const auto datum_sv = std::string_view(detoasted_val, detoasted_val_len);
 	const auto val = duckdb::StringValue::Get(constant);
 	const auto val_sv = std::string_view(val);
 	const bool res = OP::Operation(datum_sv, val_sv);
@@ -54,29 +55,29 @@ static bool
 FilterOperationSwitch(const Datum &value, const duckdb::Value &constant, Oid type_oid) {
 	switch (type_oid) {
 	case BOOLOID:
-		return TemplatedFilterOperation<bool, OP>(DatumGetBool(value), constant);
+		return TemplatedFilterOperation<bool, OP>(pg::DatumGetBool(value), constant);
 	case CHAROID:
-		return TemplatedFilterOperation<uint8_t, OP>(DatumGetChar(value), constant);
+		return TemplatedFilterOperation<uint8_t, OP>(pg::DatumGetChar(value), constant);
 	case INT2OID:
-		return TemplatedFilterOperation<int16_t, OP>(DatumGetInt16(value), constant);
+		return TemplatedFilterOperation<int16_t, OP>(pg::DatumGetInt16(value), constant);
 	case INT4OID:
-		return TemplatedFilterOperation<int32_t, OP>(DatumGetInt32(value), constant);
+		return TemplatedFilterOperation<int32_t, OP>(pg::DatumGetInt32(value), constant);
 	case INT8OID:
-		return TemplatedFilterOperation<int64_t, OP>(DatumGetInt64(value), constant);
+		return TemplatedFilterOperation<int64_t, OP>(pg::DatumGetInt64(value), constant);
 	case FLOAT4OID:
-		return TemplatedFilterOperation<float, OP>(DatumGetFloat4(value), constant);
+		return TemplatedFilterOperation<float, OP>(pg::DatumGetFloat4(value), constant);
 	case FLOAT8OID:
-		return TemplatedFilterOperation<double, OP>(DatumGetFloat8(value), constant);
+		return TemplatedFilterOperation<double, OP>(pg::DatumGetFloat8(value), constant);
 	case DATEOID: {
-		int32_t date = DatumGetDateADT(value) + pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
+		int32_t date = pg::DatumGetDateADT(value) + pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
 		return TemplatedFilterOperation<int32_t, OP>(date, constant);
 	}
 	case TIMESTAMPOID: {
-		int64_t timestamp = DatumGetTimestamp(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		int64_t timestamp = pg::DatumGetTimestamp(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 		return TemplatedFilterOperation<int64_t, OP>(timestamp, constant);
 	}
 	case TIMESTAMPTZOID: {
-		int64_t timestamptz = DatumGetTimestampTz(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		int64_t timestamptz = pg::DatumGetTimestampTz(value) + pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 		return TemplatedFilterOperation<int64_t, OP>(timestamptz, constant);
 	}
 	case BPCHAROID:
