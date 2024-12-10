@@ -66,4 +66,6 @@ struct TableAmRoutine;
 typedef uint32_t CommandId;
 
 typedef uint32_t SubTransactionId;
+
+struct varlena;
 }
