@@ -2,7 +2,7 @@
     <img width="500" src="logo.png" alt="temporary logo" />
 </p>
 
-0.1.0 release is here 🎉 Please [try](#installation) it out!
+0.2.0 release is here 🎉 Please [try](#installation) it out!
 
 # pg_duckdb: Official Postgres extension for DuckDB
 
