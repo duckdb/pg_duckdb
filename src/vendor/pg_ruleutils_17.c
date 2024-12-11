@@ -7507,6 +7507,14 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 			elog(ERROR, "invalid attnum %d for relation \"%s\"",
 				 attnum, rte->eref->aliasname);
 		if (pgduckdb_var_is_duckdb_row(var)) {
+			if (rte->rtekind == RTE_FUNCTION) {
+				if (istoplevel) {
+					appendStringInfoChar(buf, '*');
+					return NULL;
+				}
+				return NULL;
+			}
+
 			if (istoplevel) {
 				/* If the duckdb row is at the top level target list of a
 				 * select, then we want to generate r.*, to unpack all the
@@ -9039,6 +9047,32 @@ get_rule_expr(Node *node, deparse_context *context,
 					Assert(sbsref->refupperindexpr);
 					Assert(!sbsref->reflowerindexpr);
 					Assert(list_length(sbsref->refupperindexpr) == 1);
+					Var *var = (Var *) sbsref->refexpr;
+
+					deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
+																var->varlevelsup);
+					int			varno;
+					AttrNumber	varattno;
+
+					/*
+					* If we have a syntactic referent for the Var, and we're working from a
+					* parse tree, prefer to use the syntactic referent.  Otherwise, fall back
+					* on the semantic referent.  (Forcing use of the semantic referent when
+					* printing plan trees is a design choice that's perhaps more motivated by
+					* backwards compatibility than anything else.  But it does have the
+					* advantage of making plans more explicit.)
+					*/
+					if (var->varnosyn > 0 && dpns->plan == NULL)
+					{
+						varno = var->varnosyn;
+						varattno = var->varattnosyn;
+					}
+					else
+					{
+						varno = var->varno;
+						varattno = var->varattno;
+					}
+					RangeTblEntry* rte = rt_fetch(varno, dpns->rtable);
 					Oid			typoutput;
 					bool		typIsVarlena;
 					Const *constval = castNode(Const, linitial(sbsref->refupperindexpr));
@@ -9046,7 +9080,10 @@ get_rule_expr(Node *node, deparse_context *context,
 									&typoutput, &typIsVarlena);
 
 					char *extval = OidOutputFunctionCall(typoutput, constval->constvalue);
-					appendStringInfo(context->buf, ".%s", quote_identifier(extval));
+					if (rte->rtekind != RTE_FUNCTION) {
+						appendStringInfoChar(buf, '.');
+					}
+					appendStringInfoString(context->buf, quote_identifier(extval));
 				}
 				else
 				{
