@@ -106,6 +106,10 @@ ExecuteQuery(DuckdbScanState *state) {
 	List *paramlist = NIL;
 	duckdb::vector<duckdb::Value> duckdb_params;
 
+	/*
+	 * Let's recursively iterate through the relevant parameters now,
+	 * and then deal with the parameter values later
+	 */
 	(void) Get_ParamList((Node *)(state->query), (void **) (&paramlist));
 	if (list_length(paramlist)) {
 #if PG_VERSION_NUM >= 150000
@@ -121,7 +125,7 @@ ExecuteQuery(DuckdbScanState *state) {
 
 				/* give hook a chance in case parameter is dynamic */
 				if (paramLI->paramFetch != NULL) {
-					prm = paramLI->paramFetch(paramLI, param->paramid, true, &prmdata);
+					prm = paramLI->paramFetch(paramLI, param->paramid, false, &prmdata);
 				} else {
 					prm = &paramLI->params[param->paramid - 1];
 				}
