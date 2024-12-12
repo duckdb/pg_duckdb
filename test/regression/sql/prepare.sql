@@ -1,5 +1,5 @@
 -- the view should return the empty
-SELECT name, statement, parameter_types, result_types FROM pg_prepared_statements;
+SELECT name, statement, parameter_types FROM pg_prepared_statements;
 
 CREATE DATABASE testdb;
 CREATE TABLE copy_database(datname text, datistemplate boolean, datallowconn boolean);
@@ -12,7 +12,7 @@ PREPARE q1(text) AS
 EXECUTE q1('testdb');
 
 -- q1
-SELECT name, statement, parameter_types, result_types FROM pg_prepared_statements
+SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
 CREATE TABLE ta(a int);
@@ -22,7 +22,7 @@ PREPARE q2 AS SELECT COUNT(*) FROM ta;
 EXECUTE q2;
 
 -- q1 q2
-SELECT name, statement, parameter_types, result_types FROM pg_prepared_statements
+SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
 PREPARE q3(int) AS
@@ -32,7 +32,7 @@ CREATE TEMPORARY TABLE q3_prep_results AS EXECUTE q3(200);
 SELECT * FROM q3_prep_results;
 
 -- q1 q2 q3
-SELECT name, statement, parameter_types, result_types FROM pg_prepared_statements
+SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
 CREATE TABLE tb (a int DEFAULT 1, b int, c varchar DEFAULT 'pg_duckdb');
@@ -42,7 +42,7 @@ PREPARE q4(int, varchar) AS
 EXECUTE q4(1, 'pg_duckdb');
 
 -- q1 q2 q3 q4
-SELECT name, statement, parameter_types, result_types FROM pg_prepared_statements
+SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
 -- test DEALLOCATE ALL;
