@@ -39,11 +39,21 @@ pgduckdb_function_name(Oid function_oid) {
 }
 
 bool
+pgduckdb_is_unresolved_type(Oid type_oid) {
+	return type_oid == pgduckdb::DuckdbUnresolvedTypeOid();
+}
+
+bool
+pgduckdb_is_duckdb_row(Oid type_oid) {
+	return type_oid == pgduckdb::DuckdbRowOid();
+}
+
+bool
 pgduckdb_var_is_duckdb_row(Var *var) {
 	if (!var) {
 		return false;
 	}
-	return var->vartype == pgduckdb::DuckdbRowOid();
+	return pgduckdb_is_duckdb_row(var->vartype);
 }
 
 bool
@@ -58,7 +68,76 @@ pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc) {
 
 	FuncExpr *func_expr = castNode(FuncExpr, rtfunc->funcexpr);
 
-	return func_expr->funcresulttype == pgduckdb::DuckdbRowOid();
+	return pgduckdb_is_duckdb_row(func_expr->funcresulttype);
+}
+
+/*
+ * Returns NULL if the expression is not a subscript on a duckdb row. Returns
+ * the Var of the duckdb row if it is.
+ */
+Var *
+pgduckdb_duckdb_row_subscript_var(Expr *expr) {
+	if (!expr) {
+		return NULL;
+	}
+
+	if (!IsA(expr, SubscriptingRef)) {
+		return NULL;
+	}
+
+	SubscriptingRef *subscript = (SubscriptingRef *)expr;
+
+	if (!IsA(subscript->refexpr, Var)) {
+		return NULL;
+	}
+
+	Var *refexpr = (Var *)subscript->refexpr;
+
+	if (!pgduckdb_var_is_duckdb_row(refexpr)) {
+		return NULL;
+	}
+	return refexpr;
+}
+
+/*
+ * Returns a list of duckdb
+ */
+List *
+pgduckdb_star_start_vars(List *target_list) {
+	List *star_start_indexes = NIL;
+	Var *possible_star_start_var;
+	int possible_star_start_var_index = 0;
+
+	int i = 0;
+
+	foreach_node(TargetEntry, tle, target_list) {
+		i++;
+
+		if (!IsA(tle->expr, Var)) {
+			possible_star_start_var = NULL;
+			possible_star_start_var_index = 0;
+			continue;
+		}
+
+		Var *var = (Var *)tle->expr;
+
+		if (var->varattno == 1) {
+			possible_star_start_var = var;
+			possible_star_start_var_index = i;
+		} else if (possible_star_start_var) {
+			if (var->varno != possible_star_start_var->varno || var->varno == i - possible_star_start_var_index + 1) {
+				possible_star_start_var = NULL;
+				possible_star_start_var_index = 0;
+			}
+		}
+
+		if (pgduckdb_var_is_duckdb_row(var)) {
+			star_start_indexes = lappend_int(star_start_indexes, possible_star_start_var_index);
+			possible_star_start_var = NULL;
+			possible_star_start_var_index = 0;
+		}
+	}
+	return star_start_indexes;
 }
 
 /*

@@ -48,6 +48,10 @@ CREATE FUNCTION duckdb_unresolved_type_operator_bool(duckdb.unresolved_type, "an
 CREATE FUNCTION duckdb_unresolved_type_operator("any", duckdb.unresolved_type) RETURNS duckdb.unresolved_type AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_operator' LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION duckdb_unresolved_type_operator_bool("any", duckdb.unresolved_type) RETURNS boolean AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_operator' LANGUAGE C IMMUTABLE STRICT;
 
+-- Dummy functions for binary operators with unresolved type on both sides
+CREATE FUNCTION duckdb_unresolved_type_operator(duckdb.unresolved_type, duckdb.unresolved_type) RETURNS duckdb.unresolved_type AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_operator' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb_unresolved_type_operator_bool(duckdb.unresolved_type, duckdb.unresolved_type) RETURNS boolean AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_operator' LANGUAGE C IMMUTABLE STRICT;
+
 -- Dummy function for prefix/unary operators
 CREATE FUNCTION duckdb_unresolved_type_operator(duckdb.unresolved_type) RETURNS duckdb.unresolved_type AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_operator' LANGUAGE C IMMUTABLE STRICT;
 
@@ -65,6 +69,12 @@ CREATE OPERATOR - (
 -- Basic comparison operators
 CREATE OPERATOR <= (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator_bool
+);
+
+CREATE OPERATOR <= (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
@@ -77,6 +87,12 @@ CREATE OPERATOR <= (
 
 CREATE OPERATOR < (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator_bool
+);
+
+CREATE OPERATOR < (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
@@ -89,6 +105,12 @@ CREATE OPERATOR < (
 
 CREATE OPERATOR <> (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator_bool
+);
+
+CREATE OPERATOR <> (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
@@ -101,6 +123,12 @@ CREATE OPERATOR <> (
 
 CREATE OPERATOR = (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator_bool
+);
+
+CREATE OPERATOR = (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
@@ -113,12 +141,24 @@ CREATE OPERATOR = (
 
 CREATE OPERATOR > (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator_bool
+);
+
+CREATE OPERATOR > (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
 CREATE OPERATOR > (
     LEFTARG = "any",
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator_bool
+);
+
+CREATE OPERATOR >= (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
@@ -138,6 +178,12 @@ CREATE OPERATOR >= (
 -- binary math operators
 CREATE OPERATOR + (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator
+);
+
+CREATE OPERATOR + (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
@@ -150,6 +196,12 @@ CREATE OPERATOR + (
 
 CREATE OPERATOR - (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator
+);
+
+CREATE OPERATOR - (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
@@ -162,6 +214,12 @@ CREATE OPERATOR - (
 
 CREATE OPERATOR * (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator
+);
+
+CREATE OPERATOR * (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
@@ -174,6 +232,12 @@ CREATE OPERATOR * (
 
 CREATE OPERATOR / (
     LEFTARG = duckdb.unresolved_type,
+    RIGHTARG = duckdb.unresolved_type,
+    FUNCTION = duckdb_unresolved_type_operator
+);
+
+CREATE OPERATOR / (
+    LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
@@ -182,39 +246,6 @@ CREATE OPERATOR / (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
-);
-
--- Self comparison operators and necessary dummy function, needed for GROUP BY and ORDER BY
-CREATE FUNCTION duckdb_unresolved_type_operator_bool(duckdb.unresolved_type, duckdb.unresolved_type) RETURNS boolean AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_operator' LANGUAGE C IMMUTABLE STRICT;
-
-CREATE OPERATOR < (
-    LEFTARG = duckdb.unresolved_type,
-    RIGHTARG = duckdb.unresolved_type,
-    FUNCTION = duckdb_unresolved_type_operator_bool
-);
-
-CREATE OPERATOR <= (
-    LEFTARG = duckdb.unresolved_type,
-    RIGHTARG = duckdb.unresolved_type,
-    FUNCTION = duckdb_unresolved_type_operator_bool
-);
-
-CREATE OPERATOR = (
-    LEFTARG = duckdb.unresolved_type,
-    RIGHTARG = duckdb.unresolved_type,
-    FUNCTION = duckdb_unresolved_type_operator_bool
-);
-
-CREATE OPERATOR > (
-    LEFTARG = duckdb.unresolved_type,
-    RIGHTARG = duckdb.unresolved_type,
-    FUNCTION = duckdb_unresolved_type_operator_bool
-);
-
-CREATE OPERATOR >= (
-    LEFTARG = duckdb.unresolved_type,
-    RIGHTARG = duckdb.unresolved_type,
-    FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
 -- TODO: use other dummy function with better error

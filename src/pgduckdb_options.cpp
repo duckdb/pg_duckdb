@@ -450,15 +450,11 @@ DECLARE_PG_FUNCTION(duckdb_row_out) {
 }
 
 DECLARE_PG_FUNCTION(duckdb_unresolved_type_in) {
-	elog(ERROR, "Creating the duckdb.unresolved_type type is not supported");
+	return textin(fcinfo);
 }
 
 DECLARE_PG_FUNCTION(duckdb_unresolved_type_out) {
-	elog(ERROR, "Converting a duckdb.unresolved_type to a string is not supported");
-}
-
-DECLARE_PG_FUNCTION(duckdb_get_row_field_operator) {
-	elog(ERROR, "The 'get field' operator for duckdb.row cannot be executed by Postgres");
+	return textout(fcinfo);
 }
 
 DECLARE_PG_FUNCTION(duckdb_row_subscript) {

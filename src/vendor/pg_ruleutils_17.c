@@ -6041,11 +6041,51 @@ get_target_list(List *targetList, deparse_context *context,
 
 	sep = " ";
 	colno = 0;
+	List *star_starts = pgduckdb_star_start_vars(targetList);
+	ListCell *current_star_start = list_head(star_starts);
+
+	int varno_star = 0;
+	int varattno_star = 0;
+	bool added_star = false;
+
+	int i = 0;
 	foreach(l, targetList)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(l);
 		char	   *colname;
 		char	   *attname;
+		i++;
+
+		if (current_star_start && lfirst_int(current_star_start) == i) {
+			Var *var = castNode(Var, tle->expr);
+			varno_star = var->varno;
+			varattno_star = var->varattno;
+		}
+
+		if (varno_star) {
+			bool reset = true;
+			if (tle->expr && IsA(tle->expr, Var)) {
+				Var *var = castNode(Var, tle->expr);
+
+				if (var->varno == varno_star && var->varattno == varattno_star) {
+					varattno_star++;
+					reset = false;
+					if (added_star || !pgduckdb_var_is_duckdb_row(var)) {
+						continue;
+					}
+					added_star = true;
+				}
+			}
+
+			if (reset) {
+				varno_star = 0;
+				varattno_star = 0;
+				current_star_start = lnext(star_starts, current_star_start);
+				added_star = false;
+			}
+		}
+
+
 
 		if (tle->resjunk)
 			continue;			/* ignore junk entries */
@@ -6100,8 +6140,39 @@ get_target_list(List *targetList, deparse_context *context,
 		else
 			colname = tle->resname;
 
+		bool duckdb_row_needs_as = !pgduckdb_var_is_duckdb_row(var);
+		Var *subscript_var = pgduckdb_duckdb_row_subscript_var(tle->expr);
+		if (subscript_var) {
+			deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
+														subscript_var->varlevelsup);
+			int			varno;
+			int			varattno;
+
+			/*
+			* If we have a syntactic referent for the Var, and we're working from a
+			* parse tree, prefer to use the syntactic referent.  Otherwise, fall back
+			* on the semantic referent.  (Forcing use of the semantic referent when
+			* printing plan trees is a design choice that's perhaps more motivated by
+			* backwards compatibility than anything else.  But it does have the
+			* advantage of making plans more explicit.)
+			*/
+			if (subscript_var->varnosyn > 0 && dpns->plan == NULL)
+			{
+				varno = subscript_var->varnosyn;
+				varattno = subscript_var->varattnosyn;
+			}
+			else
+			{
+				varno = subscript_var->varno;
+				varattno = subscript_var->varattno;
+			}
+			RangeTblEntry* rte = rt_fetch(varno, dpns->rtable);
+			char *original_column = strVal(list_nth(rte->eref->colnames, varattno - 1));
+			duckdb_row_needs_as = strcmp(original_column, colname) != 0;
+		}
+
 		/* Show AS unless the column's name is correct as-is */
-		if (colname && !pgduckdb_var_is_duckdb_row(var))
+		if (colname && duckdb_row_needs_as)
 		{
 			if (attname == NULL || strcmp(attname, colname) != 0)
 				appendStringInfo(&targetbuf, " AS %s", quote_identifier(colname));
@@ -9052,7 +9123,6 @@ get_rule_expr(Node *node, deparse_context *context,
 					deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
 																var->varlevelsup);
 					int			varno;
-					AttrNumber	varattno;
 
 					/*
 					* If we have a syntactic referent for the Var, and we're working from a
@@ -9065,12 +9135,10 @@ get_rule_expr(Node *node, deparse_context *context,
 					if (var->varnosyn > 0 && dpns->plan == NULL)
 					{
 						varno = var->varnosyn;
-						varattno = var->varattnosyn;
 					}
 					else
 					{
 						varno = var->varno;
-						varattno = var->varattno;
 					}
 					RangeTblEntry* rte = rt_fetch(varno, dpns->rtable);
 					Oid			typoutput;
@@ -11151,6 +11219,10 @@ get_const_expr(Const *constval, deparse_context *context, int showtype)
 	bool		typIsVarlena;
 	char	   *extval;
 	bool		needlabel = false;
+
+	if (pgduckdb_is_unresolved_type(constval->consttype)) {
+		showtype = -1;
+	}
 
 	if (constval->constisnull)
 	{

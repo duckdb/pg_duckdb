@@ -1,13 +1,13 @@
 -- PostgreSQL instance has data directory set to tmp_check/data so for all read functions argument
 -- is relative to that data directory patch
 -- read_parquet
-SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT);
+SELECT count(r['sepal.length']) FROM read_parquet('../../data/iris.parquet') r;
  count 
 -------
    150
 (1 row)
 
-SELECT "sepal.length" FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT) ORDER BY "sepal.length"  LIMIT 5;
+SELECT r['sepal.length'] FROM read_parquet('../../data/iris.parquet') r ORDER BY r['sepal.length']  LIMIT 5;
  sepal.length 
 --------------
           4.3
@@ -17,9 +17,9 @@ SELECT "sepal.length" FROM read_parquet('../../data/iris.parquet') AS ("sepal.le
           4.5
 (5 rows)
 
-SELECT "sepal.length", file_row_number, filename
-    FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true)
-    AS ("sepal.length" FLOAT, file_row_number INT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
+SELECT r['sepal.length'], r['file_row_number'], r['filename']
+    FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true) r
+    ORDER BY r['sepal.length']  LIMIT 5;
  sepal.length | file_row_number |        filename         
 --------------+-----------------+-------------------------
           4.3 |              13 | ../../data/iris.parquet
@@ -30,13 +30,13 @@ SELECT "sepal.length", file_row_number, filename
 (5 rows)
 
 -- read_csv
-SELECT count("sepal.length") FROM read_csv('../../data/iris.csv') AS ("sepal.length" FLOAT);
+SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
  count 
 -------
    150
 (1 row)
 
-SELECT "sepal.length" FROM read_csv('../../data/iris.csv') AS ("sepal.length" FLOAT) ORDER BY "sepal.length" LIMIT 5;
+SELECT r['sepal.length'] FROM read_csv('../../data/iris.csv') r ORDER BY r['sepal.length'] LIMIT 5;
  sepal.length 
 --------------
           4.3
@@ -46,9 +46,9 @@ SELECT "sepal.length" FROM read_csv('../../data/iris.csv') AS ("sepal.length" FL
           4.5
 (5 rows)
 
-SELECT "sepal.length", filename
-    FROM read_csv('../../data/iris.csv', filename => true, header => true)
-    AS ("sepal.length" FLOAT, filename VARCHAR) ORDER BY "sepal.length"  LIMIT 5;
+SELECT r['sepal.length'], r['filename']
+    FROM read_csv('../../data/iris.csv', filename => true, header => true) r
+    ORDER BY r['sepal.length']  LIMIT 5;
  sepal.length |      filename       
 --------------+---------------------
           4.3 | ../../data/iris.csv
@@ -58,7 +58,7 @@ SELECT "sepal.length", filename
           4.5 | ../../data/iris.csv
 (5 rows)
 
-SELECT * FROM read_csv('../../non-existing-file.csv') AS ("sepal.length" FLOAT);
+SELECT * FROM read_csv('../../non-existing-file.csv');
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'IO Error: No files found that match the pattern "../../non-existing-file.csv"
 -- delta_scan
 SELECT duckdb.install_extension('delta');
@@ -67,13 +67,13 @@ SELECT duckdb.install_extension('delta');
  t
 (1 row)
 
-SELECT count(a) FROM delta_scan('../../data/delta_table') AS (a INT);
+SELECT count(r['a']) FROM delta_scan('../../data/delta_table') r;
  count 
 -------
    100
 (1 row)
 
-SELECT * FROM delta_scan('../../data/delta_table') AS (a INT, b VARCHAR) WHERE (a = 1 OR b = 'delta_table_3');
+SELECT * FROM delta_scan('../../data/delta_table') r WHERE (r['a'] = 1 OR r['b'] = 'delta_table_3');
  a |       b       
 ---+---------------
  1 | delta_table_1
@@ -87,7 +87,7 @@ SELECT duckdb.install_extension('iceberg');
  t
 (1 row)
 
-SELECT COUNT(l_orderkey) FROM iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) AS (l_orderkey BIGINT);
+SELECT COUNT(r['l_orderkey']) FROM iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) r;
  count 
 -------
  51793
@@ -95,18 +95,14 @@ SELECT COUNT(l_orderkey) FROM iceberg_scan('../../data/lineitem_iceberg', allow_
 
 -- TPCH query #6
 SELECT
-	sum(l_extendedprice * l_discount) as revenue
+	sum(r['l_extendedprice'] * r['l_discount']) as revenue
 FROM
-	iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) AS
-        (l_extendedprice DOUBLE PRECISION,
-         l_discount DOUBLE PRECISION,
-         l_shipdate DATE,
-         l_quantity DOUBLE PRECISION)
+	iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) r
 WHERE
-	l_shipdate >= date '1997-01-01'
-	AND l_shipdate < date '1997-01-01' + interval '1' year
-	AND l_discount between 0.08 - 0.01 and 0.08 + 0.01
-	AND l_quantity < 25
+	r['l_shipdate'] >= date '1997-01-01'
+	AND r['l_shipdate'] < date '1997-01-01' + interval '1' year
+	AND r['l_discount'] between 0.08 - 0.01 and 0.08 + 0.01
+	AND r['l_quantity'] < 25
 LIMIT 1;
    revenue    
 --------------
@@ -128,19 +124,19 @@ SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths
 (2 rows)
 
 -- read_json
-SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT);
+SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r;
  count 
 -------
    100
 (1 row)
 
-SELECT COUNT(a) FROM read_json('../../data/table.json') AS (a INT, c FLOAT) WHERE c > 50.4;
+SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r WHERE r['c'] > 50.4;
  count 
 -------
     51
 (1 row)
 
-SELECT a, b, c FROM read_json('../../data/table.json') AS (a INT, b VARCHAR, c FLOAT) WHERE c > 50.4 AND c < 51.2;
+SELECT r['a'], r['b'], r['c'] FROM read_json('../../data/table.json') r WHERE r['c'] > 50.4 AND r['c'] < 51.2;
  a  |    b    |  c   
 ----+---------+------
  50 | json_50 | 50.5
