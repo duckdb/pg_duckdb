@@ -4,17 +4,16 @@ SELECT name, statement, parameter_types FROM pg_prepared_statements;
 ------+-----------+-----------------
 (0 rows)
 
-CREATE DATABASE testdb;
 CREATE TABLE copy_database(datname text, datistemplate boolean, datallowconn boolean);
 INSERT INTO copy_database SELECT datname, datistemplate, datallowconn FROM pg_database;
 -- parameterized queries
 PREPARE q1(text) AS
 	SELECT datname, datistemplate, datallowconn
 	FROM copy_database WHERE datname = $1;
-EXECUTE q1('testdb');
- datname | datistemplate | datallowconn 
----------+---------------+--------------
- testdb  | f             | t
+EXECUTE q1('postgres');
+ datname  | datistemplate | datallowconn 
+----------+---------------+--------------
+ postgres | f             | t
 (1 row)
 
 -- q1
@@ -85,6 +84,12 @@ EXECUTE q4(1, 'pg_duckdb');
  2
 (1 row)
 
+EXECUTE q4(1, 'pg_duckdb');
+ b 
+---
+ 2
+(1 row)
+
 -- q1 q2 q3 q4
 SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
@@ -108,5 +113,4 @@ SELECT name, statement, parameter_types FROM pg_prepared_statements
 ------+-----------+-----------------
 (0 rows)
 
-DROP DATABASE testdb;
 DROP TABLE copy_database, ta, tb;

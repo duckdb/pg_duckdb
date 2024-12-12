@@ -1,7 +1,6 @@
 -- the view should return the empty
 SELECT name, statement, parameter_types FROM pg_prepared_statements;
 
-CREATE DATABASE testdb;
 CREATE TABLE copy_database(datname text, datistemplate boolean, datallowconn boolean);
 INSERT INTO copy_database SELECT datname, datistemplate, datallowconn FROM pg_database;
 -- parameterized queries
@@ -9,7 +8,7 @@ PREPARE q1(text) AS
 	SELECT datname, datistemplate, datallowconn
 	FROM copy_database WHERE datname = $1;
 
-EXECUTE q1('testdb');
+EXECUTE q1('postgres');
 
 -- q1
 SELECT name, statement, parameter_types FROM pg_prepared_statements
@@ -40,6 +39,7 @@ INSERT INTO tb(b) VALUES(2);
 PREPARE q4(int, varchar) AS
 	SELECT b FROM tb WHERE a = $1 AND c = $2;
 EXECUTE q4(1, 'pg_duckdb');
+EXECUTE q4(1, 'pg_duckdb');
 
 -- q1 q2 q3 q4
 SELECT name, statement, parameter_types FROM pg_prepared_statements
@@ -50,5 +50,4 @@ DEALLOCATE ALL;
 SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
-DROP DATABASE testdb;
 DROP TABLE copy_database, ta, tb;
