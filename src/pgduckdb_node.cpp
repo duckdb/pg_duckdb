@@ -11,11 +11,13 @@ extern "C" {
 #include "miscadmin.h"
 #include "tcop/pquery.h"
 #include "nodes/params.h"
+#include "nodes/nodeFuncs.h"
 #include "utils/ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+#include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 /* global variables */
@@ -59,6 +61,7 @@ static TupleTableSlot *Duckdb_ExecCustomScan(CustomScanState *node);
 static void Duckdb_EndCustomScan(CustomScanState *node);
 static void Duckdb_ReScanCustomScan(CustomScanState *node);
 static void Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es);
+static bool Get_ParamList(Node *node, void **context);
 
 static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
@@ -99,28 +102,41 @@ ExecuteQuery(DuckdbScanState *state) {
 	auto &prepared = *state->prepared_statement;
 	auto &query_results = state->query_results;
 	auto &connection = state->duckdb_connection;
-	auto pg_params = state->params;
-	const auto num_params = pg_params ? pg_params->numParams : 0;
+	auto paramLI = state->params;
+	List *paramlist = NIL;
 	duckdb::vector<duckdb::Value> duckdb_params;
-	for (int i = 0; i < num_params; i++) {
-		ParamExternData *pg_param;
-		ParamExternData tmp_workspace;
 
-		/* give hook a chance in case parameter is dynamic */
-		if (pg_params->paramFetch != NULL) {
-			pg_param = pg_params->paramFetch(pg_params, i + 1, false, &tmp_workspace);
-		} else {
-			pg_param = &pg_params->params[i];
-		}
+	(void) Get_ParamList((Node *)(state->query), (void **) (&paramlist));
+	if (list_length(paramlist)) {
+#if PG_VERSION_NUM >= 150000
+		foreach_node(Param, param, paramlist) {
+#else
+	 	foreach_ptr(Param, param, paramlist) {
+#endif
+			if (param->paramkind == PARAM_EXTERN &&
+				paramLI != NULL && param->paramid > 0 &&
+				param->paramid <= paramLI->numParams) {
+				ParamExternData *prm;
+				ParamExternData prmdata;
 
-		if (pg_param->isnull) {
-			duckdb_params.push_back(duckdb::Value());
-		} else if (OidIsValid(pg_param->ptype)) {
-			duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype));
-		} else {
-			std::ostringstream oss;
-			oss << "parameter '" << i << "' has an invalid type (" << pg_param->ptype << ") during query execution";
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
+				/* give hook a chance in case parameter is dynamic */
+				if (paramLI->paramFetch != NULL) {
+					prm = paramLI->paramFetch(paramLI, param->paramid, true, &prmdata);
+				} else {
+					prm = &paramLI->params[param->paramid - 1];
+				}
+
+				if (prm->isnull) {
+					duckdb_params.push_back(duckdb::Value());
+				} else if (OidIsValid(prm->ptype) && prm->ptype == param->paramtype) {
+					duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(prm->value, prm->ptype));
+				} else {
+					/* paramid is offset by 1 */
+					std::ostringstream oss;
+					oss << "parameter '" << param->paramid - 1 << "' has an invalid type (" << prm->ptype << ") during query execution";
+					throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
+				}
+			}
 		}
 	}
 
@@ -211,6 +227,31 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 static TupleTableSlot *
 Duckdb_ExecCustomScan(CustomScanState *node) {
 	return InvokeCPPFunc(Duckdb_ExecCustomScan_Cpp, node);
+}
+
+static bool
+Get_ParamList(Node *node, void **context) {
+	if (node == NULL) {
+		return false;
+	}
+
+	if (IsA(node, Param)) {
+		*context = (void *) lappend((List *) *context, node);
+	}
+
+	if (IsA(node, Query)) {
+#if PG_VERSION_NUM >= 160000
+		return query_tree_walker((Query *)node, Get_ParamList, context, 0);
+#else
+		return query_tree_walker((Query *)node, (bool (*)())((void *)Get_ParamList), context, 0);
+#endif
+	}
+
+#if PG_VERSION_NUM >= 160000
+	return expression_tree_walker(node, Get_ParamList, context);
+#else
+	return expression_tree_walker(node, (bool (*)())((void *)Get_ParamList), context);
+#endif
 }
 
 void
