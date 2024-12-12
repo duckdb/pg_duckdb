@@ -4,10 +4,10 @@ SET duckdb.force_execution = false;
 
 \set pwd `pwd`
 
-select * from read_parquet(:'pwd' || '/data/unsigned_types.parquet') as (usmallint int);
-select * from read_parquet(ARRAY[:'pwd' || '/data/unsigned_types.parquet']) as (usmallint int);
+select r['usmallint'] from read_parquet(:'pwd' || '/data/unsigned_types.parquet') r;
+select r['usmallint'] from read_parquet(ARRAY[:'pwd' || '/data/unsigned_types.parquet']) r;
 
-select * from read_csv(:'pwd' || '/data/web_page.csv') as (column00 int) LIMIT 2;
-select * from read_csv(ARRAY[:'pwd' || '/data/web_page.csv']) as (column00 int) LIMIT 2;
+select r['column00'] from read_csv(:'pwd' || '/data/web_page.csv') r LIMIT 2;
+select r['column00'] from read_csv(ARRAY[:'pwd' || '/data/web_page.csv']) r LIMIT 2;
 
 -- TODO: Add a test for scan_iceberg once we have a test table

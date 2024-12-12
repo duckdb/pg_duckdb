@@ -33,7 +33,7 @@ SELECT * FROM duckdb.cache('some hacky sql', 'some more hacky sql');
 ERROR:  permission denied for function cache
 SET duckdb.force_execution = true;
 -- read_csv from the local filesystem should be disallowed
-SELECT count("sepal.length") FROM read_csv('../../data/iris.csv') AS ("sepal.length" FLOAT);
+SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Permission Error: File system LocalFileSystem has been disabled by configuration
 -- Should fail because DuckDB execution is not allowed for this user
 SET ROLE user3;
