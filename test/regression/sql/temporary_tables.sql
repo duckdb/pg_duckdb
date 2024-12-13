@@ -148,7 +148,7 @@ DROP TABLE t;
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 
 -- CTAS fully in Duckdb
-CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
+CREATE TEMP TABLE webpages USING duckdb AS SELECT r['column00'], r['column01'], r['column02'] FROM read_csv('../../data/web_page.csv') r;
 SELECT * FROM webpages ORDER BY column00 LIMIT 2;
 
 CREATE TEMP TABLE t_heap(a int) USING heap;
