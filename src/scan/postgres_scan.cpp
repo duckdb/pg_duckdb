@@ -55,7 +55,7 @@ void
 PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput &input) {
 	/* SELECT COUNT(*) FROM */
 	if (input.column_ids.size() == 1 && input.column_ids[0] == UINT64_MAX) {
-		scan_query << "SELECT COUNT(*) FROM " << ConstructFullyQualifiedTableName(rel);
+		scan_query << "SELECT COUNT(*) FROM " << ConstructFullyQualifiedTableName();
 		count_tuples_only = true;
 		return;
 	}
@@ -119,7 +119,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 		scan_query << quote_identifier(attr.attname.data);
 	}
 
-	scan_query << " FROM " << ConstructFullyQualifiedTableName(rel);
+	scan_query << " FROM " << ConstructFullyQualifiedTableName();
 
 	first = true;
 
@@ -145,7 +145,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 }
 
 std::string
-PostgresScanGlobalState::ConstructFullyQualifiedTableName(Relation rel) {
+PostgresScanGlobalState::ConstructFullyQualifiedTableName() {
 	return psprintf("%s.%s", quote_identifier(get_namespace_name_or_temp(get_rel_namespace(rel->rd_rel->oid))),
 	                quote_identifier(get_rel_name(rel->rd_rel->oid)));
 }
@@ -199,24 +199,24 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
-PostgresScanTableFunction::PostgresScanInitGlobal(duckdb::ClientContext &context,
+PostgresScanTableFunction::PostgresScanInitGlobal(__attribute__((unused)) duckdb::ClientContext &context,
                                                   duckdb::TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresScanFunctionData>();
 	auto global_state = duckdb::make_uniq<PostgresScanGlobalState>(bind_data.snapshot, bind_data.rel, input);
-	return std::move(global_state);
+	return global_state;
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
-PostgresScanTableFunction::PostgresScanInitLocal(duckdb::ExecutionContext &context,
-                                                 duckdb::TableFunctionInitInput &input,
+PostgresScanTableFunction::PostgresScanInitLocal(__attribute__((unused)) duckdb::ExecutionContext &context,
+                                                 __attribute__((unused)) duckdb::TableFunctionInitInput &input,
                                                  duckdb::GlobalTableFunctionState *gstate) {
 	auto global_state = reinterpret_cast<PostgresScanGlobalState *>(gstate);
 	return duckdb::make_uniq<PostgresScanLocalState>(global_state);
 }
 
 void
-PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &context, duckdb::TableFunctionInput &data,
-                                                duckdb::DataChunk &output) {
+PostgresScanTableFunction::PostgresScanFunction(__attribute__((unused)) duckdb::ClientContext &context,
+                                                duckdb::TableFunctionInput &data, duckdb::DataChunk &output) {
 	auto &local_state = data.local_state->Cast<PostgresScanLocalState>();
 
 	local_state.output_vector_size = 0;
@@ -251,7 +251,8 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &context, 
 }
 
 duckdb::unique_ptr<duckdb::NodeStatistics>
-PostgresScanTableFunction::PostgresScanCardinality(duckdb::ClientContext &context, const duckdb::FunctionData *data) {
+PostgresScanTableFunction::PostgresScanCardinality(__attribute__((unused)) duckdb::ClientContext &context,
+                                                   const duckdb::FunctionData *data) {
 	auto &bind_data = data->Cast<PostgresScanFunctionData>();
 	return duckdb::make_uniq<duckdb::NodeStatistics>(bind_data.cardinality, bind_data.cardinality);
 }
