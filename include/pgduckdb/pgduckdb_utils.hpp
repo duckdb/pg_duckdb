@@ -17,12 +17,15 @@ struct ErrorContextCallback;
 struct MemoryContextData;
 
 typedef struct MemoryContextData *MemoryContext;
+typedef char *pg_stack_base_t;
 
 extern sigjmp_buf *PG_exception_stack;
 extern MemoryContext CurrentMemoryContext;
 extern ErrorContextCallback *error_context_stack;
 extern ErrorData *CopyErrorData();
 extern void FlushErrorState();
+extern pg_stack_base_t set_stack_base();
+extern void restore_stack_base(pg_stack_base_t base);
 }
 
 namespace pgduckdb {
@@ -43,6 +46,19 @@ struct PgExceptionGuard {
 
 	sigjmp_buf *_save_exception_stack;
 	ErrorContextCallback *_save_context_stack;
+};
+
+/*
+ * DuckdbGlobalLock should be held before calling.
+ */
+struct PostgresScopedStackReset {
+	PostgresScopedStackReset() {
+		saved_current_stack = set_stack_base();
+	}
+	~PostgresScopedStackReset() {
+		restore_stack_base(saved_current_stack);
+	}
+	pg_stack_base_t saved_current_stack;
 };
 
 /*

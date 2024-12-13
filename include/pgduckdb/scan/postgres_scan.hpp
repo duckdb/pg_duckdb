@@ -22,6 +22,9 @@ struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 	}
 	void ConstructTableScanQuery(duckdb::TableFunctionInitInput &input);
 
+private:
+	std::string ConstructFullyQualifiedTableName(Relation rel);
+
 public:
 	Snapshot snapshot;
 	Relation rel;
