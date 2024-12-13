@@ -23,7 +23,7 @@ private:
 private:
 	QueryDesc *table_scan_query_desc;
 	PlanState *table_scan_planstate;
-	ParallelExecutorInfo *pei;
+	ParallelExecutorInfo *parallel_executor_info;
 	void **parallel_worker_readers;
 	TupleTableSlot *slot;
 	int nworkers_launched;

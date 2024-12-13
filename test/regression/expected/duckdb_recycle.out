@@ -13,10 +13,10 @@ EXPLAIN SELECT count(*) FROM ta;
  │        count_star()       │
  └─────────────┬─────────────┘
  ┌─────────────┴─────────────┐
- │     POSTGRES_SEQ_SCAN     │
+ │       POSTGRES_SCAN       │
  │    ────────────────────   │
  │         Function:         │
- │     POSTGRES_SEQ_SCAN     │
+ │       POSTGRES_SCAN       │
  │                           │
  │         ~2550 Rows        │
  └───────────────────────────┘
@@ -38,10 +38,10 @@ EXPLAIN SELECT count(*) FROM ta;
  │        count_star()       │
  └─────────────┬─────────────┘
  ┌─────────────┴─────────────┐
- │     POSTGRES_SEQ_SCAN     │
+ │       POSTGRES_SCAN       │
  │    ────────────────────   │
  │         Function:         │
- │     POSTGRES_SEQ_SCAN     │
+ │       POSTGRES_SCAN       │
  │                           │
  │         ~2550 Rows        │
  └───────────────────────────┘
