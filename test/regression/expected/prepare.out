@@ -105,6 +105,96 @@ SELECT name, statement, parameter_types FROM pg_prepared_statements
       |         SELECT b FROM tb WHERE a = $1 AND c = $2;   | 
 (4 rows)
 
+TRUNCATE tb;
+INSERT INTO tb VALUES(10, 10, 'test');
+INSERT INTO tb VALUES(100, 100, 'pg_duckdb');
+PREPARE q5(int, varchar) AS
+	SELECT b FROM tb WHERE a = $1 AND b = $1 AND c = $2;
+EXECUTE q5(10, 'test');
+ b  
+----
+ 10
+(1 row)
+
+EXECUTE q5(100, 'pg_duckdb');
+  b  
+-----
+ 100
+(1 row)
+
+-- q1 q2 q3 q4 q5
+SELECT name, statement, parameter_types FROM pg_prepared_statements
+    ORDER BY name;
+ name |                          statement                           |        parameter_types        
+------+--------------------------------------------------------------+-------------------------------
+ q1   | PREPARE q1(text) AS                                         +| {text}
+      |         SELECT datname, datistemplate, datallowconn         +| 
+      |         FROM copy_database WHERE datname = $1;               | 
+ q2   | PREPARE q2 AS SELECT COUNT(*) FROM ta;                       | {}
+ q3   | PREPARE q3(int) AS                                          +| {integer}
+      |         SELECT * FROM ta WHERE a = $1;                       | 
+ q4   | PREPARE q4(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE a = $1 AND c = $2;            | 
+ q5   | PREPARE q5(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE a = $1 AND b = $1 AND c = $2; | 
+(5 rows)
+
+PREPARE q6(int, varchar) AS
+	SELECT b FROM tb WHERE c = $2;
+EXECUTE q6(10, 'test');
+ b  
+----
+ 10
+(1 row)
+
+-- q1 q2 q3 q4 q5 q6
+SELECT name, statement, parameter_types FROM pg_prepared_statements
+    ORDER BY name;
+ name |                          statement                           |        parameter_types        
+------+--------------------------------------------------------------+-------------------------------
+ q1   | PREPARE q1(text) AS                                         +| {text}
+      |         SELECT datname, datistemplate, datallowconn         +| 
+      |         FROM copy_database WHERE datname = $1;               | 
+ q2   | PREPARE q2 AS SELECT COUNT(*) FROM ta;                       | {}
+ q3   | PREPARE q3(int) AS                                          +| {integer}
+      |         SELECT * FROM ta WHERE a = $1;                       | 
+ q4   | PREPARE q4(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE a = $1 AND c = $2;            | 
+ q5   | PREPARE q5(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE a = $1 AND b = $1 AND c = $2; | 
+ q6   | PREPARE q6(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE c = $2;                       | 
+(6 rows)
+
+PREPARE q7(int, varchar) AS
+	SELECT b FROM tb WHERE a = $1;
+EXECUTE q7(100, 'pg_duckdb');
+  b  
+-----
+ 100
+(1 row)
+
+-- q1 q2 q3 q4 q5 q6 q7
+SELECT name, statement, parameter_types FROM pg_prepared_statements
+    ORDER BY name;
+ name |                          statement                           |        parameter_types        
+------+--------------------------------------------------------------+-------------------------------
+ q1   | PREPARE q1(text) AS                                         +| {text}
+      |         SELECT datname, datistemplate, datallowconn         +| 
+      |         FROM copy_database WHERE datname = $1;               | 
+ q2   | PREPARE q2 AS SELECT COUNT(*) FROM ta;                       | {}
+ q3   | PREPARE q3(int) AS                                          +| {integer}
+      |         SELECT * FROM ta WHERE a = $1;                       | 
+ q4   | PREPARE q4(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE a = $1 AND c = $2;            | 
+ q5   | PREPARE q5(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE a = $1 AND b = $1 AND c = $2; | 
+ q6   | PREPARE q6(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE c = $2;                       | 
+ q7   | PREPARE q7(int, varchar) AS                                 +| {integer,"character varying"}
+      |         SELECT b FROM tb WHERE a = $1;                       | 
+(7 rows)
+
 -- test DEALLOCATE ALL;
 DEALLOCATE ALL;
 SELECT name, statement, parameter_types FROM pg_prepared_statements

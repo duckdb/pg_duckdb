@@ -45,6 +45,34 @@ EXECUTE q4(1, 'pg_duckdb');
 SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
+TRUNCATE tb;
+INSERT INTO tb VALUES(10, 10, 'test');
+INSERT INTO tb VALUES(100, 100, 'pg_duckdb');
+PREPARE q5(int, varchar) AS
+	SELECT b FROM tb WHERE a = $1 AND b = $1 AND c = $2;
+EXECUTE q5(10, 'test');
+EXECUTE q5(100, 'pg_duckdb');
+
+-- q1 q2 q3 q4 q5
+SELECT name, statement, parameter_types FROM pg_prepared_statements
+    ORDER BY name;
+
+PREPARE q6(int, varchar) AS
+	SELECT b FROM tb WHERE c = $2;
+EXECUTE q6(10, 'test');
+
+-- q1 q2 q3 q4 q5 q6
+SELECT name, statement, parameter_types FROM pg_prepared_statements
+    ORDER BY name;
+
+PREPARE q7(int, varchar) AS
+	SELECT b FROM tb WHERE a = $1;
+EXECUTE q7(100, 'pg_duckdb');
+
+-- q1 q2 q3 q4 q5 q6 q7
+SELECT name, statement, parameter_types FROM pg_prepared_statements
+    ORDER BY name;
+
 -- test DEALLOCATE ALL;
 DEALLOCATE ALL;
 SELECT name, statement, parameter_types FROM pg_prepared_statements
