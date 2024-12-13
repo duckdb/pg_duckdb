@@ -1,49 +1,19 @@
-#include "duckdb/main/client_context.hpp"
-#include "duckdb/function/replacement_scan.hpp"
-#include "duckdb/parser/tableref/table_function_ref.hpp"
-#include "duckdb/parser/parser.hpp"
-#include "duckdb/parser/tableref/subqueryref.hpp"
-#include "duckdb/parser/expression/function_expression.hpp"
-#include "duckdb/parser/statement/select_statement.hpp"
-#include "duckdb/parser/expression/constant_expression.hpp"
-#include "duckdb/parser/expression/comparison_expression.hpp"
-#include "duckdb/parser/expression/columnref_expression.hpp"
-#include "duckdb/parser/qualified_name.hpp"
-#include "duckdb/common/enums/statement_type.hpp"
-#include "duckdb/common/enums/expression_type.hpp"
-
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
-#include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/logger.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "access/htup_details.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_class.h"
-#include "optimizer/planmain.h"
-#include "optimizer/planner.h"
+#include "executor/tuptable.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
-#include "utils/regproc.h"
 #include "utils/rel.h"
-#include "utils/snapmgr.h"
-#include "utils/syscache.h"
-#include "tcop/tcopprot.h"
-#include "executor/execdesc.h"
-#include "executor/executor.h"
-
-#include "pgduckdb/vendor/pg_ruleutils.h"
-#include "pgduckdb/pgduckdb_ruleutils.h"
 }
-
-#include "pgduckdb/pgduckdb_process_lock.hpp"
 
 namespace pgduckdb {
 
@@ -141,7 +111,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 
 	scan_query << ";";
 
-	elog(DEBUG1, "scan_query: %s", scan_query.str().c_str());
+	pd_log(DEBUG1, "scan_query: %s", scan_query.str().c_str());
 }
 
 std::string
