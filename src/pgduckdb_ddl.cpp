@@ -20,6 +20,7 @@ extern "C" {
 #include "commands/event_trigger.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
+#include "rewrite/rewriteHandler.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
@@ -39,33 +40,70 @@ extern "C" {
  * tables we force this value to false.
  */
 static bool ctas_skip_data = false;
+static List *ctas_original_target_list = NIL;
 
 static bool top_level_ddl = true;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
 static void
-DuckdbHandleDDL(Node *parsetree) {
+DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/* We're not installed, so don't mess with the query */
 		return;
 	}
 
+	Node *parsetree = pstmt->utilityStmt;
+
 	if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
-		if (strcmp(access_method, "duckdb") != 0) {
-			/* not a duckdb table, so don't mess with the query */
+		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
+		if (is_duckdb_table) {
+			/*
+			 * Force skipData to false for duckdb tables, so that Postgres does
+			 * not execute the query, and save the original value in ctas_skip_data
+			 * so we can use it later in duckdb_create_table_trigger to choose
+			 * whether to execute the query in DuckDB or not.
+			 */
+			ctas_skip_data = stmt->into->skipData;
+			stmt->into->skipData = true;
+		}
+		bool is_create_materialized_view = stmt->into->viewQuery != NULL;
+		bool skips_planning = stmt->into->skipData || is_create_materialized_view;
+		if (!skips_planning) {
+			// No need to plan here as well, because standard_ProcessUtility
+			// will already plan the query and thus get the correct columns.
 			return;
 		}
 
+		// TODO: Probably we should only do this if the targetlist actually
+		// contains some duckdb.unresolved_type or duckdb.row columns.
+		// XXX: This is a huge hack. Probably we should do something different
+		// here. The current hack doesn't work with materialized views yet.
+
+		List *rewritten;
+		PlannedStmt *plan;
+		Query *original_query = castNode(Query, stmt->query);
+		Query *query = (Query *)copyObjectImpl(original_query);
 		/*
-		 * Force skipData to false for duckdb tables, so that Postgres does
-		 * not execute the query, and save the original value in ctas_skip_data
-		 * so we can use it later in duckdb_create_table_trigger to choose
-		 * whether to execute the query in DuckDB or not.
+		 * Parse analysis was done already, but we still have to run the rule
+		 * rewriter.  We do not do AcquireRewriteLocks: we assume the query
+		 * either came straight from the parser, or suitable locks were
+		 * acquired by plancache.c.
 		 */
-		ctas_skip_data = stmt->into->skipData;
-		stmt->into->skipData = true;
+		rewritten = QueryRewrite(query);
+
+		/* SELECT should never rewrite to more or less than one SELECT query */
+		if (list_length(rewritten) != 1)
+			elog(ERROR, "unexpected rewrite result for CREATE TABLE AS SELECT");
+		query = linitial_node(Query, rewritten);
+		Assert(query->commandType == CMD_SELECT);
+
+		/* plan the query */
+		plan = pg_plan_query(query, query_string, CURSOR_OPT_PARALLEL_OK, params);
+		ctas_original_target_list = original_query->targetList;
+		original_query->targetList = plan->planTree->targetlist;
+
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
 		auto stmt = castNode(CreateSchemaStmt, parsetree);
 		if (stmt->schemaname) {
@@ -125,7 +163,7 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	bool prev_top_level_ddl = top_level_ddl;
 	top_level_ddl = context == PROCESS_UTILITY_TOPLEVEL;
 
-	DuckdbHandleDDL(parsetree);
+	DuckdbHandleDDL(pstmt, query_string, params);
 	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 
 	top_level_ddl = prev_top_level_ddl;
@@ -345,6 +383,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (IsA(parsetree, CreateTableAsStmt) && !ctas_skip_data) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
 		ctas_query = (Query *)stmt->query;
+		ctas_query->targetList = ctas_original_target_list;
 	}
 
 	pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
