@@ -6168,6 +6168,9 @@ get_target_list(List *targetList, deparse_context *context,
 			}
 			RangeTblEntry* rte = rt_fetch(varno, dpns->rtable);
 			char *original_column = strVal(list_nth(rte->eref->colnames, varattno - 1));
+			/* BUG: Thil logic breaks the following query:
+			 * SELECT * FROM (SELECT r['column00'] FROM read_csv('/home/jelte/work/pg_duckdb/test/regression/data/web_page.csv') r limit 1);
+			 */
 			duckdb_row_needs_as = strcmp(original_column, colname) != 0;
 		}
 
