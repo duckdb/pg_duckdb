@@ -44,11 +44,6 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	}
 
 	Relation rel = PostgresTable::OpenRelation(rel_oid);
-	if (IsRelView(rel)) {
-		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which
-		// will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
-		return nullptr;
-	}
 
 	duckdb::CreateTableInfo info;
 	info.table = entry_name;
