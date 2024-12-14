@@ -108,10 +108,6 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 			scan_query << ") ";
 		}
 	}
-
-	scan_query << ";";
-
-	pd_log(DEBUG1, "scan_query: %s", scan_query.str().c_str());
 }
 
 std::string
@@ -124,7 +120,8 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot snapshot, Relation rel
     : snapshot(snapshot), rel(rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       total_row_count(0) {
 	ConstructTableScanQuery(input);
-	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str());
+	table_reader_global_state =
+	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
 	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 
@@ -183,19 +180,26 @@ PostgresScanTableFunction::PostgresScanInitLocal(__attribute__((unused)) duckdb:
 	auto global_state = reinterpret_cast<PostgresScanGlobalState *>(gstate);
 	return duckdb::make_uniq<PostgresScanLocalState>(global_state);
 }
+void
+SetOutputCardinality(duckdb::DataChunk &output, PostgresScanLocalState &local_state) {
+	idx_t output_cardinality =
+	    local_state.output_vector_size <= STANDARD_VECTOR_SIZE ? local_state.output_vector_size : STANDARD_VECTOR_SIZE;
+	output.SetCardinality(output_cardinality);
+	local_state.output_vector_size -= output_cardinality;
+}
 
 void
 PostgresScanTableFunction::PostgresScanFunction(__attribute__((unused)) duckdb::ClientContext &context,
                                                 duckdb::TableFunctionInput &data, duckdb::DataChunk &output) {
 	auto &local_state = data.local_state->Cast<PostgresScanLocalState>();
 
-	local_state.output_vector_size = 0;
-
-	/* We have exhausted seq scan of heap table so we can return */
+	/* We have exhausted table scan */
 	if (local_state.exhausted_scan) {
-		output.SetCardinality(0);
+		SetOutputCardinality(output, local_state);
 		return;
 	}
+
+	local_state.output_vector_size = 0;
 
 	int i = 0;
 	for (; i < STANDARD_VECTOR_SIZE; i++) {
@@ -208,16 +212,12 @@ PostgresScanTableFunction::PostgresScanFunction(__attribute__((unused)) duckdb::
 		InsertTupleIntoChunk(output, local_state, slot);
 	}
 
+	/* If we finish before reading complete vector means that scan was exhausted. */
 	if (i != STANDARD_VECTOR_SIZE) {
 		local_state.exhausted_scan = true;
 	}
 
-	/* Special case when we only use COUNT(*). We only update output capactity. */
-	if (local_state.global_state->count_tuples_only && local_state.output_vector_size < STANDARD_VECTOR_SIZE) {
-		output.SetCapacity(local_state.output_vector_size);
-	}
-
-	output.SetCardinality(local_state.output_vector_size);
+	SetOutputCardinality(output, local_state);
 }
 
 duckdb::unique_ptr<duckdb::NodeStatistics>
