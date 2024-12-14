@@ -1305,6 +1305,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 	auto scan_global_state = scan_local_state.global_state;
 
 	if (scan_global_state->count_tuples_only) {
+		/* COUNT(*) returned tuple will have only one value returned as first tuple element. */
 		scan_global_state->total_row_count += slot->tts_values[0];
 		scan_local_state.output_vector_size += slot->tts_values[0];
 		return;
