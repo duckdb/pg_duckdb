@@ -116,8 +116,8 @@ PostgresScanGlobalState::ConstructFullyQualifiedTableName() {
 	                quote_identifier(get_rel_name(rel->rd_rel->oid)));
 }
 
-PostgresScanGlobalState::PostgresScanGlobalState(Snapshot snapshot, Relation rel, duckdb::TableFunctionInitInput &input)
-    : snapshot(snapshot), rel(rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
+PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _rel, duckdb::TableFunctionInitInput &input)
+    : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       total_row_count(0) {
 	ConstructTableScanQuery(input);
 	table_reader_global_state =
@@ -132,8 +132,8 @@ PostgresScanGlobalState::~PostgresScanGlobalState() {
 // PostgresScanLocalState
 //
 
-PostgresScanLocalState::PostgresScanLocalState(PostgresScanGlobalState *global_state)
-    : global_state(global_state), exhausted_scan(false) {
+PostgresScanLocalState::PostgresScanLocalState(PostgresScanGlobalState *_global_state)
+    : global_state(_global_state), exhausted_scan(false) {
 }
 
 PostgresScanLocalState::~PostgresScanLocalState() {
@@ -143,8 +143,8 @@ PostgresScanLocalState::~PostgresScanLocalState() {
 // PostgresSeqScanFunctionData
 //
 
-PostgresScanFunctionData::PostgresScanFunctionData(Relation rel, uint64_t cardinality, Snapshot snapshot)
-    : rel(rel), cardinality(cardinality), snapshot(snapshot) {
+PostgresScanFunctionData::PostgresScanFunctionData(Relation _rel, uint64_t _cardinality, Snapshot _snapshot)
+    : rel(_rel), cardinality(_cardinality), snapshot(_snapshot) {
 }
 
 PostgresScanFunctionData::~PostgresScanFunctionData() {
