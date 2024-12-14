@@ -102,7 +102,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 				scan_query << " AND ";
 			}
 			first = false;
-			scan_query << " (";
+			scan_query << "(";
 			auto attr = table_tuple_desc->attrs[attr_num - 1];
 			scan_query << filter->ToString(attr.attname.data).c_str();
 			scan_query << ") ";
