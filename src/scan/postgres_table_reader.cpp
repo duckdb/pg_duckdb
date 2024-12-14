@@ -62,7 +62,7 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 		if (count_tuples_only) {
 			/* For count_tuples_only we will try to execute aggregate node on table scan */
 			planned_stmt->planTree->parallel_aware = true;
-			marked_parallel_aware =  MarkPlanParallelAware((Plan *)table_scan_query_desc->planstate->plan->lefttree);
+			marked_parallel_aware = MarkPlanParallelAware((Plan *)table_scan_query_desc->planstate->plan->lefttree);
 		} else {
 			marked_parallel_aware = MarkPlanParallelAware(table_scan_query_desc->planstate->plan);
 		}
@@ -72,8 +72,11 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	if (persistence != RELPERSISTENCE_TEMP && marked_parallel_aware) {
 
 		int parallel_workers = ParallelWorkerNumber(planned_stmt->planTree->plan_rows);
+		bool interrupts_can_be_process = INTERRUPTS_CAN_BE_PROCESSED();
 
-		RESUME_CANCEL_INTERRUPTS();
+		if (!interrupts_can_be_process) {
+			RESUME_CANCEL_INTERRUPTS();
+		}
 
 		if (!IsInParallelMode()) {
 			EnterParallelMode();
@@ -94,7 +97,9 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 			memcpy(parallel_worker_readers, parallel_executor_info->reader, nreaders * sizeof(TupleQueueReader *));
 		}
 
-		HOLD_CANCEL_INTERRUPTS();
+		if (!interrupts_can_be_process) {
+			HOLD_CANCEL_INTERRUPTS();
+		}
 	}
 
 	elog(DEBUG1, "(PGDuckdDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
