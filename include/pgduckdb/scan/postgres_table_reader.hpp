@@ -12,14 +12,15 @@ namespace pgduckdb {
 
 class PostgresTableReader {
 public:
-	PostgresTableReader(const char *table_scan_query);
+	PostgresTableReader(const char *table_scan_query, bool count_tuples_only);
 	~PostgresTableReader();
 	TupleTableSlot *GetNextTuple();
 
 private:
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
-
+	std::string ExplainScanPlan(QueryDesc *query_desc);
+	bool MarkPlanParallelAware(Plan *plan);
 private:
 	QueryDesc *table_scan_query_desc;
 	PlanState *table_scan_planstate;

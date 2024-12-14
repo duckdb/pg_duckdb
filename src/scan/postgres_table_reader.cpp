@@ -7,6 +7,7 @@ extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
 #include "access/xact.h"
+#include "commands/explain.h"
 #include "executor/executor.h"
 #include "executor/execParallel.h"
 #include "executor/tqueue.h"
@@ -24,7 +25,7 @@ extern "C" {
 
 namespace pgduckdb {
 
-PostgresTableReader::PostgresTableReader(const char *table_scan_query)
+PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool count_tuples_only)
     : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
       entered_parallel_mode(false) {
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
@@ -55,10 +56,20 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query)
 	table_scan_planstate =
 	    PostgresFunctionGuard(ExecInitNode, planned_stmt->planTree, table_scan_query_desc->estate, 0);
 
-	/* Temp tables can be excuted with parallel workers */
-	if (persistence != RELPERSISTENCE_TEMP) {
+	bool marked_parallel_aware = false;
 
-		table_scan_query_desc->planstate->plan->parallel_aware = true;
+	if (persistence != RELPERSISTENCE_TEMP) {
+		if (count_tuples_only) {
+			/* For count_tuples_only we will try to execute aggregate node on table scan */
+			planned_stmt->planTree->parallel_aware = true;
+			marked_parallel_aware =  MarkPlanParallelAware((Plan *)table_scan_query_desc->planstate->plan->lefttree);
+		} else {
+			marked_parallel_aware = MarkPlanParallelAware(table_scan_query_desc->planstate->plan);
+		}
+	}
+
+	/* Temp tables can be excuted with parallel workers, and whole plan should be parallel aware */
+	if (persistence != RELPERSISTENCE_TEMP && marked_parallel_aware) {
 
 		int parallel_workers = ParallelWorkerNumber(planned_stmt->planTree->plan_rows);
 
@@ -85,6 +96,10 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query)
 
 		HOLD_CANCEL_INTERRUPTS();
 	}
+
+	elog(DEBUG1, "(PGDuckdDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
+	     !nreaders ? "IN PROCESS THREAD" : psprintf("ON %d PARALLEL WORKER(S)", nreaders),
+	     ExplainScanPlan(table_scan_query_desc).c_str());
 
 	slot = PostgresFunctionGuard(ExecInitExtraTupleSlot, table_scan_query_desc->estate,
 	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
@@ -125,6 +140,50 @@ PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
 	int cardinality_log = std::log2(cardinality);
 	int base = cardinality_log / base_log;
 	return std::max(1, std::min(base, std::max(max_workers_per_postgres_scan, max_parallel_workers)));
+}
+
+std::string
+PostgresTableReader::ExplainScanPlan(QueryDesc *query_desc) {
+	ExplainState *es = (ExplainState *)PostgresFunctionGuard(palloc0, sizeof(ExplainState));
+	es->str = makeStringInfo();
+	es->format = EXPLAIN_FORMAT_TEXT;
+	PostgresFunctionGuard(ExplainPrintPlan, es, query_desc);
+	// // Remove new line char from explain output
+	// es->str->data[es->str->len - 1] = 0;
+	std::string explain_scan(es->str->data);
+	return explain_scan;
+}
+
+bool
+PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
+	switch (nodeTag(plan)) {
+	case T_SeqScan:
+	case T_IndexScan:
+	case T_IndexOnlyScan: {
+		plan->parallel_aware = true;
+		return true;
+	}
+	case T_BitmapHeapScan: {
+		plan->parallel_aware = true;
+		return MarkPlanParallelAware(plan->lefttree);
+	}
+	case T_BitmapIndexScan: {
+		((BitmapIndexScan *)plan)->isshared = true;
+		return true;
+	}
+	case T_BitmapAnd: {
+		return MarkPlanParallelAware((Plan *)linitial(((BitmapAnd *)plan)->bitmapplans));
+	}
+	case T_BitmapOr: {
+		((BitmapOr *)plan)->isshared = true;
+		return MarkPlanParallelAware((Plan *)linitial(((BitmapOr *)plan)->bitmapplans));
+	}
+	default: {
+		std::ostringstream oss;
+		oss << "Unknown postgres scan query plan node: " << nodeTag(plan);
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
+	}
+	}
 }
 
 TupleTableSlot *
