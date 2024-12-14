@@ -35,8 +35,13 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	Assert(list_length(raw_parsetree_list) == 1);
 	RawStmt *raw_parsetree = linitial_node(RawStmt, raw_parsetree_list);
 
+#if PG_VERSION_NUM >= 150000
 	List *query_list =
 	    PostgresFunctionGuard(pg_analyze_and_rewrite_fixedparams, raw_parsetree, table_scan_query, nullptr, 0, nullptr);
+#else
+	List *query_list =
+	    PostgresFunctionGuard(pg_analyze_and_rewrite, raw_parsetree, table_scan_query, nullptr, 0, nullptr);
+#endif
 
 	Assert(list_length(query_list) == 1);
 	Query *query = linitial_node(Query, query_list);
