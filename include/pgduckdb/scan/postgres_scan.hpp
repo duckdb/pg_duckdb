@@ -29,7 +29,6 @@ public:
 	Snapshot snapshot;
 	Relation rel;
 	TupleDesc table_tuple_desc;
-	std::mutex lock; // Lock for one replacement scan
 	bool count_tuples_only;
 	duckdb::vector<duckdb::pair<duckdb::idx_t, AttrNumber>> output_columns;
 	std::atomic<std::uint32_t> total_row_count;

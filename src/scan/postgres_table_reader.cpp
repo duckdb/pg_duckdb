@@ -148,8 +148,6 @@ PostgresTableReader::ExplainScanPlan(QueryDesc *query_desc) {
 	es->str = makeStringInfo();
 	es->format = EXPLAIN_FORMAT_TEXT;
 	PostgresFunctionGuard(ExplainPrintPlan, es, query_desc);
-	// // Remove new line char from explain output
-	// es->str->data[es->str->len - 1] = 0;
 	std::string explain_scan(es->str->data);
 	return explain_scan;
 }
