@@ -33,7 +33,7 @@ static constexpr char r2_filename_prefix[] = "r2://";
  * including the column names if provided in the original copy_stmt, e.g. my_table(column1, column2).
  */
 static void
-appendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *copy_stmt) {
+AppendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *copy_stmt) {
 	/* Open and lock the relation, using the appropriate lock type. */
 	Relation rel = table_openrv(copy_stmt->relation, AccessShareLock);
 	Oid relid = RelationGetRelid(rel);
@@ -117,8 +117,27 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 	}
 }
 
+static char *
+CommaSeparatedQuotedList(const List *names)
+{
+	StringInfoData string;
+	ListCell   *l;
+
+	initStringInfo(&string);
+
+	foreach(l, names)
+	{
+		if (l != list_head(names))
+			appendStringInfoChar(&string, ',');
+		appendStringInfoString(&string, quote_identifier(strVal(lfirst(l))));
+	}
+
+	return string.data;
+}
+
+
 static void
-appendCreateCopyOptions(StringInfo info, CopyStmt *copy_stmt) {
+AppendCreateCopyOptions(StringInfo info, CopyStmt *copy_stmt) {
 	if (list_length(copy_stmt->options) == 0) {
 		appendStringInfo(info, ";");
 		return;
@@ -150,7 +169,9 @@ appendCreateCopyOptions(StringInfo info, CopyStmt *copy_stmt) {
 				appendStringInfoString(info, quote_literal_cstr(defGetString(defel)));
 				break;
 			case T_List:
-				appendStringInfoString(info, NameListToQuotedString((List *)defel->arg));
+				appendStringInfo(info, "(");
+				appendStringInfoString(info, CommaSeparatedQuotedList((List *)defel->arg));
+				appendStringInfo(info, ")");
 				break;
 			case T_A_Star:
 				appendStringInfo(info, "*");
@@ -191,7 +212,7 @@ CheckRewritten(List *rewritten) {
 	}
 }
 
-bool starts_with(const char* str, const char* prefix) {
+bool CheckPrefix(const char* str, const char* prefix) {
 	while (*prefix) {
 		if (*prefix++ != *str++) {
 			return false;
@@ -208,9 +229,9 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 	}
 
 	/* Copy `filename` should start with S3/GS/R2 prefix */
-	if (!starts_with(copy_stmt->filename, s3_filename_prefix) &&
-	    !starts_with(copy_stmt->filename, gcs_filename_prefix) &&
-	    !starts_with(copy_stmt->filename, r2_filename_prefix)) {
+	if (!CheckPrefix(copy_stmt->filename, s3_filename_prefix) &&
+	    !CheckPrefix(copy_stmt->filename, gcs_filename_prefix) &&
+	    !CheckPrefix(copy_stmt->filename, r2_filename_prefix)) {
 		return nullptr;
 	}
 
@@ -244,13 +265,13 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 		ParseState *pstate = make_parsestate(NULL);
 		pstate->p_sourcetext = query_string;
 		pstate->p_queryEnv = query_env;
-		appendCreateRelationCopyString(rewritten_query_info, pstate, copy_stmt);
+		AppendCreateRelationCopyString(rewritten_query_info, pstate, copy_stmt);
 	}
 
 	appendStringInfo(rewritten_query_info, " TO ");
 	appendStringInfoString(rewritten_query_info, quote_literal_cstr(copy_stmt->filename));
 	appendStringInfo(rewritten_query_info, " ");
-	appendCreateCopyOptions(rewritten_query_info, copy_stmt);
+	AppendCreateCopyOptions(rewritten_query_info, copy_stmt);
 
 	elog(DEBUG2, "(PGDuckDB/CreateRelationCopyString) Rewritten query: \'%s\'", rewritten_query_info->data);
 
