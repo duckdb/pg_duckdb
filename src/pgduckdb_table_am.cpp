@@ -304,8 +304,8 @@ duckdb_scan_analyze_next_block(TableScanDesc /*scan*/, BlockNumber /*blockno*/, 
 #endif
 
 static bool
-duckdb_scan_analyze_next_tuple(TableScanDesc /*scan*/, TransactionId /*OldestXmin*/, double * /*liverows*/, double * /*deadrows*/,
-                               TupleTableSlot * /*slot*/) {
+duckdb_scan_analyze_next_tuple(TableScanDesc /*scan*/, TransactionId /*OldestXmin*/, double * /*liverows*/,
+                               double * /*deadrows*/, TupleTableSlot * /*slot*/) {
 	NOT_IMPLEMENTED();
 }
 

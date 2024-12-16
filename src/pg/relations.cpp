@@ -17,7 +17,8 @@ namespace pgduckdb {
 
 #undef RelationGetDescr
 
-TupleDesc RelationGetDescr(Relation rel) {
+TupleDesc
+RelationGetDescr(Relation rel) {
 	return rel->rd_att;
 }
 
@@ -66,7 +67,8 @@ CloseRelation(Relation rel) {
 	CurrentResourceOwner = saveResourceOwner;
 }
 
-void EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
+void
+EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
 	PostgresFunctionGuard(estimate_rel_size, rel, attr_widths, pages, tuples, allvisfrac);
 }
 

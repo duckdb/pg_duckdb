@@ -24,7 +24,7 @@ namespace pgduckdb {
 //
 
 HeapReaderGlobalState::HeapReaderGlobalState(Relation rel)
-: m_nblocks(RelationGetNumberOfBlocks(rel)), m_last_assigned_block_number(InvalidBlockNumber) {
+    : m_nblocks(RelationGetNumberOfBlocks(rel)), m_last_assigned_block_number(InvalidBlockNumber) {
 }
 
 BlockNumber
@@ -95,7 +95,7 @@ HeapReader::ReadPageTuples(duckdb::DataChunk &output) {
 		m_read_next_page = true;
 	} else {
 		block = m_block_number;
-		if(!m_read_next_page) {
+		if (!m_read_next_page) {
 			page = BufferGetPage(m_buffer);
 		}
 	}

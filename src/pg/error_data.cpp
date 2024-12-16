@@ -5,7 +5,8 @@ extern "C" {
 }
 
 namespace pgduckdb::pg {
-const char* GetErrorDataMessage(ErrorData* error_data) {
-  return error_data->message;
+const char *
+GetErrorDataMessage(ErrorData *error_data) {
+	return error_data->message;
 }
-} // namespace pgduckdb
+} // namespace pgduckdb::pg

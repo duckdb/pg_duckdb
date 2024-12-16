@@ -115,7 +115,7 @@ ExecuteQuery(DuckdbScanState *state) {
 			pg_param = &pg_params->params[i];
 		}
 
-		if (prepared.named_param_map.count(duckdb::to_string(i + 1)) == 0){
+		if (prepared.named_param_map.count(duckdb::to_string(i + 1)) == 0) {
 			continue;
 		}
 

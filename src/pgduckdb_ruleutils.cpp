@@ -381,7 +381,7 @@ pgduckdb_is_not_default_expr(Node *node, void *context) {
 		return true;
 	} else if (IsA(node, Const)) {
 		/* If location is -1, it comes from the DEFAULT clause */
-		Const *con = (Const *) node;
+		Const *con = (Const *)node;
 		if (con->location != -1) {
 			return true;
 		}
