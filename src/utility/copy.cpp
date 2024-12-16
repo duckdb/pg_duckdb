@@ -118,15 +118,13 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 }
 
 static char *
-CommaSeparatedQuotedList(const List *names)
-{
+CommaSeparatedQuotedList(const List *names) {
 	StringInfoData string;
-	ListCell   *l;
+	ListCell *l;
 
 	initStringInfo(&string);
 
-	foreach(l, names)
-	{
+	foreach (l, names) {
 		if (l != list_head(names))
 			appendStringInfoChar(&string, ',');
 		appendStringInfoString(&string, quote_identifier(strVal(lfirst(l))));
@@ -134,7 +132,6 @@ CommaSeparatedQuotedList(const List *names)
 
 	return string.data;
 }
-
 
 static void
 AppendCreateCopyOptions(StringInfo info, CopyStmt *copy_stmt) {
@@ -198,7 +195,7 @@ CheckRewritten(List *rewritten) {
 		                errmsg("DO INSTEAD NOTHING rules are not supported for COPY")));
 	} else if (list_length(rewritten) > 1) {
 		/* examine queries to determine which error message to issue */
-		foreach_node (Query, q, rewritten) {
+		foreach_node(Query, q, rewritten) {
 			if (q->querySource == QSRC_QUAL_INSTEAD_RULE)
 				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 				                errmsg("conditional DO INSTEAD rules are not supported for COPY")));
@@ -212,7 +209,8 @@ CheckRewritten(List *rewritten) {
 	}
 }
 
-bool CheckPrefix(const char* str, const char* prefix) {
+bool
+CheckPrefix(const char *str, const char *prefix) {
 	while (*prefix) {
 		if (*prefix++ != *str++) {
 			return false;
@@ -221,7 +219,7 @@ bool CheckPrefix(const char* str, const char* prefix) {
 	return true;
 }
 
-const char*
+const char *
 MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env) {
 	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
 	if (!copy_stmt->filename) {

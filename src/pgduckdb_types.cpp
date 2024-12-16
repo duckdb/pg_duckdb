@@ -223,7 +223,7 @@ ConvertDoubleDatum(const duckdb::Value &value) {
 
 template <class T, class OP = DecimalConversionInteger>
 void
-ConvertNumeric(const duckdb::Value& ddb_value, idx_t scale, NumericVar& result) {
+ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) {
 	result.dscale = scale;
 
 	T value = ddb_value.GetValueUnsafe<T>();

@@ -82,8 +82,8 @@ duckdb::unique_ptr<duckdb::LocalTableFunctionState>
 PostgresSeqScanFunction::PostgresSeqScanInitLocal(duckdb::ExecutionContext &, duckdb::TableFunctionInitInput &,
                                                   duckdb::GlobalTableFunctionState *gstate) {
 	auto global_state = reinterpret_cast<PostgresSeqScanGlobalState *>(gstate);
-	return duckdb::make_uniq<PostgresSeqScanLocalState>(
-	    global_state->m_rel, global_state->m_heap_reader_global_state, global_state->m_global_state);
+	return duckdb::make_uniq<PostgresSeqScanLocalState>(global_state->m_rel, global_state->m_heap_reader_global_state,
+	                                                    global_state->m_global_state);
 }
 
 void
