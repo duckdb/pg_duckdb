@@ -14,6 +14,7 @@ extern "C" {
 #include "nodes/nodeFuncs.h"
 #include "nodes/print.h"
 #include "nodes/primnodes.h"
+#include "parser/analyze.h"
 #include "tcop/utility.h"
 #include "tcop/pquery.h"
 #include "utils/rel.h"
@@ -37,6 +38,7 @@ static planner_hook_type prev_planner_hook = NULL;
 static ExecutorStart_hook_type prev_executor_start_hook = NULL;
 static ExecutorFinish_hook_type prev_executor_finish_hook = NULL;
 static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
+static post_parse_analyze_hook_type prev_post_parse_analyze_hook = NULL;
 
 static bool
 ContainsCatalogTable(List *rtes) {
@@ -360,6 +362,14 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 }
 
 void
+DuckdbPostParseAnalyzeHook(ParseState *pstate, Query *query, JumbleState *jstate) {
+	pprint(query);
+	if (prev_post_parse_analyze_hook) {
+		prev_post_parse_analyze_hook(pstate, query, jstate);
+	}
+}
+
+void
 DuckdbInitHooks(void) {
 	prev_planner_hook = planner_hook;
 	planner_hook = DuckdbPlannerHook;
@@ -372,6 +382,9 @@ DuckdbInitHooks(void) {
 
 	prev_explain_one_query_hook = ExplainOneQuery_hook ? ExplainOneQuery_hook : standard_ExplainOneQuery;
 	ExplainOneQuery_hook = DuckdbExplainOneQueryHook;
+
+	prev_post_parse_analyze_hook = post_parse_analyze_hook;
+	post_parse_analyze_hook = DuckdbPostParseAnalyzeHook;
 
 	DuckdbInitUtilityHook();
 }
