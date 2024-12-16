@@ -56,20 +56,18 @@ PostgresTable::GetTableCardinality(Relation rel) {
 }
 
 duckdb::unique_ptr<duckdb::BaseStatistics>
-PostgresTable::GetStatistics(__attribute__((unused)) duckdb::ClientContext &context,
-                             __attribute__((unused)) duckdb::column_t column_id) {
+PostgresTable::GetStatistics(duckdb::ClientContext &, duckdb::column_t) {
 	throw duckdb::NotImplementedException("GetStatistics not supported yet");
 }
 
 duckdb::TableFunction
-PostgresTable::GetScanFunction(__attribute__((unused)) duckdb::ClientContext &context,
-                               duckdb::unique_ptr<duckdb::FunctionData> &bind_data) {
+PostgresTable::GetScanFunction(duckdb::ClientContext &, duckdb::unique_ptr<duckdb::FunctionData> &bind_data) {
 	bind_data = duckdb::make_uniq<PostgresScanFunctionData>(rel, cardinality, snapshot);
 	return PostgresScanTableFunction();
 }
 
 duckdb::TableStorageInfo
-PostgresTable::GetStorageInfo(__attribute__((unused)) duckdb::ClientContext &context) {
+PostgresTable::GetStorageInfo(duckdb::ClientContext &) {
 	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
 }
 
