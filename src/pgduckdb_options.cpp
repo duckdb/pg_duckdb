@@ -265,7 +265,7 @@ DuckdbGetCachedFilesInfos() {
 				break;
 			}
 			cache_info.push_back(CacheFileInfo {metadata_tokens[0], metadata_tokens[1], std::stoll(metadata_tokens[2]),
-			                                    std::stoi(metadata_tokens[3])});
+			                                    std::stoll(metadata_tokens[3])});
 		}
 	}
 	return cache_info;
