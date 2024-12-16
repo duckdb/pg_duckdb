@@ -101,10 +101,12 @@ ExecuteQuery(DuckdbScanState *state) {
 	auto &connection = state->duckdb_connection;
 	auto pg_params = state->params;
 	const auto num_params = pg_params ? pg_params->numParams : 0;
-	duckdb::vector<duckdb::Value> duckdb_params;
+	duckdb::case_insensitive_map_t<duckdb::BoundParameterData> named_values;
+
 	for (int i = 0; i < num_params; i++) {
 		ParamExternData *pg_param;
 		ParamExternData tmp_workspace;
+		duckdb::Value duckdb_param;
 
 		/* give hook a chance in case parameter is dynamic */
 		if (pg_params->paramFetch != NULL) {
@@ -113,18 +115,23 @@ ExecuteQuery(DuckdbScanState *state) {
 			pg_param = &pg_params->params[i];
 		}
 
+		if (prepared.named_param_map.count(duckdb::to_string(i + 1)) == 0){
+			continue;
+		}
+
 		if (pg_param->isnull) {
-			duckdb_params.push_back(duckdb::Value());
+			duckdb_param = duckdb::Value();
 		} else if (OidIsValid(pg_param->ptype)) {
-			duckdb_params.push_back(pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype));
+			duckdb_param = pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype);
 		} else {
 			std::ostringstream oss;
 			oss << "parameter '" << i << "' has an invalid type (" << pg_param->ptype << ") during query execution";
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
 		}
+		named_values[duckdb::to_string(i + 1)] = duckdb::BoundParameterData(duckdb_param);
 	}
 
-	auto pending = prepared.PendingQuery(duckdb_params, true);
+	auto pending = prepared.PendingQuery(named_values, true);
 	if (pending->HasError()) {
 		return pending->ThrowError();
 	}
