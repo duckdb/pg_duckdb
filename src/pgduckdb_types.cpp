@@ -1312,7 +1312,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 	}
 	/* Write tuple columns in output vector. */
 	int duckdb_output_index = 0;
-	for (auto const &[_, attr_num] : scan_global_state->output_columns) {
+	for (auto const &attr_num : scan_global_state->output_columns) {
 		auto &result = output.data[duckdb_output_index];
 		if (slot->tts_isnull[duckdb_output_index]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);

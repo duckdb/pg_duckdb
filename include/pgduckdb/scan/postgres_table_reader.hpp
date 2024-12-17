@@ -15,11 +15,11 @@ public:
 	PostgresTableReader(const char *table_scan_query, bool count_tuples_only);
 	~PostgresTableReader();
 	TupleTableSlot *GetNextTuple();
-
+	void PostgresTableReaderCleanup();
 private:
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
-	std::string ExplainScanPlan(QueryDesc *query_desc);
+	const char * ExplainScanPlan(QueryDesc *query_desc);
 	bool MarkPlanParallelAware(Plan *plan);
 private:
 	QueryDesc *table_scan_query_desc;
