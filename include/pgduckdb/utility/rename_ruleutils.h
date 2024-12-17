@@ -23,7 +23,6 @@
 #define pg_get_statisticsobjdef_string   pgduckdb_pg_get_statisticsobjdef_string
 #define get_list_partvalue_string        pgduckdb_get_list_partvalue_string
 
-
 /*
  * The following replaces all usages of generate_qualified_relation_name and
  * generate_relation_name with calls to the pgduckdb_relation_name function

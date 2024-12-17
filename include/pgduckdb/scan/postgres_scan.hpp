@@ -30,7 +30,7 @@ public:
 	Relation rel;
 	TupleDesc table_tuple_desc;
 	bool count_tuples_only;
-	duckdb::vector<duckdb::pair<duckdb::idx_t, AttrNumber>> output_columns;
+	duckdb::vector<AttrNumber> output_columns;
 	std::atomic<std::uint32_t> total_row_count;
 	std::ostringstream scan_query;
 	duckdb::shared_ptr<PostgresTableReader> table_reader_global_state;

@@ -68,19 +68,18 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 	 */
 	if (input.CanRemoveFilterColumns()) {
 		for (const auto &projection_id : input.projection_ids) {
-			output_columns.emplace_back(projection_id, input.column_ids[projection_id] + 1);
+			output_columns.emplace_back(input.column_ids[projection_id] + 1);
 		}
 	} else {
-		duckdb::idx_t output_index = 0;
 		for (const auto &column_id : input.column_ids) {
-			output_columns.emplace_back(output_index++, column_id + 1);
+			output_columns.emplace_back(column_id + 1);
 		}
 	}
 
 	scan_query << "SELECT ";
 
 	bool first = true;
-	for (auto const &[duckdb_scanned_index, attr_num] : output_columns) {
+	for (auto const &attr_num : output_columns) {
 		if (!first) {
 			scan_query << ", ";
 		}
@@ -95,18 +94,22 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 
 	for (auto const &[attr_num, duckdb_scanned_index] : columns_to_scan) {
 		auto filter = column_filters[duckdb_scanned_index];
-		if (filter) {
-			if (first) {
-				scan_query << " WHERE ";
-			} else {
-				scan_query << " AND ";
-			}
-			first = false;
-			scan_query << "(";
-			auto attr = table_tuple_desc->attrs[attr_num - 1];
-			scan_query << filter->ToString(attr.attname.data).c_str();
-			scan_query << ") ";
+
+		if (!filter) {
+			continue;
 		}
+
+		if (first) {
+			scan_query << " WHERE ";
+		} else {
+			scan_query << " AND ";
+		}
+
+		first = false;
+		scan_query << "(";
+		auto attr = table_tuple_desc->attrs[attr_num - 1];
+		scan_query << filter->ToString(attr.attname.data).c_str();
+		scan_query << ") ";
 	}
 }
 
@@ -204,16 +207,12 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	for (; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (TupIsNull(slot)) {
+			local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
 			local_state.exhausted_scan = true;
 			break;
 		}
 		slot_getallattrs(slot);
 		InsertTupleIntoChunk(output, local_state, slot);
-	}
-
-	/* If we finish before reading complete vector means that scan was exhausted. */
-	if (i != STANDARD_VECTOR_SIZE) {
-		local_state.exhausted_scan = true;
 	}
 
 	SetOutputCardinality(output, local_state);

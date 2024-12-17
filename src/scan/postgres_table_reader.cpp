@@ -109,13 +109,19 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 
 	elog(DEBUG1, "(PGDuckdDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
 	     !nreaders ? "IN PROCESS THREAD" : psprintf("ON %d PARALLEL WORKER(S)", nreaders),
-	     ExplainScanPlan(table_scan_query_desc).c_str());
+	     ExplainScanPlan(table_scan_query_desc));
 
 	slot = PostgresFunctionGuard(ExecInitExtraTupleSlot, table_scan_query_desc->estate,
 	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
 }
 
 PostgresTableReader::~PostgresTableReader() {
+	if (table_scan_query_desc) {
+		PostgresTableReaderCleanup();
+	}
+}
+
+void PostgresTableReader::PostgresTableReaderCleanup() {
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 
 	PostgresScopedStackReset scoped_stack_reset;
@@ -127,13 +133,13 @@ PostgresTableReader::~PostgresTableReader() {
 		PostgresFunctionGuard(ExecParallelCleanup, parallel_executor_info);
 	}
 
-	parallel_executor_info = NULL;
+	parallel_executor_info = nullptr;
 
 	if (parallel_worker_readers) {
 		PostgresFunctionGuard(pfree, parallel_worker_readers);
 	}
 
-	parallel_worker_readers = NULL;
+	parallel_worker_readers = nullptr;
 
 	PostgresFunctionGuard(ExecutorFinish, table_scan_query_desc);
 	PostgresFunctionGuard(ExecutorEnd, table_scan_query_desc);
@@ -142,6 +148,8 @@ PostgresTableReader::~PostgresTableReader() {
 	if (entered_parallel_mode) {
 		ExitParallelMode();
 	}
+
+	table_scan_query_desc = nullptr;
 }
 
 int
@@ -152,15 +160,20 @@ PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
 	return std::max(1, std::min(base, std::max(max_workers_per_postgres_scan, max_parallel_workers)));
 }
 
-std::string
-PostgresTableReader::ExplainScanPlan(QueryDesc *query_desc) {
-	ExplainState *es = (ExplainState *)PostgresFunctionGuard(palloc0, sizeof(ExplainState));
+const char *
+ExplainScanPlan_Unsafe(QueryDesc *query_desc) {
+	ExplainState *es = (ExplainState *)palloc0(sizeof(ExplainState));
 	es->str = makeStringInfo();
 	es->format = EXPLAIN_FORMAT_TEXT;
-	PostgresFunctionGuard(ExplainPrintPlan, es, query_desc);
-	std::string explain_scan(es->str->data);
-	return explain_scan;
+	ExplainPrintPlan(es, query_desc);
+	return es->str->data;
 }
+
+const char *
+PostgresTableReader::ExplainScanPlan(QueryDesc *query_desc) {
+	return PostgresFunctionGuard(ExplainScanPlan_Unsafe, query_desc);
+}
+
 
 bool
 PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
@@ -208,7 +221,7 @@ PostgresTableReader::GetNextTuple() {
 		std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 		PostgresScopedStackReset scoped_stack_reset;
 		table_scan_query_desc->estate->es_query_dsa = parallel_executor_info ? parallel_executor_info->area : NULL;
-		thread_scan_slot = ExecProcNode(table_scan_planstate);
+		thread_scan_slot = PostgresFunctionGuard(ExecProcNode, table_scan_planstate);
 		table_scan_query_desc->estate->es_query_dsa = NULL;
 		if (!TupIsNull(thread_scan_slot)) {
 			return thread_scan_slot;
