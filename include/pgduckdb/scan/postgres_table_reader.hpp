@@ -16,11 +16,14 @@ public:
 	~PostgresTableReader();
 	TupleTableSlot *GetNextTuple();
 	void PostgresTableReaderCleanup();
+
 private:
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
 	const char * ExplainScanPlan(QueryDesc *query_desc);
+	bool CanTableScanRunInParallel(Plan *plan);
 	bool MarkPlanParallelAware(Plan *plan);
+
 private:
 	QueryDesc *table_scan_query_desc;
 	PlanState *table_scan_planstate;

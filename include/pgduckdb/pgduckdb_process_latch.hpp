@@ -16,7 +16,6 @@ extern void ResetLatch(Latch *latch);
 
 /* Defined in utils/wait_event.h */
 #define PG_WAIT_EXTENSION 0x07000000U
-
 }
 
 namespace pgduckdb {

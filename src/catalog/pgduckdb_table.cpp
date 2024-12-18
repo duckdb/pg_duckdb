@@ -46,15 +46,6 @@ PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, Relation rel) {
 	}
 }
 
-Cardinality
-PostgresTable::GetTableCardinality(Relation rel) {
-	Cardinality cardinality;
-	BlockNumber n_pages;
-	double allvisfrac;
-	EstimateRelSize(rel, NULL, &n_pages, &cardinality, &allvisfrac);
-	return cardinality;
-}
-
 duckdb::unique_ptr<duckdb::BaseStatistics>
 PostgresTable::GetStatistics(duckdb::ClientContext &, duckdb::column_t) {
 	throw duckdb::NotImplementedException("GetStatistics not supported yet");

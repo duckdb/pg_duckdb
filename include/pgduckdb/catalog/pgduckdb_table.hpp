@@ -26,7 +26,6 @@ public:
 public:
 	static Relation OpenRelation(Oid relid);
 	static void SetTableInfo(duckdb::CreateTableInfo &info, Relation rel);
-	static Cardinality GetTableCardinality(Relation rel);
 
 protected:
 	Relation rel;

@@ -61,17 +61,33 @@ ContainsCatalogTable(List *rtes) {
 }
 
 static bool
-ContainsPartitionedTable(List *rtes) {
+ContainsAllowedTableType(List *rtes, int elevel) {
 	foreach_node(RangeTblEntry, rte, rtes) {
 		if (rte->rtekind == RTE_SUBQUERY) {
 			/* Check whether any table in the subquery is a partitioned table */
-			if (ContainsPartitionedTable(rte->subquery->rtable)) {
+			if (ContainsAllowedTableType(rte->subquery->rtable, elevel)) {
 				return true;
 			}
 		}
 
-		if (rte->relkind == RELKIND_PARTITIONED_TABLE) {
+		/* Allow functions */
+		if (rte->rtekind == RTE_FUNCTION) {
 			return true;
+		}
+
+		switch (rte->relkind) {
+		case RELKIND_RELATION:
+		case RELKIND_INDEX:
+		case RELKIND_TOASTVALUE:
+		case RELKIND_VIEW:
+		case RELKIND_MATVIEW:
+		case RELKIND_FOREIGN_TABLE:
+		case RELKIND_PARTITIONED_TABLE:
+		case RELKIND_PARTITIONED_INDEX:
+			return true;
+		default:
+			elog(elevel, "DuckDB does not support querying table type '%c'", rte->relkind);
+			return false;
 		}
 	}
 	return false;
@@ -181,8 +197,7 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	/*
 	 * When accessing the partitioned table, we temporarily let PG handle it instead of DuckDB.
 	 */
-	if (ContainsPartitionedTable(query->rtable)) {
-		elog(elevel, "DuckDB does not support querying PG partitioned table");
+	if (!ContainsAllowedTableType(query->rtable, elevel)) {
 		return false;
 	}
 

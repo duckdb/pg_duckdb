@@ -39,6 +39,7 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	}
 
 	Oid rel_oid = GetRelidFromSchemaAndTable(name.c_str(), entry_name.c_str());
+
 	if (!IsValidOid(rel_oid)) {
 		return nullptr; // Table could not be found
 	}
@@ -49,7 +50,7 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	info.table = entry_name;
 	PostgresTable::SetTableInfo(info, rel);
 
-	auto cardinality = PostgresTable::GetTableCardinality(rel);
+	auto cardinality = EstimateRelSize(rel);
 	tables.emplace(entry_name, duckdb::make_uniq<PostgresTable>(schema->catalog, *schema, info, rel, cardinality,
 	                                                            schema->snapshot));
 	return tables[entry_name].get();
