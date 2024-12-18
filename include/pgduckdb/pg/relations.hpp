@@ -18,14 +18,12 @@ const char *GetAttName(const Form_pg_attribute);
 
 Form_pg_attribute GetAttr(const TupleDesc tupleDesc, int i);
 
-void EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac);
+double EstimateRelSize(Relation rel);
 
 Oid GetRelidFromSchemaAndTable(const char *, const char *);
 
 bool IsValidOid(Oid);
 
 bool IsValidBlockNumber(BlockNumber);
-
-bool IsRelView(Relation);
 
 } // namespace pgduckdb

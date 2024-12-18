@@ -67,9 +67,17 @@ CloseRelation(Relation rel) {
 	CurrentResourceOwner = saveResourceOwner;
 }
 
-void
-EstimateRelSize(Relation rel, int32_t *attr_widths, BlockNumber *pages, double *tuples, double *allvisfrac) {
-	PostgresFunctionGuard(estimate_rel_size, rel, attr_widths, pages, tuples, allvisfrac);
+double
+EstimateRelSize(Relation rel) {
+	Cardinality cardinality = 0;
+
+	if (RELKIND_HAS_TABLE_AM(rel->rd_rel->relkind) || rel->rd_rel->relkind == RELKIND_INDEX) {
+		BlockNumber pages;
+		double allvisfrac;
+		PostgresFunctionGuard(estimate_rel_size, rel, nullptr, &pages, &cardinality, &allvisfrac);
+	}
+
+	return cardinality;
 }
 
 Oid
@@ -89,11 +97,6 @@ GetRelidFromSchemaAndTable(const char *schema_name, const char *entry_name) {
 bool
 IsValidOid(Oid oid) {
 	return oid != InvalidOid;
-}
-
-bool
-IsRelView(Relation rel) {
-	return rel->rd_rel->relkind == RELKIND_VIEW;
 }
 
 bool

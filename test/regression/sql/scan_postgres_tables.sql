@@ -41,6 +41,23 @@ SELECT COUNT(*) FROM t1 AS t1_1, t1 AS t1_2 WHERE t1_1.a < 2 AND t1_2.a > 8;
 SET max_parallel_workers TO DEFAULT;
 
 
+-- PARTITIONED TABLE
+
+SET client_min_messages TO DEFAULT;
+CREATE TABLE partitioned_table(a int, b INT, c text) PARTITION BY RANGE (a);
+CREATE TABLE partition_1 PARTITION OF partitioned_table FOR VALUES FROM (0) TO (50);
+CREATE TABLE partition_2 PARTITION OF partitioned_table FOR VALUES FROM (50) TO (100);
+INSERT INTO partitioned_table SELECT g % 100, g, 'abcde_'||g from generate_series(1,100000) g;
+CREATE INDEX ON partitioned_table(b);
+SET client_min_messages TO DEBUG1;
+
+SELECT COUNT(*) FROM partitioned_table WHERE a < 25;
+SELECT COUNT(*) FROM partitioned_table WHERE a < 75;
+SELECT COUNT(*) FROM partitioned_table WHERE a < 25 OR a > 75;
+SELECT COUNT(*) FROM partitioned_table WHERE a < 25 AND b = 1;
+SELECT COUNT(*) FROM partitioned_table, t2 WHERE partitioned_table.a = t2.a AND partitioned_table.a < 2;
+
+
 SET enable_bitmapscan TO DEFAULT;
 SET client_min_messages TO DEFAULT;
-DROP TABLE t1, t2;
+DROP TABLE t1, t2, partitioned_table;

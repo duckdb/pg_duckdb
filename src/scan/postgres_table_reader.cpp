@@ -21,6 +21,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_guc.h"
 }
 
+#include "pgduckdb/vendor/pg_list.hpp"
+
 #include <cmath>
 
 namespace pgduckdb {
@@ -61,20 +63,19 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	table_scan_planstate =
 	    PostgresFunctionGuard(ExecInitNode, planned_stmt->planTree, table_scan_query_desc->estate, 0);
 
-	bool marked_parallel_aware = false;
+	bool run_scan_with_parallel_workers = persistence != RELPERSISTENCE_TEMP;
+	run_scan_with_parallel_workers &= CanTableScanRunInParallel(table_scan_query_desc->planstate->plan);
 
-	if (persistence != RELPERSISTENCE_TEMP) {
+	/* Temp tables can be excuted with parallel workers, and whole plan should be parallel aware */
+	if (run_scan_with_parallel_workers) {
+
 		if (count_tuples_only) {
 			/* For count_tuples_only we will try to execute aggregate node on table scan */
 			planned_stmt->planTree->parallel_aware = true;
-			marked_parallel_aware = MarkPlanParallelAware((Plan *)table_scan_query_desc->planstate->plan->lefttree);
+			MarkPlanParallelAware((Plan *)table_scan_query_desc->planstate->plan->lefttree);
 		} else {
-			marked_parallel_aware = MarkPlanParallelAware(table_scan_query_desc->planstate->plan);
+			MarkPlanParallelAware(table_scan_query_desc->planstate->plan);
 		}
-	}
-
-	/* Temp tables can be excuted with parallel workers, and whole plan should be parallel aware */
-	if (persistence != RELPERSISTENCE_TEMP && marked_parallel_aware) {
 
 		int parallel_workers = ParallelWorkerNumber(planned_stmt->planTree->plan_rows);
 		bool interrupts_can_be_process = INTERRUPTS_CAN_BE_PROCESSED();
@@ -121,7 +122,8 @@ PostgresTableReader::~PostgresTableReader() {
 	}
 }
 
-void PostgresTableReader::PostgresTableReaderCleanup() {
+void
+PostgresTableReader::PostgresTableReaderCleanup() {
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 
 	PostgresScopedStackReset scoped_stack_reset;
@@ -174,6 +176,30 @@ PostgresTableReader::ExplainScanPlan(QueryDesc *query_desc) {
 	return PostgresFunctionGuard(ExplainScanPlan_Unsafe, query_desc);
 }
 
+bool
+PostgresTableReader::CanTableScanRunInParallel(Plan *plan) {
+	switch (nodeTag(plan)) {
+	case T_SeqScan:
+	case T_IndexScan:
+	case T_IndexOnlyScan:
+	case T_BitmapHeapScan:
+		return true;
+	case T_Append: {
+		ListCell *l;
+		foreach (l, ((Append *)plan)->appendplans) {
+			if (!CanTableScanRunInParallel((Plan *)lfirst(l))) {
+				return false;
+			}
+		}
+		return true;
+	}
+	/* This is special case for COUNT(*) */
+	case T_Agg:
+		return true;
+	default:
+		return false;
+	}
+}
 
 bool
 PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
@@ -181,6 +207,10 @@ PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
 	case T_SeqScan:
 	case T_IndexScan:
 	case T_IndexOnlyScan: {
+		plan->parallel_aware = true;
+		return true;
+	}
+	case T_Append: {
 		plan->parallel_aware = true;
 		return true;
 	}
