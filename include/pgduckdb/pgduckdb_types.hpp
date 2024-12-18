@@ -6,8 +6,8 @@
 
 namespace pgduckdb {
 
-class PostgresScanGlobalState;
-class PostgresScanLocalState;
+struct PostgresScanGlobalState;
+struct PostgresScanLocalState;
 
 // DuckDB has date starting from 1/1/1970 while PG starts from 1/1/2000
 constexpr int32_t PGDUCKDB_DUCK_DATE_OFFSET = 10957;

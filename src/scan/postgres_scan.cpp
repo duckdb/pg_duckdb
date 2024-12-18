@@ -203,7 +203,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 	local_state.output_vector_size = 0;
 
-	int i = 0;
+	size_t i = 0;
 	for (; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (TupIsNull(slot)) {

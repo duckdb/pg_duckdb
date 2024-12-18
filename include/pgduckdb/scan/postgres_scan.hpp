@@ -45,7 +45,7 @@ public:
 
 public:
 	PostgresScanGlobalState *global_state;
-	int output_vector_size;
+	size_t output_vector_size;
 	bool exhausted_scan;
 };
 
