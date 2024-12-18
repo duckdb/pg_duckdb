@@ -814,3 +814,9 @@ RETURNS SETOF duckdb.row
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
+
+CREATE FUNCTION duckdb.query(query text)
+RETURNS SETOF duckdb.row
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
