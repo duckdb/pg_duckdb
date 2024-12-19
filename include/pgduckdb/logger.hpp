@@ -46,7 +46,7 @@ namespace pgduckdb {
 		pd_prevent_errno_in_scope(); \
 		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level"); \
 		if (message_level_is_interesting(elevel)) { \
-			std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock()); \
+			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock()); \
 			if (errstart(elevel, domain)) \
 				__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__); \
 		} \
