@@ -1,14 +1,10 @@
 #pragma once
 
-#include "duckdb.hpp"
-
 #include "pgduckdb/pg/declarations.hpp"
 
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
-
-// PostgresTableReader
 
 class PostgresTableReader {
 public:
@@ -24,7 +20,6 @@ private:
 	bool CanTableScanRunInParallel(Plan *plan);
 	bool MarkPlanParallelAware(Plan *plan);
 
-private:
 	QueryDesc *table_scan_query_desc;
 	PlanState *table_scan_planstate;
 	ParallelExecutorInfo *parallel_executor_info;
