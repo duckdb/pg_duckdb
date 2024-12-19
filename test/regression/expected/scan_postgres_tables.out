@@ -6,7 +6,7 @@ SELECT COUNT(*) FROM t1;
 DEBUG:  (PGDuckdDB/PostgresTableReader)
 
 QUERY: SELECT COUNT(*) FROM public.t1
-RUNNING: ON 1 PARALLEL WORKER(S).
+RUNNING: ON 2 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Aggregate
   ->  Parallel Seq Scan on t1
