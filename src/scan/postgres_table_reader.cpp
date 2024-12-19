@@ -227,10 +227,7 @@ PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
 	switch (nodeTag(plan)) {
 	case T_SeqScan:
 	case T_IndexScan:
-	case T_IndexOnlyScan: {
-		plan->parallel_aware = true;
-		return true;
-	}
+	case T_IndexOnlyScan:
 	case T_Append: {
 		plan->parallel_aware = true;
 		return true;
@@ -263,10 +260,8 @@ PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
  */
 TupleTableSlot *
 PostgresTableReader::GetNextTuple() {
-	MinimalTuple worker_minmal_tuple;
-	TupleTableSlot *thread_scan_slot;
 	if (nreaders > 0) {
-		worker_minmal_tuple = GetNextWorkerTuple();
+		MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
 		if (HeapTupleIsValid(worker_minmal_tuple)) {
 			PostgresFunctionGuard(ExecStoreMinimalTuple, worker_minmal_tuple, slot, false);
 			return slot;
@@ -274,7 +269,7 @@ PostgresTableReader::GetNextTuple() {
 	} else {
 		PostgresScopedStackReset scoped_stack_reset;
 		table_scan_query_desc->estate->es_query_dsa = parallel_executor_info ? parallel_executor_info->area : NULL;
-		thread_scan_slot = PostgresFunctionGuard(ExecProcNode, table_scan_planstate);
+		TupleTableSlot *thread_scan_slot = PostgresFunctionGuard(ExecProcNode, table_scan_planstate);
 		table_scan_query_desc->estate->es_query_dsa = NULL;
 		if (!TupIsNull(thread_scan_slot)) {
 			return thread_scan_slot;
@@ -287,11 +282,10 @@ PostgresTableReader::GetNextTuple() {
 MinimalTuple
 PostgresTableReader::GetNextWorkerTuple() {
 	int nvisited = 0;
+	TupleQueueReader *reader = NULL;
+	MinimalTuple minimal_tuple = NULL;
+	bool readerdone = false;
 	for (;;) {
-		TupleQueueReader *reader;
-		MinimalTuple minimal_tuple;
-		bool readerdone;
-
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
 
 		minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
@@ -301,6 +295,7 @@ PostgresTableReader::GetNextWorkerTuple() {
 			if (nreaders == 0) {
 				return NULL;
 			}
+
 			memmove(&parallel_worker_readers[next_parallel_reader], &parallel_worker_readers[next_parallel_reader + 1],
 			        sizeof(TupleQueueReader *) * (nreaders - next_parallel_reader));
 			if (next_parallel_reader >= nreaders) {
@@ -313,11 +308,12 @@ PostgresTableReader::GetNextWorkerTuple() {
 			return minimal_tuple;
 		}
 
-		next_parallel_reader++;
-		if (next_parallel_reader >= nreaders)
+		++next_parallel_reader;
+		if (next_parallel_reader >= nreaders) {
 			next_parallel_reader = 0;
+		}
 
-		nvisited++;
+		++nvisited;
 		if (nvisited >= nreaders) {
 			/*
 			 * It should be safe to make this call because function calling GetNextTuple() and transitively

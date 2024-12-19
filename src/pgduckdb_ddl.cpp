@@ -1,6 +1,3 @@
-#include "duckdb.hpp"
-#include <regex>
-
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 

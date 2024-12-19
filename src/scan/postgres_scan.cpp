@@ -14,7 +14,7 @@ namespace pgduckdb {
 //
 
 void
-PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput &input) {
+PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input) {
 	/* SELECT COUNT(*) FROM */
 	if (input.column_ids.size() == 1 && input.column_ids[0] == UINT64_MAX) {
 		scan_query << "SELECT COUNT(*) FROM " << pgduckdb::GenerateQualifiedRelationName(rel);
@@ -107,7 +107,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 }
 
 PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _rel,
-                                                 duckdb::TableFunctionInitInput &input)
+                                                 const duckdb::TableFunctionInitInput &input)
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       total_row_count(0) {
 	ConstructTableScanQuery(input);
@@ -198,15 +198,15 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 	local_state.output_vector_size = 0;
 
-	size_t i = 0;
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
-	for (; i < STANDARD_VECTOR_SIZE; i++) {
+	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; ++i) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {
 			local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
 			local_state.exhausted_scan = true;
 			break;
 		}
+
 		SlotGetAllAttrs(slot);
 		InsertTupleIntoChunk(output, local_state, slot);
 	}
