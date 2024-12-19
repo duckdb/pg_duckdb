@@ -69,15 +69,17 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	/* Temp tables can be excuted with parallel workers, and whole plan should be parallel aware */
 	if (run_scan_with_parallel_workers) {
 
+		int parallel_workers = 0;
 		if (count_tuples_only) {
 			/* For count_tuples_only we will try to execute aggregate node on table scan */
 			planned_stmt->planTree->parallel_aware = true;
 			MarkPlanParallelAware((Plan *)table_scan_query_desc->planstate->plan->lefttree);
+			parallel_workers = ParallelWorkerNumber(planned_stmt->planTree->lefttree->plan_rows);
 		} else {
 			MarkPlanParallelAware(table_scan_query_desc->planstate->plan);
+			parallel_workers = ParallelWorkerNumber(planned_stmt->planTree->plan_rows);
 		}
 
-		int parallel_workers = ParallelWorkerNumber(planned_stmt->planTree->plan_rows);
 		bool interrupts_can_be_process = INTERRUPTS_CAN_BE_PROCESSED();
 
 		if (!interrupts_can_be_process) {
