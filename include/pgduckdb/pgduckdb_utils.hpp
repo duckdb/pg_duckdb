@@ -49,7 +49,21 @@ struct PgExceptionGuard {
 };
 
 /*
- * DuckdbGlobalLock should be held before calling.
+ * PostgresScopedStackReset is a RAII class that saves the current stack base
+ * and restores it on destruction. When calling certain Postgres C functions
+ * from other threads than the main thread this is necessary to avoid Postgres
+ * throwing an error running out of stack space. In codepaths that postgres
+ * expects to be called recursively it checks if the stack size is still within
+ * the limit set by max_stack_depth. It does so by comparing the current stack
+ * pointer to the pointer it saved when starting the process. But since
+ * different threads have different stacks, this check will fail basically
+ * automatically if the thread is not the main thread. This class is a
+ * workaround for this problem, by configuring a new stack base matching the
+ * current location of the stack. This does mean that the stack might grow
+ * higher than, but for our use case this shouldn't matter anyway because we
+ * don't expect any recursive functions to be called. And even if we did expect
+ * that, the default max_stack_depth is conservative enough to handle this small
+ * bit of extra stack space.
  */
 struct PostgresScopedStackReset {
 	PostgresScopedStackReset() {
