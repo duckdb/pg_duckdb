@@ -1,7 +1,7 @@
 #include "pgduckdb/scan/postgres_table_reader.hpp"
-#include "pgduckdb/pgduckdb_process_latch.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pg/latch.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -29,7 +29,8 @@ namespace pgduckdb {
 
 PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool count_tuples_only)
     : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
-      entered_parallel_mode(false) {
+      entered_parallel_mode(false), last_known_latch_update_count(0) {
+
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
 
@@ -302,7 +303,8 @@ PostgresTableReader::GetNextWorkerTuple() {
 
 		nvisited++;
 		if (nvisited >= nreaders) {
-			GlobalProcessLatch::WaitGlobalLatch();
+			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+			pgduckdb::pg::WaitMyLatch(last_known_latch_update_count);
 			nvisited = 0;
 		}
 	}
