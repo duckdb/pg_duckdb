@@ -53,3 +53,13 @@ CREATE TABLE s (b INT);
 SELECT * FROM t JOIN s ON a = b;
 DROP TABLE t;
 DROP TABLE s;
+
+CREATE TABLE a  (b int);
+CREATE TABLE "A"(c int);
+INSERT INTO a VALUES(1);
+SET duckdb.force_execution = false;
+SELECT * FROM a, "A" as aa;
+SET duckdb.force_execution = true;
+SELECT * FROM a, "A" as aa;
+DROP TABLE a;
+DROP TABLE "A";
