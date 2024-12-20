@@ -184,6 +184,24 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 		return false;
 	}
 
+	/*
+	 * If any table is from pg_catalog, we don't want to use DuckDB. This is
+	 * because DuckDB has its own pg_catalog tables that contain different data
+	 * then Postgres its pg_catalog tables.
+	 */
+	if (ContainsCatalogTable(query->rtable)) {
+		elog(elevel, "DuckDB does not support querying PG catalog tables");
+		return false;
+	}
+
+	/*
+	 * Check that we're only accessing table types that we know we have support
+	 * for.
+	 */
+	if (!ContainsAllowedTableType(query->rtable, elevel)) {
+		return false;
+	}
+
 	/* Anything else is hopefully fine... */
 	return true;
 }
