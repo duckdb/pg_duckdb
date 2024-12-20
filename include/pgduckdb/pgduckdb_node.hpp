@@ -6,4 +6,3 @@ extern "C" {
 }
 
 extern CustomScanMethods duckdb_scan_scan_methods;
-extern "C" void DuckdbInitNode(void);

@@ -1,7 +1,5 @@
 #pragma once
 
-void DuckdbInitBackgroundWorker(void);
-
 namespace pgduckdb {
 
 void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade);

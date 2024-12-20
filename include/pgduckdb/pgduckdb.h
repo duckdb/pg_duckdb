@@ -7,8 +7,21 @@ typedef enum {
 	MOTHERDUCK_AUTO,
 } MotherDuckEnabled;
 
-// pgduckdb.c
+// pgduckdb.cpp
 extern "C" void _PG_init(void);
 
-// pgduckdb_hooks.c
-void DuckdbInitHooks(void);
+void DuckdbInitGUC();
+
+// pgduckdb_hooks.cpp
+void DuckdbInitHooks();
+
+// pgduckdb_node.cpp
+void DuckdbInitNode();
+
+// pgduckdb_background_worker.cpp
+void DuckdbInitBackgroundWorker();
+
+namespace pgduckdb {
+// pgduckdb_xact.cpp
+void RegisterDuckdbXactCallback();
+} // namespace pgduckdb
