@@ -34,7 +34,6 @@ WaitMyLatch(uint64_t &last_known_latch_update_count) {
 	// they deserve what they get.
 	static uint64_t latch_update_count = 0;
 
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	if (last_known_latch_update_count == latch_update_count) {
 		PostgresFunctionGuard(WaitLatch, MyLatch, WL_LATCH_SET | WL_EXIT_ON_PM_DEATH, 0, PG_WAIT_EXTENSION);
 		/* Note: No need to use PostgresFunctionGuard here, because ResetLatch
