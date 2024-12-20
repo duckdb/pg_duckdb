@@ -1,11 +1,11 @@
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
 
+#include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/catalog/pgduckdb_schema.hpp"
 #include "pgduckdb/logger.hpp"
 #include "pgduckdb/pg/relations.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_types.hpp" // ConvertPostgresToDuckColumnType
-#include "pgduckdb/scan/postgres_seq_scan.hpp"
 
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 
@@ -20,13 +20,13 @@ PostgresTable::PostgresTable(duckdb::Catalog &_catalog, duckdb::SchemaCatalogEnt
 }
 
 PostgresTable::~PostgresTable() {
-	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	CloseRelation(rel);
 }
 
 Relation
 PostgresTable::OpenRelation(Oid relid) {
-	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	return pgduckdb::OpenRelation(relid);
 }
 
@@ -46,38 +46,19 @@ PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, Relation rel) {
 	}
 }
 
-Cardinality
-PostgresTable::GetTableCardinality(Relation rel) {
-	Cardinality cardinality;
-	BlockNumber n_pages;
-	double allvisfrac;
-	EstimateRelSize(rel, NULL, &n_pages, &cardinality, &allvisfrac);
-	return cardinality;
-}
-
-//===--------------------------------------------------------------------===//
-// PostgresHeapTable
-//===--------------------------------------------------------------------===//
-
-PostgresHeapTable::PostgresHeapTable(duckdb::Catalog &_catalog, duckdb::SchemaCatalogEntry &_schema,
-                                     duckdb::CreateTableInfo &_info, Relation _rel, Cardinality _cardinality,
-                                     Snapshot _snapshot)
-    : PostgresTable(_catalog, _schema, _info, _rel, _cardinality, _snapshot) {
-}
-
 duckdb::unique_ptr<duckdb::BaseStatistics>
-PostgresHeapTable::GetStatistics(duckdb::ClientContext &, duckdb::column_t) {
+PostgresTable::GetStatistics(duckdb::ClientContext &, duckdb::column_t) {
 	throw duckdb::NotImplementedException("GetStatistics not supported yet");
 }
 
 duckdb::TableFunction
-PostgresHeapTable::GetScanFunction(duckdb::ClientContext &, duckdb::unique_ptr<duckdb::FunctionData> &bind_data) {
-	bind_data = duckdb::make_uniq<PostgresSeqScanFunctionData>(rel, cardinality, snapshot);
-	return PostgresSeqScanFunction();
+PostgresTable::GetScanFunction(duckdb::ClientContext &, duckdb::unique_ptr<duckdb::FunctionData> &bind_data) {
+	bind_data = duckdb::make_uniq<PostgresScanFunctionData>(rel, cardinality, snapshot);
+	return PostgresScanTableFunction();
 }
 
 duckdb::TableStorageInfo
-PostgresHeapTable::GetStorageInfo(duckdb::ClientContext &) {
+PostgresTable::GetStorageInfo(duckdb::ClientContext &) {
 	throw duckdb::NotImplementedException("GetStorageInfo not supported yet");
 }
 
