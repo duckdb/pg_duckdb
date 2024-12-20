@@ -121,14 +121,13 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 
 PostgresTableReader::~PostgresTableReader() {
 	if (table_scan_query_desc) {
+		std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 		PostgresTableReaderCleanup();
 	}
 }
 
 void
 PostgresTableReader::PostgresTableReaderCleanup() {
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
-
 	PostgresScopedStackReset scoped_stack_reset;
 
 	PostgresFunctionGuard(ExecEndNode, table_scan_planstate);
@@ -251,7 +250,6 @@ PostgresTableReader::GetNextTuple() {
 			return slot;
 		}
 	} else {
-		std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 		PostgresScopedStackReset scoped_stack_reset;
 		table_scan_query_desc->estate->es_query_dsa = parallel_executor_info ? parallel_executor_info->area : NULL;
 		thread_scan_slot = PostgresFunctionGuard(ExecProcNode, table_scan_planstate);
@@ -276,7 +274,6 @@ PostgresTableReader::GetNextWorkerTuple() {
 
 		{
 			// We need to take global lock for `TupleQueueReaderNext` call
-			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 			minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
 		}
 
@@ -303,7 +300,6 @@ PostgresTableReader::GetNextWorkerTuple() {
 
 		nvisited++;
 		if (nvisited >= nreaders) {
-			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 			pgduckdb::pg::WaitMyLatch(last_known_latch_update_count);
 			nvisited = 0;
 		}
