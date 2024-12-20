@@ -2,6 +2,7 @@
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pg/relations.hpp"
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/logger.hpp"
@@ -25,7 +26,7 @@ void
 PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput &input) {
 	/* SELECT COUNT(*) FROM */
 	if (input.column_ids.size() == 1 && input.column_ids[0] == UINT64_MAX) {
-		scan_query << "SELECT COUNT(*) FROM " << ConstructFullyQualifiedTableName();
+		scan_query << "SELECT COUNT(*) FROM " << pgduckdb::GenerateQualifiedRelationName(rel);
 		count_tuples_only = true;
 		return;
 	}
@@ -88,7 +89,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 		scan_query << quote_identifier(attr.attname.data);
 	}
 
-	scan_query << " FROM " << ConstructFullyQualifiedTableName();
+	scan_query << " FROM " << GenerateQualifiedRelationName(rel);
 
 	first = true;
 
@@ -112,12 +113,6 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 		scan_query << filter->ToString(col).c_str();
 		scan_query << ") ";
 	}
-}
-
-std::string
-PostgresScanGlobalState::ConstructFullyQualifiedTableName() {
-	return psprintf("%s.%s", quote_identifier(get_namespace_name_or_temp(get_rel_namespace(rel->rd_rel->oid))),
-	                quote_identifier(get_rel_name(rel->rd_rel->oid)));
 }
 
 PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _rel,

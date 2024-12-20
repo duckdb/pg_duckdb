@@ -184,23 +184,6 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 		return false;
 	}
 
-	/*
-	 * If any table is from pg_catalog, we don't want to use DuckDB. This is
-	 * because DuckDB has its own pg_catalog tables that contain different data
-	 * then Postgres its pg_catalog tables.
-	 */
-	if (ContainsCatalogTable(query->rtable)) {
-		elog(elevel, "DuckDB does not support querying PG catalog tables");
-		return false;
-	}
-
-	/*
-	 * When accessing the partitioned table, we temporarily let PG handle it instead of DuckDB.
-	 */
-	if (!ContainsAllowedTableType(query->rtable, elevel)) {
-		return false;
-	}
-
 	/* Anything else is hopefully fine... */
 	return true;
 }
