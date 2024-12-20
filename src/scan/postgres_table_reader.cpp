@@ -129,24 +129,28 @@ PostgresTableReader::~PostgresTableReader() {
 void
 PostgresTableReader::PostgresTableReaderCleanup() {
 	PostgresScopedStackReset scoped_stack_reset;
+	PostgresMemberGuard(PostgresTableReader::PostgresTableReaderCleanupUnsafe);
+}
 
-	PostgresFunctionGuard(ExecEndNode, table_scan_planstate);
+void
+PostgresTableReader::PostgresTableReaderCleanupUnsafe() {
+	ExecEndNode(table_scan_planstate);
 
 	if (parallel_executor_info != NULL) {
-		PostgresFunctionGuard(ExecParallelFinish, parallel_executor_info);
-		PostgresFunctionGuard(ExecParallelCleanup, parallel_executor_info);
+		ExecParallelFinish(parallel_executor_info);
+		ExecParallelCleanup(parallel_executor_info);
 		parallel_executor_info = nullptr;
 	}
 
 
 	if (parallel_worker_readers) {
-		PostgresFunctionGuard(pfree, parallel_worker_readers);
+		pfree(parallel_worker_readers);
 		parallel_worker_readers = nullptr;
 	}
 
-	PostgresFunctionGuard(ExecutorFinish, table_scan_query_desc);
-	PostgresFunctionGuard(ExecutorEnd, table_scan_query_desc);
-	PostgresFunctionGuard(FreeQueryDesc, table_scan_query_desc);
+	ExecutorFinish(table_scan_query_desc);
+	ExecutorEnd(table_scan_query_desc);
+	FreeQueryDesc(table_scan_query_desc);
 
 	if (entered_parallel_mode) {
 		ExitParallelMode();

@@ -15,6 +15,7 @@ public:
 
 private:
 	MinimalTuple GetNextWorkerTuple();
+	void PostgresTableReaderCleanupUnsafe();
 	int ParallelWorkerNumber(Cardinality cardinality);
 	const char * ExplainScanPlan(QueryDesc *query_desc);
 	bool CanTableScanRunInParallel(Plan *plan);
