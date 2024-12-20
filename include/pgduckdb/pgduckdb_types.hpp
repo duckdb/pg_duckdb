@@ -1,5 +1,6 @@
 #pragma once
 
+#include "duckdb/common/types/data_chunk.hpp"
 #include "pgduckdb/pg/declarations.hpp"
 
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.

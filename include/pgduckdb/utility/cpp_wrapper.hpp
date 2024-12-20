@@ -30,7 +30,7 @@ __CPPFunctionGuard__(const char *func_name, FuncArgs... args) {
 
 } // namespace pgduckdb
 
-#define InvokeCPPFunc(FUNC, ...) pgduckdb::__CPPFunctionGuard__<decltype(&FUNC), &FUNC>(__FUNCTION__, __VA_ARGS__)
+#define InvokeCPPFunc(FUNC, ...) pgduckdb::__CPPFunctionGuard__<decltype(&FUNC), &FUNC>(__FUNCTION__, ##__VA_ARGS__)
 
 // Wrappers
 
