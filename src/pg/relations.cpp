@@ -11,8 +11,9 @@ extern "C" {
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
-#include "utils/resowner.h" // CurrentResourceOwner and TopTransactionResourceOwner
-#include "utils/syscache.h" // RELOID
+#include "utils/resowner.h"    // CurrentResourceOwner and TopTransactionResourceOwner
+#include "executor/tuptable.h" // TupIsNull
+#include "utils/syscache.h"    // RELOID
 }
 
 namespace pgduckdb {
@@ -55,6 +56,16 @@ GetAttName(const Form_pg_attribute att) {
 Form_pg_attribute
 GetAttr(const TupleDesc tupleDesc, int i) {
 	return &tupleDesc->attrs[i];
+}
+
+bool
+TupleIsNull(TupleTableSlot *slot) {
+	return TupIsNull(slot);
+}
+
+void
+SlotGetAllAttrs(TupleTableSlot *slot) {
+	PostgresFunctionGuard(slot_getallattrs, slot);
 }
 
 Relation

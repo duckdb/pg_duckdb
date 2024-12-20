@@ -7,12 +7,6 @@
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/logger.hpp"
 
-extern "C" {
-#include "postgres.h"
-#include "executor/tuptable.h"
-#include "utils/rel.h"
-}
-
 namespace pgduckdb {
 
 //
@@ -82,8 +76,8 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 			scan_query << ", ";
 		}
 		first = false;
-		auto attr = table_tuple_desc->attrs[attr_num - 1];
-		scan_query << pgduckdb::QuoteIdentifier(attr.attname.data);
+		auto attr = GetAttr(table_tuple_desc, attr_num - 1);
+		scan_query << pgduckdb::QuoteIdentifier(GetAttName(attr));
 	}
 
 	scan_query << " FROM " << GenerateQualifiedRelationName(rel);
@@ -105,8 +99,8 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 
 		first = false;
 		scan_query << "(";
-		auto attr = table_tuple_desc->attrs[attr_num - 1];
-		auto col = pgduckdb::QuoteIdentifier(attr.attname.data);
+		auto attr = GetAttr(table_tuple_desc, attr_num - 1);
+		auto col = pgduckdb::QuoteIdentifier(GetAttName(attr));
 		scan_query << filter->ToString(col).c_str();
 		scan_query << ") ";
 	}
@@ -199,12 +193,12 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	size_t i = 0;
 	for (; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
-		if (TupIsNull(slot)) {
+		if (pgduckdb::TupleIsNull(slot)) {
 			local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
 			local_state.exhausted_scan = true;
 			break;
 		}
-		slot_getallattrs(slot);
+		SlotGetAllAttrs(slot);
 		InsertTupleIntoChunk(output, local_state, slot);
 	}
 

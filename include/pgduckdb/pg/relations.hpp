@@ -18,6 +18,10 @@ const char *GetAttName(const Form_pg_attribute);
 
 Form_pg_attribute GetAttr(const TupleDesc tupleDesc, int i);
 
+bool TupleIsNull(TupleTableSlot *slot);
+
+void SlotGetAllAttrs(TupleTableSlot *slot);
+
 double EstimateRelSize(Relation rel);
 
 Oid GetRelidFromSchemaAndTable(const char *, const char *);
