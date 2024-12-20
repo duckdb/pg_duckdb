@@ -18,6 +18,8 @@ namespace pgduckdb {
 #undef RelationGetDescr
 
 #if PG_VERSION_NUM < 150000
+// clang-format off
+
 /*
  * Relation kinds with a table access method (rd_tableam).  Although sequences
  * use the heap table AM, they are enough of a special case in most uses that
@@ -29,6 +31,8 @@ namespace pgduckdb {
 	((relkind) == RELKIND_RELATION || \
 	 (relkind) == RELKIND_TOASTVALUE || \
 	 (relkind) == RELKIND_MATVIEW)
+
+// clang-format on
 #endif
 
 TupleDesc
