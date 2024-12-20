@@ -104,6 +104,32 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
 	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(__func__, ##__VA_ARGS__)
 
+
+template <typename T, typename ReturnType>
+ReturnType __PostgresMemberGuard__(ReturnType (T::*func)(), T* instance, const char *func_name) {
+	MemoryContext ctx = CurrentMemoryContext;
+	ErrorData *edata = nullptr;
+	{ // Scope for PG_END_TRY
+		PgExceptionGuard g;
+		sigjmp_buf _local_sigjmp_buf;
+		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
+			PG_exception_stack = &_local_sigjmp_buf;
+			return (instance->*func)();
+		} else {
+			g.RestoreStacks();
+			CurrentMemoryContext = ctx;
+			edata = CopyErrorData();
+			FlushErrorState();
+		}
+	} // PG_END_TRY();
+
+	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, pg::GetErrorDataMessage(edata));
+	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
+}
+
+#define PostgresMemberGuard(FUNC, ...)                                                                               \
+	pgduckdb::__PostgresMemberGuard__(&FUNC, this, __func__)
+
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query);
