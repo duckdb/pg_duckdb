@@ -144,4 +144,9 @@ GenerateQualifiedRelationName(Relation rel) {
 	return PostgresFunctionGuard(GenerateQualifiedRelationName_Unsafe, rel);
 }
 
+const char *
+QuoteIdentifier(const char *ident) {
+	return PostgresFunctionGuard(quote_identifier, ident);
+}
+
 } // namespace pgduckdb
