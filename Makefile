@@ -116,5 +116,5 @@ format:
 	ruff format
 
 format-all:
-	find src include -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs clang-format -i
+	find src include -iname '*.hpp' -o -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs clang-format -i
 	ruff format
