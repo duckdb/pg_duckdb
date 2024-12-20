@@ -8,8 +8,9 @@ struct DuckDBMallocator {
 
 	DuckDBMallocator() = default;
 
-    template<class U>
-    constexpr DuckDBMallocator(const DuckDBMallocator <U>&) noexcept {}
+	template <class U>
+	constexpr DuckDBMallocator(const DuckDBMallocator<U> &) noexcept {
+	}
 
 	[[nodiscard]] T *
 	allocate(std::size_t n) {
@@ -31,10 +32,16 @@ struct DuckDBMallocator {
 	}
 };
 
-template<class T, class U>
-bool operator==(const DuckDBMallocator <T>&, const DuckDBMallocator <U>&) { return true; }
+template <class T, class U>
+bool
+operator==(const DuckDBMallocator<T> &, const DuckDBMallocator<U> &) {
+	return true;
+}
 
-template<class T, class U>
-bool operator!=(const DuckDBMallocator <T>&, const DuckDBMallocator <U>&) { return false; }
+template <class T, class U>
+bool
+operator!=(const DuckDBMallocator<T> &, const DuckDBMallocator<U> &) {
+	return false;
+}
 
 } // namespace pgduckdb
