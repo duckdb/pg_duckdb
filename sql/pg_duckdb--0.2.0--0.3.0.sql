@@ -435,6 +435,12 @@ CREATE AGGREGATE list(duckdb.unresolved_type) (
     FINALFUNC = duckdb_unresolved_type_final
 );
 
+CREATE AGGREGATE max(duckdb.unresolved_type) (
+    SFUNC = duckdb_unresolved_type_state_trans,
+    STYPE = duckdb.unresolved_type,
+    FINALFUNC = duckdb_unresolved_type_final
+);
+
 CREATE AGGREGATE max(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
