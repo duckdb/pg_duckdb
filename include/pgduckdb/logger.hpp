@@ -7,24 +7,24 @@
 extern "C" {
 bool errstart(int elevel, const char *domain);
 void errfinish(const char *filename, int lineno, const char *funcname);
-int	errmsg_internal(const char *fmt,...);
+int errmsg_internal(const char *fmt, ...);
 bool message_level_is_interesting(int elevel);
 }
 
 namespace pgduckdb {
 
 /* PG Error level codes */
-#define DEBUG5		10
-#define DEBUG4		11
-#define DEBUG3		12
-#define DEBUG2		13
-#define DEBUG1		14
-#define LOG			15
-#define INFO		17
-#define NOTICE		18
-#define WARNING		19
-#define PGWARNING	19
-#define WARNING_CLIENT_ONLY	20
+#define DEBUG5              10
+#define DEBUG4              11
+#define DEBUG3              12
+#define DEBUG2              13
+#define DEBUG1              14
+#define LOG                 15
+#define INFO                17
+#define NOTICE              18
+#define WARNING             19
+#define PGWARNING           19
+#define WARNING_CLIENT_ONLY 20
 
 // From PG elog.h
 #ifdef __GNUC__
@@ -41,23 +41,21 @@ namespace pgduckdb {
 #define pd_prevent_errno_in_scope()
 #endif
 
-#define pd_ereport_domain(elevel, domain, ...)	\
-	do { \
-		pd_prevent_errno_in_scope(); \
-		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level"); \
-		if (message_level_is_interesting(elevel)) { \
-			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock()); \
-			if (errstart(elevel, domain)) \
-				__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__); \
-		} \
-	} while(0)
+#define pd_ereport_domain(elevel, domain, ...)                                                                         \
+	do {                                                                                                               \
+		pd_prevent_errno_in_scope();                                                                                   \
+		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level");                       \
+		if (message_level_is_interesting(elevel)) {                                                                    \
+			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());                                            \
+			if (errstart(elevel, domain))                                                                              \
+				__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__);                                                  \
+		}                                                                                                              \
+	} while (0)
 
 #define TEXTDOMAIN NULL
 
-#define pd_ereport(elevel, ...)	\
-	pd_ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
+#define pd_ereport(elevel, ...) pd_ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
 
-#define pd_log(elevel, ...)  \
-	pd_ereport(elevel, errmsg_internal(__VA_ARGS__))
+#define pd_log(elevel, ...) pd_ereport(elevel, errmsg_internal(__VA_ARGS__))
 
 } // namespace pgduckdb

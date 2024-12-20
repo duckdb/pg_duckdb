@@ -5,5 +5,5 @@ struct ErrorData;
 }
 
 namespace pgduckdb::pg {
-const char* GetErrorDataMessage(ErrorData* error_data);
+const char *GetErrorDataMessage(ErrorData *error_data);
 }

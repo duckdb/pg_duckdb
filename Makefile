@@ -78,7 +78,7 @@ installcheck: all install
 	$(MAKE) check-regression-duckdb
 
 pycheck: all install
-	pytest -n $(PYTEST_CONCURRENCY)
+	LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH} pytest -n $(PYTEST_CONCURRENCY)
 
 check: installcheck pycheck
 
@@ -116,5 +116,5 @@ format:
 	ruff format
 
 format-all:
-	find src include -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs clang-format -i
+	find src include -iname '*.hpp' -o -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs clang-format -i
 	ruff format

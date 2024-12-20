@@ -28,7 +28,7 @@ __CPPFunctionGuard__(const char *func_name, FuncArgs... args) {
 	elog(ERROR, "(PGDuckDB/%s) %s", func_name, error_message);
 }
 
-}
+} // namespace pgduckdb
 
 #define InvokeCPPFunc(FUNC, ...) pgduckdb::__CPPFunctionGuard__<decltype(&FUNC), &FUNC>(__FUNCTION__, __VA_ARGS__)
 
