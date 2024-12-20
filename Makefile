@@ -78,7 +78,7 @@ installcheck: all install
 	$(MAKE) check-regression-duckdb
 
 pycheck: all install
-	pytest -n $(PYTEST_CONCURRENCY)
+	LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH} pytest -n $(PYTEST_CONCURRENCY)
 
 check: installcheck pycheck
 
