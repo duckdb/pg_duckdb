@@ -7,8 +7,8 @@
 
 namespace pgduckdb {
 
-class PostgresScanGlobalState;
-class PostgresScanLocalState;
+struct PostgresScanGlobalState;
+struct PostgresScanLocalState;
 
 // DuckDB has date starting from 1/1/1970 while PG starts from 1/1/2000
 constexpr int32_t PGDUCKDB_DUCK_DATE_OFFSET = 10957;
@@ -21,7 +21,6 @@ int32_t GetPostgresDuckDBTypemod(const duckdb::LogicalType &type);
 duckdb::Value ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type);
 void ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, uint64_t offset);
 bool ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, uint64_t col);
-void InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scan_global_state,
-                          duckdb::shared_ptr<PostgresScanLocalState> scan_local_state, HeapTupleData *tuple);
+void InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_local_state, TupleTableSlot *slot);
 
 } // namespace pgduckdb
