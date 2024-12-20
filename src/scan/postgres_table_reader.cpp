@@ -272,7 +272,12 @@ PostgresTableReader::GetNextWorkerTuple() {
 		bool readerdone;
 
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
-		minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
+
+		{
+			// We need to take global lock for `TupleQueueReaderNext` call
+			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+			minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
+		}
 
 		if (readerdone) {
 			--nreaders;
