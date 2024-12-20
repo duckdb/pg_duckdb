@@ -8,6 +8,8 @@ extern "C" {
 #include "access/relation.h"     // relation_open and relation_close
 #include "catalog/namespace.h"   // makeRangeVarFromNameList, RangeVarGetRelid
 #include "optimizer/plancat.h"   // estimate_rel_size
+#include "utils/builtins.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/resowner.h" // CurrentResourceOwner and TopTransactionResourceOwner
 #include "utils/syscache.h" // RELOID
@@ -120,6 +122,26 @@ IsValidOid(Oid oid) {
 bool
 IsValidBlockNumber(BlockNumber block_number) {
 	return block_number != InvalidBlockNumber;
+}
+
+/*
+ * generate_qualified_relation_name
+ *		Compute the name to display for a relation specified by OID
+ *
+ * As above, but unconditionally schema-qualify the name.
+ */
+static char *
+GenerateQualifiedRelationName_Unsafe(Relation rel) {
+	char *nspname = get_namespace_name_or_temp(rel->rd_rel->relnamespace);
+	if (!nspname)
+		elog(ERROR, "cache lookup failed for namespace %u", rel->rd_rel->relnamespace);
+
+	return quote_qualified_identifier(nspname, NameStr(rel->rd_rel->relname));
+}
+
+char *
+GenerateQualifiedRelationName(Relation rel) {
+	return PostgresFunctionGuard(GenerateQualifiedRelationName_Unsafe, rel);
 }
 
 } // namespace pgduckdb

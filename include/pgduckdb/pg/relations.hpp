@@ -26,4 +26,6 @@ bool IsValidOid(Oid);
 
 bool IsValidBlockNumber(BlockNumber);
 
+char *GenerateQualifiedRelationName(Relation rel);
+
 } // namespace pgduckdb
