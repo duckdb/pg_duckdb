@@ -9,10 +9,7 @@
 
 extern "C" {
 #include "postgres.h"
-#include "access/htup_details.h"
 #include "executor/tuptable.h"
-#include "utils/builtins.h"
-#include "utils/lsyscache.h"
 #include "utils/rel.h"
 }
 
@@ -86,7 +83,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 		}
 		first = false;
 		auto attr = table_tuple_desc->attrs[attr_num - 1];
-		scan_query << quote_identifier(attr.attname.data);
+		scan_query << pgduckdb::QuoteIdentifier(attr.attname.data);
 	}
 
 	scan_query << " FROM " << GenerateQualifiedRelationName(rel);
@@ -109,7 +106,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(duckdb::TableFunctionInitInput 
 		first = false;
 		scan_query << "(";
 		auto attr = table_tuple_desc->attrs[attr_num - 1];
-		auto col = quote_identifier(attr.attname.data);
+		auto col = pgduckdb::QuoteIdentifier(attr.attname.data);
 		scan_query << filter->ToString(col).c_str();
 		scan_query << ") ";
 	}
