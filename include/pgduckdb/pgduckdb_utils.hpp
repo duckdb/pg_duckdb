@@ -104,9 +104,9 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
 	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(__func__, ##__VA_ARGS__)
 
-
 template <typename T, typename ReturnType>
-ReturnType __PostgresMemberGuard__(ReturnType (T::*func)(), T* instance, const char *func_name) {
+ReturnType
+__PostgresMemberGuard__(ReturnType (T::*func)(), T *instance, const char *func_name) {
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
 	{ // Scope for PG_END_TRY
@@ -127,8 +127,7 @@ ReturnType __PostgresMemberGuard__(ReturnType (T::*func)(), T* instance, const c
 	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
 }
 
-#define PostgresMemberGuard(FUNC, ...)                                                                               \
-	pgduckdb::__PostgresMemberGuard__(&FUNC, this, __func__)
+#define PostgresMemberGuard(FUNC, ...) pgduckdb::__PostgresMemberGuard__(&FUNC, this, __func__)
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 

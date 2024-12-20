@@ -27,6 +27,19 @@ extern "C" {
 
 namespace pgduckdb {
 
+int SetupPostgresTableReader(ParallelExecutorInfo *&parallel_executor_info, void **&parallel_worker_readers,
+                             int &nreaders, int &nworkers_launched, bool &entered_parallel_mode,
+                             QueryDesc *&table_scan_query_desc, PlanState *&table_scan_planstate, TupleTableSlot *&slot,
+                             const char *table_scan_query, bool count_tuples_only);
+
+bool CanTableScanRunInParallel(Plan *plan);
+
+bool MarkPlanParallelAware(Plan *plan);
+
+int ParallelWorkerNumber(Cardinality cardinality);
+
+const char *ExplainScanPlan_Unsafe(QueryDesc *query_desc);
+
 PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool count_tuples_only)
     : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
       entered_parallel_mode(false), last_known_latch_update_count(0) {
@@ -34,16 +47,25 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
 
-	List *raw_parsetree_list = PostgresFunctionGuard(pg_parse_query, table_scan_query);
+	PostgresFunctionGuard(SetupPostgresTableReader, std::ref(parallel_executor_info), std::ref(parallel_worker_readers),
+	                      std::ref(nreaders), std::ref(nworkers_launched), std::ref(entered_parallel_mode),
+	                      std::ref(table_scan_query_desc), std::ref(table_scan_planstate), std::ref(slot),
+	                      table_scan_query, count_tuples_only);
+}
+
+int
+SetupPostgresTableReader(ParallelExecutorInfo *&parallel_executor_info, void **&parallel_worker_readers, int &nreaders,
+                         int &nworkers_launched, bool &entered_parallel_mode, QueryDesc *&table_scan_query_desc,
+                         PlanState *&table_scan_planstate, TupleTableSlot *&slot, const char *table_scan_query,
+                         bool count_tuples_only) {
+	List *raw_parsetree_list = pg_parse_query(table_scan_query);
 	Assert(list_length(raw_parsetree_list) == 1);
 	RawStmt *raw_parsetree = linitial_node(RawStmt, raw_parsetree_list);
 
 #if PG_VERSION_NUM >= 150000
-	List *query_list =
-	    PostgresFunctionGuard(pg_analyze_and_rewrite_fixedparams, raw_parsetree, table_scan_query, nullptr, 0, nullptr);
+	List *query_list = pg_analyze_and_rewrite_fixedparams(raw_parsetree, table_scan_query, nullptr, 0, nullptr);
 #else
-	List *query_list =
-	    PostgresFunctionGuard(pg_analyze_and_rewrite, raw_parsetree, table_scan_query, nullptr, 0, nullptr);
+	List *query_list = pg_analyze_and_rewrite(raw_parsetree, table_scan_query, nullptr, 0, nullptr);
 #endif
 
 	Assert(list_length(query_list) == 1);
@@ -54,15 +76,14 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 
 	char persistence = get_rel_persistence(rte->relid);
 
-	PlannedStmt *planned_stmt = PostgresFunctionGuard(standard_planner, query, table_scan_query, 0, nullptr);
+	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr);
 
-	table_scan_query_desc = PostgresFunctionGuard(CreateQueryDesc, planned_stmt, table_scan_query, GetActiveSnapshot(),
-	                                              InvalidSnapshot, None_Receiver, nullptr, nullptr, 0);
+	table_scan_query_desc = CreateQueryDesc(planned_stmt, table_scan_query, GetActiveSnapshot(), InvalidSnapshot,
+	                                        None_Receiver, nullptr, nullptr, 0);
 
-	PostgresFunctionGuard(ExecutorStart, table_scan_query_desc, 0);
+	ExecutorStart(table_scan_query_desc, 0);
 
-	table_scan_planstate =
-	    PostgresFunctionGuard(ExecInitNode, planned_stmt->planTree, table_scan_query_desc->estate, 0);
+	table_scan_planstate = ExecInitNode(planned_stmt->planTree, table_scan_query_desc->estate, 0);
 
 	bool run_scan_with_parallel_workers = persistence != RELPERSISTENCE_TEMP;
 	run_scan_with_parallel_workers &= CanTableScanRunInParallel(table_scan_query_desc->planstate->plan);
@@ -93,14 +114,14 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 		}
 
 		ParallelContext *pcxt;
-		parallel_executor_info = PostgresFunctionGuard(ExecInitParallelPlan, table_scan_planstate,
-		                                               table_scan_query_desc->estate, nullptr, parallel_workers, -1);
+		parallel_executor_info =
+		    ExecInitParallelPlan(table_scan_planstate, table_scan_query_desc->estate, nullptr, parallel_workers, -1);
 		pcxt = parallel_executor_info->pcxt;
-		PostgresFunctionGuard(LaunchParallelWorkers, pcxt);
+		LaunchParallelWorkers(pcxt);
 		nworkers_launched = pcxt->nworkers_launched;
 
 		if (pcxt->nworkers_launched > 0) {
-			PostgresFunctionGuard(ExecParallelCreateReaders, parallel_executor_info);
+			ExecParallelCreateReaders(parallel_executor_info);
 			nreaders = pcxt->nworkers_launched;
 			parallel_worker_readers = (void **)palloc(nreaders * sizeof(TupleQueueReader *));
 			memcpy(parallel_worker_readers, parallel_executor_info->reader, nreaders * sizeof(TupleQueueReader *));
@@ -113,10 +134,11 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 
 	elog(DEBUG1, "(PGDuckdDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
 	     !nreaders ? "IN PROCESS THREAD" : psprintf("ON %d PARALLEL WORKER(S)", nreaders),
-	     ExplainScanPlan(table_scan_query_desc));
+	     ExplainScanPlan_Unsafe(table_scan_query_desc));
 
-	slot = PostgresFunctionGuard(ExecInitExtraTupleSlot, table_scan_query_desc->estate,
-	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
+	slot = ExecInitExtraTupleSlot(table_scan_query_desc->estate, table_scan_planstate->ps_ResultTupleDesc,
+	                              &TTSOpsMinimalTuple);
+	return 0;
 }
 
 PostgresTableReader::~PostgresTableReader() {
@@ -142,7 +164,6 @@ PostgresTableReader::PostgresTableReaderCleanupUnsafe() {
 		parallel_executor_info = nullptr;
 	}
 
-
 	if (parallel_worker_readers) {
 		pfree(parallel_worker_readers);
 		parallel_worker_readers = nullptr;
@@ -160,7 +181,7 @@ PostgresTableReader::PostgresTableReaderCleanupUnsafe() {
 }
 
 int
-PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
+ParallelWorkerNumber(Cardinality cardinality) {
 	static const int base_log = 8;
 	int cardinality_log = std::log2(cardinality);
 	int base = cardinality_log / base_log;
@@ -182,7 +203,7 @@ PostgresTableReader::ExplainScanPlan(QueryDesc *query_desc) {
 }
 
 bool
-PostgresTableReader::CanTableScanRunInParallel(Plan *plan) {
+CanTableScanRunInParallel(Plan *plan) {
 	switch (nodeTag(plan)) {
 	case T_SeqScan:
 	case T_IndexScan:
@@ -207,7 +228,7 @@ PostgresTableReader::CanTableScanRunInParallel(Plan *plan) {
 }
 
 bool
-PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
+MarkPlanParallelAware(Plan *plan) {
 	switch (nodeTag(plan)) {
 	case T_SeqScan:
 	case T_IndexScan:
