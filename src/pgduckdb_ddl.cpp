@@ -46,6 +46,45 @@ static bool ctas_skip_data = false;
 static bool top_level_ddl = true;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
+// Get precision and scale from postgres type modifier.
+static int
+GetPgNumericPrecision(int32 typmod) {
+	return ((typmod - VARHDRSZ) >> 16) & 0xffff;
+}
+static int
+GetPgNumericScale(int32 typmod) {
+	return (((typmod - VARHDRSZ) & 0x7ff) ^ 1024) - 1024;
+}
+
+// If column is of type "numeric", check whether it's acceptable for duckdb;
+// If not, exception is thrown via `elog`.
+static void
+ValidateColumnNumericType(Form_pg_attribute &attribute) {
+	auto &type = attribute->atttypid;
+	if (type != NUMERICOID) {
+		return;
+	}
+	auto &typmod = attribute->atttypmod;
+	auto precision = GetPgNumericPrecision(typmod);
+	auto scale = GetPgNumericScale(typmod);
+	// duckdb's "numeric" type's max supported precision is 38.
+	if (typmod == -1 || precision < 0 || scale < 0 || precision > 38) {
+		elog(ERROR,
+		     "Unsupported type when creating column: type precision %d with scale %d is not supported by duckdb, which "
+		     "only allows maximum precision 38",
+		     precision, scale);
+	}
+}
+
+// Validate new relation creation, if invalid throw exception via `elog`.
+static void
+ValidateRelationCreation(TupleDesc desc) {
+	for (int i = 0; i < desc->natts; i++) {
+		Form_pg_attribute attr = &desc->attrs[i];
+		ValidateColumnNumericType(attr);
+	}
+}
+
 static void
 DuckdbHandleDDL(Node *parsetree) {
 	if (!pgduckdb::IsExtensionRegistered()) {
@@ -252,6 +291,10 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (SPI_processed != 1) {
 		elog(ERROR, "Expected single table to be created, but found %" PRIu64, static_cast<uint64_t>(SPI_processed));
 	}
+
+	// Check whether new table creation is supported in duckdb.
+	// TODO(hjiang): Same type validation should be applied to other DDL as well.
+	ValidateRelationCreation(SPI_tuptable->tupdesc);
 
 	HeapTuple tuple = SPI_tuptable->vals[0];
 	bool isnull;
