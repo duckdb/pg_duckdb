@@ -1,2 +1,3 @@
-CREATE TEMP TABLE numeric_tbl (a NUMERIC) USING duckdb;
-ERROR:  Unsupported type when creating column: type precision 40 with scale 5 is not supported by duckdb, which only allows maximum precision 38
+CREATE TEMP TABLE large_numeric_tbl (a NUMERIC) USING duckdb;
+INSERT INTO large_numeric_tbl VALUES(856324.111122223333::NUMERIC(40,12));
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Parser Error: Width must be between 1 and 38!

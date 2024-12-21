@@ -1,1 +1,2 @@
-CREATE TEMP TABLE numeric_tbl (a NUMERIC) USING duckdb;
+CREATE TEMP TABLE large_numeric_tbl (a NUMERIC) USING duckdb;
+INSERT INTO large_numeric_tbl VALUES(856324.111122223333::NUMERIC(40,12));
