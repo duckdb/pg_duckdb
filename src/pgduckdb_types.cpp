@@ -517,6 +517,19 @@ struct PostgresTypeTraits<VARCHAROID> {
 	}
 };
 
+// BLOB type
+template <>
+struct PostgresTypeTraits<BYTEAOID> {
+	static constexpr int16_t typlen = -1; // variable-length
+	static constexpr bool typbyval = false;
+	static constexpr char typalign = 'i';
+
+	static inline Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertBinaryDatum(val);
+	}
+};
+
 template <int32_t OID>
 struct PostgresOIDMapping {
 	static constexpr int32_t postgres_oid = OID;
@@ -557,6 +570,7 @@ using TimestampArray = PODArray<PostgresOIDMapping<TIMESTAMPOID>>;
 using UUIDArray = PODArray<PostgresOIDMapping<UUIDOID>>;
 using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
 using NumericArray = PODArray<PostgresOIDMapping<NUMERICOID>>;
+using ByteArray = PODArray<PostgresOIDMapping<BYTEAOID>>;
 
 static idx_t
 GetDuckDBListDimensionality(const duckdb::LogicalType &list_type, idx_t depth = 0) {
@@ -800,6 +814,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<UUIDArray>(slot, value, col);
 		break;
 	}
+	case BYTEAARRAYOID: {
+		ConvertDuckToPostgresArray<ByteArray>(slot, value, col);
+		break;
+	}
 	default:
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 		return false;
@@ -883,6 +901,7 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSARRAYOID:
 		return duckdb::LogicalTypeId::UINTEGER;
 	case BYTEAOID:
+	case BYTEAARRAYOID:
 		return duckdb::LogicalTypeId::BLOB;
 	default:
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
@@ -938,6 +957,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 		return NUMERICARRAYOID;
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDARRAYOID;
+	case duckdb::LogicalTypeId::BLOB:
+		return BYTEAARRAYOID;
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %d to Postgres type",
 		     static_cast<uint8_t>(type.id()));

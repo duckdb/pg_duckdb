@@ -195,6 +195,15 @@ INSERT INTO varchar_array_2d VALUES
     ('{{"some","strings"},{NULL,"last"}}');
 SELECT * FROM varchar_array_2d;
 
+-- BYTEA (single dimension)
+CREATE TABLE bytea_array_1d (a bytea[]);
+
+INSERT INTO bytea_array_1d (a) 
+VALUES 
+    (ARRAY[decode('01020304', 'hex'), decode('aabbccdd', 'hex')]),
+    (ARRAY[decode('11223344', 'hex'), decode('55667788', 'hex')]);
+SELECT * FROM bytea_array_1d;
+
 -- TIMESTAMP (two dimensions)
 CREATE TABLE timestamp_array_2d(a TIMESTAMP[][]);
 INSERT INTO timestamp_array_2d VALUES
