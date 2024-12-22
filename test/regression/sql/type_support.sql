@@ -154,6 +154,18 @@ INSERT INTO json_tbl SELECT CAST(a as JSON) FROM (VALUES
 ) t(a);
 SELECT * FROM json_tbl;
 
+-- BLOB
+CREATE TABLE blob_tbl(a bytea);
+INSERT INTO blob_tbl SELECT CAST(a as bytea) FROM (VALUES
+    ('\x'),
+    ('\x110102030405060708090a0b0c0d0e0f'),
+    (''),
+    ('\x00'),
+    ('\x07'),
+    (NULL)
+) t(a);
+SELECT * from blob_tbl;
+
 -- REGCLASSOID
 CREATE TABLE regclass_tbl (a REGCLASS);
 INSERT INTO regclass_tbl VALUES (42), (3000000000);
@@ -178,4 +190,5 @@ DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
 DROP TABLE json_tbl;
+DROP TABLE blob_tbl;
 DROP TABLE regclass_tbl;

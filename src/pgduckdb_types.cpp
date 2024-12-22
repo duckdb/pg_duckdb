@@ -2,6 +2,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -196,6 +197,17 @@ ConvertVarCharDatum(const duckdb::Value &value) {
 	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
 	SET_VARSIZE(result, varchar_len + VARHDRSZ);
 	memcpy(VARDATA(result), varchar, varchar_len);
+	return PointerGetDatum(result);
+}
+
+static Datum
+ConvertBinaryDatum(const duckdb::Value &value) {
+	auto str = value.GetValue<duckdb::string>();
+	auto blob = str.c_str();
+	auto blob_len = str.size();
+	bytea* result = (bytea *)palloc0(blob_len + VARHDRSZ);
+	SET_VARSIZE(result, blob_len + VARHDRSZ);
+	memcpy(VARDATA(result), blob, blob_len);
 	return PointerGetDatum(result);
 }
 
@@ -733,6 +745,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = ConvertUUIDDatum(value);
 		break;
 	}
+	case BYTEAOID: {
+		slot->tts_values[col] = ConvertBinaryDatum(value);
+		break;
+	}
 	case BOOLARRAYOID: {
 		ConvertDuckToPostgresArray<BoolArray>(slot, value, col);
 		break;
@@ -866,6 +882,8 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSOID:
 	case REGCLASSARRAYOID:
 		return duckdb::LogicalTypeId::UINTEGER;
+	case BYTEAOID:
+		return duckdb::LogicalTypeId::BLOB;
 	default:
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
@@ -974,6 +992,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		}
 		return GetPostgresArrayDuckDBType(*duck_type);
 	}
+	case duckdb::LogicalTypeId::BLOB:
+		return BYTEAOID;
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
 		     type.ToString().c_str());
@@ -1220,6 +1240,14 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		}
 		duckdb_uuid.upper ^= (uint64_t(1) << 63);
 		Append(result, duckdb_uuid, offset);
+		break;
+	}
+	case duckdb::LogicalTypeId::BLOB: {
+		const char *bytea_data = VARDATA_ANY(value);
+		size_t bytea_length = VARSIZE_ANY_EXHDR(value);
+		const duckdb::string_t s(bytea_data, bytea_length);
+		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
+		data[offset] = duckdb::StringVector::AddString(result, s);
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {

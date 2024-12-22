@@ -308,6 +308,27 @@ SELECT * FROM json_tbl;
  {}
 (4 rows)
 
+-- BLOB
+CREATE TABLE blob_tbl(a bytea);
+INSERT INTO blob_tbl SELECT CAST(a as bytea) FROM (VALUES
+    ('\x'),
+    ('\x110102030405060708090a0b0c0d0e0f'),
+    (''),
+    ('\x00'),
+    ('\x07'),
+    (NULL)
+) t(a);
+SELECT * from blob_tbl;
+                                                                 a                                                                  
+------------------------------------------------------------------------------------------------------------------------------------
+ \x
+ \x5c7831315c7830315c7830325c7830335c7830345c7830355c7830365c7830375c7830385c7830395c7830415c7830425c7830435c7830445c7830455c783046
+ \x
+ \x5c783030
+ \x5c783037
+ 
+(6 rows)
+
 -- REGCLASSOID
 CREATE TABLE regclass_tbl (a REGCLASS);
 INSERT INTO regclass_tbl VALUES (42), (3000000000);
@@ -337,4 +358,5 @@ DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
 DROP TABLE json_tbl;
+DROP TABLE blob_tbl;
 DROP TABLE regclass_tbl;
