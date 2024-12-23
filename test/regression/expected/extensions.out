@@ -2,8 +2,9 @@ SET duckdb.force_execution TO false;
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 4]
+[ Rows: 5]
 cached_httpfs	true	true
+icu	true	true
 json	true	true
 parquet	true	true
 pgduckdb	true	false
