@@ -1,7 +1,6 @@
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
-#include "pgduckdb/pg/latch.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -14,9 +13,10 @@ extern "C" {
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
 #include "tcop/tcopprot.h"
+#include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
-#include "utils/lsyscache.h"
+#include "utils/wait_event.h"
 
 #include "pgduckdb/pgduckdb_guc.h"
 }
@@ -29,7 +29,7 @@ namespace pgduckdb {
 
 PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool count_tuples_only)
     : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
-      entered_parallel_mode(false), last_known_latch_update_count(0) {
+      entered_parallel_mode(false) {
 
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
@@ -239,6 +239,9 @@ PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
 	}
 }
 
+/*
+ * GlobalProcessLock should be held before calling this.
+ */
 TupleTableSlot *
 PostgresTableReader::GetNextTuple() {
 	MinimalTuple worker_minmal_tuple;
@@ -272,10 +275,7 @@ PostgresTableReader::GetNextWorkerTuple() {
 
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
 
-		{
-			// We need to take global lock for `TupleQueueReaderNext` call
-			minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
-		}
+		minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
 
 		if (readerdone) {
 			--nreaders;
@@ -300,7 +300,13 @@ PostgresTableReader::GetNextWorkerTuple() {
 
 		nvisited++;
 		if (nvisited >= nreaders) {
-			pgduckdb::pg::WaitMyLatch(last_known_latch_update_count);
+			/*
+			 * It should be safe to make this call because function calling GetNextTuple() and transitively
+			 * GetNextWorkerTuple() should held GlobalProcesLock.
+			 */
+			PostgresFunctionGuard(WaitLatch, MyLatch, WL_LATCH_SET | WL_EXIT_ON_PM_DEATH, 0, PG_WAIT_EXTENSION);
+			/* No need to use PostgresFunctionGuard here, because ResetLatch is a trivial function */
+			ResetLatch(MyLatch);
 			nvisited = 0;
 		}
 	}
