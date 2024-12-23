@@ -1,0 +1,31 @@
+create domain domainvarchar varchar(5);
+create domain domainint4 int4;
+create domain domaintext text;
+create table basictest
+           ( testint4 domainint4
+           , testtext domaintext
+           , testvarchar domainvarchar
+           );
+INSERT INTO basictest values ('88', 'haha', 'short');      -- Good
+INSERT INTO basictest values ('88', 'haha', 'short text'); -- Bad varchar
+ERROR:  value too long for type character varying(5)
+INSERT INTO basictest values ('888', 'haha', 'short');
+select * from basictest;
+ testint4 | testtext | testvarchar 
+----------+----------+-------------
+       88 | haha     | short
+      888 | haha     | short
+(2 rows)
+
+select testtext || testvarchar as concat, testint4 + 12 as sum
+from basictest;
+  concat   | sum 
+-----------+-----
+ hahashort | 100
+ hahashort | 900
+(2 rows)
+
+drop table basictest;
+drop domain domainvarchar restrict;
+drop domain domainint4 restrict;
+drop domain domaintext;
