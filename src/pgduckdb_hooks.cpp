@@ -61,39 +61,6 @@ ContainsCatalogTable(List *rtes) {
 }
 
 static bool
-ContainsAllowedTableType(List *rtes, int elevel) {
-	foreach_node(RangeTblEntry, rte, rtes) {
-		if (rte->rtekind == RTE_SUBQUERY) {
-			/* Check whether any table in the subquery is a partitioned table */
-			if (ContainsAllowedTableType(rte->subquery->rtable, elevel)) {
-				return true;
-			}
-		}
-
-		/* Allow functions */
-		if (rte->rtekind == RTE_FUNCTION) {
-			return true;
-		}
-
-		switch (rte->relkind) {
-		case RELKIND_RELATION:
-		case RELKIND_INDEX:
-		case RELKIND_TOASTVALUE:
-		case RELKIND_VIEW:
-		case RELKIND_MATVIEW:
-		case RELKIND_FOREIGN_TABLE:
-		case RELKIND_PARTITIONED_TABLE:
-		case RELKIND_PARTITIONED_INDEX:
-			return true;
-		default:
-			elog(elevel, "DuckDB does not support querying table type '%c'", rte->relkind);
-			return false;
-		}
-	}
-	return false;
-}
-
-static bool
 IsDuckdbTable(Oid relid) {
 	if (relid == InvalidOid) {
 		return false;
@@ -191,14 +158,6 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	 */
 	if (ContainsCatalogTable(query->rtable)) {
 		elog(elevel, "DuckDB does not support querying PG catalog tables");
-		return false;
-	}
-
-	/*
-	 * Check that we're only accessing table types that we know we have support
-	 * for.
-	 */
-	if (!ContainsAllowedTableType(query->rtable, elevel)) {
 		return false;
 	}
 
