@@ -1360,18 +1360,17 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 		return;
 	}
 	/* Write tuple columns in output vector. */
-	int duckdb_output_index = 0;
-	for (auto const &attr_num : scan_global_state->output_columns) {
+	for (int duckdb_output_index = 0; duckdb_output_index < slot->tts_tupleDescriptor->natts; duckdb_output_index++) {
 		auto &result = output.data[duckdb_output_index];
 		if (slot->tts_isnull[duckdb_output_index]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state.output_vector_size);
 		} else {
-			auto attr = slot->tts_tupleDescriptor->attrs[attr_num - 1];
+			/* Use ruturned tuple slot attr information. */
+			auto attr = slot->tts_tupleDescriptor->attrs[duckdb_output_index];
 			ConvertPostgresToDuckValue(attr.atttypid, slot->tts_values[duckdb_output_index], result,
 			                           scan_local_state.output_vector_size);
 		}
-		duckdb_output_index++;
 	}
 
 	scan_local_state.output_vector_size++;
