@@ -14,7 +14,7 @@ extern "C" {
 static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
-int max_workers_per_postgres_scan = 2;
+int duckdb_max_workers_per_postgres_scan = 2;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
@@ -161,7 +161,7 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
 	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
-	                     &max_workers_per_postgres_scan, 2, 8);
+	                     &duckdb_max_workers_per_postgres_scan, 2, 8);
 
 	DefineCustomVariable("duckdb.postgres_role",
 	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
