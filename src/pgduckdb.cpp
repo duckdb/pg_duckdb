@@ -1,17 +1,12 @@
-#include "duckdb.hpp"
+#include "pgduckdb/pgduckdb.h"
+
+#include <type_traits>
 
 extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
 #include "utils/guc.h"
 }
-
-#include "pgduckdb/pgduckdb.h"
-#include "pgduckdb/pgduckdb_node.hpp"
-#include "pgduckdb/pgduckdb_background_worker.hpp"
-#include "pgduckdb/pgduckdb_xact.hpp"
-
-static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
 int duckdb_max_threads_per_postgres_scan = 1;
@@ -99,6 +94,7 @@ DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T 
 	} else {
 		static_assert("Unsupported type");
 	}
+
 	func(name, gettext_noop(short_desc), NULL, var, *var, min, max, context, flags, check_hook, assign_hook, show_hook);
 }
 
@@ -122,8 +118,8 @@ static const struct config_enum_entry motherduck_enabled_options[] = {
 };
 /* clang-format on */
 
-static void
-DuckdbInitGUC(void) {
+void
+DuckdbInitGUC() {
 	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
 
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",

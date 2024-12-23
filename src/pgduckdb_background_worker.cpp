@@ -125,7 +125,7 @@ force_motherduck_sync(PG_FUNCTION_ARGS) {
 }
 
 void
-DuckdbInitBackgroundWorker(void) {
+DuckdbInitBackgroundWorker() {
 	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
 		return;
 	}
