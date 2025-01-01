@@ -808,9 +808,7 @@ numeric_typmod_scale(int32 typmod) {
 
 duckdb::LogicalType
 ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
-	/* If it's a domain, look at the base type instead */
-	auto type_id = getBaseType(attribute->atttypid);
-	switch (type_id) {
+	switch (attribute->atttypid) {
 	case BOOLOID:
 	case BOOLARRAYOID:
 		return duckdb::LogicalTypeId::BOOLEAN;
@@ -869,7 +867,7 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSARRAYOID:
 		return duckdb::LogicalTypeId::UINTEGER;
 	default:
-		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(type_id) + ")");
+		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
 }
 
