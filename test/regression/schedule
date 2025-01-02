@@ -26,3 +26,4 @@ test: transaction_errors
 test: secrets
 test: prepare
 test: function
+test: approx_count_distinct
