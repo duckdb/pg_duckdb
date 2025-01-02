@@ -165,6 +165,7 @@ INSERT INTO blob_tbl SELECT CAST(a as bytea) FROM (VALUES
     (NULL)
 ) t(a);
 SELECT * from blob_tbl;
+SELECT * from blob_tbl where a = '\x07';
 
 -- REGCLASSOID
 CREATE TABLE regclass_tbl (a REGCLASS);

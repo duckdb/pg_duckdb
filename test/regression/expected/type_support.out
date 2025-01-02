@@ -329,6 +329,12 @@ SELECT * from blob_tbl;
  
 (6 rows)
 
+SELECT * from blob_tbl where a = '\x07';
+  a   
+------
+ \x07
+(1 row)
+
 -- REGCLASSOID
 CREATE TABLE regclass_tbl (a REGCLASS);
 INSERT INTO regclass_tbl VALUES (42), (3000000000);
