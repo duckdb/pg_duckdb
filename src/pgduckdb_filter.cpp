@@ -83,6 +83,8 @@ FilterOperationSwitch(const Datum &value, const duckdb::Value &constant, Oid typ
 	case TEXTOID:
 	case VARCHAROID:
 		return StringFilterOperation<OP>(value, constant, type_oid == BPCHAROID);
+	case BYTEAOID:
+		return StringFilterOperation<OP>(value, constant, false);
 	default:
 		throw duckdb::InvalidTypeException(
 		    duckdb::string("(DuckDB/FilterOperationSwitch) Unsupported duckdb type: " + std::to_string(type_oid)));

@@ -2,6 +2,7 @@
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/blob.hpp"
 
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -196,6 +197,17 @@ ConvertVarCharDatum(const duckdb::Value &value) {
 	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
 	SET_VARSIZE(result, varchar_len + VARHDRSZ);
 	memcpy(VARDATA(result), varchar, varchar_len);
+	return PointerGetDatum(result);
+}
+
+static Datum
+ConvertBinaryDatum(const duckdb::Value &value) {
+	auto str = value.GetValueUnsafe<duckdb::string_t>();
+	auto blob_len = str.GetSize();
+	auto blob = str.GetDataUnsafe();
+	bytea* result = (bytea *)palloc0(blob_len + VARHDRSZ);
+	SET_VARSIZE(result, blob_len + VARHDRSZ);
+	memcpy(VARDATA(result), blob, blob_len);
 	return PointerGetDatum(result);
 }
 
@@ -505,6 +517,19 @@ struct PostgresTypeTraits<VARCHAROID> {
 	}
 };
 
+// BLOB type
+template <>
+struct PostgresTypeTraits<BYTEAOID> {
+	static constexpr int16_t typlen = -1; // variable-length
+	static constexpr bool typbyval = false;
+	static constexpr char typalign = 'i';
+
+	static inline Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertBinaryDatum(val);
+	}
+};
+
 template <int32_t OID>
 struct PostgresOIDMapping {
 	static constexpr int32_t postgres_oid = OID;
@@ -545,6 +570,7 @@ using TimestampArray = PODArray<PostgresOIDMapping<TIMESTAMPOID>>;
 using UUIDArray = PODArray<PostgresOIDMapping<UUIDOID>>;
 using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
 using NumericArray = PODArray<PostgresOIDMapping<NUMERICOID>>;
+using ByteArray = PODArray<PostgresOIDMapping<BYTEAOID>>;
 
 static idx_t
 GetDuckDBListDimensionality(const duckdb::LogicalType &list_type, idx_t depth = 0) {
@@ -733,6 +759,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = ConvertUUIDDatum(value);
 		break;
 	}
+	case BYTEAOID: {
+		slot->tts_values[col] = ConvertBinaryDatum(value);
+		break;
+	}
 	case BOOLARRAYOID: {
 		ConvertDuckToPostgresArray<BoolArray>(slot, value, col);
 		break;
@@ -782,6 +812,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case UUIDARRAYOID: {
 		ConvertDuckToPostgresArray<UUIDArray>(slot, value, col);
+		break;
+	}
+	case BYTEAARRAYOID: {
+		ConvertDuckToPostgresArray<ByteArray>(slot, value, col);
 		break;
 	}
 	default:
@@ -866,6 +900,9 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case REGCLASSOID:
 	case REGCLASSARRAYOID:
 		return duckdb::LogicalTypeId::UINTEGER;
+	case BYTEAOID:
+	case BYTEAARRAYOID:
+		return duckdb::LogicalTypeId::BLOB;
 	default:
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
@@ -920,6 +957,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 		return NUMERICARRAYOID;
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDARRAYOID;
+	case duckdb::LogicalTypeId::BLOB:
+		return BYTEAARRAYOID;
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %d to Postgres type",
 		     static_cast<uint8_t>(type.id()));
@@ -974,6 +1013,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		}
 		return GetPostgresArrayDuckDBType(*duck_type);
 	}
+	case duckdb::LogicalTypeId::BLOB:
+		return BYTEAOID;
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
 		     type.ToString().c_str());
@@ -1220,6 +1261,14 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		}
 		duckdb_uuid.upper ^= (uint64_t(1) << 63);
 		Append(result, duckdb_uuid, offset);
+		break;
+	}
+	case duckdb::LogicalTypeId::BLOB: {
+		const char *bytea_data = VARDATA_ANY(value);
+		size_t bytea_length = VARSIZE_ANY_EXHDR(value);
+		const duckdb::string_t s(bytea_data, bytea_length);
+		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
+		data[offset] = duckdb::StringVector::AddString(result, s);
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
