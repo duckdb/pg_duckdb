@@ -1,10 +1,13 @@
 #pragma once
 
-#include "duckdb.hpp"
+#include "pgduckdb/pg/declarations.hpp"
 
-extern "C" {
-#include "postgres.h"
-}
+#include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
+
+
+namespace duckdb {
+class TableFilter;
+} // namespace duckdb
 
 namespace pgduckdb {
 
