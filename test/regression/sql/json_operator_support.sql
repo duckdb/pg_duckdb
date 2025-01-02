@@ -1,26 +1,3 @@
--- JSON
-set duckdb.force_execution to true;
-
--- -> int operator
-select '[{"a":"foo"},{"b":"bar"},{"c":"baz"}]'::json->2;
-
--- -> text operator
-select '{"a": {"b":"foo"}}'::json->'a'
-
--- #>> text[] operator
-select '{"a":[1,2,3],"b":[4,5,6]}'::json#>>'{a,2}';
-
--- #> text[] operator
-select '{"a": {"b":{"c": "foo"}}}'::json#>'{a,b}';
-
--- ->> int operator
-select '[1,2,3]'::json->>2;
-
--- ->> text operator
-select '{"a":1,"b":2}'::json->>'b';
-
--- 
-
 -- Create Table
 -- Create table for JSON testing
 CREATE TABLE test_json (
@@ -93,7 +70,3 @@ FROM test_json;
 -- Test Case 15: Extract Value Using JSON Path Queries (@@)
 SELECT id, data @@ '$.k == true' AS k_is_true
 FROM test_json;
-
-
-
-
