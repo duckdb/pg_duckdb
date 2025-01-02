@@ -191,7 +191,6 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	local_state.output_vector_size = 0;
 
 	size_t i = 0;
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	for (; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {
