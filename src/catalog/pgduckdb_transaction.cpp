@@ -39,24 +39,20 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	}
 
 	Oid rel_oid = GetRelidFromSchemaAndTable(name.c_str(), entry_name.c_str());
+
 	if (!IsValidOid(rel_oid)) {
 		return nullptr; // Table could not be found
 	}
 
 	Relation rel = PostgresTable::OpenRelation(rel_oid);
-	if (IsRelView(rel)) {
-		// Let the replacement scan handle this, the ReplacementScan replaces the view with its view_definition, which
-		// will get bound again and hit a PostgresIndexTable / PostgresHeapTable.
-		return nullptr;
-	}
 
 	duckdb::CreateTableInfo info;
 	info.table = entry_name;
 	PostgresTable::SetTableInfo(info, rel);
 
-	auto cardinality = PostgresTable::GetTableCardinality(rel);
-	tables.emplace(entry_name, duckdb::make_uniq<PostgresHeapTable>(schema->catalog, *schema, info, rel, cardinality,
-	                                                                schema->snapshot));
+	auto cardinality = EstimateRelSize(rel);
+	tables.emplace(entry_name, duckdb::make_uniq<PostgresTable>(schema->catalog, *schema, info, rel, cardinality,
+	                                                            schema->snapshot));
 	return tables[entry_name].get();
 }
 
