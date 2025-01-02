@@ -1317,7 +1317,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state.output_vector_size);
 		} else {
-			/* Use ruturned tuple slot attr information. */
+			/* Use returned tuple slot attr information. */
 			auto attr = slot->tts_tupleDescriptor->attrs[duckdb_output_index];
 			ConvertPostgresToDuckValue(attr.atttypid, slot->tts_values[duckdb_output_index], result,
 			                           scan_local_state.output_vector_size);
