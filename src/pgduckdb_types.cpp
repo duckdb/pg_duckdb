@@ -202,9 +202,9 @@ ConvertVarCharDatum(const duckdb::Value &value) {
 
 static Datum
 ConvertBinaryDatum(const duckdb::Value &value) {
-	auto str = value.GetValue<duckdb::string>();
-	auto blob = str.c_str();
-	auto blob_len = str.size();
+	auto str = value.GetValueUnsafe<duckdb::string_t>();
+	auto blob_len = str.GetSize();
+	auto blob = str.GetDataUnsafe();
 	bytea* result = (bytea *)palloc0(blob_len + VARHDRSZ);
 	SET_VARSIZE(result, blob_len + VARHDRSZ);
 	memcpy(VARDATA(result), blob, blob_len);
