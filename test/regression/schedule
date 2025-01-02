@@ -27,3 +27,4 @@ test: secrets
 test: prepare
 test: function
 test: scan_postgres_tables
+test: approx_count_distinct
