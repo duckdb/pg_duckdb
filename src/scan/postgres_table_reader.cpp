@@ -161,6 +161,7 @@ PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
 	static const int base_log = 8;
 	int cardinality_log = std::log2(cardinality);
 	int base = cardinality_log / base_log;
+	base = 8;
 	return std::max(1, std::min(base, std::max(duckdb_max_workers_per_postgres_scan, max_parallel_workers)));
 }
 
