@@ -53,24 +53,24 @@ OpenRelation(Oid relationId) {
 	auto rel = PostgresFunctionGuard(relation_open, relationId, AccessShareLock);
 	TupleDesc tupleDesc = rel->rd_att;
 	for (int i = 0; i < tupleDesc->natts; i++) {
-		Oid type_id= InvalidOid;
 		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, i);
-		if (type_is_array_domain(thisatt->atttypid) && thisatt->attndims == 0) {
-			HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(thisatt->atttypid));
-			thisatt->attndims = ((Form_pg_type) GETSTRUCT(typeTuple))->typndims;
-			ReleaseSysCache(typeTuple);
+		if (get_typtype(thisatt->atttypid) == TYPTYPE_DOMAIN) {
+			/* If the domain is an array type, you need to obtain the corresponding array dimension information */
+			if (type_is_array_domain(thisatt->atttypid) && thisatt->attndims == 0) {
+				HeapTuple  typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(thisatt->atttypid));
+				thisatt->attndims = ((Form_pg_type) GETSTRUCT(typeTuple))->typndims;
+				ReleaseSysCache(typeTuple);
+			}
 
-			/* If it's a domain, look at the base type instead */
-			type_id = getBaseType(thisatt->atttypid);
+			/* It is a domain type that needs to be reduced to its base type */
+			thisatt->atttypid = getBaseType(thisatt->atttypid);
 		} else if (type_is_array(thisatt->atttypid)) {
-			/* if an array type, assume domain attribute */
-			type_id = get_array_type(getBaseType(get_base_element_type(thisatt->atttypid)));
-		} else {
-			/* If it's a domain, look at the base type instead */
-			type_id = getBaseType(thisatt->atttypid);
+			Oid elem_type = get_base_element_type(thisatt->atttypid);
+			if (OidIsValid(elem_type) && get_typtype(elem_type) == TYPTYPE_DOMAIN) {
+				/* When the member type of an array is domain, you need to build a base array type */
+				thisatt->atttypid = get_array_type(getBaseType(elem_type));
+			}
 		}
-
-		thisatt->atttypid = type_id;
 	}
 
 	CurrentResourceOwner = saveResourceOwner;
