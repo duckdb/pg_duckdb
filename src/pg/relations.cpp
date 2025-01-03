@@ -6,11 +6,14 @@ extern "C" {
 #include "postgres.h"
 #include "access/htup_details.h" // GETSTRUCT
 #include "access/relation.h"     // relation_open and relation_close
+#include "access/tupdesc.h"  // TupleDescAttr
 #include "catalog/namespace.h"   // makeRangeVarFromNameList, RangeVarGetRelid
+#include "catalog/pg_type.h" // Form_pg_type
 #include "optimizer/plancat.h"   // estimate_rel_size
 #include "utils/rel.h"
 #include "utils/resowner.h" // CurrentResourceOwner and TopTransactionResourceOwner
 #include "utils/syscache.h" // RELOID
+#include "utils/lsyscache.h" // getBaseType
 }
 
 namespace pgduckdb {
@@ -48,6 +51,28 @@ OpenRelation(Oid relationId) {
 	ResourceOwner saveResourceOwner = CurrentResourceOwner;
 	CurrentResourceOwner = TopTransactionResourceOwner;
 	auto rel = PostgresFunctionGuard(relation_open, relationId, AccessShareLock);
+	TupleDesc tupleDesc = rel->rd_att;
+	for (int i = 0; i < tupleDesc->natts; i++) {
+		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, i);
+		if (get_typtype(thisatt->atttypid) == TYPTYPE_DOMAIN) {
+			/* If the domain is an array type, you need to obtain the corresponding array dimension information */
+			if (type_is_array_domain(thisatt->atttypid) && thisatt->attndims == 0) {
+				HeapTuple  typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(thisatt->atttypid));
+				thisatt->attndims = ((Form_pg_type) GETSTRUCT(typeTuple))->typndims;
+				ReleaseSysCache(typeTuple);
+			}
+
+			/* It is a domain type that needs to be reduced to its base type */
+			thisatt->atttypid = getBaseType(thisatt->atttypid);
+		} else if (type_is_array(thisatt->atttypid)) {
+			Oid elem_type = get_base_element_type(thisatt->atttypid);
+			if (OidIsValid(elem_type) && get_typtype(elem_type) == TYPTYPE_DOMAIN) {
+				/* When the member type of an array is domain, you need to build a base array type */
+				thisatt->atttypid = get_array_type(getBaseType(elem_type));
+			}
+		}
+	}
+
 	CurrentResourceOwner = saveResourceOwner;
 	return rel;
 }
