@@ -481,4 +481,5 @@ ERROR:  Domain is not supported in DuckDB
 CREATE TEMP TABLE domaintest(testint4_array domainint4[]) USING duckdb;
 ERROR:  Domain is not supported in DuckDB
 DROP DOMAIN domainint4;
+DROP DOMAIN domain_int_array;
 DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;

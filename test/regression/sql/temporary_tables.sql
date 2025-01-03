@@ -257,4 +257,5 @@ CREATE TEMP TABLE domaintest(testint4_array domain_int_array) USING duckdb;
 CREATE TEMP TABLE domaintest(testint4_array domainint4[]) USING duckdb;
 
 DROP DOMAIN domainint4;
+DROP DOMAIN domain_int_array;
 DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;
