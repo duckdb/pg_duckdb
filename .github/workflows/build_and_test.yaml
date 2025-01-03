@@ -19,8 +19,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install clang-format (11.0.1) and ruff
-        run: python3 -m pip install "clang-format==11.0.1" ruff
+      - name: Install clang-format and ruff
+        run: python3 -m pip install -r dev_requirements.txt
       - name: Run clang-format
         run: git clang-format refs/remotes/origin/main --diff
       - name: Run ruff check

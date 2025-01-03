@@ -205,7 +205,7 @@ ConvertBinaryDatum(const duckdb::Value &value) {
 	auto str = value.GetValueUnsafe<duckdb::string_t>();
 	auto blob_len = str.GetSize();
 	auto blob = str.GetDataUnsafe();
-	bytea* result = (bytea *)palloc0(blob_len + VARHDRSZ);
+	bytea *result = (bytea *)palloc0(blob_len + VARHDRSZ);
 	SET_VARSIZE(result, blob_len + VARHDRSZ);
 	memcpy(VARDATA(result), blob, blob_len);
 	return PointerGetDatum(result);
