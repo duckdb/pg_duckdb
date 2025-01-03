@@ -250,4 +250,11 @@ INSERT INTO ta (a) SELECT * FROM generate_series(1, 3); -- OK
 INSERT INTO ta (b) SELECT * FROM generate_series(1, 3); -- OK
 SELECT * FROM ta;
 
+CREATE DOMAIN domainint4 int4;
+CREATE TEMP TABLE domaintest(testint4 domainint4) USING duckdb;
+CREATE DOMAIN domain_int_array as INT[];
+CREATE TEMP TABLE domaintest(testint4_array domain_int_array) USING duckdb;
+CREATE TEMP TABLE domaintest(testint4_array domainint4[]) USING duckdb;
+
+DROP DOMAIN domainint4;
 DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;

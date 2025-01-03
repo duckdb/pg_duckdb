@@ -248,6 +248,15 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 			continue;
 		}
 
+		if (get_typtype(column->atttypid) == TYPTYPE_DOMAIN) {
+			elog(ERROR, "Domain is not supported in DuckDB");
+		} else if (type_is_array(column->atttypid)) {
+			Oid elem_type = get_base_element_type(column->atttypid);
+			if (get_typtype(elem_type) == TYPTYPE_DOMAIN) {
+				elog(ERROR, "Domain is not supported in DuckDB");
+			}
+		}
+
 		const char *column_name = NameStr(column->attname);
 
 		const char *column_type_name = format_type_with_typemod(column->atttypid, column->atttypmod);
