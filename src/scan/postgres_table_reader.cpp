@@ -167,11 +167,11 @@ PostgresTableReader::PostgresTableReaderCleanup() {
 int
 PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
 	static const int cardinality_threshold = 1 << 16;
-	/* No parallel scan wanted */
+	/* No parallel worker scan wanted */
 	if (!duckdb_max_workers_per_postgres_scan) {
 		return 0;
 	}
-	/* */
+	/* Use only one worker when scan is done on low cardinality */
 	if (cardinality <= cardinality_threshold) {
 		return 1;
 	}
