@@ -20,7 +20,7 @@ public:
 private:
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
-	const char * ExplainScanPlan(QueryDesc *query_desc);
+	const char *ExplainScanPlan(QueryDesc *query_desc);
 	bool CanTableScanRunInParallel(Plan *plan);
 	bool MarkPlanParallelAware(Plan *plan);
 

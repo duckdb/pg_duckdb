@@ -101,7 +101,7 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
 }
 
-#define PostgresFunctionGuard(FUNC, ...)                                               \
+#define PostgresFunctionGuard(FUNC, ...)                                                                               \
 	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(__func__, ##__VA_ARGS__)
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
