@@ -159,8 +159,13 @@ CREATE TEMP TABLE t(b) USING duckdb AS SELECT * FROM t_heap;
 SELECT * FROM t;
 
 -- CTAS from DuckDB table to postgres table
-CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t_heap;
+CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t;
 SELECT * FROM t_heap2;
+
+-- CTAS from postgres table to postgres table (not actually handled by
+-- pg_duckdb, but should still work)
+CREATE TEMP TABLE t_heap3(c) USING heap AS SELECT * FROM t_heap;
+SELECT * FROM t_heap3;
 
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
@@ -250,4 +255,4 @@ INSERT INTO ta (a) SELECT * FROM generate_series(1, 3); -- OK
 INSERT INTO ta (b) SELECT * FROM generate_series(1, 3); -- OK
 SELECT * FROM ta;
 
-DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;
+DROP TABLE webpages, t, t_heap, t_heap2, t_heap3, ta, tb, tc, td;
