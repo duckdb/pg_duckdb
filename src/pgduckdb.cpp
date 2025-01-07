@@ -4,6 +4,7 @@ extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
 #include "utils/guc.h"
+#include "postmaster/bgworker_internals.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -161,7 +162,7 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
 	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
-	                     &duckdb_max_workers_per_postgres_scan, 2, 8);
+	                     &duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
 
 	DefineCustomVariable("duckdb.postgres_role",
 	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "

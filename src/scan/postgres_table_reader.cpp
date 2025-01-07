@@ -156,12 +156,26 @@ PostgresTableReader::PostgresTableReaderCleanup() {
 	table_scan_query_desc = nullptr;
 }
 
+
+/*
+ * Logic is straightforward, if `duckdb_max_workers_per_postgres_scan` is set to 0 we don't want any
+ * parallelization. For cardinality less equal than 2^16 we only try to run one parallel process. When cardinality
+ * is bigger than we should spawn numer of parallel processes set by `duckdb_max_workers_per_postgres_scan` but
+ * not bigger than `max_parallel_workers`.
+ */
+
 int
 PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
-	static const int base_log = 8;
-	int cardinality_log = std::log2(cardinality);
-	int base = cardinality_log / base_log;
-	return std::max(1, std::min(base, std::max(duckdb_max_workers_per_postgres_scan, max_parallel_workers)));
+	static const int cardinality_threshold = 1 << 16;
+	/* No parallel scan wanted */
+	if (!duckdb_max_workers_per_postgres_scan) {
+		return 0;
+	}
+	/* */
+	if (cardinality <= cardinality_threshold) {
+		return 1;
+	}
+	return std::min(duckdb_max_workers_per_postgres_scan, max_parallel_workers);
 }
 
 const char *
