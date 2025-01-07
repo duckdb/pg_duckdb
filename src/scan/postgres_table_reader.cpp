@@ -130,32 +130,38 @@ void
 PostgresTableReader::PostgresTableReaderCleanup() {
 	PostgresScopedStackReset scoped_stack_reset;
 
-	PostgresFunctionGuard(ExecEndNode, table_scan_planstate);
+	if (table_scan_planstate) {
+		auto tmp = table_scan_planstate;
+		table_scan_planstate = nullptr;
+		PostgresFunctionGuard(ExecEndNode, tmp);
+	}
 
 	if (parallel_executor_info != NULL) {
-		PostgresFunctionGuard(ExecParallelFinish, parallel_executor_info);
-		PostgresFunctionGuard(ExecParallelCleanup, parallel_executor_info);
+		auto tmp = parallel_executor_info;
+		parallel_executor_info = nullptr;
+		PostgresFunctionGuard(ExecParallelFinish, tmp);
+		PostgresFunctionGuard(ExecParallelCleanup, tmp);
 	}
-
-	parallel_executor_info = nullptr;
 
 	if (parallel_worker_readers) {
-		PostgresFunctionGuard(pfree, parallel_worker_readers);
+		auto tmp = parallel_worker_readers;
+		parallel_worker_readers = nullptr;
+		PostgresFunctionGuard(pfree, tmp);
 	}
 
-	parallel_worker_readers = nullptr;
-
-	PostgresFunctionGuard(ExecutorFinish, table_scan_query_desc);
-	PostgresFunctionGuard(ExecutorEnd, table_scan_query_desc);
-	PostgresFunctionGuard(FreeQueryDesc, table_scan_query_desc);
+	if (table_scan_query_desc) {
+		auto tmp = table_scan_query_desc;
+		table_scan_query_desc = nullptr;
+		PostgresFunctionGuard(ExecutorFinish, tmp);
+		PostgresFunctionGuard(ExecutorEnd, tmp);
+		PostgresFunctionGuard(FreeQueryDesc, tmp);
+	}
 
 	if (entered_parallel_mode) {
+		entered_parallel_mode = false;
 		ExitParallelMode();
 	}
-
-	table_scan_query_desc = nullptr;
 }
-
 
 /*
  * Logic is straightforward, if `duckdb_max_workers_per_postgres_scan` is set to 0 we don't want any
