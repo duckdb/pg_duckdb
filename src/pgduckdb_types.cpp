@@ -1268,7 +1268,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		size_t bytea_length = VARSIZE_ANY_EXHDR(value);
 		const duckdb::string_t s(bytea_data, bytea_length);
 		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
-		data[offset] = duckdb::StringVector::AddString(result, s);
+		data[offset] = duckdb::StringVector::AddStringOrBlob(result, s);
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
