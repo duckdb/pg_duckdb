@@ -29,7 +29,7 @@ namespace pgduckdb {
 
 PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool count_tuples_only)
     : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
-      entered_parallel_mode(false) {
+      entered_parallel_mode(false), cleaned_up(false) {
 
 	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
@@ -120,46 +120,45 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 }
 
 PostgresTableReader::~PostgresTableReader() {
-	if (table_scan_query_desc) {
-		std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
-		PostgresTableReaderCleanup();
+	if (cleaned_up) {
+		return;
 	}
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+	PostgresTableReaderCleanup();
 }
 
 void
 PostgresTableReader::PostgresTableReaderCleanup() {
+	D_ASSERT(!cleaned_up);
+	cleaned_up = true;
 	PostgresScopedStackReset scoped_stack_reset;
 
 	if (table_scan_planstate) {
-		auto tmp = table_scan_planstate;
+		PostgresFunctionGuard(ExecEndNode, table_scan_planstate);
 		table_scan_planstate = nullptr;
-		PostgresFunctionGuard(ExecEndNode, tmp);
 	}
 
 	if (parallel_executor_info != NULL) {
-		auto tmp = parallel_executor_info;
+		PostgresFunctionGuard(ExecParallelFinish, parallel_executor_info);
+		PostgresFunctionGuard(ExecParallelCleanup, parallel_executor_info);
 		parallel_executor_info = nullptr;
-		PostgresFunctionGuard(ExecParallelFinish, tmp);
-		PostgresFunctionGuard(ExecParallelCleanup, tmp);
 	}
 
 	if (parallel_worker_readers) {
-		auto tmp = parallel_worker_readers;
+		PostgresFunctionGuard(pfree, parallel_worker_readers);
 		parallel_worker_readers = nullptr;
-		PostgresFunctionGuard(pfree, tmp);
 	}
 
 	if (table_scan_query_desc) {
-		auto tmp = table_scan_query_desc;
+		PostgresFunctionGuard(ExecutorFinish, table_scan_query_desc);
+		PostgresFunctionGuard(ExecutorEnd, table_scan_query_desc);
+		PostgresFunctionGuard(FreeQueryDesc, table_scan_query_desc);
 		table_scan_query_desc = nullptr;
-		PostgresFunctionGuard(ExecutorFinish, tmp);
-		PostgresFunctionGuard(ExecutorEnd, tmp);
-		PostgresFunctionGuard(FreeQueryDesc, tmp);
 	}
 
 	if (entered_parallel_mode) {
-		entered_parallel_mode = false;
 		ExitParallelMode();
+		entered_parallel_mode = false;
 	}
 }
 

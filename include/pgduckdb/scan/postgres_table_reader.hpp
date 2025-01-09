@@ -34,6 +34,7 @@ private:
 	int nreaders;
 	int next_parallel_reader;
 	bool entered_parallel_mode;
+	bool cleaned_up;
 };
 
 } // namespace pgduckdb
