@@ -15,8 +15,7 @@ EXPLAIN SELECT count(*) FROM ta;
  ┌─────────────┴─────────────┐
  │       POSTGRES_SCAN       │
  │    ────────────────────   │
- │         Function:         │
- │       POSTGRES_SCAN       │
+ │             ta            │
  │                           │
  │         ~2550 Rows        │
  └───────────────────────────┘
@@ -40,8 +39,7 @@ EXPLAIN SELECT count(*) FROM ta;
  ┌─────────────┴─────────────┐
  │       POSTGRES_SCAN       │
  │    ────────────────────   │
- │         Function:         │
- │       POSTGRES_SCAN       │
+ │             ta            │
  │                           │
  │         ~2550 Rows        │
  └───────────────────────────┘
