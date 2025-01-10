@@ -76,6 +76,7 @@ public:
 	                                 duckdb::DataChunk &output);
 	static duckdb::unique_ptr<duckdb::NodeStatistics> PostgresScanCardinality(duckdb::ClientContext &context,
 	                                                                          const duckdb::FunctionData *data);
+	static std::string ToString(const duckdb::FunctionData *bind_data);
 };
 
 } // namespace pgduckdb

@@ -154,6 +154,12 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 	filter_pushdown = true;
 	filter_prune = true;
 	cardinality = PostgresScanCardinality;
+	to_string = ToString;
+}
+
+std::string PostgresScanTableFunction::ToString(const duckdb::FunctionData *data) {
+	auto &bind_data = data->Cast<PostgresScanFunctionData>();
+	return GetRelationName(bind_data.rel);
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>

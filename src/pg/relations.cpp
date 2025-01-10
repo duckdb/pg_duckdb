@@ -160,4 +160,9 @@ QuoteIdentifier(const char *ident) {
 	return PostgresFunctionGuard(quote_identifier, ident);
 }
 
+const char *
+GetRelationName(Relation rel) {
+	return RelationGetRelationName(rel);
+}
+
 } // namespace pgduckdb
