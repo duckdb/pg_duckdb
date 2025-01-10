@@ -8,7 +8,6 @@
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
-#include "pgduckdb/scan/postgres_seq_scan.hpp"
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
@@ -135,8 +134,7 @@ DuckDBManager::Initialize() {
 	duckdb::DBConfig config;
 	config.SetOptionByName("custom_user_agent", "pg_duckdb");
 	config.SetOptionByName("extension_directory", CreateOrGetDirectoryPath("duckdb_extensions"));
-	// Transforms VIEWs into their view definition
-	config.replacement_scans.emplace_back(pgduckdb::PostgresReplacementScan);
+
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
 	SET_DUCKDB_OPTION(enable_external_access);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
@@ -208,14 +206,9 @@ DuckDBManager::Initialize() {
 
 void
 DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
-	pgduckdb::PostgresSeqScanFunction seq_scan_fun;
-	duckdb::CreateTableFunctionInfo seq_scan_info(seq_scan_fun);
-
-	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
 	context.transaction.BeginTransaction();
 	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
-	catalog.CreateTableFunction(context, &seq_scan_info);
 	context.transaction.Commit();
 }
 
