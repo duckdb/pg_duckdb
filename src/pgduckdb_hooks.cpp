@@ -147,8 +147,9 @@ NeedsDuckdbExecution(Query *query) {
  *
  * If there's no FROM clause, we're only selecting constants. From a
  * performance perspective there's not really a point in using DuckDB. If we
- * remove this check many common queries that are used to inspect postgres will
- * throw a warning or return incorrect results. For example:
+ * forward all of such queries to DuckDB anyway, then many queries that are
+ * used to inspect postgres will throw a warning or return incorrect results.
+ * For example:
  *
  *    SELECT current_setting('work_mem');
  *
