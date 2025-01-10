@@ -21,7 +21,7 @@ EXPLAIN SELECT count(*) FROM ta;
  └───────────────────────────┘
  
  
-(19 rows)
+(18 rows)
 
 CALL duckdb.recycle_ddb();
 EXPLAIN SELECT count(*) FROM ta;
@@ -45,7 +45,7 @@ EXPLAIN SELECT count(*) FROM ta;
  └───────────────────────────┘
  
  
-(19 rows)
+(18 rows)
 
 -- Not allowed in a transaction
 BEGIN;
