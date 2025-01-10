@@ -30,4 +30,17 @@ SELECT a, approx_count_distinct(b) OVER (PARTITION BY a) FROM t ORDER BY a;
  5 |                     1
 (8 rows)
 
+SELECT approx_count_distinct(1);
+ approx_count_distinct 
+-----------------------
+                     1
+(1 row)
+
+SET duckdb.force_execution = false;
+SELECT approx_count_distinct(1);
+ approx_count_distinct 
+-----------------------
+                     1
+(1 row)
+
 DROP TABLE t;

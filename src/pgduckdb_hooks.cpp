@@ -106,6 +106,13 @@ ContainsDuckdbItems(Node *node, void *context) {
 		}
 	}
 
+	if (IsA(node, Aggref)) {
+		Aggref *func = castNode(Aggref, node);
+		if (pgduckdb::IsDuckdbOnlyFunction(func->aggfnoid)) {
+			return true;
+		}
+	}
+
 #if PG_VERSION_NUM >= 160000
 	return expression_tree_walker(node, ContainsDuckdbItems, context);
 #else
@@ -116,6 +123,27 @@ ContainsDuckdbItems(Node *node, void *context) {
 static bool
 NeedsDuckdbExecution(Query *query) {
 	return ContainsDuckdbItems((Node *)query, NULL);
+}
+
+/*
+ * We only check ContainsFromClause if duckdb.force_execution is set to true.
+ *
+ * If there's no FROM clause, we're only selecting constants. From a
+ * performance perspective there's not really a point in using DuckDB. If we
+ * forward all of such queries to DuckDB anyway, then many queries that are
+ * used to inspect postgres will throw a warning or return incorrect results.
+ * For example:
+ *
+ *    SELECT current_setting('work_mem');
+ *
+ * So even if a user sets duckdb.force_execution = true, we still won't
+ * forward such queries to DuckDB. With one exception: If the query
+ * requires duckdb e.g. due to a duckdb-only function being used, we'll
+ * still executing this in DuckDB.
+ */
+static bool
+ContainsFromClause(Query *query) {
+	return query->rtable;
 }
 
 static bool
@@ -143,15 +171,6 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	}
 
 	/*
-	 * If there's no rtable, we're only selecting constants. There's no point
-	 * in using DuckDB for that.
-	 */
-	if (!query->rtable) {
-		elog(elevel, "DuckDB usage requires at least one table");
-		return false;
-	}
-
-	/*
 	 * If any table is from pg_catalog, we don't want to use DuckDB. This is
 	 * because DuckDB has its own pg_catalog tables that contain different data
 	 * then Postgres its pg_catalog tables.
@@ -172,7 +191,7 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 			IsAllowedStatement(parse, true);
 
 			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
-		} else if (duckdb_force_execution && IsAllowedStatement(parse)) {
+		} else if (duckdb_force_execution && IsAllowedStatement(parse) && ContainsFromClause(parse)) {
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
