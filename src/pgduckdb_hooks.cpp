@@ -123,6 +123,13 @@ ContainsDuckdbItems(Node *node, void *context) {
 		}
 	}
 
+	if (IsA(node, Aggref)) {
+		Aggref *func = castNode(Aggref, node);
+		if (pgduckdb::IsDuckdbOnlyFunction(func->aggfnoid)) {
+			return true;
+		}
+	}
+
 #if PG_VERSION_NUM >= 160000
 	return expression_tree_walker(node, ContainsDuckdbItems, context);
 #else
@@ -160,10 +167,22 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	}
 
 	/*
-	 * If there's no rtable, we're only selecting constants. There's no point
-	 * in using DuckDB for that.
+	 * XXX: This is a bit of a weird one, because it is only allowed when
+	 * IsAllowedStatement is called with throw_error.
+	 *
+	 * If there's no rtable, we're only selecting constants. From a performance
+	 * perspective there's not really a point in using DuckDB. If we remove
+	 * this heck many common queries that are used to inspect postgres will
+	 * throw a warning or return incorrect results. For example:
+	 *
+	 *    SELECT current_setting('work_mem');
+	 *
+	 * So even if a user sets duckdb.force_execution = true, we still won't
+	 * forward such queries to DuckDB. With one exception: If the query
+	 * requires duckdb e.g. due to a duckdb-only function being used, we'll
+	 * still executing this in DuckDB.
 	 */
-	if (!query->rtable) {
+	if (!query->rtable && !throw_error) {
 		elog(elevel, "DuckDB usage requires at least one table");
 		return false;
 	}
