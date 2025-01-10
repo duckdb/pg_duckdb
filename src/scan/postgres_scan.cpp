@@ -165,8 +165,7 @@ std::string PostgresScanTableFunction::ToString(const duckdb::FunctionData *data
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresScanTableFunction::PostgresScanInitGlobal(duckdb::ClientContext &, duckdb::TableFunctionInitInput &input) {
 	auto &bind_data = input.bind_data->CastNoConst<PostgresScanFunctionData>();
-	auto global_state = duckdb::make_uniq<PostgresScanGlobalState>(bind_data.snapshot, bind_data.rel, input);
-	return global_state;
+	return duckdb::make_uniq<PostgresScanGlobalState>(bind_data.snapshot, bind_data.rel, input);
 }
 
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>

@@ -258,10 +258,9 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 		chunk = duckdb_scan_state->query_results->Fetch();
 	} while (chunk && chunk->size() > 0);
 
-	std::string explain_output = "\n\n";
-	explain_output += value;
-	explain_output += "\n";
-	ExplainPropertyText("DuckDB Execution Plan", explain_output.c_str(), es);
+	std::ostringstream explain_output;
+	explain_output << "\n\n" << value << "\n";
+	ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
 }
 
 void
