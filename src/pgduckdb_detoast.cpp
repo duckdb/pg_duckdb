@@ -125,7 +125,7 @@ ToastFetchDatum(struct varlena *attr) {
 		return result;
 	}
 
-	std::lock_guard<std::mutex> lock(DuckdbProcessLock::GetLock());
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 
 	if (!PostgresFunctionGuard(table_relation_fetch_toast_slice, toast_pointer, attrsize, result)) {
 		duckdb_free(result);

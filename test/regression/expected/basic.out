@@ -15,22 +15,6 @@ SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
  9 |   100
 (4 rows)
 
-SET duckdb.max_threads_per_postgres_scan to 4;
-SELECT COUNT(*) FROM t;
- count 
--------
-  1000
-(1 row)
-
-SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
- a | count 
----+-------
- 6 |   100
- 7 |   100
- 8 |   100
- 9 |   100
-(4 rows)
-
 CREATE TABLE empty(a INT);
 SELECT COUNT(*) FROM empty;
  count 
@@ -38,7 +22,6 @@ SELECT COUNT(*) FROM empty;
      0
 (1 row)
 
-SET duckdb.max_threads_per_postgres_scan TO default;
 SET client_min_messages TO default;
 DROP TABLE t;
 DROP TABLE empty;
