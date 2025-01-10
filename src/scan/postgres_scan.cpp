@@ -160,7 +160,9 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 std::string
 PostgresScanTableFunction::ToString(const duckdb::FunctionData *data) {
 	auto &bind_data = data->Cast<PostgresScanFunctionData>();
-	return GetRelationName(bind_data.rel);
+	std::ostringstream oss;
+	oss << "(POSTGRES_SCAN) " << GetRelationName(bind_data.rel);
+	return oss.str();
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
