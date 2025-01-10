@@ -159,7 +159,7 @@ NeedsDuckdbExecution(Query *query) {
  * still executing this in DuckDB.
  */
 static bool
-ContainsFromClause(Query *query, bool throw_error = false) {
+ContainsFromClause(Query *query) {
 	return query->rtable;
 }
 
