@@ -308,12 +308,12 @@ PostgresTableReader::GetNextWorkerTuple() {
 			return minimal_tuple;
 		}
 
-		++next_parallel_reader;
+		next_parallel_reader++;
 		if (next_parallel_reader >= nreaders) {
 			next_parallel_reader = 0;
 		}
 
-		++nvisited;
+		nvisited++;
 		if (nvisited >= nreaders) {
 			/*
 			 * It should be safe to make this call because function calling GetNextTuple() and transitively
