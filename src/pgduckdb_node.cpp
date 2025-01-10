@@ -137,8 +137,12 @@ ExecuteQuery(DuckdbScanState *state) {
 	}
 
 	duckdb::PendingExecutionResult execution_result;
-	do {
+	while (true) {
 		execution_result = pending->ExecuteTask();
+		if (duckdb::PendingQueryResult::IsResultReady(execution_result)) {
+			break;
+		}
+
 		if (QueryCancelPending) {
 			// Send an interrupt
 			connection->Interrupt();
@@ -150,7 +154,7 @@ ExecuteQuery(DuckdbScanState *state) {
 			ProcessInterrupts();
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Query cancelled");
 		}
-	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
+	}
 
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
 		return pending->ThrowError();
@@ -254,10 +258,9 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 		chunk = duckdb_scan_state->query_results->Fetch();
 	} while (chunk && chunk->size() > 0);
 
-	std::string explain_output = "\n\n";
-	explain_output += value;
-	explain_output += "\n";
-	ExplainPropertyText("DuckDB Execution Plan", explain_output.c_str(), es);
+	std::ostringstream explain_output;
+	explain_output << "\n\n" << value << "\n";
+	ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
 }
 
 void
