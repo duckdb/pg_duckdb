@@ -137,8 +137,12 @@ ExecuteQuery(DuckdbScanState *state) {
 	}
 
 	duckdb::PendingExecutionResult execution_result;
-	do {
+	while (true) {
 		execution_result = pending->ExecuteTask();
+		if (duckdb::PendingQueryResult::IsResultReady(execution_result)) {
+			break;
+		}
+
 		if (QueryCancelPending) {
 			// Send an interrupt
 			connection->Interrupt();
@@ -150,7 +154,7 @@ ExecuteQuery(DuckdbScanState *state) {
 			ProcessInterrupts();
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Query cancelled");
 		}
-	} while (!duckdb::PendingQueryResult::IsResultReady(execution_result));
+	}
 
 	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
 		return pending->ThrowError();
