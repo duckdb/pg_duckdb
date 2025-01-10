@@ -33,6 +33,6 @@ bool IsValidBlockNumber(BlockNumber);
 char *GenerateQualifiedRelationName(Relation rel);
 const char *QuoteIdentifier(const char *ident);
 
-const char * GetRelationName(Relation rel);
+const char *GetRelationName(Relation rel);
 
 } // namespace pgduckdb
