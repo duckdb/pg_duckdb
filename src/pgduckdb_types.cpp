@@ -51,6 +51,7 @@ public:
 };
 
 using duckdb::hugeint_t;
+using duckdb::uhugeint_t;
 
 struct DecimalConversionInteger {
 	static int64_t
