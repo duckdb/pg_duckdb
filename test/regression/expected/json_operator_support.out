@@ -23,3 +23,5 @@ select * from test_json;
  [{"key": "value"}, {"key": "another"}]
 (6 rows)
 
+-- Drop table
+DROP TABLE test_json;
