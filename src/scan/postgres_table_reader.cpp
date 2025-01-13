@@ -111,7 +111,7 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 		}
 	}
 
-	elog(DEBUG1, "(PGDuckdDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
+	elog(DEBUG1, "(PGDuckDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
 	     !nreaders ? "IN PROCESS THREAD" : psprintf("ON %d PARALLEL WORKER(S)", nreaders),
 	     ExplainScanPlan(table_scan_query_desc));
 
