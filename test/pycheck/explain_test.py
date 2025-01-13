@@ -59,21 +59,21 @@ def test_explain_ctas(cur: Cursor):
     cur.sql("CREATE TEMP TABLE heap1(id) AS SELECT 1")
     result = cur.sql("EXPLAIN CREATE TEMP TABLE heap2(id) AS SELECT * from heap1")
     plan = "\n".join(result)
-    assert "POSTGRES_SEQ_SCAN" in plan
+    assert "POSTGRES_SCAN" in plan
     assert "Total Time:" not in plan
 
     result = cur.sql(
         "EXPLAIN ANALYZE CREATE TEMP TABLE heap2(id) AS SELECT * from heap1"
     )
     plan = "\n".join(result)
-    assert "POSTGRES_SEQ_SCAN" in plan
+    assert "POSTGRES_SCAN" in plan
     assert "Total Time:" in plan
 
     result = cur.sql(
         "EXPLAIN CREATE TEMP TABLE duckdb1(id) USING duckdb AS SELECT * from heap1"
     )
     plan = "\n".join(result)
-    assert "POSTGRES_SEQ_SCAN" in plan
+    assert "POSTGRES_SCAN" in plan
     assert "Total Time:" not in plan
 
     # EXPLAIN ANALYZE is not supported for DuckDB CTAS (yet)

@@ -154,6 +154,17 @@ INSERT INTO json_tbl SELECT CAST(a as JSON) FROM (VALUES
 ) t(a);
 SELECT * FROM json_tbl;
 
+-- JSONB
+CREATE TABLE jsonb_tbl(a JSONB);
+INSERT INTO jsonb_tbl (a) VALUES
+('{"a": 1, "b": {"c": 2, "d": [3, 4]}, "e": "hello"}'),
+('{"f": 10, "g": {"h": 20, "i": 30}, "j": [40, 50, 60]}'),
+('{"k": true, "l": null, "m": {"n": "world", "o": [7, 8, 9]}}'),
+('[1, 2, 3]'),
+('["a", "b", "c"]'),
+('[{"key": "value"}, {"key": "another"}]');
+SELECT * FROM jsonb_tbl;
+
 -- BLOB
 CREATE TABLE blob_tbl(a bytea);
 INSERT INTO blob_tbl SELECT CAST(a as bytea) FROM (VALUES
@@ -191,5 +202,6 @@ DROP TABLE bigint_numeric;
 DROP TABLE hugeint_numeric;
 DROP TABLE uuid_tbl;
 DROP TABLE json_tbl;
+DROP TABLE jsonb_tbl;
 DROP TABLE blob_tbl;
 DROP TABLE regclass_tbl;

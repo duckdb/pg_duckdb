@@ -153,6 +153,7 @@ pgduckdb_relation_name(Oid relation_oid) {
 	}
 
 	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, is_duckdb_table);
+
 	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
 	ReleaseSysCache(tp);

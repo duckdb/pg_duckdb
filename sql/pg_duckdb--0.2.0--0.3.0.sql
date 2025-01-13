@@ -14,3 +14,6 @@ CREATE AGGREGATE @extschema@.approx_count_distinct(anyelement)
     stype = bigint,
     initcond = 0
 );
+
+CREATE DOMAIN pg_catalog.blob AS bytea;
+COMMENT ON DOMAIN pg_catalog.blob IS 'The DuckDB BLOB alias for BYTEA';

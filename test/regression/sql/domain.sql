@@ -1,3 +1,9 @@
+-- If the background worker process is enabled to perform tuple scanning,
+-- the original attribute will be verified. Since I replaced the attribute
+-- type with base type before this, an error will be reported. Therefore,
+-- the background process is set to 0 temporarily.
+set duckdb.max_workers_per_postgres_scan = 0;
+
 create domain domainvarchar varchar(5);
 create domain domainnumeric numeric(8,2);
 create domain domainint4 int4;
@@ -51,3 +57,5 @@ drop domain domainvarchar restrict;
 drop domain domainnumeric restrict;
 drop domain domainint4 restrict;
 drop domain domaintext;
+
+set duckdb.max_workers_per_postgres_scan = 2;

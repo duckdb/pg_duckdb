@@ -226,8 +226,17 @@ SELECT * FROM t;
 (1 row)
 
 -- CTAS from DuckDB table to postgres table
-CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t_heap;
+CREATE TEMP TABLE t_heap2(c) USING heap AS SELECT * FROM t;
 SELECT * FROM t_heap2;
+ c 
+---
+ 1
+(1 row)
+
+-- CTAS from postgres table to postgres table (not actually handled by
+-- pg_duckdb, but should still work)
+CREATE TEMP TABLE t_heap3(c) USING heap AS SELECT * FROM t_heap;
+SELECT * FROM t_heap3;
  c 
 ---
  1
@@ -482,4 +491,4 @@ CREATE TEMP TABLE domaintest(testint4_array domainint4[]) USING duckdb;
 ERROR:  Domain is not supported in DuckDB
 DROP DOMAIN domainint4;
 DROP DOMAIN domain_int_array;
-DROP TABLE webpages, t, t_heap, t_heap2, ta, tb, tc, td;
+DROP TABLE webpages, t, t_heap, t_heap2, t_heap3, ta, tb, tc, td;

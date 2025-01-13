@@ -4,6 +4,7 @@ extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
 #include "utils/guc.h"
+#include "postmaster/bgworker_internals.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -14,7 +15,7 @@ extern "C" {
 static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
-int duckdb_max_threads_per_postgres_scan = 1;
+int duckdb_max_workers_per_postgres_scan = 2;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
@@ -159,9 +160,9 @@ DuckdbInitGUC(void) {
 	                     "Maximum number of DuckDB threads per Postgres backend, alias for duckdb.threads",
 	                     &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
 
-	DefineCustomVariable("duckdb.max_threads_per_postgres_scan",
-	                     "Maximum number of DuckDB threads used for a single Postgres scan",
-	                     &duckdb_max_threads_per_postgres_scan, 1, 64);
+	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
+	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
+	                     &duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
 
 	DefineCustomVariable("duckdb.postgres_role",
 	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "

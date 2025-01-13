@@ -27,6 +27,7 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/date.h"
 #include "utils/timestamp.h"
+#include "utils/jsonb.h"
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"
@@ -51,6 +52,7 @@ public:
 };
 
 using duckdb::hugeint_t;
+using duckdb::uhugeint_t;
 
 struct DecimalConversionInteger {
 	static int64_t
@@ -205,7 +207,7 @@ ConvertBinaryDatum(const duckdb::Value &value) {
 	auto str = value.GetValueUnsafe<duckdb::string_t>();
 	auto blob_len = str.GetSize();
 	auto blob = str.GetDataUnsafe();
-	bytea* result = (bytea *)palloc0(blob_len + VARHDRSZ);
+	bytea *result = (bytea *)palloc0(blob_len + VARHDRSZ);
 	SET_VARSIZE(result, blob_len + VARHDRSZ);
 	memcpy(VARDATA(result), blob, blob_len);
 	return PointerGetDatum(result);
@@ -310,7 +312,7 @@ ConvertNumericDatum(const duckdb::Value &value) {
 
 	NumericVar numeric_var;
 	D_ASSERT(value_type_id == duckdb::LogicalTypeId::DECIMAL || value_type_id == duckdb::LogicalTypeId::HUGEINT ||
-	         value_type_id == duckdb::LogicalTypeId::UBIGINT);
+	         value_type_id == duckdb::LogicalTypeId::UBIGINT || value_type_id == duckdb::LogicalTypeId::UHUGEINT);
 	const bool is_decimal = value_type_id == duckdb::LogicalTypeId::DECIMAL;
 	uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
 
@@ -329,6 +331,9 @@ ConvertNumericDatum(const duckdb::Value &value) {
 		break;
 	case duckdb::PhysicalType::INT128:
 		ConvertNumeric<hugeint_t, DecimalConversionHugeint>(value, scale, numeric_var);
+		break;
+	case duckdb::PhysicalType::UINT128:
+		ConvertNumeric<uhugeint_t, DecimalConversionHugeint>(value, scale, numeric_var);
 		break;
 	default:
 		throw duckdb::InvalidInputException(
@@ -896,6 +901,8 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
 	case JSONARRAYOID:
+	case JSONBOID:
+	case JSONBARRAYOID:
 		return duckdb::LogicalType::JSON();
 	case REGCLASSOID:
 	case REGCLASSARRAYOID:
@@ -982,6 +989,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return INT8OID;
 	case duckdb::LogicalTypeId::UBIGINT:
 	case duckdb::LogicalTypeId::HUGEINT:
+	case duckdb::LogicalTypeId::UHUGEINT:
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::UTINYINT:
 		return INT2OID;
@@ -1050,6 +1058,15 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 	auto len = is_bpchar ? bpchartruelen(VARDATA_ANY(value), VARSIZE_ANY_EXHDR(value)) : VARSIZE_ANY_EXHDR(value);
 	duckdb::string_t str(text, len);
 
+	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
+	data[offset] = duckdb::StringVector::AddString(result, str);
+}
+
+static void
+AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
+	auto jsonb = DatumGetJsonbP(value);
+	auto jsonb_str = JsonbToCString(NULL, &jsonb->root, VARSIZE(jsonb));
+	duckdb::string_t str(jsonb_str);
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
 	data[offset] = duckdb::StringVector::AddString(result, str);
 }
@@ -1195,7 +1212,12 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		break;
 	case duckdb::LogicalTypeId::VARCHAR: {
 		// NOTE: This also handles JSON
-		AppendString(result, value, offset, attr_type == BPCHAROID);
+		if (attr_type == JSONBOID) {
+			AppendJsonb(result, value, offset);
+			break;
+		} else {
+			AppendString(result, value, offset, attr_type == BPCHAROID);
+		}
 		break;
 	}
 	case duckdb::LogicalTypeId::DATE:
@@ -1268,7 +1290,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		size_t bytea_length = VARSIZE_ANY_EXHDR(value);
 		const duckdb::string_t s(bytea_data, bytea_length);
 		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
-		data[offset] = duckdb::StringVector::AddString(result, s);
+		data[offset] = duckdb::StringVector::AddStringOrBlob(result, s);
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
@@ -1348,157 +1370,33 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	}
 }
 
-typedef struct HeapTupleReadState {
-	bool m_slow = 0;
-	int m_last_tuple_att = 0;
-	uint32 m_page_tuple_offset = 0;
-} HeapTupleReadState;
-
-static Datum
-HeapTupleFetchNextColumnDatum(TupleDesc tupleDesc, HeapTuple tuple, HeapTupleReadState &heap_tuple_read_state,
-                              AttrNumber target_attr_num, bool *is_null, const duckdb::map<int, Datum> &missing_attrs) {
-	HeapTupleHeader tup = tuple->t_data;
-	bool hasnulls = HeapTupleHasNulls(tuple);
-	int natts = HeapTupleHeaderGetNatts(tup);
-	bits8 *null_bitmap = tup->t_bits;
-
-	if (natts < target_attr_num) {
-		if (auto missing_attr = missing_attrs.find(target_attr_num - 1); missing_attr != missing_attrs.end()) {
-			*is_null = false;
-			return missing_attr->second;
-		} else {
-			*is_null = true;
-			return PointerGetDatum(NULL);
-		}
-	}
-
-	/* Which tuple are we currently reading */
-	AttrNumber current_attr_num = heap_tuple_read_state.m_last_tuple_att + 1;
-	/* Either restore from previous fetch, or use the defaults of 0 and false */
-	uint32 current_tuple_offset = heap_tuple_read_state.m_page_tuple_offset;
-	bool slow = heap_tuple_read_state.m_slow;
-
-	/* Points to the start of the tuple data section, i.e. right after the
-	 * tuple header */
-	char *tuple_data = (char *)tup + tup->t_hoff;
-
-	Datum value = (Datum)0;
-	for (; current_attr_num <= target_attr_num; current_attr_num++) {
-		Form_pg_attribute thisatt = TupleDescAttr(tupleDesc, current_attr_num - 1);
-
-		if (hasnulls && att_isnull(current_attr_num - 1, null_bitmap)) {
-			value = (Datum)0;
-			*is_null = true;
-			/*
-			 * Can't use attcacheoff anymore. The hardcoded attribute offset
-			 * assumes all attribute before it are present in the tuple. If
-			 * they are NULL, they are not present.
-			 */
-			slow = true;
-			continue;
-		}
-
-		*is_null = false;
-
-		if (!slow && thisatt->attcacheoff >= 0) {
-			current_tuple_offset = thisatt->attcacheoff;
-		} else if (thisatt->attlen == -1) {
-			if (!slow && current_tuple_offset == att_align_nominal(current_tuple_offset, thisatt->attalign)) {
-				thisatt->attcacheoff = current_tuple_offset;
-			} else {
-				current_tuple_offset =
-				    att_align_pointer(current_tuple_offset, thisatt->attalign, -1, tuple_data + current_tuple_offset);
-				slow = true;
-			}
-		} else {
-			current_tuple_offset = att_align_nominal(current_tuple_offset, thisatt->attalign);
-			if (!slow) {
-				thisatt->attcacheoff = current_tuple_offset;
-			}
-		}
-
-		value = fetchatt(thisatt, tuple_data + current_tuple_offset);
-
-		current_tuple_offset =
-		    att_addlength_pointer(current_tuple_offset, thisatt->attlen, tuple_data + current_tuple_offset);
-
-		if (thisatt->attlen <= 0) {
-			slow = true;
-		}
-	}
-
-	heap_tuple_read_state.m_last_tuple_att = target_attr_num;
-	heap_tuple_read_state.m_page_tuple_offset = current_tuple_offset;
-	heap_tuple_read_state.m_slow = slow;
-
-	return value;
-}
-
 void
-InsertTupleIntoChunk(duckdb::DataChunk &output, duckdb::shared_ptr<PostgresScanGlobalState> scan_global_state,
-                     duckdb::shared_ptr<PostgresScanLocalState> scan_local_state, HeapTupleData *tuple) {
-	HeapTupleReadState heap_tuple_read_state = {};
+InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_local_state, TupleTableSlot *slot) {
 
-	if (scan_global_state->m_count_tuples_only) {
-		scan_local_state->m_output_vector_size++;
+	auto scan_global_state = scan_local_state.global_state;
+
+	if (scan_global_state->count_tuples_only) {
+		/* COUNT(*) returned tuple will have only one value returned as first tuple element. */
+		scan_global_state->total_row_count += slot->tts_values[0];
+		scan_local_state.output_vector_size += slot->tts_values[0];
 		return;
 	}
-
-	auto &values = scan_local_state->values;
-	auto &nulls = scan_local_state->nulls;
-
-	/* First we are fetching all required columns ordered by column id
-	 * and than we need to write this tuple into output vector. Output column id list
-	 * could be out of order so we need to match column values from ordered list.
-	 */
-
-	/* Read heap tuple with all required columns. */
-	for (auto const &[attr_num, duckdb_scanned_index] : scan_global_state->m_columns_to_scan) {
-		bool is_null = false;
-		values[duckdb_scanned_index] =
-		    HeapTupleFetchNextColumnDatum(scan_global_state->m_tuple_desc, tuple, heap_tuple_read_state, attr_num,
-		                                  &is_null, scan_global_state->m_relation_missing_attrs);
-		nulls[duckdb_scanned_index] = is_null;
-		auto filter = scan_global_state->m_column_filters[duckdb_scanned_index];
-		if (!filter) {
-			continue;
-		}
-
-		const auto valid_tuple = ApplyValueFilter(*filter, values[duckdb_scanned_index], is_null,
-		                                          scan_global_state->m_tuple_desc->attrs[attr_num - 1].atttypid);
-		if (!valid_tuple) {
-			return;
-		}
-	}
-
 	/* Write tuple columns in output vector. */
-	int duckdb_output_index = 0;
-	for (auto const &[duckdb_scanned_index, attr_num] : scan_global_state->m_output_columns) {
+	for (int duckdb_output_index = 0; duckdb_output_index < slot->tts_tupleDescriptor->natts; duckdb_output_index++) {
 		auto &result = output.data[duckdb_output_index];
-		if (nulls[duckdb_scanned_index]) {
+		if (slot->tts_isnull[duckdb_output_index]) {
 			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(scan_local_state->m_output_vector_size);
+			array_mask.SetInvalid(scan_local_state.output_vector_size);
 		} else {
-			auto attr = scan_global_state->m_tuple_desc->attrs[attr_num - 1];
-			if (attr.attlen == -1) {
-				bool should_free = false;
-				values[duckdb_scanned_index] =
-				    DetoastPostgresDatum(reinterpret_cast<varlena *>(values[duckdb_scanned_index]), &should_free);
-				ConvertPostgresToDuckValue(attr.atttypid, values[duckdb_scanned_index], result,
-				                           scan_local_state->m_output_vector_size);
-				if (should_free) {
-					duckdb_free(reinterpret_cast<void *>(values[duckdb_scanned_index]));
-				}
-			} else {
-				ConvertPostgresToDuckValue(attr.atttypid, values[duckdb_scanned_index], result,
-				                           scan_local_state->m_output_vector_size);
-			}
+			/* Use returned tuple slot attr information. */
+			auto attr = slot->tts_tupleDescriptor->attrs[duckdb_output_index];
+			ConvertPostgresToDuckValue(attr.atttypid, slot->tts_values[duckdb_output_index], result,
+			                           scan_local_state.output_vector_size);
 		}
-		duckdb_output_index++;
 	}
 
-	scan_local_state->m_output_vector_size++;
-	scan_global_state->m_total_row_count++;
+	scan_local_state.output_vector_size++;
+	scan_global_state->total_row_count++;
 }
 
 NumericVar
