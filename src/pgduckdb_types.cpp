@@ -27,6 +27,7 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/date.h"
 #include "utils/timestamp.h"
+#include "utils/jsonb.h"
 }
 
 #include "pgduckdb/pgduckdb_filter.hpp"
@@ -900,6 +901,8 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalTypeId::UUID;
 	case JSONOID:
 	case JSONARRAYOID:
+	case JSONBOID:
+	case JSONBARRAYOID:
 		return duckdb::LogicalType::JSON();
 	case REGCLASSOID:
 	case REGCLASSARRAYOID:
@@ -1059,6 +1062,15 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 	data[offset] = duckdb::StringVector::AddString(result, str);
 }
 
+static void
+AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
+	auto jsonb = DatumGetJsonbP(value);
+	auto jsonb_str = JsonbToCString(NULL, &jsonb->root, VARSIZE(jsonb));
+	duckdb::string_t str(jsonb_str);
+	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
+	data[offset] = duckdb::StringVector::AddString(result, str);
+}
+
 template <class T, class OP = DecimalConversionInteger>
 T
 ConvertDecimal(const NumericVar &numeric) {
@@ -1200,7 +1212,12 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		break;
 	case duckdb::LogicalTypeId::VARCHAR: {
 		// NOTE: This also handles JSON
-		AppendString(result, value, offset, attr_type == BPCHAROID);
+		if (attr_type == JSONBOID) {
+			AppendJsonb(result, value, offset);
+			break;
+		} else {
+			AppendString(result, value, offset, attr_type == BPCHAROID);
+		}
 		break;
 	}
 	case duckdb::LogicalTypeId::DATE:
