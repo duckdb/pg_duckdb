@@ -52,6 +52,7 @@ public:
 };
 
 using duckdb::hugeint_t;
+using duckdb::uhugeint_t;
 
 struct DecimalConversionInteger {
 	static int64_t
@@ -311,7 +312,7 @@ ConvertNumericDatum(const duckdb::Value &value) {
 
 	NumericVar numeric_var;
 	D_ASSERT(value_type_id == duckdb::LogicalTypeId::DECIMAL || value_type_id == duckdb::LogicalTypeId::HUGEINT ||
-	         value_type_id == duckdb::LogicalTypeId::UBIGINT);
+	         value_type_id == duckdb::LogicalTypeId::UBIGINT || value_type_id == duckdb::LogicalTypeId::UHUGEINT);
 	const bool is_decimal = value_type_id == duckdb::LogicalTypeId::DECIMAL;
 	uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
 
@@ -330,6 +331,9 @@ ConvertNumericDatum(const duckdb::Value &value) {
 		break;
 	case duckdb::PhysicalType::INT128:
 		ConvertNumeric<hugeint_t, DecimalConversionHugeint>(value, scale, numeric_var);
+		break;
+	case duckdb::PhysicalType::UINT128:
+		ConvertNumeric<uhugeint_t, DecimalConversionHugeint>(value, scale, numeric_var);
 		break;
 	default:
 		throw duckdb::InvalidInputException(
@@ -985,6 +989,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return INT8OID;
 	case duckdb::LogicalTypeId::UBIGINT:
 	case duckdb::LogicalTypeId::HUGEINT:
+	case duckdb::LogicalTypeId::UHUGEINT:
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::UTINYINT:
 		return INT2OID;
