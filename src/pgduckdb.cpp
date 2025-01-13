@@ -15,6 +15,7 @@ extern "C" {
 static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
+bool duckdb_log_pg_subplans = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
@@ -182,4 +183,7 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.motherduck_default_database",
 	                     "Which database in MotherDuck to designate as default (in place of my_db)",
 	                     &duckdb_motherduck_default_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.log_pg_subplans", "Log plan when scanning Postgres relations",
+	                     &duckdb_log_pg_subplans);
 }

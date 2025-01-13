@@ -11,6 +11,8 @@
 
 namespace pgduckdb {
 
+bool IsExplaining();
+
 // Global State
 
 struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {

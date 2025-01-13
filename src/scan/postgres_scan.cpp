@@ -1,13 +1,33 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pg/explain.hpp"
 #include "pgduckdb/pg/relations.hpp"
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/logger.hpp"
 
 namespace pgduckdb {
+
+bool explaining = false;
+
+bool
+IsExplaining() {
+	return explaining;
+}
+
+class ExplainingToggle {
+public:
+	ExplainingToggle() {
+		explaining = true;
+	}
+
+	~ExplainingToggle() {
+		explaining = false;
+	}
+};
 
 //
 // PostgresScanGlobalState
@@ -111,8 +131,19 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       total_row_count(0) {
 	ConstructTableScanQuery(input);
-	table_reader_global_state =
-	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
+
+	auto scan_query_str = scan_query.str();
+	auto scan_query_cstr = scan_query_str.c_str();
+	if (duckdb_log_pg_subplans) {
+		D_ASSERT(!IsExplaining());
+		ExplainingToggle toggle;
+		pd_log(INFO, "Query:\n%s", scan_query_cstr);
+		PostgresScopedStackReset scoped_stack_reset;
+		auto output = PostgresFunctionGuard(ExplainPGQuery, scan_query_cstr);
+		pd_log(INFO, "Plan:\n%s", output);
+	}
+
+	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>(scan_query_cstr, count_tuples_only);
 	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 

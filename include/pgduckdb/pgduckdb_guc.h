@@ -1,6 +1,7 @@
 #pragma once
 
 extern bool duckdb_force_execution;
+extern bool duckdb_log_pg_subplans;
 extern int duckdb_maximum_threads;
 extern char *duckdb_maximum_memory;
 extern char *duckdb_disabled_filesystems;
