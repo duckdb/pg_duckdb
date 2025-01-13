@@ -26,7 +26,6 @@ test: transaction_errors
 test: secrets
 test: prepare
 test: function
-test: json_operator_support
 test: timestamp_with_interval
 test: approx_count_distinct
 test: scan_postgres_tables

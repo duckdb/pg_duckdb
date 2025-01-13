@@ -898,6 +898,7 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case JSONOID:
 	case JSONARRAYOID:
 	case JSONBOID:
+	case JSONBARRAYOID:
 		return duckdb::LogicalType::JSON();
 	case REGCLASSOID:
 	case REGCLASSARRAYOID:

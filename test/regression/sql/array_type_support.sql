@@ -153,6 +153,20 @@ INSERT INTO json_array_1d VALUES
     (ARRAY[]::JSON[]);
 SELECT * FROM json_array_1d;
 
+
+-- JSONB (single dimension)
+CREATE TABLE jsonb_array_1d(a JSONB[]);
+INSERT INTO jsonb_array_1d VALUES
+    (ARRAY['{"key": "value"}', '{"array": [1, 2, 3]}']::JSONB[]),
+    (ARRAY[
+        '{"key1": "value1"}'::jsonb,
+        '{"key2": "value2"}'::jsonb
+    ]),
+    (NULL),
+    (ARRAY['{"object": {"nested": "value"}}', NULL, '{"number": 42}']::JSONB[]),
+    (ARRAY[]::JSONB[]);
+SELECT * FROM jsonb_array_1d;
+
 -- REGCLASS (single dimension)
 CREATE TABLE regclass_array_1d(a REGCLASS[]);
 INSERT INTO regclass_array_1d VALUES
@@ -198,8 +212,8 @@ SELECT * FROM varchar_array_2d;
 -- BYTEA (single dimension)
 CREATE TABLE bytea_array_1d (a bytea[]);
 
-INSERT INTO bytea_array_1d (a) 
-VALUES 
+INSERT INTO bytea_array_1d (a)
+VALUES
     (ARRAY[decode('01020304', 'hex'), decode('aabbccdd', 'hex')]),
     (ARRAY[decode('11223344', 'hex'), decode('55667788', 'hex')]);
 SELECT * FROM bytea_array_1d;
@@ -279,6 +293,7 @@ DROP TABLE float8_array_1d;
 DROP TABLE numeric_array_1d;
 DROP TABLE uuid_array_1d;
 DROP TABLE json_array_1d;
+DROP TABLE jsonb_array_1d;
 DROP TABLE regclass_array_1d;
 DROP TABLE char_array_2d;
 DROP TABLE smallint_array_2d;
