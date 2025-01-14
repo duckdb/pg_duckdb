@@ -105,7 +105,7 @@ pgduckdb_duckdb_row_subscript_var(Expr *expr) {
 List *
 pgduckdb_star_start_vars(List *target_list) {
 	List *star_start_indexes = NIL;
-	Var *possible_star_start_var;
+	Var *possible_star_start_var = NULL;
 	int possible_star_start_var_index = 0;
 
 	int i = 0;
