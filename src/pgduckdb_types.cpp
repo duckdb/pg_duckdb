@@ -917,10 +917,40 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
+	int dimensions = -1;
+	Oid save_typoid = InvalidOid;
+
+	if (get_typtype(attribute->atttypid) == TYPTYPE_DOMAIN) {
+		/* If the domain is an array type, you need to obtain the corresponding array dimension information */
+		if (type_is_array_domain(attribute->atttypid)) {
+			HeapTuple  typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(attribute->atttypid));
+			dimensions = ((Form_pg_type) GETSTRUCT(typeTuple))->typndims;
+			ReleaseSysCache(typeTuple);
+		}
+
+		save_typoid = attribute->atttypid;
+		/* It is a domain type that needs to be reduced to its base type */
+		attribute->atttypid = getBaseType(attribute->atttypid);
+	} else if (type_is_array(attribute->atttypid)) {
+		Oid elem_type = get_base_element_type(attribute->atttypid);
+		if (OidIsValid(elem_type) && get_typtype(elem_type) == TYPTYPE_DOMAIN) {
+			save_typoid = attribute->atttypid;
+			/* When the member type of an array is domain, you need to build a base array type */
+			attribute->atttypid = get_array_type(getBaseType(elem_type));
+		}
+	}
+
 	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
-	auto dimensions = attribute->attndims;
-	if (dimensions == 0) {
-		return base_type;
+
+	if (save_typoid != InvalidOid) {
+		attribute->atttypid = save_typoid;
+	}
+
+	if (dimensions == -1) {
+		dimensions = attribute->attndims;
+		if (dimensions == 0) {
+			return base_type;
+		}
 	}
 
 	for (int i = 0; i < dimensions; i++) {

@@ -14,6 +14,7 @@ test: hugeint_conversion
 test: read_functions
 test: duckdb_only_functions
 test: duckdb_recycle
+test: domain
 test: cte
 test: create_schema
 test: create_table_as
