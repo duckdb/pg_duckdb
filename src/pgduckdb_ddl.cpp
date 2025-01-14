@@ -12,7 +12,9 @@ extern "C" {
 #include "funcapi.h"
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
+#include "nodes/nodeFuncs.h"
 #include "optimizer/optimizer.h"
+#include "parser/analyze.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
@@ -44,6 +46,41 @@ static List *ctas_original_target_list = NIL;
 
 static bool top_level_ddl = true;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
+
+static Query *
+WrapQueryInQueryCall(Query *query, List *target_list) {
+	char *duckdb_query_string = pgduckdb_get_querydef(query);
+
+	StringInfo buf = makeStringInfo();
+	appendStringInfo(buf, "SELECT ");
+	bool first = true;
+	foreach_node(TargetEntry, tle, target_list) {
+		if (!first) {
+			appendStringInfoString(buf, ", ");
+		}
+
+		Oid type = exprType((Node *)tle->expr);
+		Oid typemod = exprTypmod((Node *)tle->expr);
+		first = false;
+		appendStringInfo(buf, "r[%s]::%s AS %s", quote_literal_cstr(tle->resname),
+		                 format_type_with_typemod(type, typemod), quote_identifier(tle->resname));
+	}
+
+	appendStringInfo(buf, " FROM duckdb.query(%s) r", quote_literal_cstr(duckdb_query_string));
+
+	List *parsetree_list = pg_parse_query(buf->data);
+
+	/*
+	 * We only allow a single user statement in a prepared statement. This is
+	 * mainly to keep the protocol simple --- otherwise we'd need to worry
+	 * about multiple result tupdescs and things like that.
+	 */
+	if (list_length(parsetree_list) > 1)
+		ereport(ERROR,
+		        (errcode(ERRCODE_SYNTAX_ERROR), errmsg("BUG: pg_duckdb generated a command with multiple queries")));
+
+	return parse_analyze_fixedparams((RawStmt *)linitial(parsetree_list), buf->data, NULL, 0, NULL);
+}
 
 static void
 DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
@@ -82,8 +119,8 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		// here. The current hack doesn't work with materialized views yet.
 
 		List *rewritten;
-		PlannedStmt *plan;
 		Query *original_query = castNode(Query, stmt->query);
+
 		Query *query = (Query *)copyObjectImpl(original_query);
 		/*
 		 * Parse analysis was done already, but we still have to run the rule
@@ -99,10 +136,14 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		query = linitial_node(Query, rewritten);
 		Assert(query->commandType == CMD_SELECT);
 
-		/* plan the query */
-		plan = pg_plan_query(query, query_string, CURSOR_OPT_PARALLEL_OK, params);
-		ctas_original_target_list = original_query->targetList;
-		original_query->targetList = plan->planTree->targetlist;
+		Query *rewritten_query_copy = (Query *)copyObjectImpl(query);
+
+		PlannedStmt *plan = pg_plan_query(query, query_string, CURSOR_OPT_PARALLEL_OK, params);
+
+		List *target_list = plan->planTree->targetlist;
+
+		stmt->query = (Node *)WrapQueryInQueryCall(rewritten_query_copy, target_list);
+		stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
 
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
 		auto stmt = castNode(CreateSchemaStmt, parsetree);
