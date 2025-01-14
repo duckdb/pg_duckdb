@@ -47,8 +47,21 @@ static List *ctas_original_target_list = NIL;
 static bool top_level_ddl = true;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
+/*
+ * WrapQueryInQueryCall takes a query and wraps it an duckdb.query(...) call.
+ * It then explicitly references all the columns and the types from the
+ * original qeury its target list. So a query like this:
+ *
+ * SELECT r from read_csv('file.csv') r;
+ *
+ * Would expand to:
+ *
+ * SELECT r['id']::int AS id, r['name']::text AS name
+ * FROM duckdb.query('SELECT * from system.main.read_csv(''file.csv'')') r;
+ *
+ */
 static Query *
-WrapQueryInQueryCall(Query *query, List *target_list) {
+WrapQueryInDuckdbQueryCall(Query *query, List *target_list) {
 	char *duckdb_query_string = pgduckdb_get_querydef(query);
 
 	StringInfo buf = makeStringInfo();
@@ -113,13 +126,21 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			return;
 		}
 
-		// TODO: Probably we should only do this if the targetlist actually
-		// contains some duckdb.unresolved_type or duckdb.row columns.
-		// XXX: This is a huge hack. Probably we should do something different
-		// here. The current hack doesn't work with materialized views yet.
-
-		List *rewritten;
 		Query *original_query = castNode(Query, stmt->query);
+
+		// We need to do hacky things if the targetlist contains
+		// duckdb.unresolved_type or duckdb.row columns. In those cases we want
+		// to run the query through duckdb to get the actual result types for
+		// these queries. We also want to lock in those types creating a new
+		// query that will always retun them.
+		if (!pgduckdb_target_list_contains_unresolved_type_or_row(original_query->targetList)) {
+			// If the target list doesn't contain duckdb.row or
+			// duckdb.unresolved_type though, we are done now.
+			return;
+		}
+
+		/* NOTE: The below code is mostly copied from ExecCreateTableAs */
+		List *rewritten;
 
 		Query *query = (Query *)copyObjectImpl(original_query);
 		/*
@@ -140,9 +161,10 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 
 		PlannedStmt *plan = pg_plan_query(query, query_string, CURSOR_OPT_PARALLEL_OK, params);
 
+		/* This is where our custom code starts again */
 		List *target_list = plan->planTree->targetlist;
 
-		stmt->query = (Node *)WrapQueryInQueryCall(rewritten_query_copy, target_list);
+		stmt->query = (Node *)WrapQueryInDuckdbQueryCall(rewritten_query_copy, target_list);
 		stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
 
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {

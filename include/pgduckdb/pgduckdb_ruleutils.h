@@ -11,6 +11,7 @@ bool pgduckdb_is_duckdb_row(Oid type_oid);
 bool pgduckdb_is_unresolved_type(Oid type_oid);
 bool pgduckdb_var_is_duckdb_row(Var *var);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
+bool pgduckdb_target_list_contains_unresolved_type_or_row(List *target_list);
 Var *pgduckdb_duckdb_row_subscript_var(Expr *expr);
 List *pgduckdb_star_start_vars(List *target_list);
 
