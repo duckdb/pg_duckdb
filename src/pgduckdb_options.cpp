@@ -388,11 +388,7 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 		elog(ERROR, "Subscripting duckdb.row with an empty subscript is not supported");
 	}
 
-	if (list_length(indirection) != 1) {
-		/* TODO: Fix this, if the column contains an array we should be able to subscript that type */
-		elog(ERROR, "Subscripting duckdb.row is only supported with a single subscript");
-	}
-	pprint(indirection);
+	bool first = true;
 
 	// Transform each subscript expression
 	foreach_node(A_Indices, subscript, indirection) {
@@ -400,23 +396,29 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 		Assert(subscript->uidx);
 
 		Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
-		pprint(subscript_expr);
 		int expr_location = exprLocation(subscript->uidx);
 		Oid subscript_expr_type = exprType(subscript_expr);
 
-		Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
-		                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
-		if (!coerced_expr) {
-			ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must have text type"),
-			                parser_errposition(pstate, expr_location)));
-		}
+		/* The first subscript needs to be a TEXT constant, since it should be
+		 * a column reference. But the subscripts after that can be anything,
+		 * DuckDB should interpret those. */
+		if (first) {
+			Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
+			                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
+			if (!coerced_expr) {
+				ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must have text type"),
+				                parser_errposition(pstate, expr_location)));
+			}
 
-		if (!IsA(subscript_expr, Const)) {
-			pprint(subscript_expr);
-			ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must be a constant"),
-			                parser_errposition(pstate, expr_location)));
+			if (!IsA(subscript_expr, Const)) {
+				ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must be a constant"),
+				                parser_errposition(pstate, expr_location)));
+			}
+
+			subscript_expr = coerced_expr;
+			first = false;
 		}
-		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, coerced_expr);
+		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, subscript_expr);
 	}
 
 	/* TODO: Trigger cache population, probably we should do this somewhere else */

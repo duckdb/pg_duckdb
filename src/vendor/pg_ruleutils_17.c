@@ -9129,9 +9129,15 @@ get_rule_expr(Node *node, deparse_context *context,
 					get_rule_expr(refassgnexpr, context, showimplicit);
 				}
 				else if (IsA(sbsref->refexpr, Var) && pgduckdb_var_is_duckdb_row((Var*) sbsref->refexpr)) {
+					/* Subscript expressions into the duckdb.row type we want to
+					 * change to regular column references in the DuckDB query.
+					 * Both because it's generally more common and thus
+					 * results in better optimized queries, and because
+					 * iceberg_scan doesn't support the subscripting syntax on
+					 * its results.
+					 */
 					Assert(sbsref->refupperindexpr);
 					Assert(!sbsref->reflowerindexpr);
-					Assert(list_length(sbsref->refupperindexpr) == 1);
 					Var *var = (Var *) sbsref->refexpr;
 
 					deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
@@ -9166,6 +9172,18 @@ get_rule_expr(Node *node, deparse_context *context,
 						appendStringInfoChar(buf, '.');
 					}
 					appendStringInfoString(context->buf, quote_identifier(extval));
+
+					if (list_length(sbsref->refupperindexpr) > 1) {
+						/*
+						 * If there are any additional subscript expressions we
+						 * should output them. Subscripts can be used in duckdb
+						 * to index into arrays or json objects.
+						 */
+						SubscriptingRef *shorter_sbsref = copyObject(sbsref);
+						/* strip the first subscript from the list */
+						shorter_sbsref->refupperindexpr = list_delete_first(shorter_sbsref->refupperindexpr);
+						printSubscripts(shorter_sbsref, context);
+					}
 				}
 				else
 				{

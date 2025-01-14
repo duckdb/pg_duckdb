@@ -11,6 +11,9 @@ SELECT r['sepal.length'], r['file_row_number'], r['filename']
     FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true) r
     ORDER BY r['sepal.length']  LIMIT 5;
 
+-- Supports subscripts
+SELECT r['jsoncol'][1], r['arraycol'][2] FROM read_parquet('../../data/indexable.parquet') r;
+
 -- read_csv
 
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
