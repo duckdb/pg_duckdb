@@ -923,8 +923,8 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	if (get_typtype(attribute->atttypid) == TYPTYPE_DOMAIN) {
 		/* If the domain is an array type, you need to obtain the corresponding array dimension information */
 		if (type_is_array_domain(attribute->atttypid)) {
-			HeapTuple  typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(attribute->atttypid));
-			dimensions = ((Form_pg_type) GETSTRUCT(typeTuple))->typndims;
+			HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(attribute->atttypid));
+			dimensions = ((Form_pg_type)GETSTRUCT(typeTuple))->typndims;
 			ReleaseSysCache(typeTuple);
 		}
 
