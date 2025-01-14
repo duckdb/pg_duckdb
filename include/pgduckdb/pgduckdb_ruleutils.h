@@ -13,3 +13,5 @@ bool pgduckdb_var_is_duckdb_row(Var *var);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
 Var *pgduckdb_duckdb_row_subscript_var(Expr *expr);
 List *pgduckdb_star_start_vars(List *target_list);
+
+extern bool processed_targetlist;

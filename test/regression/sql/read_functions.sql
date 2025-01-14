@@ -23,6 +23,33 @@ SELECT r['sepal.length'], r['filename']
 
 SELECT * FROM read_csv('../../non-existing-file.csv');
 
+-- We override Postgres its default column name for subscript expressions. In
+-- the following example the column would normally be named "r", which is
+-- pretty non-descriptive especially when selecting multiple columns from the
+-- same row.
+--
+-- NOTE: Jelte tried to change this behaviour in upstream Postgres, but met
+-- with some resistance:
+-- https://www.postgresql.org/message-id/flat/CAGECzQRYAFHLnjjymsSPhL-9OExVyNfMQkZMc1hcoUQ6dDHo=Q@mail.gmail.com
+SELECT r['column00'] FROM read_csv('../../data/web_page.csv') r limit 1;
+
+-- If an explicit column name is given we
+SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.csv') r limit 1;
+
+-- ...except if that explicit column name is the same as the default column
+-- name. In which case we fail to recognize that fact.
+-- XXX: It would be nice to fix this, but it's not a high priority.
+SELECT r['column00'] AS r FROM read_csv('../../data/web_page.csv') r limit 1;
+
+-- If we use the same trick inside subqueries, then references to columns from
+-- that subquery would not use that better name, and thus the query could not
+-- be executed. To avoid that we simply don't rename a subscript expression
+-- inside a subquery, and only do so in the outermost SELECT list (aka
+-- targetlist).
+SELECT * FROM (SELECT r['column00'] FROM read_csv('../../data/web_page.csv') r limit 1);
+
+-- If you give it a different alias then that alias is propegated though.
+SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.csv') r limit 1);
 
 -- delta_scan
 

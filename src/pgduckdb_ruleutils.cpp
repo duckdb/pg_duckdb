@@ -28,6 +28,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
 extern "C" {
+bool processed_targetlist = false;
+
 char *
 pgduckdb_function_name(Oid function_oid) {
 	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
@@ -273,9 +275,14 @@ pgduckdb_relation_name(Oid relation_oid) {
  * DuckDB understands). The reason this is not part of
  * pgduckdb_pg_get_querydef_internal is because we want to avoid changing that
  * vendored in function as much as possible to keep updates easy.
+ *
+ * Apart from that it also sets the processed_targetlist variable to false,
+ * which we use in get_target_list to determine if we're processing the
+ * outermost targetlist or not.
  */
 char *
 pgduckdb_get_querydef(Query *query) {
+	processed_targetlist = false;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("DateStyle", "ISO, YMD", PGC_USERSET, PGC_S_SESSION);
 	char *result = pgduckdb_pg_get_querydef_internal(query, false);

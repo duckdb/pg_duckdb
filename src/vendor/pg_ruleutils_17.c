@@ -6048,6 +6048,9 @@ get_target_list(List *targetList, deparse_context *context,
 	int varattno_star = 0;
 	bool added_star = false;
 
+	bool outermost_targetlist = !processed_targetlist;
+	processed_targetlist = true;
+
 	int i = 0;
 	foreach(l, targetList)
 	{
@@ -6140,9 +6143,20 @@ get_target_list(List *targetList, deparse_context *context,
 		else
 			colname = tle->resname;
 
+		/*
+		 * This makes sure we don't add Postgres its bad default alias to the
+		 * duckdb.row type.
+		 */
 		bool duckdb_row_needs_as = !pgduckdb_var_is_duckdb_row(var);
+
+		/*
+		 * For r['abc'] we don't want the column name to be r, but instead we
+		 * want it to be "abc". We can only to do this for the target list of
+		 * the outside most query though to make sure references to the column
+		 * name are still valid.
+		 */
 		Var *subscript_var = pgduckdb_duckdb_row_subscript_var(tle->expr);
-		if (subscript_var) {
+		if (outermost_targetlist && subscript_var) {
 			deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
 														subscript_var->varlevelsup);
 			int			varno;
@@ -6168,9 +6182,6 @@ get_target_list(List *targetList, deparse_context *context,
 			}
 			RangeTblEntry* rte = rt_fetch(varno, dpns->rtable);
 			char *original_column = strVal(list_nth(rte->eref->colnames, varattno - 1));
-			/* BUG: Thil logic breaks the following query:
-			 * SELECT * FROM (SELECT r['column00'] FROM read_csv('/home/jelte/work/pg_duckdb/test/regression/data/web_page.csv') r limit 1);
-			 */
 			duckdb_row_needs_as = strcmp(original_column, colname) != 0;
 		}
 
