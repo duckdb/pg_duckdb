@@ -23,6 +23,10 @@ INSERT INTO basictest values ('88', 'haha', 'short', NULL);    -- Bad numeric
 SELECT 5::domainint4; -- Good
 SELECT (-5)::domainint4; -- Bad int4
 
+-- not support. It will be converted to the following statement
+-- SELECT ('-5'::integer)::domainint4 AS domainint4 FROM pgduckdb.xxx.basictest
+SELECT (-5)::domainint4 FROM basictest;
+
 select * from basictest;
 
 select testtext || testvarchar as concat, testnumeric + 42 as sum
