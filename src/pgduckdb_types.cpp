@@ -32,6 +32,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
+#include "pgduckdb/pgduckdb_process_lock.hpp"
 
 namespace pgduckdb {
 
@@ -919,6 +920,7 @@ duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	int dimensions = -1;
 	Oid save_typoid = InvalidOid;
+	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 
 	if (get_typtype(attribute->atttypid) == TYPTYPE_DOMAIN) {
 		/* If the domain is an array type, you need to obtain the corresponding array dimension information */
