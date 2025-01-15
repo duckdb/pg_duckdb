@@ -1002,6 +1002,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::DATE:
 		return DATEOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
 		return TIMESTAMPOID;
 	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
 		return TIMESTAMPTZOID;
@@ -1223,6 +1225,9 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	case duckdb::LogicalTypeId::DATE:
 		Append<duckdb::date_t>(result, duckdb::date_t(static_cast<int32_t>(value + PGDUCKDB_DUCK_DATE_OFFSET)), offset);
 		break;
+
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		Append<duckdb::timestamp_t>(
 		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
