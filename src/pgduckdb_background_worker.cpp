@@ -225,9 +225,47 @@ ShmemStartup(void) {
 	LWLockRelease(AddinShmemInitLock);
 }
 
+constexpr const char* PGDUCKDB_SYNC_WORKER_NAME = "pg_duckdb sync worker";
+
+bool HasBgwRunningForMyDatabase() {
+	const auto num_backends = pgstat_fetch_stat_numbackends();
+	for (int backend_idx = 1; backend_idx <= num_backends; ++backend_idx) {
+		LocalPgBackendStatus *local_beentry = pgstat_get_local_beentry_by_index(backend_idx);
+		PgBackendStatus *beentry = &local_beentry->backendStatus;
+		if (beentry->st_databaseid == InvalidOid) {
+			continue; // backend is not connected to a database
+		}
+
+		auto datid = ObjectIdGetDatum(beentry->st_databaseid);
+		if (datid != MyDatabaseId) {
+			continue; // backend is connected to a different database
+		}
+
+		auto backend_type = GetBackgroundWorkerTypeByPid(beentry->st_procpid);
+		if (!backend_type || strcmp(backend_type, PGDUCKDB_SYNC_WORKER_NAME) != 0) {
+			continue; // backend is not a pg_duckdb sync worker
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+/*
+Will start the background worker if:
+- MotherDuck is enabled (TODO: should be database-specific)
+- it is not already running for the current PG database
+*/
 void
-InitBackgroundWorker(void) {
+StartBackgroundWorkerIfNeeded(void) {
 	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
+		elog(DEBUG1, "pg_duckdb background worker not started because MotherDuck is not enabled");
+		return;
+	}
+
+	if (HasBgwRunningForMyDatabase()) {
+		elog(DEBUG1, "pg_duckdb background worker already running for database %u", MyDatabaseId);
 		return;
 	}
 
@@ -238,12 +276,12 @@ InitBackgroundWorker(void) {
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
 	snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_duckdb");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "pgduckdb_background_worker_main");
-	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_duckdb sync worker");
+	snprintf(worker.bgw_name, BGW_MAXLEN, PGDUCKDB_SYNC_WORKER_NAME);
 	worker.bgw_restart_time = 1;
 	worker.bgw_main_arg = (Datum)0;
 
 	// Register the worker
-	RegisterBackgroundWorker(&worker);
+	RegisterDynamicBackgroundWorker(&worker, NULL);
 
 	/* Set up the shared memory hooks */
 #if PG_VERSION_NUM >= 150000
