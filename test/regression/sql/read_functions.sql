@@ -54,6 +54,16 @@ SELECT * FROM (SELECT r['column00'] FROM read_csv('../../data/web_page.csv') r l
 -- If you give it a different alias then that alias is propegated though.
 SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.csv') r limit 1);
 
+-- Only simple string literals are supported as column names
+SELECT r[NULL] FROM read_csv('../../data/web_page.csv') r limit 1;
+SELECT r[123] FROM read_csv('../../data/web_page.csv') r limit 1;
+SELECT r[3.14] FROM read_csv('../../data/web_page.csv') r limit 1;
+SELECT r[q.col]
+FROM
+    read_csv('../../data/web_page.csv') r,
+    (SELECT 'abc'::text as col) q
+LIMIT 1;
+
 -- delta_scan
 
 SELECT duckdb.install_extension('delta');

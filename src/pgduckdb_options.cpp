@@ -373,6 +373,12 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 	PG_RETURN_BOOL(true);
 }
 
+/*
+ * DuckdbRowSubscriptTransform is called by the parser when a subscripting
+ * operation is performed on a duckdb.row. It has two main puprposes:
+ * 1. Ensure that the row is being indexed using a string literal
+ * 2. Ensure that the return type of this index operation is duckdb.unresolved_type
+ */
 void
 DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
                             bool isAssignment) {
@@ -424,6 +430,12 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 				                parser_errposition(pstate, expr_location)));
 			}
 
+			Const *subscript_const = castNode(Const, subscript_expr);
+			if (subscript_const->constisnull) {
+				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("duckdb.row subscript cannot be NULL"),
+				                parser_errposition(pstate, expr_location)));
+			}
+
 			subscript_expr = coerced_expr;
 			first = false;
 		}
@@ -435,6 +447,12 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 	sbsref->reftypmod = -1;
 }
 
+/*
+ * DuckdbRowSubscriptExecSetup is called by the executor when a subscripting
+ * operation is performed on a duckdb.row. This should never happen, because
+ * any query that contains a duckdb.row should automatically be use DuckDB
+ * execution.
+ */
 void
 DuckdbRowSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
                             SubscriptExecSteps * /*exprstate*/) {
@@ -448,6 +466,10 @@ static SubscriptRoutines duckdb_subscript_routines = {
     .fetch_leakproof = true,
     .store_leakproof = true,
 };
+
+DECLARE_PG_FUNCTION(duckdb_row_subscript) {
+	PG_RETURN_POINTER(&duckdb_subscript_routines);
+}
 
 DECLARE_PG_FUNCTION(duckdb_row_in) {
 	elog(ERROR, "Creating the duckdb.row type is not supported");
@@ -463,10 +485,6 @@ DECLARE_PG_FUNCTION(duckdb_unresolved_type_in) {
 
 DECLARE_PG_FUNCTION(duckdb_unresolved_type_out) {
 	return textout(fcinfo);
-}
-
-DECLARE_PG_FUNCTION(duckdb_row_subscript) {
-	PG_RETURN_POINTER(&duckdb_subscript_routines);
 }
 
 DECLARE_PG_FUNCTION(duckdb_unresolved_type_operator) {

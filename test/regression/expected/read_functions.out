@@ -115,6 +115,27 @@ SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.c
     1
 (1 row)
 
+-- Only simple string literals are supported as column names
+SELECT r[NULL] FROM read_csv('../../data/web_page.csv') r limit 1;
+ERROR:  duckdb.row subscript cannot be NULL
+LINE 1: SELECT r[NULL] FROM read_csv('../../data/web_page.csv') r li...
+                 ^
+SELECT r[123] FROM read_csv('../../data/web_page.csv') r limit 1;
+ERROR:  duckdb.row subscript must have text type
+LINE 1: SELECT r[123] FROM read_csv('../../data/web_page.csv') r lim...
+                 ^
+SELECT r[3.14] FROM read_csv('../../data/web_page.csv') r limit 1;
+ERROR:  duckdb.row subscript must have text type
+LINE 1: SELECT r[3.14] FROM read_csv('../../data/web_page.csv') r li...
+                 ^
+SELECT r[q.col]
+FROM
+    read_csv('../../data/web_page.csv') r,
+    (SELECT 'abc'::text as col) q
+LIMIT 1;
+ERROR:  duckdb.row subscript must be a constant
+LINE 1: SELECT r[q.col]
+                 ^
 -- delta_scan
 SELECT duckdb.install_extension('delta');
  install_extension 
