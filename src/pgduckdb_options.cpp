@@ -376,6 +376,15 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 void
 DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
                             bool isAssignment) {
+	/*
+	 * We need to populate our cache for some of the code below. Normally this
+	 * cache is populated at the start of our planner hook, but this function
+	 * is being called from the parser.
+	 */
+	if (!pgduckdb::IsExtensionRegistered()) {
+		elog(ERROR, "BUG: Using duckdb.row but the pg_duckdb extension is not installed");
+	}
+
 	if (isAssignment) {
 		elog(ERROR, "Assignment to duckdb.row is not supported");
 	}
@@ -420,9 +429,6 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 		}
 		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, subscript_expr);
 	}
-
-	/* TODO: Trigger cache population, probably we should do this somewhere else */
-	pgduckdb::IsExtensionRegistered();
 
 	// Set the result type of the subscripting operation
 	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
