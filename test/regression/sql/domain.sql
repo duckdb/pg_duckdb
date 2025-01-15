@@ -1,7 +1,7 @@
-create domain domainvarchar varchar(5);
-create domain domainnumeric numeric(8,2);
-create domain domainint4 int4;
-create domain domaintext text;
+create domain domainvarchar varchar(5) check (value is not null);
+create domain domainnumeric numeric(8,2)  check (value is not null);
+create domain domainint4 int4 check (value > 0);
+create domain domaintext text check (value is not null);
 
 -- Test tables using domains
 create table basictest
@@ -14,6 +14,14 @@ create table basictest
 INSERT INTO basictest values ('88', 'haha', 'short', '123.12');      -- Good
 INSERT INTO basictest values ('88', 'haha', 'short text', '123.12'); -- Bad varchar
 INSERT INTO basictest values ('88', 'haha', 'short', '123.1212');    -- Truncate numeric
+
+-- domain check
+INSERT INTO basictest values ('-1', 'haha', 'short', '123.1212');   -- Bad int4
+INSERT INTO basictest values ('88', NULL, 'short', '123.1212');    -- Bad text
+INSERT INTO basictest values ('88', 'haha', NULL, '123.1212');   -- Bad varchar
+INSERT INTO basictest values ('88', 'haha', 'short', NULL);    -- Bad numeric
+SELECT 5::domainint4; -- Good
+SELECT (-5)::domainint4; -- Bad int4
 
 select * from basictest;
 
