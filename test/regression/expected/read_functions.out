@@ -36,6 +36,119 @@ SELECT r['jsoncol'][1], r['arraycol'][2] FROM read_parquet('../../data/indexable
  "d"        |          22
 (1 row)
 
+-- Subqueries correctly expand *, in case of multiple columns.
+SELECT * FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
+-----------+--------------+-------------+--------------+-------------+---------+----------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
+(1 row)
+
+-- NOTE: A single "r" is equivalent to a *. The prefix and postfix columns are
+-- not explicitely selected, but still show up in the result. This is
+-- considered a bug, but it's one that we cannot easily solve because the "r"
+-- reference does not exist in the DuckDB query at all, so there's no way to
+-- reference only the columns coming from that part of the subquery. Very few
+-- people should be impacted by this though.
+SELECT r FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
+-----------+--------------+-------------+--------------+-------------+---------+----------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
+(1 row)
+
+-- ... but if you manually add the expected columns then they are merged into
+-- the new star expansion.
+SELECT prefix, r FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
+-----------+--------------+-------------+--------------+-------------+---------+----------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
+(1 row)
+
+SELECT prefix, r, postfix FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
+-----------+--------------+-------------+--------------+-------------+---------+----------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
+(1 row)
+
+-- This requires the prefix columns to be there though. If the prefix columns
+-- are not there the postfix columns don't get merged into the new star
+-- expansion automatically.
+-- NOTE: Would be nice to fix this, but it's not a high priority.
+SELECT r, postfix FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     |    postfix     
+-----------+--------------+-------------+--------------+-------------+---------+----------------+----------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else | something else
+(1 row)
+
+-- If you swap them around, they will get duplicated though. For the
+SELECT postfix, r, prefix FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+    postfix     |  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     |  prefix   
+----------------+-----------+--------------+-------------+--------------+-------------+---------+----------------+-----------
+ something else | something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else | something
+(1 row)
+
+-- Joining two subqueries a single * works as expected.
+SELECT *
+FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+) q1, (
+    SELECT * FROM read_parquet('../../data/unsigned_types.parquet') r
+) q2;
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     | utinyint | usmallint |  uinteger  
+-----------+--------------+-------------+--------------+-------------+---------+----------------+----------+-----------+------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else |      255 |     65535 | 4294967295
+(1 row)
+
+-- Combining multiple read_parquet calls in a single query also works as
+-- expected. They are not expanded to multiple *'s.
+-- BUG: This currently doesn't work correctly!
+SELECT 'something' as prefix, *, 'something else' as postfix
+FROM read_parquet('../../data/iris.parquet') r,
+        read_parquet('../../data/unsigned_types.parquet') r2
+LIMIT 1;
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety | utinyint | usmallint |  uinteger  | sepal.length | sepal.width | petal.length | petal.width | variety | utinyint | usmallint |  uinteger  |    postfix     
+-----------+--------------+-------------+--------------+-------------+---------+----------+-----------+------------+--------------+-------------+--------------+-------------+---------+----------+-----------+------------+----------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  |      255 |     65535 | 4294967295 |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  |      255 |     65535 | 4294967295 | something else
+(1 row)
+
+-- And also when done in a subquery
+-- BUG: Broken in the same way as the above query.
+SELECT * FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r,
+         read_parquet('../../data/unsigned_types.parquet') r2
+    LIMIT 1
+);
+  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety | utinyint | usmallint |  uinteger  | sepal.length_1 | sepal.width_1 | petal.length_1 | petal.width_1 | variety_1 | utinyint_1 | usmallint_1 | uinteger_1 |    postfix     
+-----------+--------------+-------------+--------------+-------------+---------+----------+-----------+------------+----------------+---------------+----------------+---------------+-----------+------------+-------------+------------+----------------
+ something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  |      255 |     65535 | 4294967295 |            5.1 |           3.5 |            1.4 |           0.2 | Setosa    |        255 |       65535 | 4294967295 | something else
+(1 row)
+
 -- read_csv
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
  count 

@@ -14,6 +14,82 @@ SELECT r['sepal.length'], r['file_row_number'], r['filename']
 -- Supports subscripts
 SELECT r['jsoncol'][1], r['arraycol'][2] FROM read_parquet('../../data/indexable.parquet') r;
 
+-- Subqueries correctly expand *, in case of multiple columns.
+SELECT * FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+
+-- NOTE: A single "r" is equivalent to a *. The prefix and postfix columns are
+-- not explicitely selected, but still show up in the result. This is
+-- considered a bug, but it's one that we cannot easily solve because the "r"
+-- reference does not exist in the DuckDB query at all, so there's no way to
+-- reference only the columns coming from that part of the subquery. Very few
+-- people should be impacted by this though.
+SELECT r FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+
+-- ... but if you manually add the expected columns then they are merged into
+-- the new star expansion.
+SELECT prefix, r FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+SELECT prefix, r, postfix FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+
+-- This requires the prefix columns to be there though. If the prefix columns
+-- are not there the postfix columns don't get merged into the new star
+-- expansion automatically.
+-- NOTE: Would be nice to fix this, but it's not a high priority.
+SELECT r, postfix FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+
+-- If you swap them around, they will get duplicated though. For the
+SELECT postfix, r, prefix FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+);
+
+-- Joining two subqueries a single * works as expected.
+SELECT *
+FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r
+    LIMIT 1
+) q1, (
+    SELECT * FROM read_parquet('../../data/unsigned_types.parquet') r
+) q2;
+
+-- Combining multiple read_parquet calls in a single query also works as
+-- expected. They are not expanded to multiple *'s.
+-- BUG: This currently doesn't work correctly!
+SELECT 'something' as prefix, *, 'something else' as postfix
+FROM read_parquet('../../data/iris.parquet') r,
+        read_parquet('../../data/unsigned_types.parquet') r2
+LIMIT 1;
+
+-- And also when done in a subquery
+-- BUG: Broken in the same way as the above query.
+SELECT * FROM (
+    SELECT 'something' as prefix, *, 'something else' as postfix
+    FROM read_parquet('../../data/iris.parquet') r,
+         read_parquet('../../data/unsigned_types.parquet') r2
+    LIMIT 1
+);
+
 -- read_csv
 
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;

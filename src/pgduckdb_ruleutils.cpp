@@ -117,7 +117,34 @@ pgduckdb_duckdb_row_subscript_var(Expr *expr) {
 }
 
 /*
- * Returns a list of duckdb
+ * In our DuckDB queries we sometimes want to use "SELECT *", when selecting
+ * from a function like read_parquet. That way DuckDB can figure out the actual
+ * columns that it should return. Sadly Postgres expands the * character from
+ * the original query to a list of columns. So we need to put a star, any time
+ * we want to replace duckdb.row columns with a "*" in the duckdb query.
+ *
+ * Since the original "*" might expand to many columns we need to remove all of
+ * those, when putting a "*" back. To do so we try to find a runs of Vars from
+ * the same FROM entry, aka RangeTableEntry (RTE) that we expect were created
+ * with a *.
+ *
+ * This function tries to find the indexes of the first column for each of
+ * those runs. It does so using this heuristic:
+ *
+ * 1. Find a column with varattno == 1 (aka the first column from an RTE)
+ * 2. Find a consecutive run of columns from the same RTE with varattnos that
+ *    keep increasing by 1.
+ * 3. Once we find a duckdb.row column in any of those consecutive columns, we
+ *    assume this run was created using a star expression and we track the
+ *    initial index. Then we start at 1 again to find the next run.
+ *
+ * NOTE: This function does not find the end of such runs, that's left as an
+ * excersice for the caller. It should be pretty easy for the caller to do
+ * that, because they need to remove such columns anyway. The main reason this
+ * function existis is so that the caller doesn't have to scan backwards to
+ * find the start of a run once it finds a duckdb.row column. Scanning
+ * backwards is difficult for the caller because it wants to write out columns
+ * to the DuckDB query as it consumes them.
  */
 List *
 pgduckdb_star_start_vars(List *target_list) {
