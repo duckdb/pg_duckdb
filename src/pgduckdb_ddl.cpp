@@ -42,7 +42,6 @@ extern "C" {
  * tables we force this value to false.
  */
 static bool ctas_skip_data = false;
-static List *ctas_original_target_list = NIL;
 
 static bool top_level_ddl = true;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
@@ -118,24 +117,32 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			ctas_skip_data = stmt->into->skipData;
 			stmt->into->skipData = true;
 		}
+
 		bool is_create_materialized_view = stmt->into->viewQuery != NULL;
 		bool skips_planning = stmt->into->skipData || is_create_materialized_view;
 		if (!skips_planning) {
 			// No need to plan here as well, because standard_ProcessUtility
-			// will already plan the query and thus get the correct columns.
+			// will already plan the query and thus get the correct columns and
+			// their types.
 			return;
 		}
 
 		Query *original_query = castNode(Query, stmt->query);
 
-		// We need to do hacky things if the targetlist contains
-		// duckdb.unresolved_type or duckdb.row columns. In those cases we want
-		// to run the query through duckdb to get the actual result types for
-		// these queries. We also want to lock in those types creating a new
-		// query that will always retun them.
+		// For cases where Postgres does not usually plan the query, we need
+		// to do hacky things if the targetlist contains duckdb.unresolved_type
+		// or duckdb.row columns. In those cases we want to run the query
+		// through duckdb to get the actual result types for these queries,
+		// which won't happen automatically if the query is not planned by
+		// Postgres. So we will manually do it here.
+		//
+		// If we're doing that anyway we might as well slightly change the
+		// query so that it always returns the types that are expected by
+		// Postgres. This is especially useful for materialized views, since
+		// the query for is likely to be run many times.
 		if (!pgduckdb_target_list_contains_unresolved_type_or_row(original_query->targetList)) {
-			// If the target list doesn't contain duckdb.row or
-			// duckdb.unresolved_type though, we are done now.
+			// ... but if the target list doesn't contain duckdb.row or
+			// duckdb.unresolved_type, there's no need to do any of that.
 			return;
 		}
 
@@ -165,7 +172,16 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		List *target_list = plan->planTree->targetlist;
 
 		stmt->query = (Node *)WrapQueryInDuckdbQueryCall(rewritten_query_copy, target_list);
-		stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
+
+		if (is_create_materialized_view) {
+			/*
+			 * If this is a materialized view we also need to update its view
+			 * query. It's important not to set it for regular CTAS queries,
+			 * otherwise Postgres code will assume it's a materialized view
+			 * instead.
+			 */
+			stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
+		}
 
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
 		auto stmt = castNode(CreateSchemaStmt, parsetree);
@@ -446,12 +462,10 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (IsA(parsetree, CreateTableAsStmt) && !ctas_skip_data) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
 		ctas_query = (Query *)stmt->query;
-		ctas_query->targetList = ctas_original_target_list;
 	}
 
 	pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
 	if (ctas_query) {
-
 		const char *ctas_query_string = pgduckdb_get_querydef(ctas_query);
 
 		std::string insert_string =
