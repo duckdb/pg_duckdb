@@ -190,7 +190,6 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
-			pprint(parse);
 
 			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
 		} else if (duckdb_force_execution && IsAllowedStatement(parse) && ContainsFromClause(parse)) {
