@@ -25,6 +25,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "executor/spi.h"
+#include "common/file_utils.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
 #include "storage/ipc.h"
@@ -91,12 +92,19 @@ BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count
 	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
 }
 
+bool CanTakeLockForDatabase(Oid database_oid);
+
 } // namespace pgduckdb
 
 extern "C" {
+
 PGDLLEXPORT void
 pgduckdb_background_worker_main(Datum /* main_arg */) {
 	elog(LOG, "started pg_duckdb background worker");
+	if (!pgduckdb::CanTakeLockForDatabase(0)) {
+		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", 0);
+		return;
+	}
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
 	BackgroundWorkerUnblockSignals();
@@ -225,9 +233,10 @@ ShmemStartup(void) {
 	LWLockRelease(AddinShmemInitLock);
 }
 
-constexpr const char* PGDUCKDB_SYNC_WORKER_NAME = "pg_duckdb sync worker";
+constexpr const char *PGDUCKDB_SYNC_WORKER_NAME = "pg_duckdb sync worker";
 
-bool HasBgwRunningForMyDatabase() {
+bool
+HasBgwRunningForMyDatabase() {
 	const auto num_backends = pgstat_fetch_stat_numbackends();
 	for (int backend_idx = 1; backend_idx <= num_backends; ++backend_idx) {
 		LocalPgBackendStatus *local_beentry = pgstat_get_local_beentry_by_index(backend_idx);
@@ -253,6 +262,35 @@ bool HasBgwRunningForMyDatabase() {
 }
 
 /*
+Attempts to take a lock on a file named 'pgduckdb_worker_<database_oid>.lock'
+If the lock is taken, the function returns true. If the lock is not taken, the function returns false.
+*/
+bool
+CanTakeLockForDatabase(Oid database_oid) {
+	char lock_file_name[MAXPGPATH];
+	snprintf(lock_file_name, MAXPGPATH, "%s/%s.pgduckdb_worker.%d", DataDir, PG_TEMP_FILE_PREFIX, database_oid);
+
+	auto fd = open(lock_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	if (fd < 0) {
+		auto err = strerror(errno);
+		elog(ERROR, "Could not take lock on file '%s': %s", lock_file_name, err);
+	}
+
+	// Take exclusive lock on the file
+	auto ret = flock(fd, LOCK_EX | LOCK_NB);
+	if (ret == EWOULDBLOCK) {
+		return false;
+	}
+
+	if (ret != 0) {
+		auto err = strerror(errno);
+		elog(ERROR, "Could not take lock on file '%s': %s", lock_file_name, err);
+	}
+
+	return true;
+}
+
+/*
 Will start the background worker if:
 - MotherDuck is enabled (TODO: should be database-specific)
 - it is not already running for the current PG database
@@ -260,12 +298,12 @@ Will start the background worker if:
 void
 StartBackgroundWorkerIfNeeded(void) {
 	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
-		elog(DEBUG1, "pg_duckdb background worker not started because MotherDuck is not enabled");
+		elog(DEBUG3, "pg_duckdb background worker not started because MotherDuck is not enabled");
 		return;
 	}
 
 	if (HasBgwRunningForMyDatabase()) {
-		elog(DEBUG1, "pg_duckdb background worker already running for database %u", MyDatabaseId);
+		elog(DEBUG3, "pg_duckdb background worker already running for database %u", MyDatabaseId);
 		return;
 	}
 
@@ -759,6 +797,7 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 		if (current_motherduck_catalog_version) {
 			pfree(current_motherduck_catalog_version);
 		}
+
 		current_motherduck_catalog_version = pstrdup(catalog_version.c_str());
 		MemoryContextSwitchTo(old_context);
 
