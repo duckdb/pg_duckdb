@@ -52,7 +52,8 @@ PglzDecompressDatum(const struct varlena *value) {
 struct varlena *
 Lz4DecompresDatum(const struct varlena *value) {
 #ifndef USE_LZ4
-	return NULL; /* keep compiler quiet */
+	(void)value; /* keep compiler quiet */
+	return NULL;
 #else
 	struct varlena *result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
 
