@@ -27,6 +27,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "executor/spi.h"
+#include "commands/dbcommands.h"
 #include "common/file_utils.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
@@ -151,7 +152,7 @@ extern "C" {
 PGDLLEXPORT void
 pgduckdb_background_worker_main(Datum main_arg) {
 	Oid database_oid = DatumGetObjectId(main_arg);
-	if (!pgduckdb::CanTakeBgwLockForDatabase(0)) {
+	if (!pgduckdb::CanTakeBgwLockForDatabase(database_oid)) {
 		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
 		return;
 	}
@@ -910,7 +911,8 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 		}
 
 		/* The catalog version has changed, we need to sync the catalog */
-		elog(LOG, "Syncing MotherDuck catalog for database %s: %s", motherduck_db.c_str(), catalog_version.c_str());
+		elog(LOG, "Syncing MotherDuck catalog for database '%s' in '%s': %s", motherduck_db.c_str(),
+		     get_database_name(MyDatabaseId), catalog_version.c_str());
 
 		/*
 		 * Because of our SPI_commit_that_works_in_bgworker() workaround we need to
