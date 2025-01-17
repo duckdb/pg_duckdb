@@ -10616,11 +10616,19 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 	}
 
 	/*
-	 * iceberg_scan needs to be wrapped in a subquery to resolve a bug where
-	 * aliasses on iceberg_scan are ignored:
+	 * iceberg_scan needs to be wrapped in an additianol subquery to resolve a
+	 * bug where aliasses on iceberg_scan are ignored:
 	 * https://github.com/duckdb/duckdb-iceberg/issues/44
+	 *
+	 * By wrapping the iceberg_scan call the alias is given to the subquery,
+	 * instead of th call. This subquery is easily optimized away by DuckDB,
+	 * because it doesn't do anything.
+	 *
+	 * TODO: Probably check this in a bit more efficient way and move it to
+	 * pgduckdb_ruleutils.cpp
 	 */
-	bool is_iceberg_scan = strcmp(pgduckdb_function_name(funcoid), "system.main.iceberg_scan") == 0;
+	char *duckdb_function_name = pgduckdb_function_name(funcoid);
+	bool is_iceberg_scan = duckdb_function_name != NULL && strcmp(duckdb_function_name, "system.main.iceberg_scan") == 0;
 	if (is_iceberg_scan) {
 		appendStringInfoString(buf, "(FROM ");
 	}
