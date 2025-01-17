@@ -277,10 +277,11 @@ SELECT duckdb.install_extension('iceberg');
 (1 row)
 
 SELECT COUNT(r['l_orderkey']) FROM iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) r;
-ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Binder Error: Referenced table "r" not found!
-Candidate tables: "iceberg_scan_data"
-LINE 1: SELECT count(r.l_orderkey) AS count FROM system.main...
-                     ^
+ count 
+-------
+ 51793
+(1 row)
+
 -- TPCH query #6
 SELECT
 	sum(r['l_extendedprice'] * r['l_discount']) as revenue
@@ -292,10 +293,11 @@ WHERE
 	AND r['l_discount'] between 0.08 - 0.01 and 0.08 + 0.01
 	AND r['l_quantity'] < 25
 LIMIT 1;
-ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Binder Error: Referenced table "r" not found!
-Candidate tables: "iceberg_scan_data"
-LINE 1: ...C allow_moved_paths => true) r WHERE ((r.l_shipdate >= '1997-01-01'::date) AND...
-                                                  ^
+   revenue    
+--------------
+ 1520873.7806
+(1 row)
+
 SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg');
  sequence_number |     snapshot_id     |         timestamp_ms         |                                         manifest_list                                          
 -----------------+---------------------+------------------------------+------------------------------------------------------------------------------------------------

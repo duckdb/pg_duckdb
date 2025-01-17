@@ -10615,6 +10615,16 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		nargs++;
 	}
 
+	/*
+	 * iceberg_scan needs to be wrapped in a subquery to resolve a bug where
+	 * aliasses on iceberg_scan are ignored:
+	 * https://github.com/duckdb/duckdb-iceberg/issues/44
+	 */
+	bool is_iceberg_scan = strcmp(pgduckdb_function_name(funcoid), "system.main.iceberg_scan") == 0;
+	if (is_iceberg_scan) {
+		appendStringInfoString(buf, "(FROM ");
+	}
+
 	appendStringInfo(buf, "%s(",
 					 generate_function_name(funcoid, nargs,
 											argnames, argtypes,
@@ -10631,6 +10641,10 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		get_rule_expr((Node *) lfirst(l), context, true);
 	}
 	appendStringInfoChar(buf, ')');
+
+	if (is_iceberg_scan) {
+		appendStringInfoChar(buf, ')');
+	}
 }
 
 /*
