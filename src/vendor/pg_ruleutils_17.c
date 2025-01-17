@@ -10624,12 +10624,19 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 	 * instead of th call. This subquery is easily optimized away by DuckDB,
 	 * because it doesn't do anything.
 	 *
+	 * This problem is also true for the "query" function, which we use when
+	 * creating materialized views and CTAS.
+	 * https://github.com/duckdb/duckdb/issues/15570#issuecomment-2598419474
+	 *
 	 * TODO: Probably check this in a bit more efficient way and move it to
 	 * pgduckdb_ruleutils.cpp
 	 */
 	char *duckdb_function_name = pgduckdb_function_name(funcoid);
-	bool is_iceberg_scan = duckdb_function_name != NULL && strcmp(duckdb_function_name, "system.main.iceberg_scan") == 0;
-	if (is_iceberg_scan) {
+	bool function_needs_subquery = duckdb_function_name != NULL && (
+		strcmp(duckdb_function_name, "system.main.iceberg_scan") == 0
+		|| strcmp(duckdb_function_name, "system.main.query") == 0
+	);
+	if (function_needs_subquery) {
 		appendStringInfoString(buf, "(FROM ");
 	}
 
@@ -10650,7 +10657,7 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 	}
 	appendStringInfoChar(buf, ')');
 
-	if (is_iceberg_scan) {
+	if (function_needs_subquery) {
 		appendStringInfoChar(buf, ')');
 	}
 }
