@@ -32,7 +32,7 @@ $func$;
 
 -- json_extract
 CREATE FUNCTION @extschema@.json_extract(json VARCHAR, path VARCHAR)
-RETURNS VARCHAR LANGUAGE 'plpgsql'
+RETURNS JSON LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
 $func$
@@ -43,7 +43,7 @@ $func$;
 
 -- json_extract with path list
 CREATE FUNCTION @extschema@.json_extract(json VARCHAR, path VARCHAR[])
-RETURNS VARCHAR LANGUAGE 'plpgsql'
+RETURNS JSON LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
 $func$
@@ -51,8 +51,20 @@ BEGIN
     RAISE EXCEPTION 'Function `json_extract(VARCHAR, VARCHAR)` only works with DuckDB execution.';
 END;
 $func$;
+
 -- json_extract_string
 CREATE FUNCTION @extschema@.json_extract_string(json VARCHAR, path VARCHAR)
+RETURNS VARCHAR LANGUAGE 'plpgsql'
+SET search_path = pg_catalog, pg_temp
+AS
+$func$
+BEGIN
+    RAISE EXCEPTION 'Function `json_extract_string(VARCHAR, VARCHAR)` only works with DuckDB execution.';
+END;
+$func$;
+
+-- json_extract_string
+CREATE FUNCTION @extschema@.json_extract_string(json VARCHAR, path VARCHAR[])
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
