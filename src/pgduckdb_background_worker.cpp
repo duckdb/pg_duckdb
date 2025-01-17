@@ -27,6 +27,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "executor/spi.h"
+#include "commands/dbcommands.h"
 #include "common/file_utils.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
@@ -65,17 +66,20 @@ bool CanTakeLockForDatabase(Oid database_oid);
 extern "C" {
 
 PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum /* main_arg */) {
-	elog(LOG, "started pg_duckdb background worker");
-	if (!CanTakeLockForDatabase(0)) {
-		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", 0);
+pgduckdb_background_worker_main(Datum main_arg) {
+	Oid database_oid = DatumGetObjectId(main_arg);
+	if (!CanTakeLockForDatabase(database_oid)) {
+		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
 		return;
 	}
+
+	elog(LOG, "started pg_duckdb background worker for database %u -- MyDB: %u", database_oid, MyDatabaseId);
+
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
 	BackgroundWorkerUnblockSignals();
 
-	BackgroundWorkerInitializeConnection(duckdb_motherduck_postgres_database, NULL, 0);
+	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
 
 	pgduckdb::doing_motherduck_sync = true;
 	is_background_worker = true;
@@ -221,7 +225,7 @@ StartBackgroundWorkerIfNeeded(void) {
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "pgduckdb_background_worker_main");
 	snprintf(worker.bgw_name, BGW_MAXLEN, PGDUCKDB_SYNC_WORKER_NAME);
 	worker.bgw_restart_time = 1;
-	worker.bgw_main_arg = (Datum)0;
+	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
 
 	RegisterDynamicBackgroundWorker(&worker, NULL);
 }
@@ -671,7 +675,8 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
 		}
 
 		/* The catalog version has changed, we need to sync the catalog */
-		elog(LOG, "Syncing MotherDuck catalog for database %s: %s", motherduck_db.c_str(), catalog_version.c_str());
+		elog(LOG, "Syncing MotherDuck catalog for database '%s' in '%s': %s", motherduck_db.c_str(),
+		     get_database_name(MyDatabaseId), catalog_version.c_str());
 
 		/*
 		 * Because of our SPI_commit_that_works_in_bgworker() workaround we need to
@@ -717,7 +722,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
 			}
 
 			std::string postgres_schema_name = PgSchemaName(motherduck_db, schema.name, is_default_db);
-
 			if (!CreateSchemaIfNotExists(postgres_schema_name.c_str(), is_default_db)) {
 				/* We failed to create the schema, so we skip the tables in it */
 				continue;
