@@ -9123,10 +9123,9 @@ get_rule_expr(Node *node, deparse_context *context,
 				else if (IsA(sbsref->refexpr, Var) && pgduckdb_var_is_duckdb_row((Var*) sbsref->refexpr)) {
 					/* Subscript expressions into the duckdb.row type we want to
 					 * change to regular column references in the DuckDB query.
-					 * Both because it's generally more common and thus
-					 * results in better optimized queries, and because
-					 * iceberg_scan doesn't support the subscripting syntax on
-					 * its results.
+					 * The main reason we do this is so that DuckDB generates
+					 * nicer column names, i.e. without the square brackets:
+					 * "mycolumn" instead of "r['mycolumn']"
 					 */
 					Assert(sbsref->refupperindexpr);
 					Assert(!sbsref->reflowerindexpr);
