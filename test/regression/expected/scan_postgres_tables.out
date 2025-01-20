@@ -20,11 +20,11 @@ Parallel Aggregate
 SELECT COUNT(a) FROM t1 WHERE a < 10;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a<10 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a<10) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on t1
-  Filter: ((a IS NOT NULL) AND (a < 10))
+  Filter: (a < 10)
 
  count 
 -------
@@ -39,13 +39,13 @@ SET client_min_messages TO DEBUG1;
 SELECT COUNT(a) FROM t1 WHERE a < 10;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a<10 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a<10) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Bitmap Heap Scan on t1
-  Recheck Cond: ((a < 10) AND (a IS NOT NULL))
+  Recheck Cond: (a < 10)
   ->  Bitmap Index Scan on t1_a_idx
-        Index Cond: ((a < 10) AND (a IS NOT NULL))
+        Index Cond: (a < 10)
 
  count 
 -------
@@ -57,11 +57,11 @@ SET enable_bitmapscan TO false;
 SELECT COUNT(a) FROM t1 WHERE a = 1;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a=1 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a=1) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Index Only Scan using t1_a_idx on t1
-  Index Cond: ((a IS NOT NULL) AND (a = 1))
+  Index Cond: (a = 1)
 
  count 
 -------
@@ -72,11 +72,11 @@ Parallel Index Only Scan using t1_a_idx on t1
 SELECT COUNT(c) FROM t1 WHERE a = 1;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT c FROM public.t1 WHERE (a=1 AND a IS NOT NULL) 
+QUERY: SELECT c FROM public.t1 WHERE (a=1) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Index Scan using t1_a_idx on t1
-  Index Cond: ((a IS NOT NULL) AND (a = 1))
+  Index Cond: (a = 1)
 
  count 
 -------
@@ -98,11 +98,11 @@ Seq Scan on t2
 
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a>=1 AND a<=3 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a>=1 AND a<=3) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Index Only Scan using t1_a_idx on t1
-  Index Cond: ((a >= 1) AND (a <= 3) AND (a IS NOT NULL))
+  Index Cond: ((a >= 1) AND (a <= 3))
 
  a | a 
 ---+---
@@ -115,19 +115,19 @@ Parallel Index Only Scan using t1_a_idx on t1
 SELECT COUNT(*) FROM t1 AS t1_1, t1 AS t1_2 WHERE t1_1.a < 2 AND t1_2.a > 8;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a<2 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a>8) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on t1
-  Filter: ((a IS NOT NULL) AND (a < 2))
+  Filter: (a > 8)
 
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a>8 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a<2) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on t1
-  Filter: ((a IS NOT NULL) AND (a > 8))
+  Filter: (a < 2)
 
  count 
 -------
@@ -139,19 +139,19 @@ SET max_parallel_workers TO 0;
 SELECT COUNT(*) FROM t1 AS t1_1, t1 AS t1_2 WHERE t1_1.a < 2 AND t1_2.a > 8;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a<2 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a>8) 
 RUNNING: IN PROCESS THREAD.
 EXECUTING: 
 Parallel Seq Scan on t1
-  Filter: ((a IS NOT NULL) AND (a < 2))
+  Filter: (a > 8)
 
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.t1 WHERE (a>8 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.t1 WHERE (a<2) 
 RUNNING: IN PROCESS THREAD.
 EXECUTING: 
 Parallel Seq Scan on t1
-  Filter: ((a IS NOT NULL) AND (a > 8))
+  Filter: (a < 2)
 
  count 
 -------
@@ -170,11 +170,11 @@ SET client_min_messages TO DEBUG1;
 SELECT COUNT(*) FROM partitioned_table WHERE a < 25;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.partitioned_table WHERE (a<25 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.partitioned_table WHERE (a<25) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on partition_1 partitioned_table
-  Filter: ((a IS NOT NULL) AND (a < 25))
+  Filter: (a < 25)
 
  count 
 -------
@@ -184,14 +184,14 @@ Parallel Seq Scan on partition_1 partitioned_table
 SELECT COUNT(*) FROM partitioned_table WHERE a < 75;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.partitioned_table WHERE (a<75 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.partitioned_table WHERE (a<75) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Append
   ->  Seq Scan on partition_1 partitioned_table_1
-        Filter: ((a IS NOT NULL) AND (a < 75))
+        Filter: (a < 75)
   ->  Seq Scan on partition_2 partitioned_table_2
-        Filter: ((a IS NOT NULL) AND (a < 75))
+        Filter: (a < 75)
 
  count 
 -------
@@ -201,12 +201,14 @@ Parallel Append
 SELECT COUNT(*) FROM partitioned_table WHERE a < 25 OR a > 75;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.partitioned_table
-RUNNING: ON 2 PARALLEL WORKER(S).
+QUERY: SELECT a FROM public.partitioned_table WHERE (a<25 OR a>75) 
+RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Append
   ->  Seq Scan on partition_1 partitioned_table_1
+        Filter: ((a < 25) OR (a > 75))
   ->  Seq Scan on partition_2 partitioned_table_2
+        Filter: ((a < 25) OR (a > 75))
 
  count 
 -------
@@ -216,12 +218,12 @@ Parallel Append
 SELECT COUNT(*) FROM partitioned_table WHERE a < 25 AND b = 1;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a, b FROM public.partitioned_table WHERE (a<25 AND a IS NOT NULL)  AND (b=1 AND b IS NOT NULL) 
+QUERY: SELECT a, b FROM public.partitioned_table WHERE (a<25)  AND (b=1) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Index Scan using partition_1_b_idx on partition_1 partitioned_table
-  Index Cond: ((b IS NOT NULL) AND (b = 1))
-  Filter: ((a IS NOT NULL) AND (a < 25))
+  Index Cond: (b = 1)
+  Filter: (a < 25)
 
  count 
 -------
@@ -231,19 +233,19 @@ Parallel Index Scan using partition_1_b_idx on partition_1 partitioned_table
 SELECT COUNT(*) FROM partitioned_table, t2 WHERE partitioned_table.a = t2.a AND partitioned_table.a < 2;
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.partitioned_table WHERE (a<2 AND a IS NOT NULL) 
+QUERY: SELECT a FROM public.partitioned_table WHERE (a<2) 
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on partition_1 partitioned_table
-  Filter: ((a IS NOT NULL) AND (a < 2))
+  Filter: (a < 2)
 
 DEBUG:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM pg_temp.t2 WHERE (a<2 AND a IS NOT NULL AND a>=0 AND a<=1 AND a IS NOT NULL) 
+QUERY: SELECT a FROM pg_temp.t2 WHERE (a<2 AND a>=0 AND a<=1) 
 RUNNING: IN PROCESS THREAD.
 EXECUTING: 
 Seq Scan on t2
-  Filter: ((a IS NOT NULL) AND (a IS NOT NULL) AND (a < 2) AND (a >= 0) AND (a <= 1))
+  Filter: ((a < 2) AND (a >= 0) AND (a <= 1))
 
  count 
 -------

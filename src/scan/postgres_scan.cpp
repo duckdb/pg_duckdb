@@ -1,3 +1,5 @@
+#include "duckdb/planner/filter/optional_filter.hpp"
+
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -12,6 +14,29 @@ namespace pgduckdb {
 //
 // PostgresScanGlobalState
 //
+
+void
+PostgresScanGlobalState::ConstructQueryFilter(duckdb::TableFilter *filter, const char *column_name) {
+	switch (filter->filter_type) {
+		case duckdb::TableFilterType::CONSTANT_COMPARISON:
+		case duckdb::TableFilterType::IS_NULL:
+		case duckdb::TableFilterType::IS_NOT_NULL:
+		case duckdb::TableFilterType::CONJUNCTION_OR:
+		case duckdb::TableFilterType::CONJUNCTION_AND:
+		case duckdb::TableFilterType::IN_FILTER:
+			scan_query << filter->ToString(column_name).c_str();
+			break;
+		case duckdb::TableFilterType::OPTIONAL_FILTER: {
+			auto optional_filter = reinterpret_cast<duckdb::OptionalFilter*>(filter);
+			ConstructQueryFilter(optional_filter->child_filter.get(), column_name);
+			break;
+		}
+		case duckdb::TableFilterType::STRUCT_EXTRACT:
+		case duckdb::TableFilterType::DYNAMIC_FILTER:
+			scan_query << "1 = 1";
+			break;
+	}
+}
 
 void
 PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input) {
@@ -101,7 +126,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 		scan_query << "(";
 		auto attr = GetAttr(table_tuple_desc, attr_num - 1);
 		auto col = pgduckdb::QuoteIdentifier(GetAttName(attr));
-		scan_query << filter->ToString(col).c_str();
+		ConstructQueryFilter(filter, col);
 		scan_query << ") ";
 	}
 }
@@ -157,12 +182,12 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 	to_string = ToString;
 }
 
-std::string
-PostgresScanTableFunction::ToString(const duckdb::FunctionData *data) {
-	auto &bind_data = data->Cast<PostgresScanFunctionData>();
-	std::ostringstream oss;
-	oss << "(POSTGRES_SCAN) " << GetRelationName(bind_data.rel);
-	return oss.str();
+duckdb::InsertionOrderPreservingMap<duckdb::string>
+PostgresScanTableFunction::ToString(duckdb::TableFunctionToStringInput &input) {
+	auto &bind_data = input.bind_data->Cast<PostgresScanFunctionData>();
+	duckdb::InsertionOrderPreservingMap<duckdb::string> result;
+	result["Table"] =  GetRelationName(bind_data.rel);
+	return result;
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
