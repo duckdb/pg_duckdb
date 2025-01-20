@@ -18,23 +18,23 @@ namespace pgduckdb {
 void
 PostgresScanGlobalState::ConstructQueryFilter(duckdb::TableFilter *filter, const char *column_name) {
 	switch (filter->filter_type) {
-		case duckdb::TableFilterType::CONSTANT_COMPARISON:
-		case duckdb::TableFilterType::IS_NULL:
-		case duckdb::TableFilterType::IS_NOT_NULL:
-		case duckdb::TableFilterType::CONJUNCTION_OR:
-		case duckdb::TableFilterType::CONJUNCTION_AND:
-		case duckdb::TableFilterType::IN_FILTER:
-			scan_query << filter->ToString(column_name).c_str();
-			break;
-		case duckdb::TableFilterType::OPTIONAL_FILTER: {
-			auto optional_filter = reinterpret_cast<duckdb::OptionalFilter*>(filter);
-			ConstructQueryFilter(optional_filter->child_filter.get(), column_name);
-			break;
-		}
-		case duckdb::TableFilterType::STRUCT_EXTRACT:
-		case duckdb::TableFilterType::DYNAMIC_FILTER:
-			scan_query << "1 = 1";
-			break;
+	case duckdb::TableFilterType::CONSTANT_COMPARISON:
+	case duckdb::TableFilterType::IS_NULL:
+	case duckdb::TableFilterType::IS_NOT_NULL:
+	case duckdb::TableFilterType::CONJUNCTION_OR:
+	case duckdb::TableFilterType::CONJUNCTION_AND:
+	case duckdb::TableFilterType::IN_FILTER:
+		scan_query << filter->ToString(column_name).c_str();
+		break;
+	case duckdb::TableFilterType::OPTIONAL_FILTER: {
+		auto optional_filter = reinterpret_cast<duckdb::OptionalFilter *>(filter);
+		ConstructQueryFilter(optional_filter->child_filter.get(), column_name);
+		break;
+	}
+	case duckdb::TableFilterType::STRUCT_EXTRACT:
+	case duckdb::TableFilterType::DYNAMIC_FILTER:
+		scan_query << "1 = 1";
+		break;
 	}
 }
 
@@ -186,7 +186,7 @@ duckdb::InsertionOrderPreservingMap<duckdb::string>
 PostgresScanTableFunction::ToString(duckdb::TableFunctionToStringInput &input) {
 	auto &bind_data = input.bind_data->Cast<PostgresScanFunctionData>();
 	duckdb::InsertionOrderPreservingMap<duckdb::string> result;
-	result["Table"] =  GetRelationName(bind_data.rel);
+	result["Table"] = GetRelationName(bind_data.rel);
 	return result;
 }
 
