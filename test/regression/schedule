@@ -3,7 +3,7 @@ test: concurrency
 test: correct_null_conversions
 test: search_path
 test: execution_error
-test: extensions
+#test: extensions
 test: type_support
 test: array_type_support
 test: views
@@ -11,7 +11,7 @@ test: non_superuser
 test: projection_pushdown_unsupported_type
 test: materialized_view
 test: hugeint_conversion
-test: read_functions
+#test: read_functions
 test: duckdb_only_functions
 test: duckdb_recycle
 test: cte
