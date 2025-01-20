@@ -28,7 +28,7 @@ def test_explain(cur: Cursor):
     result = cur.sql("EXPLAIN SELECT count(*) FROM test_table where id = %s", (1,))
     plan = "\n".join(result)
     assert "UNGROUPED_AGGREGATE" in plan
-    assert "id=1 AND id IS NOT NULL" in plan
+    assert "id=1" in plan
     assert "Total Time:" not in plan
     assert "Output:" not in plan
 
@@ -37,7 +37,7 @@ def test_explain(cur: Cursor):
     )
     plan = "\n".join(result)
     assert "UNGROUPED_AGGREGATE" in plan
-    assert "id=1 AND id IS NOT NULL" in plan
+    assert "id=1" in plan
     assert "Total Time:" in plan
     assert "Output:" not in plan
 
@@ -66,7 +66,7 @@ def test_explain_ctas(cur: Cursor):
         "EXPLAIN ANALYZE CREATE TEMP TABLE heap2(id) AS SELECT * from heap1"
     )
     plan = "\n".join(result)
-    assert "POSTGRES_SCAN" in plan
+    assert "TABLE_SCAN" in plan
     assert "Total Time:" in plan
 
     result = cur.sql(
