@@ -682,7 +682,7 @@ void HTTPFileHandle::Initialize(optional_ptr<FileOpener> opener) {
 	}
 
 	auto current_cache = TryGetMetadataCache(opener, hfs);
-	auto current_file_cache = TryGetFileCache(opener, hfs);
+	auto current_file_cache = http_params.enable_http_file_cache ? TryGetFileCache(opener, hfs) : nullptr;
 
 	bool should_write_cache = false;
 	if (!http_params.force_download && current_cache && !flags.OpenForWriting()) {
