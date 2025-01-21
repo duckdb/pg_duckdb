@@ -20,6 +20,7 @@ extern "C" {
 #include "storage/lockdefs.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
+#include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -117,6 +118,75 @@ pgduckdb_duckdb_row_subscript_var(Expr *expr) {
 }
 
 /*
+ * pgduckdb_check_for_star_start tries to figure out if this is tle_cell
+ * contains a Var that is the start of a run of Vars that should be
+ * reconstructed as a star. If that's the case it sets the varno_star and
+ * varattno_star of the ctx.
+ */
+static void
+pgduckdb_check_for_star_start(StarReconstructionContext *ctx, ListCell *tle_cell) {
+	TargetEntry *first_tle = (TargetEntry *)lfirst(tle_cell);
+
+	if (!IsA(first_tle->expr, Var)) {
+		/* Not a Var so we're not at the start of a run of Vars. */
+		return;
+	}
+
+	Var *first_var = (Var *)first_tle->expr;
+
+	if (first_var->varattno != 1) {
+		/* If we don't have varattno 1, then we are not at a run of Vars */
+		return;
+	}
+
+	/*
+	 * We found a Var that could potentially be the first of a run of Vars for
+	 * which we have to reconstruct the star. To check if this is indeed the
+	 * case we see if we can find a duckdb.row in this list of Vars.
+	 */
+	int varno = first_var->varno;
+	int varattno = first_var->varattno;
+
+	do {
+		TargetEntry *tle = (TargetEntry *)lfirst(tle_cell);
+
+		if (!IsA(tle->expr, Var)) {
+			/*
+			 * We found the end of this run of Vars, by finding something else
+			 * than a Var.
+			 */
+			return;
+		}
+
+		Var *var = (Var *)tle->expr;
+
+		if (var->varno != varno) {
+			/* A Var from a different RTE */
+			return;
+		}
+
+		if (var->varattno != varattno) {
+			/* Not a consecutive Var */
+			return;
+		}
+		if (pgduckdb_var_is_duckdb_row(var)) {
+			/*
+			 * If we have a duckdb.row, then we found a run of Vars that we
+			 * have to reconstruct the star for.
+			 */
+
+			ctx->varno_star = varno;
+			ctx->varattno_star = first_var->varattno;
+			ctx->added_current_star = false;
+			return;
+		}
+
+		/* Look for the next Var in the run */
+		varattno++;
+	} while ((tle_cell = lnext(ctx->target_list, tle_cell)));
+}
+
+/*
  * In our DuckDB queries we sometimes want to use "SELECT *", when selecting
  * from a function like read_parquet. That way DuckDB can figure out the actual
  * columns that it should return. Sadly Postgres expands the * character from
@@ -128,60 +198,69 @@ pgduckdb_duckdb_row_subscript_var(Expr *expr) {
  * the same FROM entry, aka RangeTableEntry (RTE) that we expect were created
  * with a *.
  *
- * This function tries to find the indexes of the first column for each of
- * those runs. It does so using this heuristic:
- *
- * 1. Find a column with varattno == 1 (aka the first column from an RTE)
- * 2. Find a consecutive run of columns from the same RTE with varattnos that
- *    keep increasing by 1.
- * 3. Once we find a duckdb.row column in any of those consecutive columns, we
- *    assume this run was created using a star expression and we track the
- *    initial index. Then we start at 1 again to find the next run.
- *
- * NOTE: This function does not find the end of such runs, that's left as an
- * excersice for the caller. It should be pretty easy for the caller to do
- * that, because they need to remove such columns anyway. The main reason this
- * function existis is so that the caller doesn't have to scan backwards to
- * find the start of a run once it finds a duckdb.row column. Scanning
- * backwards is difficult for the caller because it wants to write out columns
- * to the DuckDB query as it consumes them.
+ * This function returns true if we should skip writing this tle_cell to the
+ * DuckDB query because it is part of a run of Vars that will be reconstructed
+ * as a star.
  */
-List *
-pgduckdb_star_start_vars(List *target_list) {
-	List *star_start_indexes = NIL;
-	Var *possible_star_start_var = NULL;
-	int possible_star_start_var_index = 0;
+bool
+pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell) {
+	/* Detect start of a Var run that should be reconstructed to a star */
+	pgduckdb_check_for_star_start(ctx, tle_cell);
 
-	int i = 0;
+	/*
+	 * If we're not currently reconstructing a star we don't need to do
+	 * anything.
+	 */
+	if (!ctx->varno_star) {
+		return false;
+	}
 
-	foreach_node(TargetEntry, tle, target_list) {
-		i++;
+	TargetEntry *tle = (TargetEntry *)lfirst(tle_cell);
 
-		if (!IsA(tle->expr, Var)) {
-			possible_star_start_var = NULL;
-			possible_star_start_var_index = 0;
-			continue;
-		}
+	/*
+	 * Find out if this target entry is the next element in the run of Vars for
+	 * the star we're currently reconstructing.
+	 */
+	if (tle->expr && IsA(tle->expr, Var)) {
+		Var *var = castNode(Var, tle->expr);
 
-		Var *var = (Var *)tle->expr;
+		if (var->varno == ctx->varno_star && var->varattno == ctx->varattno_star) {
+			/*
+			 * We're still in the run of Vars, increment the varattno to look
+			 * for the next Var on the next call.
+			 */
+			ctx->varattno_star++;
 
-		if (var->varattno == 1) {
-			possible_star_start_var = var;
-			possible_star_start_var_index = i;
-		} else if (possible_star_start_var) {
-			if (var->varno != possible_star_start_var->varno || var->varno == i - possible_star_start_var_index + 1) {
-				possible_star_start_var = NULL;
-				possible_star_start_var_index = 0;
+			/* If we already added star we skip writing this target entry */
+			if (ctx->added_current_star) {
+				return true;
 			}
-		}
 
-		if (pgduckdb_var_is_duckdb_row(var)) {
-			star_start_indexes = lappend_int(star_start_indexes, possible_star_start_var_index);
-			possible_star_start_var = NULL;
-			possible_star_start_var_index = 0;
+			/*
+			 * If it's not a duckdb row we skip this target entry too. The way
+			 * we add a single star is by expanding the first duckdb.row torget
+			 * entry, which we've defined to expand to a star. So we need to
+			 * skip any non duckdb.row Vars that precede the first duckdb.row.
+			 */
+			if (!pgduckdb_var_is_duckdb_row(var)) {
+				return true;
+			}
+
+			ctx->added_current_star = true;
+			return false;
 		}
 	}
-	return star_start_indexes;
+
+	/*
+	 * If it was not, that means we've successfully expanded this star and we
+	 * should start looking for the next star start. So reset all the state
+	 * used for this star reconstruction.
+	 */
+	ctx->varno_star = 0;
+	ctx->varattno_star = 0;
+	ctx->added_current_star = false;
+
+	return false;
 }
 
 /*

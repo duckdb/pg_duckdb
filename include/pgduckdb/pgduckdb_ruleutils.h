@@ -1,4 +1,12 @@
 #include "postgres.h"
+#include "pgduckdb/vendor/pg_list.hpp"
+
+typedef struct StarReconstructionContext {
+	List *target_list;
+	int varno_star;
+	int varattno_star;
+	bool added_current_star;
+} StarReconstructionContext;
 
 char *pgduckdb_relation_name(Oid relid);
 char *pgduckdb_function_name(Oid function_oid);
@@ -13,7 +21,7 @@ bool pgduckdb_var_is_duckdb_row(Var *var);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
 bool pgduckdb_target_list_contains_unresolved_type_or_row(List *target_list);
 Var *pgduckdb_duckdb_row_subscript_var(Expr *expr);
-List *pgduckdb_star_start_vars(List *target_list);
+bool pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell);
 bool pgduckdb_function_needs_subquery(Oid function_oid);
 int pgduckdb_show_type(Const *constval, int original_showtype);
 

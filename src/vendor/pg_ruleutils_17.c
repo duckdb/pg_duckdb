@@ -6041,54 +6041,22 @@ get_target_list(List *targetList, deparse_context *context,
 
 	sep = " ";
 	colno = 0;
-	List *star_starts = pgduckdb_star_start_vars(targetList);
-	ListCell *current_star_start = list_head(star_starts);
 
-	int varno_star = 0;
-	int varattno_star = 0;
-	bool added_star = false;
+	StarReconstructionContext star_reconstruction_context = {0};
+	star_reconstruction_context.target_list = targetList;
 
 	bool outermost_targetlist = !processed_targetlist;
 	processed_targetlist = true;
 
-	int i = 0;
 	foreach(l, targetList)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(l);
 		char	   *colname;
 		char	   *attname;
-		i++;
 
-		if (current_star_start && lfirst_int(current_star_start) == i) {
-			Var *var = castNode(Var, tle->expr);
-			varno_star = var->varno;
-			varattno_star = var->varattno;
+		if (pgduckdb_reconstruct_star_step(&star_reconstruction_context, l)) {
+			continue;
 		}
-
-		if (varno_star) {
-			bool reset = true;
-			if (tle->expr && IsA(tle->expr, Var)) {
-				Var *var = castNode(Var, tle->expr);
-
-				if (var->varno == varno_star && var->varattno == varattno_star) {
-					varattno_star++;
-					reset = false;
-					if (added_star || !pgduckdb_var_is_duckdb_row(var)) {
-						continue;
-					}
-					added_star = true;
-				}
-			}
-
-			if (reset) {
-				varno_star = 0;
-				varattno_star = 0;
-				current_star_start = lnext(star_starts, current_star_start);
-				added_star = false;
-			}
-		}
-
-
 
 		if (tle->resjunk)
 			continue;			/* ignore junk entries */
