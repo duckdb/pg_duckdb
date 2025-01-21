@@ -379,6 +379,35 @@ pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf) {
 }
 
 /*
+ * Writes the refname to the buf in a way that results in the correct output
+ * for the duckdb.row type.
+ *
+ * Returns the "attname" that should be passed back to the caller of
+ * get_variable().
+ */
+char *
+pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level) {
+	appendStringInfoString(buf, quote_identifier(refname));
+
+	if (is_top_level) {
+		/*
+		 * If the duckdb.row is at the top level target list of a select, then
+		 * we want to generate r.*, to unpack all the columns instead of
+		 * returning a STRUCT from the query.
+		 *
+		 * Since we use .* there is no attname.
+		 */
+		appendStringInfoString(buf, ".*");
+		return NULL;
+	}
+
+	/*
+	 * In any other case, we want to simply use the alias of the TargetEntry.
+	 */
+	return refname;
+}
+
+/*
  * Given a postgres schema name, this returns a list of two elements: the first
  * is the DuckDB database name and the second is the duckdb schema name. These
  * are not escaped yet.

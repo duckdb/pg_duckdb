@@ -7542,35 +7542,22 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		if (attnum > colinfo->num_cols)
 			elog(ERROR, "invalid attnum %d for relation \"%s\"",
 				 attnum, rte->eref->aliasname);
-		if (pgduckdb_var_is_duckdb_row(var)) {
-			if (istoplevel) {
-				/* If the duckdb row is at the top level target list of a
-				 * select, then we want to generate r.*, to unpack all the
-				 * columns instead of returning a STRUCT from the query. */
-				attname = NULL;
-			} else {
-				/* In any other case, we want to simply use the alias of the
-				 * TargetEntry, without the column name that postgres gave to
-				 * it. Because even though according to the Postgres parser we
-				 * are referencing a column of type "duckdb.row", that column
-				 * won't actually exist in the DuckDB query.
-				 */
-				attname = refname;
-				refname = NULL;
-			}
-		} else {
-			attname = colinfo->colnames[attnum - 1];
 
-			/*
-			 * If we find a Var referencing a dropped column, it seems better to
-			 * print something (anything) than to fail.  In general this should
-			 * not happen, but it used to be possible for some cases involving
-			 * functions returning named composite types, and perhaps there are
-			 * still bugs out there.
-			 */
-			if (attname == NULL)
-				attname = "?dropped?column?";
+		if (pgduckdb_var_is_duckdb_row(var)) {
+			return pgduckdb_write_row_refname(context->buf, refname, istoplevel);
 		}
+
+		attname = colinfo->colnames[attnum - 1];
+
+		/*
+		 * If we find a Var referencing a dropped column, it seems better to
+		 * print something (anything) than to fail.  In general this should
+		 * not happen, but it used to be possible for some cases involving
+		 * functions returning named composite types, and perhaps there are
+		 * still bugs out there.
+		 */
+		if (attname == NULL)
+			attname = "?dropped?column?";
 	}
 	else
 	{
@@ -7588,7 +7575,7 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 	else
 	{
 		appendStringInfoChar(buf, '*');
-		if (istoplevel && !pgduckdb_var_is_duckdb_row(var))
+		if (istoplevel)
 			appendStringInfo(buf, "::%s",
 							 format_type_with_typemod(var->vartype,
 													  var->vartypmod));

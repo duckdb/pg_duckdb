@@ -26,5 +26,6 @@ bool pgduckdb_function_needs_subquery(Oid function_oid);
 int pgduckdb_show_type(Const *constval, int original_showtype);
 bool pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var, char *colname);
 SubscriptingRef *pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf);
+char *pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level);
 
 extern bool processed_targetlist;
