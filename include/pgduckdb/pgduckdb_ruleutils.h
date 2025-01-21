@@ -14,5 +14,7 @@ bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
 bool pgduckdb_target_list_contains_unresolved_type_or_row(List *target_list);
 Var *pgduckdb_duckdb_row_subscript_var(Expr *expr);
 List *pgduckdb_star_start_vars(List *target_list);
+bool pgduckdb_function_needs_subquery(Oid function_oid);
+int pgduckdb_show_type(Const *constval, int original_showtype);
 
 extern bool processed_targetlist;

@@ -10614,27 +10614,7 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		nargs++;
 	}
 
-	/*
-	 * iceberg_scan needs to be wrapped in an additianol subquery to resolve a
-	 * bug where aliasses on iceberg_scan are ignored:
-	 * https://github.com/duckdb/duckdb-iceberg/issues/44
-	 *
-	 * By wrapping the iceberg_scan call the alias is given to the subquery,
-	 * instead of th call. This subquery is easily optimized away by DuckDB,
-	 * because it doesn't do anything.
-	 *
-	 * This problem is also true for the "query" function, which we use when
-	 * creating materialized views and CTAS.
-	 * https://github.com/duckdb/duckdb/issues/15570#issuecomment-2598419474
-	 *
-	 * TODO: Probably check this in a bit more efficient way and move it to
-	 * pgduckdb_ruleutils.cpp
-	 */
-	char *duckdb_function_name = pgduckdb_function_name(funcoid);
-	bool function_needs_subquery = duckdb_function_name != NULL && (
-		strcmp(duckdb_function_name, "system.main.iceberg_scan") == 0
-		|| strcmp(duckdb_function_name, "system.main.query") == 0
-	);
+	bool function_needs_subquery = pgduckdb_function_needs_subquery(funcoid);
 	if (function_needs_subquery) {
 		appendStringInfoString(buf, "(FROM ");
 	}
@@ -11247,9 +11227,7 @@ get_const_expr(Const *constval, deparse_context *context, int showtype)
 	char	   *extval;
 	bool		needlabel = false;
 
-	if (pgduckdb_is_unresolved_type(constval->consttype)) {
-		showtype = -1;
-	}
+	showtype = pgduckdb_show_type(constval, showtype);
 
 	if (constval->constisnull)
 	{
@@ -12291,7 +12269,14 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		get_rte_alias(rte, varno, false, context);
 
 		if (pgduckdb_func_returns_duckdb_row(rtfunc1)) {
-			/* Don't print column aliases for functions that return a duckdb.row */
+			/*
+			 * We never want to print column aliases for functions that return
+			 * a duckdb.row. The common pattern is for people to not provide an
+			 * explicit column alias (i.e. "r" becomes "r(r)"). This obviously
+			 * is a naming collision and DuckDB resolves that in the opposite
+			 * way that we want. Never adding column aliases for duckdb.row
+			 * avoids this conflict.
+			 */
 		}
 		/* Print the column definitions or aliases, if needed */
 		else if (rtfunc1 && rtfunc1->funccolnames != NIL)

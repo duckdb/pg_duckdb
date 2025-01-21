@@ -185,6 +185,53 @@ pgduckdb_star_start_vars(List *target_list) {
 }
 
 /*
+ * iceberg_scan needs to be wrapped in an additianol subquery to resolve a
+ * bug where aliasses on iceberg_scan are ignored:
+ * https://github.com/duckdb/duckdb-iceberg/issues/44
+ *
+ * By wrapping the iceberg_scan call the alias is given to the subquery,
+ * instead of th call. This subquery is easily optimized away by DuckDB,
+ * because it doesn't do anything.
+ *
+ * This problem is also true for the "query" function, which we use when
+ * creating materialized views and CTAS.
+ * https://github.com/duckdb/duckdb/issues/15570#issuecomment-2598419474
+ *
+ * TODO: Probably check this in a bit more efficient way and move it to
+ * pgduckdb_ruleutils.cpp
+ */
+bool
+pgduckdb_function_needs_subquery(Oid function_oid) {
+	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
+		return false;
+	}
+
+	auto func_name = get_func_name(function_oid);
+	if (strcmp(func_name, "iceberg_scan") == 0) {
+		return true;
+	}
+
+	if (strcmp(func_name, "query") == 0) {
+		return true;
+	}
+	return false;
+}
+
+/*
+ * We never want to show the unresolved_type in DuckDB query. The
+ * unrosolved_type does not actually exist in DuckDB, we only use it to keep
+ * the Postgres parser happy. DuckDB can simply figure out the correct type
+ * itself without an explicit cast.
+ */
+int
+pgduckdb_show_type(Const *constval, int original_showtype) {
+	if (pgduckdb_is_unresolved_type(constval->consttype)) {
+		return -1;
+	}
+	return original_showtype;
+}
+
+/*
  * Given a postgres schema name, this returns a list of two elements: the first
  * is the DuckDB database name and the second is the duckdb schema name. These
  * are not escaped yet.
