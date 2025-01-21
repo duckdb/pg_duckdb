@@ -91,7 +91,11 @@ WrapQueryInDuckdbQueryCall(Query *query, List *target_list) {
 		ereport(ERROR,
 		        (errcode(ERRCODE_SYNTAX_ERROR), errmsg("BUG: pg_duckdb generated a command with multiple queries")));
 
+#if PG_VERSION_NUM >= 150000
 	return parse_analyze_fixedparams((RawStmt *)linitial(parsetree_list), buf->data, NULL, 0, NULL);
+#else
+	return parse_analyze((RawStmt *)linitial(parsetree_list), buf->data, NULL, 0, NULL);
+#endif
 }
 
 static void
