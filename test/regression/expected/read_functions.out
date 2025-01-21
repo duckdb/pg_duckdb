@@ -40,7 +40,7 @@ SELECT r['jsoncol'][1], r['arraycol'][2] FROM read_parquet('../../data/indexable
 SELECT jsoncol[1], arraycol[2] FROM (
     SELECT r['jsoncol'] jsoncol, r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
-);
+) q;
  jsoncol | arraycol 
 ---------+----------
  "d"     |       22
@@ -56,7 +56,7 @@ SELECT r['arraycol'][1:2] FROM read_parquet('../../data/indexable.parquet') r;
 SELECT arraycol[1:2] FROM (
     SELECT r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
-);
+) q;
  arraycol 
 ----------
  {11,22}
@@ -67,7 +67,7 @@ SELECT * FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
   prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
 -----------+--------------+-------------+--------------+-------------+---------+----------------
  something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
@@ -83,7 +83,7 @@ SELECT r FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
   prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
 -----------+--------------+-------------+--------------+-------------+---------+----------------
  something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
@@ -95,7 +95,7 @@ SELECT prefix, r FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
   prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
 -----------+--------------+-------------+--------------+-------------+---------+----------------
  something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
@@ -105,7 +105,7 @@ SELECT prefix, r, postfix FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
   prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     
 -----------+--------------+-------------+--------------+-------------+---------+----------------
  something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else
@@ -119,7 +119,7 @@ SELECT r, postfix FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
   prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     |    postfix     
 -----------+--------------+-------------+--------------+-------------+---------+----------------+----------------
  something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else | something else
@@ -130,7 +130,7 @@ SELECT postfix, r, prefix FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
     postfix     |  prefix   | sepal.length | sepal.width | petal.length | petal.width | variety |    postfix     |  prefix   
 ----------------+-----------+--------------+-------------+--------------+-------------+---------+----------------+-----------
  something else | something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  | something else | something
@@ -169,7 +169,7 @@ SELECT * FROM (
     FROM read_parquet('../../data/iris.parquet') r,
          read_parquet('../../data/unsigned_types.parquet') r2
     LIMIT 1
-);
+) q;
   prefix   | sepal.length | sepal.width | petal.length | petal.width | variety | utinyint | usmallint |  uinteger  |    postfix     
 -----------+--------------+-------------+--------------+-------------+---------+----------+-----------+------------+----------------
  something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  |      255 |     65535 | 4294967295 | something else
@@ -241,14 +241,14 @@ SELECT r['column00'] AS r FROM read_csv('../../data/web_page.csv') r limit 1;
 -- be executed. To avoid that we simply don't rename a subscript expression
 -- inside a subquery, and only do so in the outermost SELECT list (aka
 -- targetlist).
-SELECT * FROM (SELECT r['column00'] FROM read_csv('../../data/web_page.csv') r limit 1);
+SELECT * FROM (SELECT r['column00'] FROM read_csv('../../data/web_page.csv') r limit 1) q;
  r 
 ---
  1
 (1 row)
 
 -- If you give it a different alias then that alias is propegated though.
-SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.csv') r limit 1);
+SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.csv') r limit 1) q;
  col1 
 ------
     1

@@ -18,21 +18,21 @@ SELECT r['jsoncol'][1], r['arraycol'][2] FROM read_parquet('../../data/indexable
 SELECT jsoncol[1], arraycol[2] FROM (
     SELECT r['jsoncol'] jsoncol, r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
-);
+) q;
 
 -- And the same for slice subscripts
 SELECT r['arraycol'][1:2] FROM read_parquet('../../data/indexable.parquet') r;
 SELECT arraycol[1:2] FROM (
     SELECT r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
-);
+) q;
 
 -- Subqueries correctly expand *, in case of multiple columns.
 SELECT * FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
 
 -- NOTE: A single "r" is equivalent to a *. The prefix and postfix columns are
 -- not explicitely selected, but still show up in the result. This is
@@ -44,7 +44,7 @@ SELECT r FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
 
 -- ... but if you manually add the expected columns then they are merged into
 -- the new star expansion.
@@ -52,12 +52,12 @@ SELECT prefix, r FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
 SELECT prefix, r, postfix FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
 
 -- This requires the prefix columns to be there though. If the prefix columns
 -- are not there the postfix columns don't get merged into the new star
@@ -67,14 +67,14 @@ SELECT r, postfix FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
 
 -- If you swap them around, they will get duplicated though. For the
 SELECT postfix, r, prefix FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
     FROM read_parquet('../../data/iris.parquet') r
     LIMIT 1
-);
+) q;
 
 -- Joining two subqueries a single * works as expected.
 SELECT *
@@ -101,7 +101,7 @@ SELECT * FROM (
     FROM read_parquet('../../data/iris.parquet') r,
          read_parquet('../../data/unsigned_types.parquet') r2
     LIMIT 1
-);
+) q;
 
 -- read_csv
 
@@ -138,10 +138,10 @@ SELECT r['column00'] AS r FROM read_csv('../../data/web_page.csv') r limit 1;
 -- be executed. To avoid that we simply don't rename a subscript expression
 -- inside a subquery, and only do so in the outermost SELECT list (aka
 -- targetlist).
-SELECT * FROM (SELECT r['column00'] FROM read_csv('../../data/web_page.csv') r limit 1);
+SELECT * FROM (SELECT r['column00'] FROM read_csv('../../data/web_page.csv') r limit 1) q;
 
 -- If you give it a different alias then that alias is propegated though.
-SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.csv') r limit 1);
+SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.csv') r limit 1) q;
 
 -- Only simple string literals are supported as column names
 SELECT r[NULL] FROM read_csv('../../data/web_page.csv') r limit 1;
