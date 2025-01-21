@@ -29,6 +29,8 @@ extern "C" {
 #include "utils/snapmgr.h"
 
 #include "nodes/print.h"
+
+#include "pgduckdb/vendor/pg_list.hpp"
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
