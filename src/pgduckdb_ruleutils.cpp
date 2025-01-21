@@ -10,6 +10,7 @@ extern "C" {
 #include "commands/dbcommands.h"
 #include "nodes/nodeFuncs.h"
 #include "lib/stringinfo.h"
+#include "parser/parsetree.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -308,6 +309,33 @@ pgduckdb_show_type(Const *constval, int original_showtype) {
 		return -1;
 	}
 	return original_showtype;
+}
+
+bool
+pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var, char *colname) {
+	/* The first bit of this logic is taken from get_variable() */
+	int varno;
+	int varattno;
+
+	/*
+	 * If we have a syntactic referent for the Var, and we're working from a
+	 * parse tree, prefer to use the syntactic referent.  Otherwise, fall back
+	 * on the semantic referent.  (See comments in get_variable().)
+	 */
+	if (subscript_var->varnosyn > 0 && plan == NULL) {
+		varno = subscript_var->varnosyn;
+		varattno = subscript_var->varattnosyn;
+	} else {
+		varno = subscript_var->varno;
+		varattno = subscript_var->varattno;
+	}
+
+	RangeTblEntry *rte = rt_fetch(varno, rtable);
+
+	/* Custom code starts here */
+	char *original_column = strVal(list_nth(rte->eref->colnames, varattno - 1));
+
+	return strcmp(original_column, colname) != 0;
 }
 
 /*

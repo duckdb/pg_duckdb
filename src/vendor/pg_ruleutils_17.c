@@ -6115,46 +6115,29 @@ get_target_list(List *targetList, deparse_context *context,
 		 * This makes sure we don't add Postgres its bad default alias to the
 		 * duckdb.row type.
 		 */
-		bool duckdb_row_needs_as = !pgduckdb_var_is_duckdb_row(var);
+		bool duckdb_skip_as = pgduckdb_var_is_duckdb_row(var);
 
 		/*
-		 * For r['abc'] we don't want the column name to be r, but instead we
-		 * want it to be "abc". We can only to do this for the target list of
-		 * the outside most query though to make sure references to the column
-		 * name are still valid.
+		 * For r['abc'] expressions we don't want the column name to be r, but
+		 * instead we want it to be "abc". We can only to do this for the
+		 * target list of the outside most query though to make sure references
+		 * to the column name are still valid.
 		 */
-		Var *subscript_var = pgduckdb_duckdb_row_subscript_var(tle->expr);
-		if (outermost_targetlist && subscript_var) {
-			deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
-														subscript_var->varlevelsup);
-			int			varno;
-			int			varattno;
-
-			/*
-			* If we have a syntactic referent for the Var, and we're working from a
-			* parse tree, prefer to use the syntactic referent.  Otherwise, fall back
-			* on the semantic referent.  (Forcing use of the semantic referent when
-			* printing plan trees is a design choice that's perhaps more motivated by
-			* backwards compatibility than anything else.  But it does have the
-			* advantage of making plans more explicit.)
-			*/
-			if (subscript_var->varnosyn > 0 && dpns->plan == NULL)
-			{
-				varno = subscript_var->varnosyn;
-				varattno = subscript_var->varattnosyn;
+		if (!duckdb_skip_as && outermost_targetlist) {
+			Var *subscript_var = pgduckdb_duckdb_row_subscript_var(tle->expr);
+			if (subscript_var) {
+				/*
+				 * This cannot be moved to pgduckdb_ruleutils, because of
+				 * the reliance on the non-public deparse_namespace type.
+				 */
+				deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
+															subscript_var->varlevelsup);
+				duckdb_skip_as = !pgduckdb_subscript_has_custom_alias(dpns->plan, dpns->rtable, subscript_var, colname);
 			}
-			else
-			{
-				varno = subscript_var->varno;
-				varattno = subscript_var->varattno;
-			}
-			RangeTblEntry* rte = rt_fetch(varno, dpns->rtable);
-			char *original_column = strVal(list_nth(rte->eref->colnames, varattno - 1));
-			duckdb_row_needs_as = strcmp(original_column, colname) != 0;
 		}
 
 		/* Show AS unless the column's name is correct as-is */
-		if (colname && duckdb_row_needs_as)
+		if (colname && !duckdb_skip_as)
 		{
 			if (attname == NULL || strcmp(attname, colname) != 0)
 				appendStringInfo(&targetbuf, " AS %s", quote_identifier(colname));
