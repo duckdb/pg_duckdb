@@ -6137,7 +6137,7 @@ get_target_list(List *targetList, deparse_context *context,
 		}
 
 		/* Show AS unless the column's name is correct as-is */
-		if (colname && !duckdb_skip_as)
+		if (colname && !duckdb_skip_as)			/* resname could be NULL */
 		{
 			if (attname == NULL || strcmp(attname, colname) != 0)
 				appendStringInfo(&targetbuf, " AS %s", quote_identifier(colname));
