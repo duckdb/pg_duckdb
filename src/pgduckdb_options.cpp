@@ -395,10 +395,6 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 		elog(ERROR, "Assignment to duckdb.row is not supported");
 	}
 
-	if (isSlice) {
-		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
-	}
-
 	if (indirection == NIL) {
 		elog(ERROR, "Subscripting duckdb.row with an empty subscript is not supported");
 	}
@@ -407,17 +403,21 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 
 	// Transform each subscript expression
 	foreach_node(A_Indices, subscript, indirection) {
-		Assert(!subscript->is_slice);
 		Assert(subscript->uidx);
 
 		Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
-		int expr_location = exprLocation(subscript->uidx);
-		Oid subscript_expr_type = exprType(subscript_expr);
 
 		/* The first subscript needs to be a TEXT constant, since it should be
 		 * a column reference. But the subscripts after that can be anything,
 		 * DuckDB should interpret those. */
 		if (first) {
+			int expr_location = exprLocation(subscript->uidx);
+			Oid subscript_expr_type = exprType(subscript_expr);
+
+			if (subscript->lidx) {
+				elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+			}
+
 			Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
 			                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
 			if (!coerced_expr) {
@@ -440,6 +440,13 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 			first = false;
 		}
 		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, subscript_expr);
+		if (isSlice) {
+			Node *lower_subscript_expr = NULL;
+			if (subscript->uidx) {
+				lower_subscript_expr = transformExpr(pstate, subscript->lidx, pstate->p_expr_kind);
+			}
+			sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, lower_subscript_expr);
+		}
 	}
 
 	// Set the result type of the subscripting operation
@@ -459,7 +466,7 @@ DuckdbRowSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefS
 	elog(ERROR, "Subscripting duckdb.row is not supported in the Postgres Executor");
 }
 
-static SubscriptRoutines duckdb_subscript_routines = {
+static SubscriptRoutines duckdb_row_subscript_routines = {
     .transform = DuckdbRowSubscriptTransform,
     .exec_setup = DuckdbRowSubscriptExecSetup,
     .fetch_strict = false,
@@ -468,7 +475,78 @@ static SubscriptRoutines duckdb_subscript_routines = {
 };
 
 DECLARE_PG_FUNCTION(duckdb_row_subscript) {
-	PG_RETURN_POINTER(&duckdb_subscript_routines);
+	PG_RETURN_POINTER(&duckdb_row_subscript_routines);
+}
+
+/*
+ * DuckdbUnresolvedTypeSubscriptTransform is called by the parser when a
+ * subscripting operation is performed on a duckdb.unresolved_type. All this
+ * does is parse ensre that any subscript on duckdb.unresolved_type returns an
+ * unrsolved type again.
+ */
+void
+DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate,
+                                       bool isSlice, bool isAssignment) {
+	/*
+	 * We need to populate our cache for some of the code below. Normally this
+	 * cache is populated at the start of our planner hook, but this function
+	 * is being called from the parser.
+	 */
+	if (!pgduckdb::IsExtensionRegistered()) {
+		elog(ERROR, "BUG: Using duckdb.unresolved_type but the pg_duckdb extension is not installed");
+	}
+
+	if (isAssignment) {
+		elog(ERROR, "Assignment to duckdb.unresolved_type is not supported");
+	}
+
+	if (indirection == NIL) {
+		elog(ERROR, "Subscripting duckdb.row with an empty subscript is not supported");
+	}
+
+	// Transform each subscript expression
+	foreach_node(A_Indices, subscript, indirection) {
+		Assert(subscript->uidx);
+
+		Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
+
+		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, subscript_expr);
+		if (isSlice) {
+			Node *lower_subscript_expr = NULL;
+			if (subscript->uidx) {
+				lower_subscript_expr = transformExpr(pstate, subscript->lidx, pstate->p_expr_kind);
+			}
+			sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, lower_subscript_expr);
+		}
+	}
+
+	// Set the result type of the subscripting operation
+	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
+	sbsref->reftypmod = -1;
+}
+
+/*
+ * DuckdbUnresolvedTypeSubscriptExecSetup is called by the executor when a
+ * subscripting operation is performed on a duckdb.unresolved_type. This should
+ * never happen, because any query that contains a duckdb.unresolved_type should
+ * automatically be use DuckDB execution.
+ */
+void
+DuckdbUnresolvedTypeSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
+                                       SubscriptExecSteps * /*exprstate*/) {
+	elog(ERROR, "Subscripting duckdb.unresolved_type is not supported in the Postgres Executor");
+}
+
+static SubscriptRoutines duckdb_unresolved_type_subscript_routines = {
+    .transform = DuckdbUnresolvedTypeSubscriptTransform,
+    .exec_setup = DuckdbUnresolvedTypeSubscriptExecSetup,
+    .fetch_strict = false,
+    .fetch_leakproof = true,
+    .store_leakproof = true,
+};
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_subscript) {
+	PG_RETURN_POINTER(&duckdb_unresolved_type_subscript_routines);
 }
 
 DECLARE_PG_FUNCTION(duckdb_row_in) {

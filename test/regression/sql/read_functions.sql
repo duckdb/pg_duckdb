@@ -11,8 +11,21 @@ SELECT r['sepal.length'], r['file_row_number'], r['filename']
     FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true) r
     ORDER BY r['sepal.length']  LIMIT 5;
 
--- Supports subscripts
+-- Further subscripting is supported on duckdb.row
 SELECT r['jsoncol'][1], r['arraycol'][2] FROM read_parquet('../../data/indexable.parquet') r;
+
+-- And not just on duckdb.row, but also on duckdb.unresolved_type (the parenth
+SELECT jsoncol[1], arraycol[2] FROM (
+    SELECT r['jsoncol'] jsoncol, r['arraycol'] arraycol
+    FROM read_parquet('../../data/indexable.parquet') r
+);
+
+-- And the same for slice subscripts
+SELECT r['arraycol'][1:2] FROM read_parquet('../../data/indexable.parquet') r;
+SELECT arraycol[1:2] FROM (
+    SELECT r['arraycol'] arraycol
+    FROM read_parquet('../../data/indexable.parquet') r
+);
 
 -- Subqueries correctly expand *, in case of multiple columns.
 SELECT * FROM (
@@ -134,6 +147,7 @@ SELECT * FROM (SELECT r['column00'] AS col1 FROM read_csv('../../data/web_page.c
 SELECT r[NULL] FROM read_csv('../../data/web_page.csv') r limit 1;
 SELECT r[123] FROM read_csv('../../data/web_page.csv') r limit 1;
 SELECT r[3.14] FROM read_csv('../../data/web_page.csv') r limit 1;
+SELECT r['abc':'abc'] FROM read_csv('../../data/web_page.csv') r limit 1;
 SELECT r[q.col]
 FROM
     read_csv('../../data/web_page.csv') r,

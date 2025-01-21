@@ -30,10 +30,12 @@ CREATE TYPE duckdb.row (
 
 CREATE FUNCTION duckdb.unresolved_type_in(cstring) RETURNS duckdb.unresolved_type AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_in' LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION duckdb.unresolved_type_out(duckdb.unresolved_type) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_out' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.unresolved_type_subscript(internal) RETURNS internal AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_subscript' LANGUAGE C IMMUTABLE STRICT;
 CREATE TYPE duckdb.unresolved_type (
     INTERNALLENGTH = VARIABLE,
     INPUT = duckdb.unresolved_type_in,
-    OUTPUT = duckdb.unresolved_type_out
+    OUTPUT = duckdb.unresolved_type_out,
+    SUBSCRIPT = duckdb.unresolved_type_subscript
 );
 
 -- Dummy functions for binary operators with unresolved type on the lefthand

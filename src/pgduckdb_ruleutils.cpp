@@ -356,7 +356,6 @@ pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf) {
 	}
 
 	Assert(sbsref->refupperindexpr);
-	Assert(!sbsref->reflowerindexpr);
 	Oid typoutput;
 	bool typIsVarlena;
 	Const *constval = castNode(Const, linitial(sbsref->refupperindexpr));
@@ -375,6 +374,9 @@ pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf) {
 	SubscriptingRef *shorter_sbsref = (SubscriptingRef *)copyObjectImpl(sbsref);
 	/* strip the first subscript from the list */
 	shorter_sbsref->refupperindexpr = list_delete_first(shorter_sbsref->refupperindexpr);
+	if (shorter_sbsref->reflowerindexpr) {
+		shorter_sbsref->reflowerindexpr = list_delete_first(shorter_sbsref->reflowerindexpr);
+	}
 	return shorter_sbsref;
 }
 
