@@ -9071,41 +9071,11 @@ get_rule_expr(Node *node, deparse_context *context,
 					appendStringInfoString(buf, " := ");
 					get_rule_expr(refassgnexpr, context, showimplicit);
 				}
-				else if (IsA(sbsref->refexpr, Var) && pgduckdb_var_is_duckdb_row((Var*) sbsref->refexpr)) {
-					/* Subscript expressions into the duckdb.row type we want to
-					 * change to regular column references in the DuckDB query.
-					 * The main reason we do this is so that DuckDB generates
-					 * nicer column names, i.e. without the square brackets:
-					 * "mycolumn" instead of "r['mycolumn']"
-					 */
-					Assert(sbsref->refupperindexpr);
-					Assert(!sbsref->reflowerindexpr);
-					Oid			typoutput;
-					bool		typIsVarlena;
-					Const *constval = castNode(Const, linitial(sbsref->refupperindexpr));
-					getTypeOutputInfo(constval->consttype,
-									&typoutput, &typIsVarlena);
-
-					char *extval = OidOutputFunctionCall(typoutput, constval->constvalue);
-
-					appendStringInfo(context->buf, ".%s", quote_identifier(extval));
-
-					if (list_length(sbsref->refupperindexpr) > 1) {
-						/*
-						 * If there are any additional subscript expressions we
-						 * should output them. Subscripts can be used in duckdb
-						 * to index into arrays or json objects.
-						 */
-						SubscriptingRef *shorter_sbsref = copyObject(sbsref);
-						/* strip the first subscript from the list */
-						shorter_sbsref->refupperindexpr = list_delete_first(shorter_sbsref->refupperindexpr);
-						printSubscripts(shorter_sbsref, context);
-					}
-				}
 				else
 				{
+					SubscriptingRef *new_sbsref = pgduckdb_strip_first_subscript(sbsref, context->buf);
 					/* Just an ordinary container fetch, so print subscripts */
-					printSubscripts(sbsref, context);
+					printSubscripts(new_sbsref, context);
 				}
 			}
 			break;

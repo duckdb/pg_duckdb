@@ -22,6 +22,7 @@ extern "C" {
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
+#include "pgduckdb/vendor/pg_list.hpp"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -336,6 +337,45 @@ pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var
 	char *original_column = strVal(list_nth(rte->eref->colnames, varattno - 1));
 
 	return strcmp(original_column, colname) != 0;
+}
+
+/*
+ * Subscript expressions that index into the duckdb.row type need to be changed
+ * to regular column references in the DuckDB query. The main reason we do this
+ * is so that DuckDB generates nicer column names, i.e. without the square
+ * brackets: "mycolumn" instead of "r['mycolumn']"
+ */
+SubscriptingRef *
+pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf) {
+	if (!IsA(sbsref->refexpr, Var)) {
+		return sbsref;
+	}
+
+	if (!pgduckdb_var_is_duckdb_row((Var *)sbsref->refexpr)) {
+		return sbsref;
+	}
+
+	Assert(sbsref->refupperindexpr);
+	Assert(!sbsref->reflowerindexpr);
+	Oid typoutput;
+	bool typIsVarlena;
+	Const *constval = castNode(Const, linitial(sbsref->refupperindexpr));
+	getTypeOutputInfo(constval->consttype, &typoutput, &typIsVarlena);
+
+	char *extval = OidOutputFunctionCall(typoutput, constval->constvalue);
+
+	appendStringInfo(buf, ".%s", quote_identifier(extval));
+
+	/*
+	 * If there are any additional subscript expressions we should output them.
+	 * Subscripts can be used in duckdb to index into arrays or json objects.
+	 * It's fine if this results in an empty List, because printSubscripts
+	 * handles that case correctly.
+	 */
+	SubscriptingRef *shorter_sbsref = (SubscriptingRef *)copyObjectImpl(sbsref);
+	/* strip the first subscript from the list */
+	shorter_sbsref->refupperindexpr = list_delete_first(shorter_sbsref->refupperindexpr);
+	return shorter_sbsref;
 }
 
 /*

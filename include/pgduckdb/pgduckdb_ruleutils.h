@@ -25,5 +25,6 @@ bool pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tl
 bool pgduckdb_function_needs_subquery(Oid function_oid);
 int pgduckdb_show_type(Const *constval, int original_showtype);
 bool pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var, char *colname);
+SubscriptingRef *pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf);
 
 extern bool processed_targetlist;
