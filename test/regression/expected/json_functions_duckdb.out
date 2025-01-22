@@ -200,17 +200,65 @@ SELECT json_valid('{"name": "John", "age": 30, "skills": ["SQL", "Python"]}'::JS
 -- Expected Output:
 -- true (since the JSON is well-formed)
 -- Test 2: Invalid JSON
-SELECT json_valid('{"name": "John", "age": 30, "skills": ["SQL", "Python"::JSON) AS is_valid;
-
--- Expected Output:
--- false (since the JSON is not well-formed; missing closing bracket in the array)
-
--- </JSON_VALID>
-ERROR:  unterminated quoted string at or near "'{"name": "John", "age": 30, "skills": ["SQL", "Python"::JSON) AS is_valid;
-
--- Expected Output:
--- false (since the JSON is not well-formed; missing closing bracket in the array)
-
--- </JSON_VALID>"
+SELECT json_valid('{"name": "John", "age": 30, "skills": ["SQL", "Python"'::JSON) AS is_valid;
+ERROR:  invalid input syntax for type json
 LINE 1: SELECT json_valid('{"name": "John", "age": 30, "skills": ["S...
                           ^
+DETAIL:  The input string ended unexpectedly.
+CONTEXT:  JSON data, line 1: ...e": "John", "age": 30, "skills": ["SQL", "Python"
+-- Expected Output:
+-- false
+-- </JSON_VALID>
+-- <JSON>
+    SELECT json('{
+        "name": "John",
+        "age": 30,
+        "skills": ["SQL", "Python"]
+    }'::JSON) AS minified_json;
+                   minified_json                    
+----------------------------------------------------
+ {"name":"John","age":30,"skills":["SQL","Python"]}
+(1 row)
+
+-- </JSON>
+CREATE TABLE example1 (k VARCHAR, v INTEGER);
+INSERT INTO example1 VALUES ('duck', 42), ('goose', 7);
+-- <JSON_GROUP_ARRAY>
+SELECT json_group_array(v) FROM example1;
+ json_group_array 
+------------------
+ [42,7]
+(1 row)
+
+-- </JSON_GROUP_ARRAY>
+-- <JSON_GROUP_OBJECT>
+SELECT json_group_object(k, v) FROM example1;
+ERROR:  function json_group_object(character varying, integer) does not exist
+LINE 1: SELECT json_group_object(k, v) FROM example1;
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+-- </JSON_GROUP_OBJECT>
+-- <JSON_GROUP_STRUCTURE>
+CREATE TABLE example2 (j JSON);
+INSERT INTO example2 VALUES
+    ('{"family": "anatidae", "species": ["duck", "goose"], "coolness": 42.42}'),
+    ('{"family": "canidae", "species": ["labrador", "bulldog"], "hair": true}');
+SELECT json_group_structure(j) FROM example2;
+                              json_group_structure                               
+---------------------------------------------------------------------------------
+ {"family":"VARCHAR","species":["VARCHAR"],"coolness":"DOUBLE","hair":"BOOLEAN"}
+(1 row)
+
+-- </JSON_GROUP_STRUCTURE>
+-- STRUCTURE no supported in postgres
+-- CREATE TABLE example (j JSON);
+-- INSERT INTO example VALUES
+--     ('{"family": "anatidae", "species": ["duck", "goose"], "coolness": 42.42}'),
+--     ('{"family": "canidae", "species": ["labrador", "bulldog"], "hair": true}');
+-- -- <JSON_TRANSFORM>
+-- SELECT json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') FROM example;
+-- SELECT json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 2)"}') FROM example;
+-- -- </JSON_TRANSFORM>
+-- -- <JSON_TRANSFORM_STRICT>
+-- SELECT json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') FROM example;
+-- -- </JSON_TRANSFORM_STRICT>
