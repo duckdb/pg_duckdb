@@ -111,7 +111,7 @@ BuildDuckdbOnlyFunctions() {
 	 */
 	const char *function_names[] = {"read_parquet",      "read_csv",     "iceberg_scan",       "iceberg_metadata",
 	                                "iceberg_snapshots", "delta_scan",   "read_json",          "approx_count_distinct",
-	                                "json_exists",       "json_extract", "json_extract_string"};
+	                                "json_exists",       "json_extract", "json_extract_string", "json_array_length", "json_contains", "json_keys", "json_structure", "json_type", "json_valid", "json", "json_group_array", "json_group_object", "json_group_structure", "json_transform", "from_json", "json_transform_strict", "from_json_strict"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
