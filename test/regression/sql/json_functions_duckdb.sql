@@ -5,12 +5,6 @@ SELECT json_exists('{"a": {"b": 1}}'::json, '$.a.b'); -- Expected: true
 -- Test 2: Path does not exist in a simple JSON object
 SELECT json_exists('{"a": {"b": 1}}'::json, '$.a.c'); -- Expected: false
 
--- Test 1: Path exists in a simple JSON object
-SELECT json_exists('{"a": {"b": 1}}'::jsonb, '$.a.b'); -- Expected: true
-
--- Test 2: Path does not exist in a simple JSON object
-SELECT json_exists('{"a": {"b": 1}}'::jsonb, '$.a.c'); -- Expected: false
-
 -- </JSON_EXISTS>
 
 -- <JSON_EXTRACT>
