@@ -19,7 +19,7 @@ CREATE DOMAIN pg_catalog.blob AS bytea;
 COMMENT ON DOMAIN pg_catalog.blob IS 'The DuckDB BLOB alias for BYTEA';
 
 -- json_exists
-CREATE FUNCTION @extschema@.json_exists(json json , path VARCHAR)
+CREATE FUNCTION @extschema@.json_exists("json" json , path VARCHAR)
 RETURNS boolean LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -30,7 +30,7 @@ END;
 $func$;
 
 -- json_extract
-CREATE FUNCTION @extschema@.json_extract(json json, path VARCHAR)
+CREATE FUNCTION @extschema@.json_extract("json" json, path VARCHAR)
 RETURNS JSON LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -41,7 +41,7 @@ END;
 $func$;
 
 -- json_extract with path list
-CREATE FUNCTION @extschema@.json_extract(json json, path VARCHAR[])
+CREATE FUNCTION @extschema@.json_extract("json" json, path VARCHAR[])
 RETURNS JSON LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -52,7 +52,7 @@ END;
 $func$;
 
 -- json_extract_string
-CREATE FUNCTION @extschema@.json_extract_string(json json, path VARCHAR)
+CREATE FUNCTION @extschema@.json_extract_string("json" json, path VARCHAR)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -63,7 +63,7 @@ END;
 $func$;
 
 -- json_extract_string
-CREATE FUNCTION @extschema@.json_extract_string(json json, path VARCHAR[])
+CREATE FUNCTION @extschema@.json_extract_string("json" json, path VARCHAR[])
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -74,7 +74,7 @@ END;
 $func$;
 
 -- json_value
-CREATE FUNCTION @extschema@.json_value(json json, path VARCHAR)
+CREATE FUNCTION @extschema@.json_value("json" json, path VARCHAR)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -85,7 +85,7 @@ END;
 $func$;
 
 -- json_array_length
-CREATE FUNCTION @extschema@.json_array_length(json json, path_input VARCHAR)
+CREATE FUNCTION @extschema@.json_array_length("json" json, path_input VARCHAR)
 RETURNS integer LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -107,7 +107,7 @@ END;
 $func$;
 
 -- json_keys
-CREATE FUNCTION @extschema@.json_keys(json json, path VARCHAR DEFAULT NULL)
+CREATE FUNCTION @extschema@.json_keys("json" json, path VARCHAR DEFAULT NULL)
 RETURNS SETOF VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -118,7 +118,7 @@ END;
 $func$;
 
 -- json_structure
-CREATE FUNCTION @extschema@.json_structure(json json)
+CREATE FUNCTION @extschema@.json_structure("json" json)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -129,7 +129,7 @@ END;
 $func$;
 
 -- json_type
-CREATE FUNCTION @extschema@.json_type(json json, path VARCHAR[] DEFAULT NULL)
+CREATE FUNCTION @extschema@.json_type("json" json, path VARCHAR[] DEFAULT NULL)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -140,7 +140,7 @@ END;
 $func$;
 
 -- json_valid
-CREATE FUNCTION @extschema@.json_valid(json json)
+CREATE FUNCTION @extschema@.json_valid("json" json)
 RETURNS boolean LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -151,7 +151,7 @@ END;
 $func$;
 
 -- json
-CREATE FUNCTION @extschema@.json(json json)
+CREATE FUNCTION @extschema@.json("json" json)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -184,7 +184,7 @@ END;
 $func$;
 
 -- json_group_structure
-CREATE FUNCTION @extschema@.json_group_structure(json json)
+CREATE FUNCTION @extschema@.json_group_structure("json" json)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -195,7 +195,7 @@ END;
 $func$;
 
 -- json_transform
-CREATE FUNCTION @extschema@.json_transform(json json, structure VARCHAR)
+CREATE FUNCTION @extschema@.json_transform("json" json, structure VARCHAR)
 RETURNS json LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -206,7 +206,7 @@ END;
 $func$;
 
 -- from_json
-CREATE FUNCTION @extschema@.from_json(json json, structure VARCHAR)
+CREATE FUNCTION @extschema@.from_json("json" json, structure VARCHAR)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -217,7 +217,7 @@ END;
 $func$;
 
 -- json_transform_strict
-CREATE FUNCTION @extschema@.json_transform_strict(json json, structure VARCHAR)
+CREATE FUNCTION @extschema@.json_transform_strict("json" json, structure VARCHAR)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
@@ -229,7 +229,7 @@ $func$;
 
 
 -- from_json_strict
-CREATE FUNCTION @extschema@.from_json_strict(json json, structure VARCHAR)
+CREATE FUNCTION @extschema@.from_json_strict("json" json, structure VARCHAR)
 RETURNS VARCHAR LANGUAGE 'plpgsql'
 SET search_path = pg_catalog, pg_temp
 AS
