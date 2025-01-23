@@ -6,15 +6,79 @@
 namespace duckdb {
 
 class CachedFileHandle;
-class LocalFileSystem;
+
+class LocalCacheFileSystem: public LocalFileSystem {
+
+public:
+	LocalCacheFileSystem(const std::string &_cache_file_directory) : cache_file_directory(_cache_file_directory) {
+		// TODO: Should we forbid symlinks for cache_file_directory? Or have a more complex check?
+	}
+
+	std::string GetName() const override {
+		return "LocalCacheFileSystem";
+	}
+
+	unique_ptr<FileHandle> OpenFile(const string &file_name, FileOpenFlags flags,
+	                                optional_ptr<FileOpener> opener = nullptr) override {
+		if (file_name.find("..") != string::npos || file_name.find("/") != string::npos) {
+			throw PermissionException("Must provide a file name, not a path. Got: '", file_name, "'");
+
+		}
+
+		std::ostringstream oss;
+		oss << cache_file_directory << "/" << file_name;
+		return LocalFileSystem::OpenFile(oss.str(), flags, opener);
+	}
+
+	void AssertSameCacheDir(const string &other_dir) {
+		if (other_dir != cache_file_directory) {
+			throw PermissionException("BUG: expected cache directory to be '", cache_file_directory, "' but got '", other_dir, "'");
+		}
+	}
+
+#define LOCAL_FILE_SYSTEM_METHOD(method_name) \
+	method_name(const string &path, optional_ptr<FileOpener> opener = nullptr) override { \
+		throw PermissionException("LocalCacheFileSystem cannot run " #method_name " on '", path, "'"); \
+	}
+
+	LOCAL_FILE_SYSTEM_METHOD(bool DirectoryExists)
+	LOCAL_FILE_SYSTEM_METHOD(void CreateDirectory)
+	LOCAL_FILE_SYSTEM_METHOD(void RemoveDirectory)
+	LOCAL_FILE_SYSTEM_METHOD(bool FileExists)
+	LOCAL_FILE_SYSTEM_METHOD(bool IsPipe)
+	LOCAL_FILE_SYSTEM_METHOD(void RemoveFile)
+
+	bool ListFiles(const string &directory, const std::function<void(const string &, bool)> &,
+	               FileOpener *opener = nullptr) override {
+		throw PermissionException("LocalCacheFileSystem cannot run ListFiles on '", directory, "'");
+	}
+
+	void MoveFile(const string &source, const string &target, optional_ptr<FileOpener> opener = nullptr) override {
+		throw PermissionException("LocalCacheFileSystem cannot run MoveFile on '", source, "' to '", target, "'");
+	}
+
+	vector<string> Glob(const string &path, FileOpener *opener = nullptr) override {
+		throw PermissionException("LocalCacheFileSystem cannot run Glob on '", path, "'");
+	}
+
+	bool CanHandleFile(const string &fpath) override {
+		throw PermissionException("LocalCacheFileSystem cannot run CanHandleFile on '", fpath, "'");
+	}
+
+	static bool IsPrivateFile(const string &path_p, FileOpener *opener) {
+		throw PermissionException("LocalCacheFileSystem cannot run IsPrivateFile on '", path_p, "'");
+	}
+private:
+	std::string cache_file_directory;
+};
+
 
 //! Represents a file that is intended to be fully downloaded, then used in parallel by multiple threads
 class CachedFile : public enable_shared_from_this<CachedFile> {
 	friend class CachedFileHandle;
 
 public:
-	CachedFile(const string &cache_dir, FileSystem &fs, const std::string &key, bool cache_file);
-	~CachedFile();
+	CachedFile(LocalCacheFileSystem &fs, const std::string &key, bool cache_file);
 
 	unique_ptr<CachedFileHandle> GetHandle() {
 		auto this_ptr = shared_from_this();
@@ -26,13 +90,11 @@ public:
 	}
 
 private:
-	void GetDirectoryCacheLock(const string &cache_dir);
+	void GetDirectoryCacheLock();
 	void ReleaseDirectoryCacheLock();
 
-private:
-	string cache_directory;
 	// FileSystem
-	FileSystem &fs;
+	LocalCacheFileSystem &fs;
 	// File name
 	std::string file_name;
 	// Cache file FileDescriptor
@@ -80,13 +142,6 @@ private:
 	shared_ptr<CachedFile> file;
 };
 
-class LocalCacheFileSystem: public LocalFileSystem {
-	// TODO: we could lock down the LocalFileSystem to only allow path that are in the cache directory
-	std::string GetName() const override {
-		return "LocalCacheFileSystem";
-	}
-};
-
 class HTTPFileCache : public ClientContextState {
 public:
 	explicit HTTPFileCache(ClientContext &context) {
@@ -97,10 +152,15 @@ public:
 	shared_ptr<CachedFile> GetCachedFile(const string &cache_dir, const string &key, bool create_cache);
 
 private:
-	LocalCacheFileSystem cache_fs;
+	LocalCacheFileSystem& GetFS(const string &cache_dir);
+
+	unique_ptr<LocalCacheFileSystem> cached_fs;
 
 	//! Database Instance
 	shared_ptr<DatabaseInstance> db;
+
+	//! Mutex to lock when getting the cached fs (Parallel Only)
+	mutex cached_fs_mutex;
 	//! Mutex to lock when getting the cached file (Parallel Only)
 	mutex cached_files_mutex;
 	//! In case of fully downloading the file, the cached files of this query
