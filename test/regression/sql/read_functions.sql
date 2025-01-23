@@ -26,6 +26,11 @@ SELECT arraycol[1:2] FROM (
     SELECT r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
 ) q;
+SELECT r['arraycol'][:] FROM read_parquet('../../data/indexable.parquet') r;
+SELECT arraycol[:] FROM (
+    SELECT r['arraycol'] arraycol
+    FROM read_parquet('../../data/indexable.parquet') r
+) q;
 
 -- Subqueries correctly expand *, in case of multiple columns.
 SELECT * FROM (
@@ -103,6 +108,9 @@ SELECT * FROM (
     LIMIT 1
 ) q;
 
+-- We show a hint for the new syntax when someone uses the old syntax.
+SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT);
+
 -- read_csv
 
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
@@ -148,6 +156,7 @@ SELECT r[NULL] FROM read_csv('../../data/web_page.csv') r limit 1;
 SELECT r[123] FROM read_csv('../../data/web_page.csv') r limit 1;
 SELECT r[3.14] FROM read_csv('../../data/web_page.csv') r limit 1;
 SELECT r['abc':'abc'] FROM read_csv('../../data/web_page.csv') r limit 1;
+SELECT r[:] FROM read_csv('../../data/web_page.csv') r limit 1;
 SELECT r[q.col]
 FROM
     read_csv('../../data/web_page.csv') r,

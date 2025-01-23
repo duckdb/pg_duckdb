@@ -375,6 +375,79 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 	PG_RETURN_BOOL(true);
 }
 
+Node *
+CoerceRowSubscriptToText(struct ParseState *pstate, A_Indices *subscript) {
+	if (!subscript->uidx) {
+		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+	}
+
+	Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
+	int expr_location = exprLocation(subscript->uidx);
+	Oid subscript_expr_type = exprType(subscript_expr);
+
+	if (subscript->lidx) {
+		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+	}
+
+	Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
+	                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
+	if (!coerced_expr) {
+		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must have text type"),
+		                parser_errposition(pstate, expr_location)));
+	}
+
+	if (!IsA(subscript_expr, Const)) {
+		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must be a constant"),
+		                parser_errposition(pstate, expr_location)));
+	}
+
+	Const *subscript_const = castNode(Const, subscript_expr);
+	if (subscript_const->constisnull) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("duckdb.row subscript cannot be NULL"),
+		                parser_errposition(pstate, expr_location)));
+	}
+
+	return coerced_expr;
+}
+
+/*
+ * In Postgres all index operations in a row ar all slices or all plain
+ * index operations. If you mix them, all are converted to slices.
+ * There's no difference in representation possible between
+ * "col[1:2][1]" and "col[1:2][1:]". If you want this seperation you
+ * need to use parenthesis to seperate: "(col[1:2])[1]"
+ * This might seem like fairly strange behaviour, but Postgres uses
+ * this to be able to slice in multi-dimensional arrays and thtis
+ * behaviour is documented here:
+ * https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING
+ *
+ * This is different from DuckDB, but there's not much we can do about
+ * that. So we'll have this same behaviour by, which means we need to always
+ * add the lower subscript to the slice. The lower subscript will be NULL in
+ * that case.
+ *
+ * See also comments on SubscriptingRef in nodes/subscripting.h
+ */
+void
+AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_Indices *subscript, bool isSlice) {
+	Assert(isSlice || subscript->uidx);
+
+	Node *upper_subscript_expr = NULL;
+	if (subscript->uidx) {
+		upper_subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
+	}
+
+	sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, upper_subscript_expr);
+
+	if (isSlice) {
+		Node *lower_subscript_expr = NULL;
+		if (subscript->uidx) {
+			lower_subscript_expr = transformExpr(pstate, subscript->lidx, pstate->p_expr_kind);
+		}
+		sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, lower_subscript_expr);
+	}
+}
+
 /*
  * DuckdbRowSubscriptTransform is called by the parser when a subscripting
  * operation is performed on a duckdb.row. It has two main puprposes:
@@ -405,50 +478,19 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 
 	// Transform each subscript expression
 	foreach_node(A_Indices, subscript, indirection) {
-		Assert(subscript->uidx);
-
-		Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
-
 		/* The first subscript needs to be a TEXT constant, since it should be
 		 * a column reference. But the subscripts after that can be anything,
 		 * DuckDB should interpret those. */
 		if (first) {
-			int expr_location = exprLocation(subscript->uidx);
-			Oid subscript_expr_type = exprType(subscript_expr);
-
-			if (subscript->lidx) {
-				elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+			sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, CoerceRowSubscriptToText(pstate, subscript));
+			if (isSlice) {
+				sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, NULL);
 			}
-
-			Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
-			                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
-			if (!coerced_expr) {
-				ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must have text type"),
-				                parser_errposition(pstate, expr_location)));
-			}
-
-			if (!IsA(subscript_expr, Const)) {
-				ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must be a constant"),
-				                parser_errposition(pstate, expr_location)));
-			}
-
-			Const *subscript_const = castNode(Const, subscript_expr);
-			if (subscript_const->constisnull) {
-				ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("duckdb.row subscript cannot be NULL"),
-				                parser_errposition(pstate, expr_location)));
-			}
-
-			subscript_expr = coerced_expr;
 			first = false;
+			continue;
 		}
-		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, subscript_expr);
-		if (isSlice) {
-			Node *lower_subscript_expr = NULL;
-			if (subscript->uidx) {
-				lower_subscript_expr = transformExpr(pstate, subscript->lidx, pstate->p_expr_kind);
-			}
-			sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, lower_subscript_expr);
-		}
+
+		AddSubscriptExpressions(sbsref, pstate, subscript, isSlice);
 	}
 
 	// Set the result type of the subscripting operation
@@ -508,18 +550,7 @@ DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List *indirectio
 
 	// Transform each subscript expression
 	foreach_node(A_Indices, subscript, indirection) {
-		Assert(subscript->uidx);
-
-		Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
-
-		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, subscript_expr);
-		if (isSlice) {
-			Node *lower_subscript_expr = NULL;
-			if (subscript->uidx) {
-				lower_subscript_expr = transformExpr(pstate, subscript->lidx, pstate->p_expr_kind);
-			}
-			sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, lower_subscript_expr);
-		}
+		AddSubscriptExpressions(sbsref, pstate, subscript, isSlice);
 	}
 
 	// Set the result type of the subscripting operation

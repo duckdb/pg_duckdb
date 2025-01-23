@@ -151,8 +151,6 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		}
 
 		/* NOTE: The below code is mostly copied from ExecCreateTableAs */
-		List *rewritten;
-
 		Query *query = (Query *)copyObjectImpl(original_query);
 		/*
 		 * Parse analysis was done already, but we still have to run the rule
@@ -160,11 +158,12 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		 * either came straight from the parser, or suitable locks were
 		 * acquired by plancache.c.
 		 */
-		rewritten = QueryRewrite(query);
+		List *rewritten = QueryRewrite(query);
 
 		/* SELECT should never rewrite to more or less than one SELECT query */
 		if (list_length(rewritten) != 1)
-			elog(ERROR, "unexpected rewrite result for CREATE TABLE AS SELECT");
+			elog(ERROR, "unexpected rewrite result for CREATE TABLE AS SELECT, contains %d queries",
+			     list_length(rewritten));
 		query = linitial_node(Query, rewritten);
 		Assert(query->commandType == CMD_SELECT);
 
