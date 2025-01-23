@@ -22,7 +22,6 @@ public:
 	                                optional_ptr<FileOpener> opener = nullptr) override {
 		if (file_name.find("..") != string::npos || file_name.find("/") != string::npos) {
 			throw PermissionException("Must provide a file name, not a path. Got: '", file_name, "'");
-
 		}
 
 		std::ostringstream oss;
