@@ -97,7 +97,8 @@ shared_ptr<CachedFile> HTTPFileCache::GetCachedFile(const string &cache_dir, con
 	if (it != cached_files.end()) {
 		return it->second;
 	}
-	auto cache_entry = make_shared_ptr<CachedFile>(cache_dir, db->GetFileSystem(), key, cache_file);
+
+	auto cache_entry = make_shared_ptr<CachedFile>(cache_dir, cache_fs, key, cache_file);
 	if (cache_entry->Initialized() || cache_file) {
 		cached_files[key] = cache_entry;
 		return cache_entry;

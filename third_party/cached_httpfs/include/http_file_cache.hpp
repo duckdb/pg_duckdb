@@ -1,10 +1,12 @@
 #pragma once
 
 #include "duckdb/main/client_data.hpp"
+#include "duckdb/common/local_file_system.hpp"
 
 namespace duckdb {
 
 class CachedFileHandle;
+class LocalFileSystem;
 
 //! Represents a file that is intended to be fully downloaded, then used in parallel by multiple threads
 class CachedFile : public enable_shared_from_this<CachedFile> {
@@ -78,6 +80,12 @@ private:
 	shared_ptr<CachedFile> file;
 };
 
+class LocalCacheFileSystem: public LocalFileSystem {
+	std::string GetName() const override {
+		return "LocalCacheFileSystem";
+	}
+};
+
 class HTTPFileCache : public ClientContextState {
 public:
 	explicit HTTPFileCache(ClientContext &context) {
@@ -88,6 +96,8 @@ public:
 	shared_ptr<CachedFile> GetCachedFile(const string &cache_dir, const string &key, bool create_cache);
 
 private:
+	LocalCacheFileSystem cache_fs;
+
 	//! Database Instance
 	shared_ptr<DatabaseInstance> db;
 	//! Mutex to lock when getting the cached file (Parallel Only)
