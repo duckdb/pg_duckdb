@@ -2,8 +2,10 @@
 
 namespace duckdb {
 
-CachedFile::CachedFile(LocalCacheFileSystem &_fs, const string &key, bool cache_file) : fs(_fs), file_name(key) {
-	GetDirectoryCacheLock();
+CachedFile::CachedFile(const string &cache_dir, FileSystem &fs, const string &key, bool cache_file) : cache_directory(cache_dir), fs(fs) {
+	file_name = cache_dir + "/" + key;
+
+	GetDirectoryCacheLock(cache_dir);
 
 	FileOpenFlags flags =
 	    FileFlags::FILE_FLAGS_READ | FileFlags::FILE_FLAGS_NULL_IF_NOT_EXISTS | FileLockType::READ_LOCK;
@@ -19,22 +21,28 @@ CachedFile::CachedFile(LocalCacheFileSystem &_fs, const string &key, bool cache_
 	ReleaseDirectoryCacheLock();
 }
 
-void CachedFile::GetDirectoryCacheLock() {
-	constexpr const char* lock_file_name = ".lock";
+CachedFile::~CachedFile() {
+
+}
+
+void CachedFile::GetDirectoryCacheLock(const string &cache_dir) {
+	string lock_file = cache_dir + "/.lock";
 	FileOpenFlags flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE |
 	                      FileFlags::FILE_FLAGS_EXCLUSIVE_CREATE | FileFlags::FILE_FLAGS_NULL_IF_EXISTS |
 	                      FileLockType::WRITE_LOCK;
-	directory_lock_handle = fs.OpenFile(lock_file_name, flags);
+	directory_lock_handle = fs.OpenFile(lock_file, flags);
 	if (directory_lock_handle == nullptr) {
 		flags = FileFlags::FILE_FLAGS_WRITE | FileLockType::WRITE_LOCK;
-		directory_lock_handle = fs.OpenFile(lock_file_name, flags);
+		directory_lock_handle = fs.OpenFile(lock_file, flags);
 	}
 }
+
 
 void CachedFile::ReleaseDirectoryCacheLock() {
 	directory_lock_handle->Close();
 	directory_lock_handle.reset();
 }
+
 
 CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile> &file_p) {
 	file = file_p;
@@ -42,8 +50,9 @@ CachedFileHandle::CachedFileHandle(shared_ptr<CachedFile> &file_p) {
 
 void CachedFileHandle::WriteMetadata(const string &cache_key, const string &remote_path, idx_t total_size) {
 	D_ASSERT(!file->initialized);
+	string metadata_file_name = file->cache_directory + "/" + cache_key + ".meta";
 	FileOpenFlags flags = FileFlags::FILE_FLAGS_WRITE | FileFlags::FILE_FLAGS_FILE_CREATE | FileLockType::WRITE_LOCK;
-	auto handle = file->fs.OpenFile(cache_key + ".meta", flags);
+	auto handle = file->fs.OpenFile(metadata_file_name, flags);
 	auto cached_file_timestamp = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	string metadata_info = cache_key + "," + remote_path + "," + std::to_string(total_size) + "," + std::to_string(cached_file_timestamp);
 	handle->Write((void *)metadata_info.c_str(), metadata_info.length(), 0);
@@ -81,21 +90,6 @@ void CachedFileHandle::Read(void *buffer, idx_t length, idx_t offset) {
 	file->handle->Read((void *)buffer, length, offset);
 }
 
-LocalCacheFileSystem& HTTPFileCache::GetFS(const string &cache_dir) {
-	if (cached_fs) {
-		cached_fs->AssertSameCacheDir(cache_dir);
-		return *cached_fs;
-	}
-
-	{
-		lock_guard<mutex> lock(cached_fs_mutex);
-		if (!cached_fs) {
-			cached_fs = make_uniq<LocalCacheFileSystem>(cache_dir);
-		}
-	}
-	return HTTPFileCache::GetFS(cache_dir);
-}
-
 //! Get cache entry, create if not exists only if caching is enabled
 shared_ptr<CachedFile> HTTPFileCache::GetCachedFile(const string &cache_dir, const string &key, bool cache_file) {
 	lock_guard<mutex> lock(cached_files_mutex);
@@ -104,8 +98,7 @@ shared_ptr<CachedFile> HTTPFileCache::GetCachedFile(const string &cache_dir, con
 		return it->second;
 	}
 
-	auto& fs = GetFS(cache_dir);
-	auto cache_entry = make_shared_ptr<CachedFile>(fs, key, cache_file);
+	auto cache_entry = make_shared_ptr<CachedFile>(cache_dir, cache_fs, key, cache_file);
 	if (cache_entry->Initialized() || cache_file) {
 		cached_files[key] = cache_entry;
 		return cache_entry;
