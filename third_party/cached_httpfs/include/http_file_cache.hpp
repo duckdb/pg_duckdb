@@ -81,7 +81,6 @@ private:
 };
 
 class LocalCacheFileSystem: public LocalFileSystem {
-	// TODO: we could lock down the LocalFileSystem to only allow path that are in the cache directory
 	std::string GetName() const override {
 		return "LocalCacheFileSystem";
 	}
