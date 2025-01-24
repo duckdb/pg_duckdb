@@ -237,6 +237,8 @@ ConvertTimestampDatum(const duckdb::Value &value) {
 			// 1 s = 10^6 micro-sec
 			rawValue *= 1000000;
 			break;
+		default:
+			// Since we don't want to handle anything here
 	}
 	return rawValue - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
