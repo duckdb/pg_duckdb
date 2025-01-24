@@ -239,7 +239,7 @@ ConvertTimestampDatum(const duckdb::Value &value) {
 		break;
 	default:
 		// Since we don't want to handle anything here
-		rawValue = rawValue
+		rawValue = rawValue;
 	}
 	return rawValue - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
