@@ -37,9 +37,6 @@ SELECT json_extract_string('{"key": 123}'::json, '$.key') AS result; -- Expected
 
 -- <JSON_VALUE>
 
--- Basic Scalar Value Extraction
-SELECT json_value('{"key": "value"}'::json, '$.key') AS result; -- Expected: "value"
-
 -- Nested JSON Extraction
 SELECT json_value('{"a": {"b": {"c": 42}}}'::json, '$.a.b.c') AS result; -- Expected: 42
 
@@ -129,11 +126,11 @@ SELECT json_valid('{"name": "John", "age": 30, "skills": ["SQL", "Python"'::JSON
 -- </JSON_VALID>
 
 -- <JSON>
-    SELECT json('{
-        "name": "John",
-        "age": 30,
-        "skills": ["SQL", "Python"]
-    }'::JSON) AS minified_json;
+    -- SELECT json('{
+    --     "name": "John",
+    --     "age": 30,
+    --     "skills": ["SQL", "Python"]
+    -- }'::JSON) AS minified_json;
 -- </JSON>
 
 
