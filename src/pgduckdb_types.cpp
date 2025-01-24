@@ -224,21 +224,21 @@ ConvertTimestampDatum(const duckdb::Value &value) {
 	int64_t rawValue = value.GetValue<int64_t>();
 
 	// Handle specific Timestamp unit(sec, ms, ns) types
-	switch(value.type().id()){
-		case duckdb::LogicalType::TIMESTAMP_MS:
-			// 1 ms = 10^3 micro-sec
-			rawValue *= 1000;
-			break;
-		case duckdb::LogicalType::TIMESTAMP_NS:
-			// 1 ns = 10^-3 micro-sec
-			rawValue /= 1000;
-			break;
-		case duckdb::LogicalType::TIMESTAMP_S:
-			// 1 s = 10^6 micro-sec
-			rawValue *= 1000000;
-			break;
-		default:
-			// Since we don't want to handle anything here
+	switch (value.type().id()) {
+	case duckdb::LogicalType::TIMESTAMP_MS:
+		// 1 ms = 10^3 micro-sec
+		rawValue *= 1000;
+		break;
+	case duckdb::LogicalType::TIMESTAMP_NS:
+		// 1 ns = 10^-3 micro-sec
+		rawValue /= 1000;
+		break;
+	case duckdb::LogicalType::TIMESTAMP_S:
+		// 1 s = 10^6 micro-sec
+		rawValue *= 1000000;
+		break;
+	default:
+		// Since we don't want to handle anything here
 	}
 	return rawValue - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
