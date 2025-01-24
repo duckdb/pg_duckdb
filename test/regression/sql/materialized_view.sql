@@ -26,7 +26,7 @@ INSERT INTO t_csv VALUES (1,1),(2,2),(3,3);
 
 COPY t_csv TO :csv_file_path (FORMAT CSV, HEADER TRUE, DELIMITER ',');
 
-CREATE MATERIALIZED VIEW mv_csv AS SELECT * FROM read_csv(:csv_file_path) AS (a BIGINT);
+CREATE MATERIALIZED VIEW mv_csv AS SELECT * FROM read_csv(:csv_file_path);
 
 SELECT COUNT(*) FROM mv_csv;
 SELECT * FROM mv_csv;

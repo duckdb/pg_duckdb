@@ -47,7 +47,7 @@ INSERT INTO t_csv VALUES (1,1),(2,2),(3,3);
 \set pwd `pwd`
 \set csv_file_path '\'' :pwd '/tmp_check/t_csv.csv'  '\''
 COPY t_csv TO :csv_file_path (FORMAT CSV, HEADER TRUE, DELIMITER ',');
-CREATE MATERIALIZED VIEW mv_csv AS SELECT * FROM read_csv(:csv_file_path) AS (a BIGINT);
+CREATE MATERIALIZED VIEW mv_csv AS SELECT * FROM read_csv(:csv_file_path);
 SELECT COUNT(*) FROM mv_csv;
  count 
 -------
@@ -55,11 +55,11 @@ SELECT COUNT(*) FROM mv_csv;
 (1 row)
 
 SELECT * FROM mv_csv;
- a 
----
- 1
- 2
- 3
+ a | b 
+---+---
+ 1 | 1
+ 2 | 2
+ 3 | 3
 (3 rows)
 
 INSERT INTO t_csv VALUES (4,4);
@@ -72,12 +72,12 @@ SELECT COUNT(*) FROM mv_csv;
 (1 row)
 
 SELECT * FROM mv_csv;
- a 
----
- 1
- 2
- 3
- 4
+ a | b 
+---+---
+ 1 | 1
+ 2 | 2
+ 3 | 3
+ 4 | 4
 (4 rows)
 
 DROP MATERIALIZED VIEW mv_csv;

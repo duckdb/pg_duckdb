@@ -30,7 +30,6 @@ extern "C" {
 #include "utils/jsonb.h"
 }
 
-#include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 
 namespace pgduckdb {

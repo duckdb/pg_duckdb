@@ -46,6 +46,13 @@ COMPILER_FLAGS=-Wno-sign-compare -Wshadow -Wswitch -Wunused-parameter -Wunreacha
 
 override PG_CPPFLAGS += -Iinclude -isystem third_party/duckdb/src/include -isystem third_party/duckdb/third_party/re2 ${COMPILER_FLAGS}
 override PG_CXXFLAGS += -std=c++17 ${DUCKDB_BUILD_CXX_FLAGS} ${COMPILER_FLAGS} -Wno-register
+# Ignore declaration-after-statement warnings in our code. Postgres enforces
+# this because their ancient style guide requires it, but we don't care. It
+# would only apply to C files anyway, and we don't have many of those. The only
+# ones that we do have are vendored in from Postgres (ruleutils), and allowing
+# declarations to be anywhere is even a good thing for those as we can keep our
+# changes to the vendored code in one place.
+override PG_CFLAGS += -Wno-declaration-after-statement
 
 SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lduckdb -lstdc++ -llz4
 
