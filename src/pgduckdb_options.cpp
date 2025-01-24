@@ -17,16 +17,26 @@ extern "C" {
 #include "access/xact.h"
 #include "executor/spi.h"
 #include "catalog/indexing.h"
+#include "parser/parse_coerce.h"
+#include "parser/parse_node.h"
+#include "parser/parse_expr.h"
+#include "nodes/subscripting.h"
+#include "nodes/nodeFuncs.h"
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
+
+#include "nodes/print.h"
+
+#include "pgduckdb/vendor/pg_list.hpp"
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 namespace pgduckdb {
@@ -363,6 +373,238 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 	pgduckdb::pg::PreventInTransactionBlock("duckdb.recycle_ddb()");
 	pgduckdb::DuckDBManager::Get().Reset();
 	PG_RETURN_BOOL(true);
+}
+
+Node *
+CoerceRowSubscriptToText(struct ParseState *pstate, A_Indices *subscript) {
+	if (!subscript->uidx) {
+		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+	}
+
+	Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
+	int expr_location = exprLocation(subscript->uidx);
+	Oid subscript_expr_type = exprType(subscript_expr);
+
+	if (subscript->lidx) {
+		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+	}
+
+	Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
+	                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
+	if (!coerced_expr) {
+		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must have text type"),
+		                parser_errposition(pstate, expr_location)));
+	}
+
+	if (!IsA(subscript_expr, Const)) {
+		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must be a constant"),
+		                parser_errposition(pstate, expr_location)));
+	}
+
+	Const *subscript_const = castNode(Const, subscript_expr);
+	if (subscript_const->constisnull) {
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("duckdb.row subscript cannot be NULL"),
+		                parser_errposition(pstate, expr_location)));
+	}
+
+	return coerced_expr;
+}
+
+/*
+ * In Postgres all index operations in a row ar all slices or all plain
+ * index operations. If you mix them, all are converted to slices.
+ * There's no difference in representation possible between
+ * "col[1:2][1]" and "col[1:2][1:]". If you want this seperation you
+ * need to use parenthesis to seperate: "(col[1:2])[1]"
+ * This might seem like fairly strange behaviour, but Postgres uses
+ * this to be able to slice in multi-dimensional arrays and thtis
+ * behaviour is documented here:
+ * https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING
+ *
+ * This is different from DuckDB, but there's not much we can do about
+ * that. So we'll have this same behaviour by, which means we need to always
+ * add the lower subscript to the slice. The lower subscript will be NULL in
+ * that case.
+ *
+ * See also comments on SubscriptingRef in nodes/subscripting.h
+ */
+void
+AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_Indices *subscript, bool isSlice) {
+	Assert(isSlice || subscript->uidx);
+
+	Node *upper_subscript_expr = NULL;
+	if (subscript->uidx) {
+		upper_subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
+	}
+
+	sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, upper_subscript_expr);
+
+	if (isSlice) {
+		Node *lower_subscript_expr = NULL;
+		if (subscript->uidx) {
+			lower_subscript_expr = transformExpr(pstate, subscript->lidx, pstate->p_expr_kind);
+		}
+		sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, lower_subscript_expr);
+	}
+}
+
+/*
+ * DuckdbRowSubscriptTransform is called by the parser when a subscripting
+ * operation is performed on a duckdb.row. It has two main puprposes:
+ * 1. Ensure that the row is being indexed using a string literal
+ * 2. Ensure that the return type of this index operation is duckdb.unresolved_type
+ */
+void
+DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
+                            bool isAssignment) {
+	/*
+	 * We need to populate our cache for some of the code below. Normally this
+	 * cache is populated at the start of our planner hook, but this function
+	 * is being called from the parser.
+	 */
+	if (!pgduckdb::IsExtensionRegistered()) {
+		elog(ERROR, "BUG: Using duckdb.row but the pg_duckdb extension is not installed");
+	}
+
+	if (isAssignment) {
+		elog(ERROR, "Assignment to duckdb.row is not supported");
+	}
+
+	if (indirection == NIL) {
+		elog(ERROR, "Subscripting duckdb.row with an empty subscript is not supported");
+	}
+
+	bool first = true;
+
+	// Transform each subscript expression
+	foreach_node(A_Indices, subscript, indirection) {
+		/* The first subscript needs to be a TEXT constant, since it should be
+		 * a column reference. But the subscripts after that can be anything,
+		 * DuckDB should interpret those. */
+		if (first) {
+			sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, CoerceRowSubscriptToText(pstate, subscript));
+			if (isSlice) {
+				sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, NULL);
+			}
+			first = false;
+			continue;
+		}
+
+		AddSubscriptExpressions(sbsref, pstate, subscript, isSlice);
+	}
+
+	// Set the result type of the subscripting operation
+	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
+	sbsref->reftypmod = -1;
+}
+
+/*
+ * DuckdbRowSubscriptExecSetup is called by the executor when a subscripting
+ * operation is performed on a duckdb.row. This should never happen, because
+ * any query that contains a duckdb.row should automatically be use DuckDB
+ * execution.
+ */
+void
+DuckdbRowSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
+                            SubscriptExecSteps * /*exprstate*/) {
+	elog(ERROR, "Subscripting duckdb.row is not supported in the Postgres Executor");
+}
+
+static SubscriptRoutines duckdb_row_subscript_routines = {
+    .transform = DuckdbRowSubscriptTransform,
+    .exec_setup = DuckdbRowSubscriptExecSetup,
+    .fetch_strict = false,
+    .fetch_leakproof = true,
+    .store_leakproof = true,
+};
+
+DECLARE_PG_FUNCTION(duckdb_row_subscript) {
+	PG_RETURN_POINTER(&duckdb_row_subscript_routines);
+}
+
+/*
+ * DuckdbUnresolvedTypeSubscriptTransform is called by the parser when a
+ * subscripting operation is performed on a duckdb.unresolved_type. All this
+ * does is parse ensre that any subscript on duckdb.unresolved_type returns an
+ * unrsolved type again.
+ */
+void
+DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate,
+                                       bool isSlice, bool isAssignment) {
+	/*
+	 * We need to populate our cache for some of the code below. Normally this
+	 * cache is populated at the start of our planner hook, but this function
+	 * is being called from the parser.
+	 */
+	if (!pgduckdb::IsExtensionRegistered()) {
+		elog(ERROR, "BUG: Using duckdb.unresolved_type but the pg_duckdb extension is not installed");
+	}
+
+	if (isAssignment) {
+		elog(ERROR, "Assignment to duckdb.unresolved_type is not supported");
+	}
+
+	if (indirection == NIL) {
+		elog(ERROR, "Subscripting duckdb.row with an empty subscript is not supported");
+	}
+
+	// Transform each subscript expression
+	foreach_node(A_Indices, subscript, indirection) {
+		AddSubscriptExpressions(sbsref, pstate, subscript, isSlice);
+	}
+
+	// Set the result type of the subscripting operation
+	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
+	sbsref->reftypmod = -1;
+}
+
+/*
+ * DuckdbUnresolvedTypeSubscriptExecSetup is called by the executor when a
+ * subscripting operation is performed on a duckdb.unresolved_type. This should
+ * never happen, because any query that contains a duckdb.unresolved_type should
+ * automatically be use DuckDB execution.
+ */
+void
+DuckdbUnresolvedTypeSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
+                                       SubscriptExecSteps * /*exprstate*/) {
+	elog(ERROR, "Subscripting duckdb.unresolved_type is not supported in the Postgres Executor");
+}
+
+static SubscriptRoutines duckdb_unresolved_type_subscript_routines = {
+    .transform = DuckdbUnresolvedTypeSubscriptTransform,
+    .exec_setup = DuckdbUnresolvedTypeSubscriptExecSetup,
+    .fetch_strict = false,
+    .fetch_leakproof = true,
+    .store_leakproof = true,
+};
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_subscript) {
+	PG_RETURN_POINTER(&duckdb_unresolved_type_subscript_routines);
+}
+
+DECLARE_PG_FUNCTION(duckdb_row_in) {
+	elog(ERROR, "Creating the duckdb.row type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_row_out) {
+	elog(ERROR, "Converting a duckdb.row to a string is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_in) {
+	return textin(fcinfo);
+}
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_out) {
+	return textout(fcinfo);
+}
+
+DECLARE_PG_FUNCTION(duckdb_unresolved_type_operator) {
+	elog(ERROR, "Unresolved duckdb types cannot be used by the Postgres executor");
+}
+
+DECLARE_PG_FUNCTION(duckdb_only_function) {
+	char *function_name = DatumGetCString(DirectFunctionCall1(regprocout, fcinfo->flinfo->fn_oid));
+	elog(ERROR, "Function '%s' only works with DuckDB execution", function_name);
 }
 
 } // extern "C"

@@ -37,6 +37,7 @@ static planner_hook_type prev_planner_hook = NULL;
 static ExecutorStart_hook_type prev_executor_start_hook = NULL;
 static ExecutorFinish_hook_type prev_executor_finish_hook = NULL;
 static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
+static emit_log_hook_type prev_emit_log_hook = NULL;
 
 static bool
 ContainsCatalogTable(List *rtes) {
@@ -352,6 +353,40 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }
 
+static void
+DuckdbEmitLogHook(ErrorData *edata) {
+	if (prev_emit_log_hook) {
+		prev_emit_log_hook(edata);
+	}
+
+	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_UNDEFINED_COLUMN && pgduckdb::IsExtensionRegistered()) {
+		/*
+		 * XXX: It would be nice if we could check if the query contained any
+		 * of the functions. We could probably check the debug_query_string
+		 * global for this. For now we don't consider that too important though.
+		 * So instead we simply always add this HINT for this specific error if
+		 * the pg_duckdb extension is installed.
+		 */
+		edata->hint = pstrdup(
+		    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If "
+		    "you're already doing that, maybe you forgot to to give the function the r alias.");
+	} else if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_SYNTAX_ERROR &&
+	           pgduckdb::IsExtensionRegistered() &&
+	           strcmp(edata->message_id,
+	                  "a column definition list is only allowed for functions returning \"record\"") == 0) {
+		/*
+		 * NOTE: We can probably remove this hint after a few releases once
+		 * we've updated all known blogposts that still used the old syntax.
+		 *
+		 * Similarly to the other hint, this could check for actual usages of
+		 * the relevant DuckDB functions.
+		 */
+		edata->hint = pstrdup(
+		    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax introduced "
+		    "in pg_duckdb 0.3.0. It seems like you might be using the outdated \"AS (colname coltype, ...)\" syntax");
+	}
+}
+
 void
 DuckdbInitHooks(void) {
 	prev_planner_hook = planner_hook;
@@ -365,6 +400,9 @@ DuckdbInitHooks(void) {
 
 	prev_explain_one_query_hook = ExplainOneQuery_hook ? ExplainOneQuery_hook : standard_ExplainOneQuery;
 	ExplainOneQuery_hook = DuckdbExplainOneQueryHook;
+
+	prev_emit_log_hook = emit_log_hook ? emit_log_hook : NULL;
+	emit_log_hook = DuckdbEmitLogHook;
 
 	DuckdbInitUtilityHook();
 }

@@ -49,6 +49,12 @@ struct {
 	bool installed;
 	/* The Postgres OID of the pg_duckdb extension. */
 	Oid extension_oid;
+	/* The OID of the duckdb schema */
+	Oid schema_oid;
+	/* The OID of the duckdb.row type */
+	Oid row_oid;
+	/* The OID of the duckdb.unresolved_type */
+	Oid unresolved_type_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
 	/* The OID of the duckdb.motherduck_postgres_database */
@@ -112,7 +118,7 @@ BuildDuckdbOnlyFunctions() {
 	const char *function_names[] = {
 	    "read_parquet",         "read_csv",       "iceberg_scan",        "iceberg_metadata",
 	    "iceberg_snapshots",    "delta_scan",     "read_json",           "approx_count_distinct",
-	    "json_exists",          "json_extract",   "json_extract_string", "json_array_length",
+		"query",	    "json_exists",          "json_extract",   "json_extract_string", "json_array_length",
 	    "json_contains",        "json_keys",      "json_structure",      "json_type",
 	    "json_valid",           "json",           "json_group_array",    "json_group_object",
 	    "json_group_structure", "json_transform", "from_json",           "json_transform_strict",
@@ -180,6 +186,11 @@ IsExtensionRegistered() {
 		BuildDuckdbOnlyFunctions();
 		cache.table_am_oid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum("duckdb"));
 
+		cache.schema_oid = get_namespace_oid("duckdb", false);
+		cache.row_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("row"), cache.schema_oid);
+		cache.unresolved_type_oid =
+		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("unresolved_type"), cache.schema_oid);
+
 		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
 
 		if (duckdb_postgres_role[0] != '\0') {
@@ -224,6 +235,24 @@ Oid
 ExtensionOid() {
 	Assert(cache.valid);
 	return cache.extension_oid;
+}
+
+Oid
+SchemaOid() {
+	Assert(cache.valid);
+	return cache.schema_oid;
+}
+
+Oid
+DuckdbRowOid() {
+	Assert(cache.valid);
+	return cache.row_oid;
+}
+
+Oid
+DuckdbUnresolvedTypeOid() {
+	Assert(cache.valid);
+	return cache.unresolved_type_oid;
 }
 
 Oid
