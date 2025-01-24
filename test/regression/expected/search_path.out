@@ -64,7 +64,7 @@ SELECT count(*) FROM public.t, other.t;
   1000
 (1 row)
 
-SELECT count(*) FROM public.read_csv(:'pwd' || '/data/web_page.csv') as (column00 int);
+SELECT count(*) FROM public.read_csv(:'pwd' || '/data/web_page.csv');
  count 
 -------
     60

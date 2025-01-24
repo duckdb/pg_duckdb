@@ -10,6 +10,7 @@ extern "C" {
 #include "commands/dbcommands.h"
 #include "nodes/nodeFuncs.h"
 #include "lib/stringinfo.h"
+#include "parser/parsetree.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -20,6 +21,8 @@ extern "C" {
 #include "storage/lockdefs.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
+#include "pgduckdb/pgduckdb_ruleutils.h"
+#include "pgduckdb/vendor/pg_list.hpp"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -28,6 +31,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
 extern "C" {
+bool processed_targetlist = false;
+
 char *
 pgduckdb_function_name(Oid function_oid) {
 	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
@@ -36,6 +41,372 @@ pgduckdb_function_name(Oid function_oid) {
 
 	auto func_name = get_func_name(function_oid);
 	return psprintf("system.main.%s", quote_identifier(func_name));
+}
+
+bool
+pgduckdb_is_unresolved_type(Oid type_oid) {
+	return type_oid == pgduckdb::DuckdbUnresolvedTypeOid();
+}
+
+bool
+pgduckdb_is_duckdb_row(Oid type_oid) {
+	return type_oid == pgduckdb::DuckdbRowOid();
+}
+
+bool
+pgduckdb_var_is_duckdb_row(Var *var) {
+	if (!var) {
+		return false;
+	}
+	return pgduckdb_is_duckdb_row(var->vartype);
+}
+
+bool
+pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc) {
+	if (!rtfunc) {
+		return false;
+	}
+
+	if (!IsA(rtfunc->funcexpr, FuncExpr)) {
+		return false;
+	}
+
+	FuncExpr *func_expr = castNode(FuncExpr, rtfunc->funcexpr);
+
+	return pgduckdb_is_duckdb_row(func_expr->funcresulttype);
+}
+
+bool
+pgduckdb_target_list_contains_unresolved_type_or_row(List *target_list) {
+	foreach_node(TargetEntry, tle, target_list) {
+		Oid type = exprType((Node *)tle->expr);
+		if (pgduckdb_is_unresolved_type(type)) {
+			return true;
+		}
+
+		if (pgduckdb_is_duckdb_row(type)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/*
+ * Returns NULL if the expression is not a subscript on a duckdb row. Returns
+ * the Var of the duckdb row if it is.
+ */
+Var *
+pgduckdb_duckdb_row_subscript_var(Expr *expr) {
+	if (!expr) {
+		return NULL;
+	}
+
+	if (!IsA(expr, SubscriptingRef)) {
+		return NULL;
+	}
+
+	SubscriptingRef *subscript = (SubscriptingRef *)expr;
+
+	if (!IsA(subscript->refexpr, Var)) {
+		return NULL;
+	}
+
+	Var *refexpr = (Var *)subscript->refexpr;
+
+	if (!pgduckdb_var_is_duckdb_row(refexpr)) {
+		return NULL;
+	}
+	return refexpr;
+}
+
+/*
+ * pgduckdb_check_for_star_start tries to figure out if this is tle_cell
+ * contains a Var that is the start of a run of Vars that should be
+ * reconstructed as a star. If that's the case it sets the varno_star and
+ * varattno_star of the ctx.
+ */
+static void
+pgduckdb_check_for_star_start(StarReconstructionContext *ctx, ListCell *tle_cell) {
+	TargetEntry *first_tle = (TargetEntry *)lfirst(tle_cell);
+
+	if (!IsA(first_tle->expr, Var)) {
+		/* Not a Var so we're not at the start of a run of Vars. */
+		return;
+	}
+
+	Var *first_var = (Var *)first_tle->expr;
+
+	if (first_var->varattno != 1) {
+		/* If we don't have varattno 1, then we are not at a run of Vars */
+		return;
+	}
+
+	/*
+	 * We found a Var that could potentially be the first of a run of Vars for
+	 * which we have to reconstruct the star. To check if this is indeed the
+	 * case we see if we can find a duckdb.row in this list of Vars.
+	 */
+	int varno = first_var->varno;
+	int varattno = first_var->varattno;
+
+	do {
+		TargetEntry *tle = (TargetEntry *)lfirst(tle_cell);
+
+		if (!IsA(tle->expr, Var)) {
+			/*
+			 * We found the end of this run of Vars, by finding something else
+			 * than a Var.
+			 */
+			return;
+		}
+
+		Var *var = (Var *)tle->expr;
+
+		if (var->varno != varno) {
+			/* A Var from a different RTE */
+			return;
+		}
+
+		if (var->varattno != varattno) {
+			/* Not a consecutive Var */
+			return;
+		}
+		if (pgduckdb_var_is_duckdb_row(var)) {
+			/*
+			 * If we have a duckdb.row, then we found a run of Vars that we
+			 * have to reconstruct the star for.
+			 */
+
+			ctx->varno_star = varno;
+			ctx->varattno_star = first_var->varattno;
+			ctx->added_current_star = false;
+			return;
+		}
+
+		/* Look for the next Var in the run */
+		varattno++;
+	} while ((tle_cell = lnext(ctx->target_list, tle_cell)));
+}
+
+/*
+ * In our DuckDB queries we sometimes want to use "SELECT *", when selecting
+ * from a function like read_parquet. That way DuckDB can figure out the actual
+ * columns that it should return. Sadly Postgres expands the * character from
+ * the original query to a list of columns. So we need to put a star, any time
+ * we want to replace duckdb.row columns with a "*" in the duckdb query.
+ *
+ * Since the original "*" might expand to many columns we need to remove all of
+ * those, when putting a "*" back. To do so we try to find a runs of Vars from
+ * the same FROM entry, aka RangeTableEntry (RTE) that we expect were created
+ * with a *.
+ *
+ * This function returns true if we should skip writing this tle_cell to the
+ * DuckDB query because it is part of a run of Vars that will be reconstructed
+ * as a star.
+ */
+bool
+pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell) {
+	/* Detect start of a Var run that should be reconstructed to a star */
+	pgduckdb_check_for_star_start(ctx, tle_cell);
+
+	/*
+	 * If we're not currently reconstructing a star we don't need to do
+	 * anything.
+	 */
+	if (!ctx->varno_star) {
+		return false;
+	}
+
+	TargetEntry *tle = (TargetEntry *)lfirst(tle_cell);
+
+	/*
+	 * Find out if this target entry is the next element in the run of Vars for
+	 * the star we're currently reconstructing.
+	 */
+	if (tle->expr && IsA(tle->expr, Var)) {
+		Var *var = castNode(Var, tle->expr);
+
+		if (var->varno == ctx->varno_star && var->varattno == ctx->varattno_star) {
+			/*
+			 * We're still in the run of Vars, increment the varattno to look
+			 * for the next Var on the next call.
+			 */
+			ctx->varattno_star++;
+
+			/* If we already added star we skip writing this target entry */
+			if (ctx->added_current_star) {
+				return true;
+			}
+
+			/*
+			 * If it's not a duckdb row we skip this target entry too. The way
+			 * we add a single star is by expanding the first duckdb.row torget
+			 * entry, which we've defined to expand to a star. So we need to
+			 * skip any non duckdb.row Vars that precede the first duckdb.row.
+			 */
+			if (!pgduckdb_var_is_duckdb_row(var)) {
+				return true;
+			}
+
+			ctx->added_current_star = true;
+			return false;
+		}
+	}
+
+	/*
+	 * If it was not, that means we've successfully expanded this star and we
+	 * should start looking for the next star start. So reset all the state
+	 * used for this star reconstruction.
+	 */
+	ctx->varno_star = 0;
+	ctx->varattno_star = 0;
+	ctx->added_current_star = false;
+
+	return false;
+}
+
+/*
+ * iceberg_scan needs to be wrapped in an additianol subquery to resolve a
+ * bug where aliasses on iceberg_scan are ignored:
+ * https://github.com/duckdb/duckdb-iceberg/issues/44
+ *
+ * By wrapping the iceberg_scan call the alias is given to the subquery,
+ * instead of th call. This subquery is easily optimized away by DuckDB,
+ * because it doesn't do anything.
+ *
+ * This problem is also true for the "query" function, which we use when
+ * creating materialized views and CTAS.
+ * https://github.com/duckdb/duckdb/issues/15570#issuecomment-2598419474
+ *
+ * TODO: Probably check this in a bit more efficient way and move it to
+ * pgduckdb_ruleutils.cpp
+ */
+bool
+pgduckdb_function_needs_subquery(Oid function_oid) {
+	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
+		return false;
+	}
+
+	auto func_name = get_func_name(function_oid);
+	if (strcmp(func_name, "iceberg_scan") == 0) {
+		return true;
+	}
+
+	if (strcmp(func_name, "query") == 0) {
+		return true;
+	}
+	return false;
+}
+
+/*
+ * We never want to show the unresolved_type in DuckDB query. The
+ * unrosolved_type does not actually exist in DuckDB, we only use it to keep
+ * the Postgres parser happy. DuckDB can simply figure out the correct type
+ * itself without an explicit cast.
+ */
+int
+pgduckdb_show_type(Const *constval, int original_showtype) {
+	if (pgduckdb_is_unresolved_type(constval->consttype)) {
+		return -1;
+	}
+	return original_showtype;
+}
+
+bool
+pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var, char *colname) {
+	/* The first bit of this logic is taken from get_variable() */
+	int varno;
+	int varattno;
+
+	/*
+	 * If we have a syntactic referent for the Var, and we're working from a
+	 * parse tree, prefer to use the syntactic referent.  Otherwise, fall back
+	 * on the semantic referent.  (See comments in get_variable().)
+	 */
+	if (subscript_var->varnosyn > 0 && plan == NULL) {
+		varno = subscript_var->varnosyn;
+		varattno = subscript_var->varattnosyn;
+	} else {
+		varno = subscript_var->varno;
+		varattno = subscript_var->varattno;
+	}
+
+	RangeTblEntry *rte = rt_fetch(varno, rtable);
+
+	/* Custom code starts here */
+	char *original_column = strVal(list_nth(rte->eref->colnames, varattno - 1));
+
+	return strcmp(original_column, colname) != 0;
+}
+
+/*
+ * Subscript expressions that index into the duckdb.row type need to be changed
+ * to regular column references in the DuckDB query. The main reason we do this
+ * is so that DuckDB generates nicer column names, i.e. without the square
+ * brackets: "mycolumn" instead of "r['mycolumn']"
+ */
+SubscriptingRef *
+pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf) {
+	if (!IsA(sbsref->refexpr, Var)) {
+		return sbsref;
+	}
+
+	if (!pgduckdb_var_is_duckdb_row((Var *)sbsref->refexpr)) {
+		return sbsref;
+	}
+
+	Assert(sbsref->refupperindexpr);
+	Oid typoutput;
+	bool typIsVarlena;
+	Const *constval = castNode(Const, linitial(sbsref->refupperindexpr));
+	getTypeOutputInfo(constval->consttype, &typoutput, &typIsVarlena);
+
+	char *extval = OidOutputFunctionCall(typoutput, constval->constvalue);
+
+	appendStringInfo(buf, ".%s", quote_identifier(extval));
+
+	/*
+	 * If there are any additional subscript expressions we should output them.
+	 * Subscripts can be used in duckdb to index into arrays or json objects.
+	 * It's fine if this results in an empty List, because printSubscripts
+	 * handles that case correctly.
+	 */
+	SubscriptingRef *shorter_sbsref = (SubscriptingRef *)copyObjectImpl(sbsref);
+	/* strip the first subscript from the list */
+	shorter_sbsref->refupperindexpr = list_delete_first(shorter_sbsref->refupperindexpr);
+	if (shorter_sbsref->reflowerindexpr) {
+		shorter_sbsref->reflowerindexpr = list_delete_first(shorter_sbsref->reflowerindexpr);
+	}
+	return shorter_sbsref;
+}
+
+/*
+ * Writes the refname to the buf in a way that results in the correct output
+ * for the duckdb.row type.
+ *
+ * Returns the "attname" that should be passed back to the caller of
+ * get_variable().
+ */
+char *
+pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level) {
+	appendStringInfoString(buf, quote_identifier(refname));
+
+	if (is_top_level) {
+		/*
+		 * If the duckdb.row is at the top level target list of a select, then
+		 * we want to generate r.*, to unpack all the columns instead of
+		 * returning a STRUCT from the query.
+		 *
+		 * Since we use .* there is no attname.
+		 */
+		appendStringInfoString(buf, ".*");
+		return NULL;
+	}
+
+	/*
+	 * In any other case, we want to simply use the alias of the TargetEntry.
+	 */
+	return refname;
 }
 
 /*
@@ -171,9 +542,14 @@ pgduckdb_relation_name(Oid relation_oid) {
  * DuckDB understands). The reason this is not part of
  * pgduckdb_pg_get_querydef_internal is because we want to avoid changing that
  * vendored in function as much as possible to keep updates easy.
+ *
+ * Apart from that it also sets the processed_targetlist variable to false,
+ * which we use in get_target_list to determine if we're processing the
+ * outermost targetlist or not.
  */
 char *
 pgduckdb_get_querydef(Query *query) {
+	processed_targetlist = false;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("DateStyle", "ISO, YMD", PGC_USERSET, PGC_S_SESSION);
 	char *result = pgduckdb_pg_get_querydef_internal(query, false);

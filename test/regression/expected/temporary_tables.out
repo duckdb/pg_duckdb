@@ -207,7 +207,7 @@ DROP TABLE t;
 CREATE TEMP TABLE t(a int) ON COMMIT DROP;
 ERROR:  DuckDB does not support ON COMMIT DROP
 -- CTAS fully in Duckdb
-CREATE TEMP TABLE webpages USING duckdb AS SELECT * FROM read_csv('../../data/web_page.csv') as (column00 int, column01 text, column02 date);
+CREATE TEMP TABLE webpages USING duckdb AS SELECT r['column00'], r['column01'], r['column02'] FROM read_csv('../../data/web_page.csv') r;
 SELECT * FROM webpages ORDER BY column00 LIMIT 2;
  column00 |     column01     |  column02  
 ----------+------------------+------------
@@ -247,7 +247,7 @@ NOTICE:  result: database_name	schema_name	sql
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
 pg_temp	main	CREATE TABLE t(b INTEGER);
-pg_temp	main	CREATE TABLE webpages(column00 INTEGER, column01 VARCHAR, column02 DATE);
+pg_temp	main	CREATE TABLE webpages(column00 BIGINT, column01 VARCHAR, column02 DATE);
 
 
  raw_query 
