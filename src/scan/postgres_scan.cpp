@@ -25,7 +25,7 @@ FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) 
 
 int
 PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
-                                             duckdb::string &query_filters) {
+                                             duckdb::string &query_filters, bool is_optional_filter_parent) {
 	switch (filter->filter_type) {
 	case duckdb::TableFilterType::CONSTANT_COMPARISON:
 	case duckdb::TableFilterType::IS_NULL:
@@ -40,7 +40,7 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 		duckdb::vector<std::string> conjuction_child_filters;
 		for (idx_t i = 0; i < conjuction_filter->child_filters.size(); i++) {
 			std::string child_filter;
-			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter)) {
+			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter, false)) {
 				conjuction_child_filters.emplace_back(child_filter);
 			}
 		}
@@ -53,7 +53,7 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 	}
 	case duckdb::TableFilterType::OPTIONAL_FILTER: {
 		auto optional_filter = reinterpret_cast<duckdb::OptionalFilter *>(filter);
-		return ExtractQueryFilters(optional_filter->child_filter.get(), column_name, query_filters);
+		return ExtractQueryFilters(optional_filter->child_filter.get(), column_name, query_filters, true);
 	}
 	/* DYNAMIC_FILTER is push down filter from topN execution */
 	case duckdb::TableFilterType::DYNAMIC_FILTER:
@@ -62,7 +62,11 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 	 * filter that could be added in future in DuckDB.
 	 */
 	case duckdb::TableFilterType::STRUCT_EXTRACT:
-	default:
+	default:{
+		if (is_optional_filter_parent) {
+			pd_log(DEBUG1, "(DuckDB/ExtractQueryFilters) Unsupported optional filter: %s", filter->ToString(column_name).c_str());
+			return 0;
+		}
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
 		                        "Invalid Filter Type: " + filter->ToString(column_name));
 	}
@@ -146,7 +150,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 		duckdb::string column_query_filters;
 		auto attr = GetAttr(table_tuple_desc, attr_num - 1);
 		auto col = pgduckdb::QuoteIdentifier(GetAttName(attr));
-		if (ExtractQueryFilters(filter, col, column_query_filters)) {
+		if (ExtractQueryFilters(filter, col, column_query_filters, false)) {
 			query_filters.emplace_back(column_query_filters);
 		};
 	}

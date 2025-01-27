@@ -23,7 +23,8 @@ struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 	void ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input);
 
 private:
-	int ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name, duckdb::string &filters);
+	int ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name, duckdb::string &filters,
+	                        bool is_optional_filter_parent);
 
 public:
 	Snapshot snapshot;
