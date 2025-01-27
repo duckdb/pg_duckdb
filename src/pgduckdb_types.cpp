@@ -220,8 +220,28 @@ ConvertDateDatum(const duckdb::Value &value) {
 
 inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
-	duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
-	return timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+	// Extract raw int64_t value of timestamp
+	int64_t rawValue = value.GetValue<int64_t>();
+
+	// Handle specific Timestamp unit(sec, ms, ns) types
+	switch (value.type().id()) {
+	case duckdb::LogicalType::TIMESTAMP_MS:
+		// 1 ms = 10^3 micro-sec
+		rawValue *= 1000;
+		break;
+	case duckdb::LogicalType::TIMESTAMP_NS:
+		// 1 ns = 10^-3 micro-sec
+		rawValue /= 1000;
+		break;
+	case duckdb::LogicalType::TIMESTAMP_S:
+		// 1 s = 10^6 micro-sec
+		rawValue *= 1000000;
+		break;
+	default:
+		// Since we don't want to handle anything here
+		rawValue = rawValue;
+	}
+	return rawValue - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
 
 inline Datum
@@ -1001,6 +1021,9 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::DATE:
 		return DATEOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
+	case duckdb::LogicalTypeId::TIMESTAMP_NS:
 		return TIMESTAMPOID;
 	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
 		return TIMESTAMPTZOID;
@@ -1222,6 +1245,10 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	case duckdb::LogicalTypeId::DATE:
 		Append<duckdb::date_t>(result, duckdb::date_t(static_cast<int32_t>(value + PGDUCKDB_DUCK_DATE_OFFSET)), offset);
 		break;
+
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
+	case duckdb::LogicalTypeId::TIMESTAMP_NS:
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		Append<duckdb::timestamp_t>(
 		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
