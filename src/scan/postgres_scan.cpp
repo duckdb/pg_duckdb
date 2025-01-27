@@ -55,12 +55,11 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 		auto optional_filter = reinterpret_cast<duckdb::OptionalFilter *>(filter);
 		return ExtractQueryFilters(optional_filter->child_filter.get(), column_name, query_filters, true);
 	}
-	/* DYNAMIC_FILTER is push down filter from topN execution */
-	case duckdb::TableFilterType::DYNAMIC_FILTER:
-		return 0;
-	/* STRUCT_EXTRACT is only received if struct_extract function is used. Default will catch all
+	/* DYNAMIC_FILTER is push down filter from topN execution. STRUCT_EXTRACT is
+	 * only received if struct_extract function is used. Default will catch all
 	 * filter that could be added in future in DuckDB.
 	 */
+	case duckdb::TableFilterType::DYNAMIC_FILTER:
 	case duckdb::TableFilterType::STRUCT_EXTRACT:
 	default: {
 		if (is_optional_filter_parent) {
