@@ -72,6 +72,15 @@ SELECT * FROM timestamptz_tbl;
 SELECT * FROM timestamptz_tbl WHERE a >= '2024-10-14 13:00:00+1';
 SELECT * FROM timestamptz_tbl WHERE a >= '2024-10-14 13:00:00 Europe/London';
 
+-- TIMESTAMP_NS Conversion from DuckDB to PostgreSQL
+SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12.123456789'::TIMESTAMP_NS as ts $$);
+
+-- TIMESTAMP_MS Conversion from DuckDB to PostgreSQL
+SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12.123'::TIMESTAMP_MS as ts $$);
+
+-- TIMESTAMP_S Conversion from DuckDB to PostgreSQL
+SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12'::TIMESTAMP_S as ts $$);
+
 -- FLOAT4
 CREATE TABLE float4_tbl(a FLOAT4);
 INSERT INTO float4_tbl SELECT CAST(a AS FLOAT4) FROM (VALUES
