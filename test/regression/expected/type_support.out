@@ -173,23 +173,23 @@ SELECT * FROM timestamptz_tbl WHERE a >= '2024-10-14 13:00:00 Europe/London';
 
 -- TIMESTAMP_NS Conversion from DuckDB to PostgreSQL
 SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12.123456789'::TIMESTAMP_NS as ts $$);
-             ts             
-----------------------------
- 1992-12-12 12:12:12.123456
+               ts                
+---------------------------------
+ Sat Dec 12 12:12:12.123456 1992
 (1 row)
 
 -- TIMESTAMP_MS Conversion from DuckDB to PostgreSQL
 SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12.123'::TIMESTAMP_MS as ts $$);
-           ts            
--------------------------
- 1992-12-12 12:12:12.123
+              ts              
+------------------------------
+ Sat Dec 12 12:12:12.123 1992
 (1 row)
 
 -- TIMESTAMP_S Conversion from DuckDB to PostgreSQL
 SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12'::TIMESTAMP_S as ts $$);
-         ts          
----------------------
- 1992-12-12 12:12:12
+            ts            
+--------------------------
+ Sat Dec 12 12:12:12 1992
 (1 row)
 
 -- FLOAT4
