@@ -53,9 +53,27 @@ extern "C" {
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
-static bool is_background_worker = false;
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
 static uint64 initial_cache_version = 0;
+
+namespace pgduckdb {
+
+bool is_background_worker = false;
+
+static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
+static void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *context);
+
+typedef struct BackgoundWorkerShmemStruct {
+	Latch *bgw_latch; /* The latch of the background worker */
+
+	slock_t lock; /* protects all the fields below */
+
+	int64 activity_count; /* the number of times activity was triggered by other backends */
+} BackgoundWorkerShmemStruct;
+
+static BackgoundWorkerShmemStruct *BgwShmemStruct;
+
+} // namespace pgduckdb
 
 extern "C" {
 PGDLLEXPORT void
@@ -66,9 +84,15 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 	BackgroundWorkerUnblockSignals();
 
 	BackgroundWorkerInitializeConnection(duckdb_motherduck_postgres_database, NULL, 0);
+	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
+	pgduckdb::BgwShmemStruct->bgw_latch = MyLatch;
+	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count;
+	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
 
 	pgduckdb::doing_motherduck_sync = true;
-	is_background_worker = true;
+	pgduckdb::is_background_worker = true;
+
+	duckdb::unique_ptr<duckdb::Connection> connection;
 
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
@@ -78,12 +102,23 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		if (pgduckdb::IsExtensionRegistered()) {
+			if (!connection) {
+				connection = pgduckdb::DuckDBManager::Get().CreateConnection();
+			}
+			SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
+			int64 new_activity_count = pgduckdb::BgwShmemStruct->activity_count;
+			SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+			if (last_activity_count != new_activity_count) {
+				last_activity_count = new_activity_count;
+				/* Trigger some activity to restart the syncing */
+				pgduckdb::DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
+			}
 			/*
 			 * If the extension is not registerid this loop is a no-op, which
 			 * means we essentially keep polling until the extension is
 			 * installed
 			 */
-			pgduckdb::SyncMotherDuckCatalogsWithPg(false);
+			pgduckdb::SyncMotherDuckCatalogsWithPg(false, *connection->context);
 		}
 
 		// Commit the transaction
@@ -108,11 +143,20 @@ force_motherduck_sync(PG_FUNCTION_ARGS) {
 	Datum drop_with_cascade = PG_GETARG_BOOL(0);
 	/* clear the cache of known catalog versions to force a full sync */
 	last_known_motherduck_catalog_versions.clear();
+
+	/*
+	 * We don't use GetConnection, because we want to be able to precisely
+	 * control the transaction lifecycle. We commit Postgres connections
+	 * throughout this function, and the GetConnect its cached connection its
+	 * lifecycle would be linked to those postgres transactions, which we
+	 * don't want.
+	 */
+	auto connection = pgduckdb::DuckDBManager::Get().CreateConnection();
 	SPI_connect_ext(SPI_OPT_NONATOMIC);
 	PG_TRY();
 	{
 		pgduckdb::doing_motherduck_sync = true;
-		pgduckdb::SyncMotherDuckCatalogsWithPg(drop_with_cascade);
+		pgduckdb::SyncMotherDuckCatalogsWithPg(drop_with_cascade, *connection->context);
 	}
 	PG_FINALLY();
 	{
@@ -124,8 +168,56 @@ force_motherduck_sync(PG_FUNCTION_ARGS) {
 }
 }
 
+namespace pgduckdb {
+static shmem_request_hook_type prev_shmem_request_hook = NULL;
+static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
+
+/*
+ * shmem_request hook: request additional shared resources.  We'll allocate or
+ * attach to the shared resources in pgss_shmem_startup().
+ */
+static void
+ShmemRequest(void) {
+	if (prev_shmem_request_hook)
+		prev_shmem_request_hook();
+
+	RequestAddinShmemSpace(sizeof(BackgoundWorkerShmemStruct));
+}
+
+/*
+ * CheckpointerShmemInit
+ *		Allocate and initialize checkpointer-related shared memory
+ */
+static void
+ShmemStartup(void) {
+	if (prev_shmem_startup_hook)
+		prev_shmem_startup_hook();
+
+	Size size = sizeof(BackgoundWorkerShmemStruct);
+	bool found;
+
+	/*
+	 * Create or attach to the shared memory state, including hash table
+	 */
+	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
+
+	BgwShmemStruct = (BackgoundWorkerShmemStruct *)ShmemInitStruct("DuckdbBackgroundWorker Data", size, &found);
+
+	if (!found) {
+		/*
+		 * First time through, so initialize.  Note that we zero the whole
+		 * requests array; this is so that CompactCheckpointerRequestQueue can
+		 * assume that any pad bytes in the request structs are zeroes.
+		 */
+		MemSet(BgwShmemStruct, 0, size);
+		SpinLockInit(&BgwShmemStruct->lock);
+	}
+
+	LWLockRelease(AddinShmemInitLock);
+}
+
 void
-DuckdbInitBackgroundWorker(void) {
+InitBackgroundWorker(void) {
 	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
 		return;
 	}
@@ -143,9 +235,27 @@ DuckdbInitBackgroundWorker(void) {
 
 	// Register the worker
 	RegisterBackgroundWorker(&worker);
+
+	/* Set up the shared memory hooks */
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = ShmemRequest;
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = ShmemStartup;
 }
 
-namespace pgduckdb {
+void
+TriggerActivity(void) {
+	if (!IsMotherDuckEnabled()) {
+		return;
+	}
+
+	SpinLockAcquire(&BgwShmemStruct->lock);
+	BgwShmemStruct->activity_count++;
+	/* Force wake up the background worker */
+	SetLatch(BgwShmemStruct->bgw_latch);
+	SpinLockRelease(&BgwShmemStruct->lock);
+}
+
 /* Global variables that are used to communicate with our event triggers so
  * they handle DDL of syncing differently than user-initiated DDL */
 bool doing_motherduck_sync;
@@ -546,30 +656,25 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	return true;
 }
 
-void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade);
-
-void
-SyncMotherDuckCatalogsWithPg(bool drop_with_cascade) {
-	InvokeCPPFunc(SyncMotherDuckCatalogsWithPg_Cpp, drop_with_cascade);
+static void
+SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context) {
+	/*
+	 * TODO: Passing a reference through InvokeCPPFunc doesn't work here
+	 * for some reason. So to work around that we use a pointer instead.
+	 * We should fix the underlying problem instead.
+	 */
+	InvokeCPPFunc(SyncMotherDuckCatalogsWithPg_Cpp, drop_with_cascade, &context);
 }
 
-void
-SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade) {
+static void
+SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *_context) {
 	if (!pgduckdb::IsMotherDuckEnabled()) {
 		throw std::runtime_error("MotherDuck support is not enabled");
 	}
 
-	initial_cache_version = pgduckdb::CacheVersion();
+	auto &context = *_context;
 
-	/*
-	 * We don't use GetConnection, because we want to be able to precisely
-	 * control the transaction lifecycle. We commit Postgres connections
-	 * throughout this function, and the GetConnect its cached connection its
-	 * lifecycle would be linked to those postgres transactions, which we
-	 * don't want.
-	 */
-	auto connection = pgduckdb::DuckDBManager::Get().CreateConnection();
-	auto &context = *connection->context;
+	initial_cache_version = pgduckdb::CacheVersion();
 
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	const auto &default_db = db_manager.GetDefaultDatabase(context);
