@@ -12506,7 +12506,7 @@ get_tablesample_def(TableSampleClause *tablesample, deparse_context *context)
 	false, NULL, EXPR_KIND_NONE);
 	appendStringInfo(buf, " TABLESAMPLE %s (", tsm_name);
 
-	if (pg_strcasecmp(tsm_name, "system") == 0 && list_length(tablesample->args) == 1)
+	if (is_system_sampling(tsm_name, list_length(tablesample->args)))
 	{
 		get_rule_expr((Node *) linitial(tablesample->args), context, false);
 		appendStringInfoChar(buf, '%');
