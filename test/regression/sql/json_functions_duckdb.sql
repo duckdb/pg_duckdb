@@ -217,15 +217,15 @@ SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 2
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') res FROM example2
-);
+) q;
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 1)"}') res FROM example2
-);
+) q;
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.from_json(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 1)"}') res FROM example2
-);
+) q;
 -- -- </JSON_TRANSFORM>
 
 -- -- <JSON_TRANSFORM_STRICT>
@@ -233,17 +233,17 @@ SELECT public.json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBL
 
 SELECT res['family'] family FROM (
     SELECT public.json_transform_strict(j, '{"family": "VARCHAR"}') res FROM example2
-);
+) q;
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') res FROM example2
-);
+) q;
 
 SELECT res['family'] family FROM (
     SELECT public.from_json_strict(j, '{"family": "VARCHAR"}') res FROM example2
-);
+) q;
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.from_json_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') res FROM example2
-);
+) q;
 -- -- </JSON_TRANSFORM_STRICT>
