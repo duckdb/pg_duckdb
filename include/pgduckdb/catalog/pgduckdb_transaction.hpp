@@ -2,6 +2,7 @@
 
 #include "duckdb/main/client_context.hpp"
 #include "duckdb/main/client_context_state.hpp"
+#include "duckdb/common/unordered_map.hpp"
 #include "duckdb/transaction/transaction.hpp"
 #include "pgduckdb/pg/declarations.hpp"
 
@@ -26,12 +27,12 @@ public:
 private:
 	duckdb::string name;
 	duckdb::unique_ptr<PostgresSchema> schema;
-	duckdb::case_insensitive_map_t<duckdb::unique_ptr<PostgresTable>> tables;
+	duckdb::unordered_map<duckdb::string, duckdb::unique_ptr<PostgresTable>> tables;
 };
 
 class PostgresContextState : public duckdb::ClientContextState {
 public:
-	duckdb::case_insensitive_map_t<SchemaItems> schemas;
+	duckdb::unordered_map<duckdb::string, SchemaItems> schemas;
 	void QueryEnd() override;
 };
 
