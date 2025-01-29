@@ -832,6 +832,7 @@ AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 CREATE TYPE duckdb.json;
+COMMENT ON TYPE duckdb.json IS 'A helper type that allows passing JSON, JSONB and duckdb.unresolved_type to DuckDB its json related functions';
 CREATE FUNCTION duckdb.json_in(cstring) RETURNS duckdb.json AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_in' LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION duckdb.json_out(duckdb.json) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_out' LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION duckdb.json_subscript(internal) RETURNS internal AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_subscript' LANGUAGE C IMMUTABLE STRICT;
