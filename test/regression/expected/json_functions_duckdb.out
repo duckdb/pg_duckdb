@@ -345,7 +345,7 @@ WARNING:  (PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: STRUCT
 ERROR:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') res FROM example2
-);
+) q;
   family  | coolness 
 ----------+----------
  anatidae |    42.42
@@ -354,7 +354,7 @@ SELECT res['family'] family, res['coolness'] coolness FROM (
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 1)"}') res FROM example2
-);
+) q;
  family | coolness 
 --------+----------
         |     42.4
@@ -363,7 +363,7 @@ SELECT res['family'] family, res['coolness'] coolness FROM (
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.from_json(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 1)"}') res FROM example2
-);
+) q;
  family | coolness 
 --------+----------
         |     42.4
@@ -377,7 +377,7 @@ WARNING:  (PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: STRUCT
 ERROR:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
 SELECT res['family'] family FROM (
     SELECT public.json_transform_strict(j, '{"family": "VARCHAR"}') res FROM example2
-);
+) q;
   family  
 ----------
  anatidae
@@ -386,11 +386,11 @@ SELECT res['family'] family FROM (
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') res FROM example2
-);
+) q;
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan) Invalid Input Error: Failed to cast value to numerical: "canidae"
 SELECT res['family'] family FROM (
     SELECT public.from_json_strict(j, '{"family": "VARCHAR"}') res FROM example2
-);
+) q;
   family  
 ----------
  anatidae
@@ -399,6 +399,6 @@ SELECT res['family'] family FROM (
 
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.from_json_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') res FROM example2
-);
+) q;
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan) Invalid Input Error: Failed to cast value to numerical: "canidae"
 -- -- </JSON_TRANSFORM_STRICT>
