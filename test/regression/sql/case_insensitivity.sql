@@ -28,6 +28,16 @@ SELECT * FROM b.a, "B".a as "A";
 -- With different explicit aliases it should obviously succeed too..
 SELECT * FROM b.a, "B".a as a2;
 
+-- Supports casing in column names
+select r['UPPER'], r['lower'] from read_parquet('/home/jelte/work/pg_duckdb/test/regression/data/uppercase.parquet') r;
+
+-- DuckDB is case insensitive though. So this should work too. But it will
+-- still return the original casing.
+select r['upper'], r['LOWER'] from read_parquet('/home/jelte/work/pg_duckdb/test/regression/data/uppercase.parquet') r;
+
+-- You can change the casing by using aliasses (issue #564)
+select r['UPPER'] as upper, r['lower'] as "LOWER" from read_parquet('/home/jelte/work/pg_duckdb/test/regression/data/uppercase.parquet') r;
+
 set client_min_messages TO WARNING;
 DROP TABLE a, "A";
 DROP SCHEMA b, "B" CASCADE;
