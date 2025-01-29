@@ -35,6 +35,8 @@ SELECT public.json_extract('{"key": "value"}', '$.key') AS result; -- Expected: 
 -- Nested JSON Extraction (from a duckdb.query result, i.e. a value of type duckdb.unresolved_type)
 SELECT public.json_extract(r['data'], '$.a.b.c') AS result FROM duckdb.query($$ SELECT '{"a": {"b": {"c": 42}}}'::json AS data $$) r; -- Expected: 42
 
+SELECT public.json_extract('["a", "b", "c"]', 1) AS result; -- Expected: "b"
+
 -- Multiple paths to nested objects
 SELECT public.json_extract('{"a": {"b": {"c": 42}}, "x": {"y": "value"}}', ARRAY['$.a.b.c', '$.x.y']) AS result; -- Expected: [42, "value"]
 -- </JSON_EXTRACT>
@@ -42,6 +44,7 @@ SELECT public.json_extract('{"a": {"b": {"c": 42}}, "x": {"y": "value"}}', ARRAY
 -- <JSON_EXTRACT_STRING>
 -- Basic JSON Extraction
 SELECT public.json_extract_string('{"key": "value"}', '$.key') AS result; -- Expected: "value"
+SELECT public.json_extract_string('["a", "b", "c"]', 1) AS result; -- Expected: b
 
 -- Nested JSON Extraction
 SELECT public.json_extract_string('{"a": {"b": {"c": 42}}}', '$.a.b.c') AS result; -- Expected: 42
@@ -60,6 +63,7 @@ SELECT public.json_extract_string('{"key": 123}', '$.key') AS result; -- Expecte
 
 -- Nested JSON Extraction
 SELECT public.json_value('{"a": {"b": {"c": 42}}}', '$.a.b.c') AS result; -- Expected: 42
+SELECT public.json_value('["a", "b", "c"]', 1) AS result; -- Expected: "b'
 
 -- Non-existent Path
 SELECT public.json_value('{"key": "value"}', '$.nonexistent') AS result; -- Expected: NULL
@@ -71,11 +75,17 @@ SELECT public.json_value('{"a": {"b": {"c": 42}}}', ARRAY['$.a.b.c', '$.a.b']) A
 
 -- <JSON_ARRAY_LENGTH>
 
+SELECT public.json_array_length('[1, 2, 3, 4, 5]') AS array_length; -- Expected: 5
+
 -- Test with a JSON array at the root and using a JSON path
 SELECT public.json_array_length('[1, 2, 3, 4, 5]', '$') AS array_length; -- Expected: 5
 
 -- Test with a JSON object that doesn't contain an array at the path
 SELECT public.json_array_length('{"not_an_array": {"key": "value"}}', '$.not_an_array') AS array_length; -- Expected: 0 (this  is expected DuckDB behaviour)
+
+-- BUG: This fails due to not being able to convert the UBIGINT array to a
+-- postgres type yet.
+SELECT public.json_array_length('{"a": [1, 2, 3, 4, 5], "b": [1]}', ARRAY['$.a', 'b']) AS array_length;
 
 -- </JSON_ARRAY_LENGTH>
 
@@ -96,6 +106,15 @@ SELECT public.json_keys('{"key1": "value1", "key2": "value2", "key3": "value3"}'
 
 -- Test 2: Extract keys from an empty JSON object
 SELECT public.json_keys('{}');
+
+-- With path
+SELECT public.json_keys('{"key1": {"a": "b", "c": 123}}', 'key1');
+
+SELECT public.json_keys('{"key1": {"a": "b", "c": 123}, "key2": {"abc": 567, "xyz": 123}}', ARRAY['key1', 'key2']);
+
+-- NOTE: This fails due to not Postgres only supporting multi-dimensional arrays
+-- when the dimensions are of the same size.
+SELECT public.json_keys('{"key1": {"a": "b", "c": 123}, "key2": {"abc": 567}}', ARRAY['key1', 'key2']);
 
 -- </JSON_Keys>
 

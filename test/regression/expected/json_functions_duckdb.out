@@ -53,6 +53,12 @@ SELECT public.json_extract(r['data'], '$.a.b.c') AS result FROM duckdb.query($$ 
  42
 (1 row)
 
+SELECT public.json_extract('["a", "b", "c"]', 1) AS result; -- Expected: "b"
+ result 
+--------
+ "b"
+(1 row)
+
 -- Multiple paths to nested objects
 SELECT public.json_extract('{"a": {"b": {"c": 42}}, "x": {"y": "value"}}', ARRAY['$.a.b.c', '$.x.y']) AS result; -- Expected: [42, "value"]
       result      
@@ -67,6 +73,12 @@ SELECT public.json_extract_string('{"key": "value"}', '$.key') AS result; -- Exp
  result 
 --------
  value
+(1 row)
+
+SELECT public.json_extract_string('["a", "b", "c"]', 1) AS result; -- Expected: b
+ result 
+--------
+ b
 (1 row)
 
 -- Nested JSON Extraction
@@ -106,6 +118,12 @@ SELECT public.json_value('{"a": {"b": {"c": 42}}}', '$.a.b.c') AS result; -- Exp
  42
 (1 row)
 
+SELECT public.json_value('["a", "b", "c"]', 1) AS result; -- Expected: b
+ result 
+--------
+ "b"
+(1 row)
+
 -- Non-existent Path
 SELECT public.json_value('{"key": "value"}', '$.nonexistent') AS result; -- Expected: NULL
  result 
@@ -122,6 +140,12 @@ SELECT public.json_value('{"a": {"b": {"c": 42}}}', ARRAY['$.a.b.c', '$.a.b']) A
 
 -- </JSON_VALUE>
 -- <JSON_ARRAY_LENGTH>
+SELECT public.json_array_length('[1, 2, 3, 4, 5]') AS array_length; -- Expected: 5
+ array_length 
+--------------
+            5
+(1 row)
+
 -- Test with a JSON array at the root and using a JSON path
 SELECT public.json_array_length('[1, 2, 3, 4, 5]', '$') AS array_length; -- Expected: 5
  array_length 
@@ -136,6 +160,11 @@ SELECT public.json_array_length('{"not_an_array": {"key": "value"}}', '$.not_an_
             0
 (1 row)
 
+-- BUG: This fails due to not being able to convert the UBIGINT array to a
+-- postgres type yet.
+SELECT public.json_array_length('{"a": [1, 2, 3, 4, 5], "b": [1]}', ARRAY['$.a', 'b']) AS array_length;
+WARNING:  (PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype 31 to Postgres type
+ERROR:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
 -- </JSON_ARRAY_LENGTH>
 -- <JSON_CONTAINS>
 -- Simple JSON array with numeric needle
