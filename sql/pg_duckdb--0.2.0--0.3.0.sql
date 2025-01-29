@@ -929,14 +929,14 @@ AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 -- json_valid
-CREATE FUNCTION @extschema@.json_valid("json" json)
+CREATE FUNCTION @extschema@.json_valid("json" duckdb.json)
 RETURNS boolean
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 -- json
-CREATE FUNCTION @extschema@.json("json" json)
+CREATE FUNCTION @extschema@.json("json" duckdb.json)
 RETURNS VARCHAR
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
