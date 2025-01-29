@@ -894,6 +894,12 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
+CREATE FUNCTION @extschema@.json_value("json" duckdb.json, path VARCHAR[])
+RETURNS VARCHAR
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
 -- json_array_length
 CREATE FUNCTION @extschema@.json_array_length("json" duckdb.json, path_input VARCHAR)
 RETURNS integer
@@ -917,7 +923,7 @@ LANGUAGE C;
 
 -- json_structure
 CREATE FUNCTION @extschema@.json_structure("json" duckdb.json)
-RETURNS VARCHAR
+RETURNS JSON
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
@@ -943,69 +949,68 @@ AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 -- json_group_array
-CREATE FUNCTION @extschema@.json_group_array_sfunc(bigint, "any")
-RETURNS bigint
+CREATE FUNCTION @extschema@.json_group_array_sfunc(JSON, "any")
+RETURNS JSON
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
-
 
 CREATE AGGREGATE @extschema@.json_group_array("any")
 (
     sfunc = @extschema@.json_group_array_sfunc,
-    stype = bigint,
+    stype = JSON,
     initcond = 0
 );
 
 -- json_group_object
-CREATE FUNCTION @extschema@.json_group_object_sfunc(bigint, "any", "any")
-RETURNS bigint
+CREATE FUNCTION @extschema@.json_group_object_sfunc(JSON, "any", "any")
+RETURNS JSON
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 CREATE AGGREGATE @extschema@.json_group_object("any", "any")
 (
     sfunc = @extschema@.json_group_object_sfunc,
-    stype = bigint,
+    stype = JSON,
     initcond = 0
 );
 
 -- json_group_structure
-CREATE FUNCTION @extschema@.json_group_structure_sfunc(bigint, duckdb.json)
-RETURNS bigint
+CREATE FUNCTION @extschema@.json_group_structure_sfunc(JSON, duckdb.json)
+RETURNS JSON
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 CREATE AGGREGATE @extschema@.json_group_structure(duckdb.json)
 (
     sfunc = @extschema@.json_group_structure_sfunc,
-    stype = bigint,
+    stype = JSON,
     initcond = 0
 );
 
 -- json_transform
-CREATE FUNCTION @extschema@.json_transform("json" duckdb.json, structure VARCHAR)
-RETURNS json
+CREATE FUNCTION @extschema@.json_transform("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 -- from_json
-CREATE FUNCTION @extschema@.from_json("json" duckdb.json, structure VARCHAR)
-RETURNS VARCHAR
+CREATE FUNCTION @extschema@.from_json("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 -- json_transform_strict
-CREATE FUNCTION @extschema@.json_transform_strict("json" duckdb.json, structure VARCHAR)
-RETURNS VARCHAR
+CREATE FUNCTION @extschema@.json_transform_strict("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 -- from_json_strict
-CREATE FUNCTION @extschema@.from_json_strict("json" duckdb.json, structure VARCHAR)
-RETURNS VARCHAR
+CREATE FUNCTION @extschema@.from_json_strict("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;

@@ -64,6 +64,9 @@ SELECT public.json_value('{"a": {"b": {"c": 42}}}', '$.a.b.c') AS result; -- Exp
 -- Non-existent Path
 SELECT public.json_value('{"key": "value"}', '$.nonexistent') AS result; -- Expected: NULL
 
+-- Multiple maths
+SELECT public.json_value('{"a": {"b": {"c": 42}}}', ARRAY['$.a.b.c', '$.a.b']) AS result; -- Expected: 42
+
 -- </JSON_VALUE>
 
 -- <JSON_ARRAY_LENGTH>
@@ -173,22 +176,51 @@ INSERT INTO example2 VALUES
     ('{"family": "anatidae", "species": ["duck", "goose"], "coolness": 42.42}'),
     ('{"family": "canidae", "species": ["labrador", "bulldog"], "hair": true}');
 
-SELECT json_group_structure(j) FROM example2;
+SELECT public.json_group_structure(j) FROM example2;
 
 -- </JSON_GROUP_STRUCTURE>
 
--- STRUCTURE no supported in postgres
+-- NOTE: Converting a DuckDB STRUCT type to a Postgres type is not
+-- implemented yet, so we test the next to functions in a convoluted way.
 
 -- CREATE TABLE example (j JSON);
 -- INSERT INTO example VALUES
 --     ('{"family": "anatidae", "species": ["duck", "goose"], "coolness": 42.42}'),
 --     ('{"family": "canidae", "species": ["labrador", "bulldog"], "hair": true}');
 -- -- <JSON_TRANSFORM>
--- SELECT json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') FROM example;
+SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') FROM example2;
 
--- SELECT json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 2)"}') FROM example;
+SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 2)"}') FROM example2;
+
+SELECT res['family'] family, res['coolness'] coolness FROM (
+    SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') res FROM example2
+);
+
+SELECT res['family'] family, res['coolness'] coolness FROM (
+    SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 1)"}') res FROM example2
+);
+
+SELECT res['family'] family, res['coolness'] coolness FROM (
+    SELECT public.from_json(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 1)"}') res FROM example2
+);
 -- -- </JSON_TRANSFORM>
 
 -- -- <JSON_TRANSFORM_STRICT>
--- SELECT json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') FROM example;
+SELECT public.json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') FROM example2;
+
+SELECT res['family'] family FROM (
+    SELECT public.json_transform_strict(j, '{"family": "VARCHAR"}') res FROM example2
+);
+
+SELECT res['family'] family, res['coolness'] coolness FROM (
+    SELECT public.json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') res FROM example2
+);
+
+SELECT res['family'] family FROM (
+    SELECT public.from_json_strict(j, '{"family": "VARCHAR"}') res FROM example2
+);
+
+SELECT res['family'] family, res['coolness'] coolness FROM (
+    SELECT public.from_json_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') res FROM example2
+);
 -- -- </JSON_TRANSFORM_STRICT>
