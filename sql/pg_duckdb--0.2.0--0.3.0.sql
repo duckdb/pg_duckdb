@@ -958,7 +958,13 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 -- json_type
-CREATE FUNCTION @extschema@.json_type("json" duckdb.json, path VARCHAR[] DEFAULT NULL)
+CREATE FUNCTION @extschema@.json_type("json" duckdb.json, path VARCHAR DEFAULT NULL)
+RETURNS VARCHAR
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.json_type("json" duckdb.json, path VARCHAR[])
 RETURNS VARCHAR
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'

@@ -118,7 +118,7 @@ SELECT public.json_value('{"a": {"b": {"c": 42}}}', '$.a.b.c') AS result; -- Exp
  42
 (1 row)
 
-SELECT public.json_value('["a", "b", "c"]', 1) AS result; -- Expected: b
+SELECT public.json_value('["a", "b", "c"]', 1) AS result; -- Expected: "b'
  result 
 --------
  "b"
@@ -197,6 +197,23 @@ SELECT public.json_keys('{}');
  {}
 (1 row)
 
+-- With path
+SELECT public.json_keys('{"key1": {"a": "b", "c": 123}}', 'key1');
+ json_keys 
+-----------
+ {a,c}
+(1 row)
+
+SELECT public.json_keys('{"key1": {"a": "b", "c": 123}, "key2": {"abc": 567, "xyz": 123}}', ARRAY['key1', 'key2']);
+     json_keys     
+-------------------
+ {{a,c},{abc,xyz}}
+(1 row)
+
+-- NOTE: This fails due to not Postgres only supporting multi-dimensional arrays
+-- when the dimensions are of the same size.
+SELECT public.json_keys('{"key1": {"a": "b", "c": 123}, "key2": {"abc": 567}}', ARRAY['key1', 'key2']);
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan) Invalid Input Error: Expected 2 values in list at dimension 1, found 1 instead
 -- </JSON_Keys>
 -- <JSON_STRUCTURE>
 -- Test 1: Consistent structure (simple nested JSON object)
@@ -221,7 +238,7 @@ AS structure;
 -- JSON (due to inconsistent types in the array)
 -- </JSON_STRUCTURE>
 -- <JSON_TYPE>
--- Test 1: Determine the type of the top-level JSON
+-- Determine the type of the top-level JSON
 SELECT public.json_type('{"name": "John", "age": 30, "isEmployed": true, "skills": ["SQL", "Python"]}')
 AS top_level_type;
  top_level_type 
@@ -231,7 +248,15 @@ AS top_level_type;
 
 -- Expected Output:
 -- OBJECT (because the top-level JSON is an object)
--- Test 2: Determine the types of elements at specific paths
+-- Detect the type of a specific element
+SELECT public.json_type('{"name": "John", "age": 30, "isEmployed": true, "skills": ["SQL", "Python"]}', 'name')
+AS element_type;
+ element_type 
+--------------
+ VARCHAR
+(1 row)
+
+-- Determine the types of multiple elements at specific paths
 SELECT public.json_type('{"name": "John", "age": 30, "isEmployed": true, "skills": ["SQL", "Python"]}', ARRAY['name', 'age', 'isEmployed', 'skills'])
 AS element_types;
           element_types          

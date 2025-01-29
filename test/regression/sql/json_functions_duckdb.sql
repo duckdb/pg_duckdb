@@ -137,14 +137,18 @@ AS structure;
 -- </JSON_STRUCTURE>
 
 -- <JSON_TYPE>
--- Test 1: Determine the type of the top-level JSON
+-- Determine the type of the top-level JSON
 SELECT public.json_type('{"name": "John", "age": 30, "isEmployed": true, "skills": ["SQL", "Python"]}')
 AS top_level_type;
 
 -- Expected Output:
 -- OBJECT (because the top-level JSON is an object)
 
--- Test 2: Determine the types of elements at specific paths
+-- Detect the type of a specific element
+SELECT public.json_type('{"name": "John", "age": 30, "isEmployed": true, "skills": ["SQL", "Python"]}', 'name')
+AS element_type;
+
+-- Determine the types of multiple elements at specific paths
 SELECT public.json_type('{"name": "John", "age": 30, "isEmployed": true, "skills": ["SQL", "Python"]}', ARRAY['name', 'age', 'isEmployed', 'skills'])
 AS element_types;
 
