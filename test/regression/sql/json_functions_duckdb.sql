@@ -163,6 +163,7 @@ SELECT public.json_group_array(v) FROM example1;
 
 -- <JSON_GROUP_OBJECT>
 SELECT public.json_group_object(k, v) FROM example1;
+SELECT public.json_group_object(123, 'abc');
 
 -- </JSON_GROUP_OBJECT>
 

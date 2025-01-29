@@ -245,10 +245,17 @@ SELECT public.json_group_array(v) FROM example1;
 -- </JSON_GROUP_ARRAY>
 -- <JSON_GROUP_OBJECT>
 SELECT public.json_group_object(k, v) FROM example1;
-ERROR:  function public.json_group_object(character varying, integer) does not exist
-LINE 1: SELECT public.json_group_object(k, v) FROM example1;
-               ^
-HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+   json_group_object   
+-----------------------
+ {"duck":42,"goose":7}
+(1 row)
+
+SELECT public.json_group_object(123, 'abc');
+ json_group_object 
+-------------------
+ {"123":"abc"}
+(1 row)
+
 -- </JSON_GROUP_OBJECT>
 -- <JSON_GROUP_STRUCTURE>
 CREATE TABLE example2 (j JSON);
