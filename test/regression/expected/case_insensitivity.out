@@ -1,0 +1,23 @@
+CREATE TABLE a(b int);
+CREATE TABLE "A"(c int);
+INSERT INTO a VALUES(1);
+SELECT * FROM a, "A" as aa;
+ b | c 
+---+---
+(0 rows)
+
+CREATE SCHEMA b;
+CREATE SCHEMA "B";
+CREATE TABLE b.a(d int);
+CREATE TABLE "B".a(e int);
+INSERT INTO b.a VALUES(1);
+SELECT * FROM b.a, "B".a as aa;
+ d | e 
+---+---
+(0 rows)
+
+DROP TABLE a, "A";
+DROP SCHEMA CASCADE b, "B";
+ERROR:  syntax error at or near "b"
+LINE 1: DROP SCHEMA CASCADE b, "B";
+                            ^
