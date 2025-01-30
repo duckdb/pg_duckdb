@@ -771,8 +771,8 @@ pgduckdb_is_not_default_expr(Node *node, void *context) {
 #endif
 }
 
-bool is_system_sampling(const char *tsm_name, int num_args) 
-{
-    return (pg_strcasecmp(tsm_name, "system") == 0) && (num_args == 1);
+bool
+is_system_sampling(const char *tsm_name, int num_args) {
+	return (pg_strcasecmp(tsm_name, "system") == 0) && (num_args == 1);
 }
 }
