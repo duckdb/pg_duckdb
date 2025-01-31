@@ -9,7 +9,7 @@ variable "POSTGRES_VERSION" {
 target "shared" {
   platforms = [
     "linux/amd64",
-    "linux/arm64"
+    # "linux/arm64"
   ]
 }
 
