@@ -1,4 +1,5 @@
-FROM postgres_base AS base
+ARG POSTGRES_VERSION
+FROM postgres:${POSTGRES_VERSION}-bookworm AS base
 
 ###
 ### BUILDER
