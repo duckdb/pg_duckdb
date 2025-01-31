@@ -16,6 +16,10 @@ target "shared" {
 target "postgres" {
   inherits = ["shared"]
 
+  contexts = {
+    postgres_base = "docker-image://postgres:${POSTGRES_VERSION}-bookworm"
+  }
+
   args = {
     POSTGRES_VERSION = "${POSTGRES_VERSION}"
   }
