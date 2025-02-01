@@ -12493,7 +12493,8 @@ static void
 get_tablesample_def(TableSampleClause *tablesample, deparse_context *context)
 {
 	StringInfo	buf = context->buf;
-	Oid			argtypes[1];
+	Oid			argtypes[1] = { INTERNALOID };
+	char 		*tsm_name;
 	int			nargs;
 	ListCell   *l;
 
@@ -12501,18 +12502,24 @@ get_tablesample_def(TableSampleClause *tablesample, deparse_context *context)
 	 * We should qualify the handler's function name if it wouldn't be
 	 * resolved by lookup in the current search path.
 	 */
-	argtypes[0] = INTERNALOID;
-	appendStringInfo(buf, " TABLESAMPLE %s (",
-					 generate_function_name(tablesample->tsmhandler, 1,
-											NIL, argtypes,
-											false, NULL, EXPR_KIND_NONE));
+	tsm_name = generate_function_name(tablesample->tsmhandler, 1, NIL, argtypes,
+	false, NULL, EXPR_KIND_NONE);
+	appendStringInfo(buf, " TABLESAMPLE %s (", tsm_name);
 
-	nargs = 0;
-	foreach(l, tablesample->args)
+	if (is_system_sampling(tsm_name, list_length(tablesample->args)))
 	{
-		if (nargs++ > 0)
-			appendStringInfoString(buf, ", ");
-		get_rule_expr((Node *) lfirst(l), context, false);
+		get_rule_expr((Node *) linitial(tablesample->args), context, false);
+		appendStringInfoChar(buf, '%');
+	}
+	else 
+	{
+		nargs = 0;
+		foreach(l, tablesample->args)
+		{
+			if (nargs++ > 0)
+				appendStringInfoString(buf, ", ");
+			get_rule_expr((Node *) lfirst(l), context, false);
+		}
 	}
 	appendStringInfoChar(buf, ')');
 

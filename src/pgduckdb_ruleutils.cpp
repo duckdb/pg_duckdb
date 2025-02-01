@@ -770,4 +770,9 @@ pgduckdb_is_not_default_expr(Node *node, void *context) {
 	return expression_tree_walker(node, (bool (*)())((void *)pgduckdb_is_not_default_expr), context);
 #endif
 }
+
+bool
+is_system_sampling(const char *tsm_name, int num_args) {
+	return (pg_strcasecmp(tsm_name, "system") == 0) && (num_args == 1);
+}
 }
