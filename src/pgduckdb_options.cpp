@@ -199,7 +199,18 @@ DuckdbInstallExtension(Datum name_datum) {
 
 	/*
 	 * Temporily allow all filesystems for this query, because INSTALL needs
-	 * local filesystem access.
+	 * local filesystem access. Since this setting cannot be changed inside
+	 * DuckDB after it's set to LocalFileSystem this temporary configuration
+	 * change only really has effect duckdb.install_extension is called as the
+	 * first DuckDB query for this session. Since we cannot change it back.
+	 *
+	 * While that's suboptimal it's also not a huge problem. Users only need to
+	 * install an extension once on a server. So doing that on a new connection
+	 * or after calling duckdb.recycle_ddb() should not be a big deal.
+	 *
+	 * NOTE: Because each backend has its own DuckDB instance, this setting
+	 * does not impact other backends and thus cannot cause a security issue
+	 * due to a race condition.
 	 */
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("duckdb.disabled_filesystems", "", PGC_SUSET, PGC_S_SESSION);
