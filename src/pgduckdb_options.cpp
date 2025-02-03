@@ -329,6 +329,7 @@ DECLARE_PG_FUNCTION(cache) {
 }
 
 DECLARE_PG_FUNCTION(cache_info) {
+	pgduckdb::RequireDuckdbExecution();
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *)fcinfo->resultinfo;
 	Tuplestorestate *tuple_store;
 	TupleDesc cache_info_tuple_desc;
@@ -369,12 +370,14 @@ DECLARE_PG_FUNCTION(cache_info) {
 }
 
 DECLARE_PG_FUNCTION(cache_delete) {
+	pgduckdb::RequireDuckdbExecution();
 	Datum cache_key = PG_GETARG_DATUM(0);
 	bool result = pgduckdb::DuckdbCacheDelete(cache_key);
 	PG_RETURN_BOOL(result);
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
+	pgduckdb::RequireDuckdbExecution();
 	/*
 	 * We cannot safely run this in a transaction block, because a DuckDB
 	 * transaction might have already started. Recycling the database will

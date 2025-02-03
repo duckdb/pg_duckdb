@@ -21,4 +21,5 @@ Oid IsDuckdbTable(Relation relation);
 Oid IsMotherDuckTable(Form_pg_class relation);
 Oid IsMotherDuckTable(Relation relation);
 Oid IsDuckdbExecutionAllowed();
+void RequireDuckdbExecution();
 } // namespace pgduckdb

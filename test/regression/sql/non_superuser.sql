@@ -28,6 +28,15 @@ SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
 SET ROLE user3;
 SELECT * FROM t;
 
+-- And all these duckdb functions should also fail, even the ones that don't
+-- actually open a duckdb connection.
+SET duckdb.force_execution = false;
+SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
+SELECT * FROM duckdb.cache_info();
+SELECT * FROM duckdb.cache_delete('some file');
+CALL duckdb.recycle_ddb();
+SET duckdb.force_execution = true;
+
 -- Should work with regular posgres execution though, because this user is
 -- allowed to read the table.
 SET duckdb.force_execution = false;
@@ -54,9 +63,6 @@ SET duckdb.force_execution = true;
 
 -- Extension installation
 SET duckdb.force_execution = false;
--- Recycling the database is not allowed by default. Security implications have
--- not been researched.
-CALL duckdb.recycle_ddb();
 -- Should fail because installing extensions is restricted for super users by default
 SELECT * FROM duckdb.install_extension('iceberg');
 -- Similarly when trying using raw duckdb commands
