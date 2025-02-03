@@ -1,4 +1,4 @@
-from .utils import Cursor, Postgres
+from .utils import Postgres
 
 import pytest
 import psycopg.errors
