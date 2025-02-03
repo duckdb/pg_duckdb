@@ -24,6 +24,7 @@ extern "C" {
 #include "nodes/nodeFuncs.h"
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
@@ -193,8 +194,17 @@ ReadDuckdbExtensions() {
 static bool
 DuckdbInstallExtension(Datum name_datum) {
 	auto extension_name = DatumToString(name_datum);
-	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
+
+	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name);
+
+	/*
+	 * Temporily allow all filesystems for this query, because INSTALL needs
+	 * local filesystem access.
+	 */
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("duckdb.disabled_filesystems", "", PGC_SUSET, PGC_S_SESSION);
 	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
+	AtEOXact_GUC(false, save_nestlevel);
 
 	Oid arg_types[] = {TEXTOID};
 	Datum values[] = {name_datum};
