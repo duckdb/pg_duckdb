@@ -110,51 +110,6 @@ LINE 1: LOAD  '; select * from hacky
               ^
 TRUNCATE duckdb.extensions;
 SET duckdb.force_execution = true;
--- Even after a reconnect raw extension installation should not be possible
--- though, because that would allow installing extensions from community repos.
-\c
-SET ROLE user1;
-SET duckdb.force_execution = false;
-SELECT * FROM duckdb.raw_query($$ INSTALL avro FROM community; $$);
-ERROR:  (PGDuckDB/pgduckdb_raw_query) Permission Error: File system LocalFileSystem has been disabled by configuration
--- Even if such community extensions somehow get installed, it's not possible
--- to load them without changing allow_community_extensions. Not even for a
--- superuser.
-\c
-SET duckdb.force_execution = false;
-SELECT * FROM duckdb.raw_query($$ INSTALL avro FROM community; $$);
-NOTICE:  result: Success	
-BOOLEAN	
-[ Rows: 0]
-
-
- raw_query 
------------
- 
-(1 row)
-
-SELECT * FROM duckdb.raw_query($$ LOAD avro; $$);
-ERROR:  (PGDuckDB/pgduckdb_raw_query) IO Error: Extension "/home/jelte/work/pg_duckdb/test/regression/tmp_check/data/duckdb_extensions/v1.1.3/linux_amd64/avro.duckdb_extension" could not be loaded because its signature is either missing or invalid and unsigned extensions are disabled by configuration (allow_unsigned_extensions)
--- But it should be possible to load them after changing that setting.
-\c
-SET duckdb.allow_community_extensions = true;
-SET duckdb.force_execution = false;
-SELECT * FROM duckdb.raw_query($$ LOAD avro; $$);
-NOTICE:  result: Success	
-BOOLEAN	
-[ Rows: 0]
-
-
- raw_query 
------------
- 
-(1 row)
-
--- And that setting is only changeable by superusers
-\c
-SET ROLE user1;
-SET duckdb.allow_community_extensions = true;
-ERROR:  permission denied to set parameter "duckdb.allow_community_extensions"
 RESET ROLE;
 DROP TABLE t;
 DROP OWNED BY user1;

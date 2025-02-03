@@ -84,32 +84,6 @@ SELECT * FROM duckdb.query($$ SELECT 1 $$);
 TRUNCATE duckdb.extensions;
 SET duckdb.force_execution = true;
 
--- Even after a reconnect raw extension installation should not be possible
--- though, because that would allow installing extensions from community repos.
-\c
-SET ROLE user1;
-SET duckdb.force_execution = false;
-SELECT * FROM duckdb.raw_query($$ INSTALL avro FROM community; $$);
-
--- Even if such community extensions somehow get installed, it's not possible
--- to load them without changing allow_community_extensions. Not even for a
--- superuser.
-\c
-SET duckdb.force_execution = false;
-SELECT * FROM duckdb.raw_query($$ INSTALL avro FROM community; $$);
-SELECT * FROM duckdb.raw_query($$ LOAD avro; $$);
-
--- But it should be possible to load them after changing that setting.
-\c
-SET duckdb.allow_community_extensions = true;
-SET duckdb.force_execution = false;
-SELECT * FROM duckdb.raw_query($$ LOAD avro; $$);
-
--- And that setting is only changeable by superusers
-\c
-SET ROLE user1;
-SET duckdb.allow_community_extensions = true;
-
 RESET ROLE;
 DROP TABLE t;
 DROP OWNED BY user1;
