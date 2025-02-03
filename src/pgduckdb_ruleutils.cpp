@@ -53,6 +53,29 @@ pgduckdb_is_duckdb_row(Oid type_oid) {
 	return type_oid == pgduckdb::DuckdbRowOid();
 }
 
+/*
+ * We never want to show some of our unresolved types in the DuckDB query.
+ * These types only exist to make the Postgres parser and its type resolution
+ * happy. DuckDB can simply figure out the correct type itself without an
+ * explicit cast.
+ */
+bool
+pgduckdb_is_fake_type(Oid type_oid) {
+	if (pgduckdb_is_unresolved_type(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb_is_duckdb_row(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb::DuckdbJsonOid() == type_oid) {
+		return true;
+	}
+
+	return false;
+}
+
 bool
 pgduckdb_var_is_duckdb_row(Var *var) {
 	if (!var) {
@@ -299,14 +322,13 @@ pgduckdb_function_needs_subquery(Oid function_oid) {
 }
 
 /*
- * We never want to show the unresolved_type in DuckDB query. The
- * unrosolved_type does not actually exist in DuckDB, we only use it to keep
- * the Postgres parser happy. DuckDB can simply figure out the correct type
- * itself without an explicit cast.
+ * A wrapper around pgduckdb_is_fake_type that returns -1 if the type of the
+ * Const is fake, because that's the type of value that get_const_expr requires
+ * in its showtype variable to never show the type.
  */
 int
 pgduckdb_show_type(Const *constval, int original_showtype) {
-	if (pgduckdb_is_unresolved_type(constval->consttype)) {
+	if (pgduckdb_is_fake_type(constval->consttype)) {
 		return -1;
 	}
 	return original_showtype;

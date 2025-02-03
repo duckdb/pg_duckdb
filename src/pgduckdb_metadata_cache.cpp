@@ -55,6 +55,8 @@ struct {
 	Oid row_oid;
 	/* The OID of the duckdb.unresolved_type */
 	Oid unresolved_type_oid;
+	/* The OID of the duckdb.json */
+	Oid json_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
 	/* The OID of the duckdb.motherduck_postgres_database */
@@ -123,7 +125,25 @@ BuildDuckdbOnlyFunctions() {
 	                                "delta_scan",
 	                                "read_json",
 	                                "approx_count_distinct",
-	                                "query"};
+	                                "query",
+	                                "json_exists",
+	                                "json_extract",
+	                                "json_extract_string",
+	                                "json_array_length",
+	                                "json_contains",
+	                                "json_keys",
+	                                "json_structure",
+	                                "json_type",
+	                                "json_valid",
+	                                "json",
+	                                "json_group_array",
+	                                "json_group_object",
+	                                "json_group_structure",
+	                                "json_transform",
+	                                "from_json",
+	                                "json_transform_strict",
+	                                "from_json_strict",
+	                                "json_value"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
@@ -192,6 +212,8 @@ IsExtensionRegistered() {
 		cache.unresolved_type_oid =
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("unresolved_type"), cache.schema_oid);
 
+		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
+
 		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
 
 		if (duckdb_postgres_role[0] != '\0') {
@@ -254,6 +276,12 @@ Oid
 DuckdbUnresolvedTypeOid() {
 	Assert(cache.valid);
 	return cache.unresolved_type_oid;
+}
+
+Oid
+DuckdbJsonOid() {
+	Assert(cache.valid);
+	return cache.json_oid;
 }
 
 Oid

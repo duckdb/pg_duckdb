@@ -11100,6 +11100,10 @@ get_coercion_expr(Node *arg, deparse_context *context,
 			appendStringInfoChar(buf, ')');
 	}
 
+	if (pgduckdb_is_fake_type(resulttype)) {
+		return;
+	}
+
 	/*
 	 * Never emit resulttype(arg) functional notation. A pg_proc entry could
 	 * take precedence, and a resulttype in pg_temp would require schema
