@@ -22,15 +22,11 @@ SELECT * from duckdb.tables;
 ERROR:  permission denied for table tables
 SELECT * from duckdb.extensions;
 ERROR:  permission denied for table extensions
--- Should fail because raw_query is to dangerous for regular users and the
--- others currently allow for SQL injection
+-- Should fail because any Postgres tables accesesd from DuckDB will have their
+-- permissions checked even if it happens straight from DuckDB.
 SET duckdb.force_execution = false;
-SELECT * FROM duckdb.raw_query($$ SELECT * FROM t $$);
-ERROR:  permission denied for function raw_query
-SELECT * FROM duckdb.install_extension('some hacky sql');
-ERROR:  permission denied for function install_extension
-SELECT * FROM duckdb.cache('some hacky sql', 'some more hacky sql');
-ERROR:  permission denied for function cache
+SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
+ERROR:  (PGDuckDB/pgduckdb_raw_query) Executor Error: (PGDuckDB/PostgresTableReader) permission denied for table t
 SET duckdb.force_execution = true;
 -- read_csv from the local filesystem should be disallowed
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
@@ -39,6 +35,18 @@ ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Permission Erro
 SET ROLE user3;
 SELECT * FROM t;
 ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
+-- And all these duckdb functions should also fail, even the ones that don't
+-- actually open a duckdb connection.
+SET duckdb.force_execution = false;
+SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
+ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
+SELECT * FROM duckdb.cache_info();
+ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
+SELECT * FROM duckdb.cache_delete('some file');
+ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
+CALL duckdb.recycle_ddb();
+ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
+SET duckdb.force_execution = true;
 -- Should work with regular posgres execution though, because this user is
 -- allowed to read the table.
 SET duckdb.force_execution = false;
@@ -57,10 +65,60 @@ SELECT * FROM t;
 ---
 (0 rows)
 
--- Should fail now, we don't support RLS
+-- Should fall back to PG execution, because we don't support RLS
 SET ROLE user1;
 SELECT * FROM t;
-ERROR:  (PGDuckDB/pgduckdb_relation_name) Cannot use "t" in a DuckDB query, because RLS is enabled on it
+WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Not implemented Error: Cannot use "t" relation in a DuckDB query, because RLS is enabled on it
+ a 
+---
+(0 rows)
+
+-- Should fail because we require duckdb execution so no fallback
+SELECT public.approx_count_distinct(a) FROM t;
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Not implemented Error: Cannot use "t" relation in a DuckDB query, because RLS is enabled on it
+SET duckdb.force_execution = false;
+SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
+ERROR:  (PGDuckDB/pgduckdb_raw_query) Not implemented Error: Cannot use "t" relation in a DuckDB query, because RLS is enabled on it
+SET duckdb.force_execution = true;
+-- Extension installation
+SET duckdb.force_execution = false;
+-- Should fail because installing extensions is restricted for super users by default
+SELECT * FROM duckdb.install_extension('iceberg');
+ERROR:  permission denied for function install_extension
+-- Similarly when trying using raw duckdb commands
+SELECT * FROM duckdb.raw_query($$ INSTALL someextension $$);
+ERROR:  (PGDuckDB/pgduckdb_raw_query) Permission Error: File system LocalFileSystem has been disabled by configuration
+SET duckdb.force_execution = true;
+-- It should be possible to install extensions as non-superuser after the
+-- following grants.
+RESET ROLE;
+GRANT ALL ON FUNCTION duckdb.install_extension(TEXT) TO user1;
+GRANT ALL ON TABLE duckdb.extensions TO user1;
+GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO user1;
+-- You need to reconnect though (or run recycle_ddb), because
+-- disabled_filesystems cannot be changed after it has been set.
+\c
+SET ROLE user1;
+SET duckdb.force_execution = false;
+SELECT * FROM duckdb.install_extension('iceberg');
+ install_extension 
+-------------------
+ t
+(1 row)
+
+-- We should handle SQL injections carefully though to only allow INSTALL
+SELECT * FROM duckdb.install_extension($$ '; select * from hacky '' $$);
+ERROR:  (PGDuckDB/install_extension) HTTP Error: Failed to download extension " '; select * from hacky '' " at URL "http://extensions.duckdb.org/v1.1.3/linux_amd64/ '; select * from hacky '' .duckdb_extension.gz" (HTTP 403)
+
+Candidate extensions: "delta", "excel", "sqlite_scanner", "inet", "sqlite"
+INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky $$);
+SELECT * FROM duckdb.query($$ SELECT 1 $$);
+ERROR:  (PGDuckDB/DuckdbPlanNode) Parser Error: unterminated quoted string at or near "'; select * from hacky "
+LINE 1: LOAD  '; select * from hacky 
+              ^
+TRUNCATE duckdb.extensions;
+SET duckdb.force_execution = true;
 RESET ROLE;
 DROP TABLE t;
-DROP USER user1, user2;
+DROP OWNED BY user1;
+DROP USER user1, user2, user3;

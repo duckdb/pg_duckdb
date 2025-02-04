@@ -53,6 +53,29 @@ pgduckdb_is_duckdb_row(Oid type_oid) {
 	return type_oid == pgduckdb::DuckdbRowOid();
 }
 
+/*
+ * We never want to show some of our unresolved types in the DuckDB query.
+ * These types only exist to make the Postgres parser and its type resolution
+ * happy. DuckDB can simply figure out the correct type itself without an
+ * explicit cast.
+ */
+bool
+pgduckdb_is_fake_type(Oid type_oid) {
+	if (pgduckdb_is_unresolved_type(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb_is_duckdb_row(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb::DuckdbJsonOid() == type_oid) {
+		return true;
+	}
+
+	return false;
+}
+
 bool
 pgduckdb_var_is_duckdb_row(Var *var) {
 	if (!var) {
@@ -299,14 +322,13 @@ pgduckdb_function_needs_subquery(Oid function_oid) {
 }
 
 /*
- * We never want to show the unresolved_type in DuckDB query. The
- * unrosolved_type does not actually exist in DuckDB, we only use it to keep
- * the Postgres parser happy. DuckDB can simply figure out the correct type
- * itself without an explicit cast.
+ * A wrapper around pgduckdb_is_fake_type that returns -1 if the type of the
+ * Const is fake, because that's the type of value that get_const_expr requires
+ * in its showtype variable to never show the type.
  */
 int
 pgduckdb_show_type(Const *constval, int original_showtype) {
-	if (pgduckdb_is_unresolved_type(constval->consttype)) {
+	if (pgduckdb_is_fake_type(constval->consttype)) {
 		return -1;
 	}
 	return original_showtype;
@@ -502,26 +524,6 @@ pgduckdb_relation_name(Oid relation_oid) {
 	const char *relname = NameStr(relation->relname);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
 	bool is_duckdb_table = pgduckdb::IsDuckdbTable(relation);
-
-	if (!is_duckdb_table) {
-		/*
-		 * FIXME: This should be moved somewhere else. We already have a list
-		 * of RTEs somwhere that we use to call ExecCheckPermissions. We could
-		 * used that same list to check if RLS is enabled on any of the tables,
-		 * instead of checking it here for **every occurence** of each table in
-		 * the query. One benefit of having it here is that it ensures that we
-		 * never forget to check for RLS.
-		 *
-		 * NOTE: We only need to check this for non-DuckDB tables because DuckDB
-		 * tables don't support RLS anyway.
-		 */
-		if (check_enable_rls(relation_oid, InvalidOid, false) == RLS_ENABLED) {
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			                errmsg("(PGDuckDB/pgduckdb_relation_name) Cannot use \"%s\" in a DuckDB query, because RLS "
-			                       "is enabled on it",
-			                       get_rel_name(relation_oid))));
-		}
-	}
 
 	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, is_duckdb_table);
 

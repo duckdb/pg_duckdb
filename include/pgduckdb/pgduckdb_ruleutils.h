@@ -17,6 +17,7 @@ List *pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_ta
 const char *pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table);
 bool pgduckdb_is_duckdb_row(Oid type_oid);
 bool pgduckdb_is_unresolved_type(Oid type_oid);
+bool pgduckdb_is_fake_type(Oid type_oid);
 bool pgduckdb_var_is_duckdb_row(Var *var);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
 bool pgduckdb_target_list_contains_unresolved_type_or_row(List *target_list);

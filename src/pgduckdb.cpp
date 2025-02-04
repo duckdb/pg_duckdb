@@ -26,6 +26,7 @@ int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
 char *duckdb_disabled_filesystems = strdup("LocalFileSystem");
 bool duckdb_enable_external_access = true;
+bool duckdb_allow_community_extensions = false;
 bool duckdb_allow_unsigned_extensions = false;
 bool duckdb_autoinstall_known_extensions = true;
 bool duckdb_autoload_known_extensions = true;
@@ -129,6 +130,9 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
 	                     &duckdb_enable_external_access, PGC_SUSET);
+
+	DefineCustomVariable("duckdb.allow_community_extensions", "Disable installing community extensions",
+	                     &duckdb_allow_community_extensions, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.allow_unsigned_extensions",
 	                     "Allow DuckDB to load extensions with invalid or missing signatures",
