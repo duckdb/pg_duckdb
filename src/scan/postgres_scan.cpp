@@ -25,7 +25,7 @@ FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) 
 
 int
 PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
-                                             duckdb::string &query_filters, bool is_optional_filter_parent) {
+                                             duckdb::string &query_filters, bool is_inside_optional_filter) {
 	switch (filter->filter_type) {
 	case duckdb::TableFilterType::CONSTANT_COMPARISON:
 	case duckdb::TableFilterType::IS_NULL:
@@ -62,7 +62,7 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 	case duckdb::TableFilterType::DYNAMIC_FILTER:
 	case duckdb::TableFilterType::STRUCT_EXTRACT:
 	default: {
-		if (is_optional_filter_parent) {
+		if (is_inside_optional_filter) {
 			pd_log(DEBUG1, "(DuckDB/ExtractQueryFilters) Unsupported optional filter: %s",
 			       filter->ToString(column_name).c_str());
 			return 0;
