@@ -40,7 +40,8 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 		duckdb::vector<std::string> conjuction_child_filters;
 		for (idx_t i = 0; i < conjuction_filter->child_filters.size(); i++) {
 			std::string child_filter;
-			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter, false)) {
+			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter,
+			                        is_inside_optional_filter)) {
 				conjuction_child_filters.emplace_back(child_filter);
 			}
 		}
