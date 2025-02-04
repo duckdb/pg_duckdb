@@ -50,7 +50,7 @@ We have several python dependencies for testing and formatting code.
 You can install these dependencies like this:
 ```bash
 # Needed only once
-pip -m venv env
+python -m venv env
 # Needed every time you open a new terminal
 source env/bin/activate
 # Needed only once, or when dependencies change
