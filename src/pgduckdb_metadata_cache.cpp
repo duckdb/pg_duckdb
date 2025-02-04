@@ -347,4 +347,11 @@ IsDuckdbExecutionAllowed() {
 	return has_privs_of_role(GetUserId(), cache.postgres_role_oid);
 }
 
+void
+RequireDuckdbExecution() {
+	if (!pgduckdb::IsDuckdbExecutionAllowed()) {
+		elog(ERROR, "DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role");
+	}
+}
+
 } // namespace pgduckdb

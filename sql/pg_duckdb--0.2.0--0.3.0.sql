@@ -1050,3 +1050,9 @@ RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
+
+GRANT ALL ON FUNCTION duckdb.raw_query(TEXT) TO PUBLIC;
+GRANT ALL ON FUNCTION duckdb.cache(TEXT, TEXT) TO PUBLIC;
+GRANT ALL ON FUNCTION duckdb.cache_info() TO PUBLIC;
+GRANT ALL ON FUNCTION duckdb.cache_delete(TEXT) TO PUBLIC;
+GRANT ALL ON PROCEDURE duckdb.recycle_ddb() TO PUBLIC;

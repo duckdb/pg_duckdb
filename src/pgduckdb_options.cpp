@@ -24,6 +24,7 @@ extern "C" {
 #include "nodes/nodeFuncs.h"
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
+#include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
@@ -193,8 +194,28 @@ ReadDuckdbExtensions() {
 static bool
 DuckdbInstallExtension(Datum name_datum) {
 	auto extension_name = DatumToString(name_datum);
-	auto install_extension_command = duckdb::StringUtil::Format("INSTALL %s;", extension_name.c_str());
+
+	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name);
+
+	/*
+	 * Temporily allow all filesystems for this query, because INSTALL needs
+	 * local filesystem access. Since this setting cannot be changed inside
+	 * DuckDB after it's set to LocalFileSystem this temporary configuration
+	 * change only really has effect duckdb.install_extension is called as the
+	 * first DuckDB query for this session. Since we cannot change it back.
+	 *
+	 * While that's suboptimal it's also not a huge problem. Users only need to
+	 * install an extension once on a server. So doing that on a new connection
+	 * or after calling duckdb.recycle_ddb() should not be a big deal.
+	 *
+	 * NOTE: Because each backend has its own DuckDB instance, this setting
+	 * does not impact other backends and thus cannot cause a security issue
+	 * due to a race condition.
+	 */
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("duckdb.disabled_filesystems", "", PGC_SUSET, PGC_S_SESSION);
 	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
+	AtEOXact_GUC(false, save_nestlevel);
 
 	Oid arg_types[] = {TEXTOID};
 	Datum values[] = {name_datum};
@@ -319,6 +340,7 @@ DECLARE_PG_FUNCTION(cache) {
 }
 
 DECLARE_PG_FUNCTION(cache_info) {
+	pgduckdb::RequireDuckdbExecution();
 	ReturnSetInfo *rsinfo = (ReturnSetInfo *)fcinfo->resultinfo;
 	Tuplestorestate *tuple_store;
 	TupleDesc cache_info_tuple_desc;
@@ -359,12 +381,14 @@ DECLARE_PG_FUNCTION(cache_info) {
 }
 
 DECLARE_PG_FUNCTION(cache_delete) {
+	pgduckdb::RequireDuckdbExecution();
 	Datum cache_key = PG_GETARG_DATUM(0);
 	bool result = pgduckdb::DuckdbCacheDelete(cache_key);
 	PG_RETURN_BOOL(result);
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
+	pgduckdb::RequireDuckdbExecution();
 	/*
 	 * We cannot safely run this in a transaction block, because a DuckDB
 	 * transaction might have already started. Recycling the database will
