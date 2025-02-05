@@ -54,193 +54,193 @@ CREATE FUNCTION duckdb_unresolved_type_operator_bool(duckdb.unresolved_type, duc
 CREATE FUNCTION duckdb_unresolved_type_operator(duckdb.unresolved_type) RETURNS duckdb.unresolved_type AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_operator' LANGUAGE C IMMUTABLE STRICT;
 
 -- prefix operators + and -
-CREATE OPERATOR + (
+CREATE OPERATOR pg_catalog.+ (
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR - (
+CREATE OPERATOR pg_catalog.- (
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
 -- Basic comparison operators
-CREATE OPERATOR <= (
+CREATE OPERATOR pg_catalog.<= (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR <= (
+CREATE OPERATOR pg_catalog.<= (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR <= (
+CREATE OPERATOR pg_catalog.<= (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR < (
+CREATE OPERATOR pg_catalog.< (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR < (
+CREATE OPERATOR pg_catalog.< (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR < (
+CREATE OPERATOR pg_catalog.< (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR <> (
+CREATE OPERATOR pg_catalog.<> (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR <> (
+CREATE OPERATOR pg_catalog.<> (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR <> (
+CREATE OPERATOR pg_catalog.<> (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR = (
+CREATE OPERATOR pg_catalog.= (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR = (
+CREATE OPERATOR pg_catalog.= (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR = (
+CREATE OPERATOR pg_catalog.= (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR > (
+CREATE OPERATOR pg_catalog.> (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR > (
+CREATE OPERATOR pg_catalog.> (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR > (
+CREATE OPERATOR pg_catalog.> (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR >= (
+CREATE OPERATOR pg_catalog.>= (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR >= (
+CREATE OPERATOR pg_catalog.>= (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
-CREATE OPERATOR >= (
+CREATE OPERATOR pg_catalog.>= (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator_bool
 );
 
 -- binary math operators
-CREATE OPERATOR + (
+CREATE OPERATOR pg_catalog.+ (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR + (
+CREATE OPERATOR pg_catalog.+ (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR + (
+CREATE OPERATOR pg_catalog.+ (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR - (
+CREATE OPERATOR pg_catalog.- (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR - (
+CREATE OPERATOR pg_catalog.- (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR - (
+CREATE OPERATOR pg_catalog.- (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR * (
+CREATE OPERATOR pg_catalog.* (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR * (
+CREATE OPERATOR pg_catalog.* (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR * (
+CREATE OPERATOR pg_catalog.* (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR / (
+CREATE OPERATOR pg_catalog./ (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR / (
+CREATE OPERATOR pg_catalog./ (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = "any",
     FUNCTION = duckdb_unresolved_type_operator
 );
 
-CREATE OPERATOR / (
+CREATE OPERATOR pg_catalog./ (
     LEFTARG = "any",
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
@@ -287,91 +287,91 @@ RETURNS duckdb.unresolved_type AS 'MODULE_PATHNAME', 'duckdb_unresolved_type_ope
 -- People using older Postgres versions can manually implement the aggregate if
 -- they really require it.
 
-CREATE AGGREGATE arbitrary(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.arbitrary(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE arg_max(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.arg_max(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE arg_max(duckdb.unresolved_type, "any", "any") (
+CREATE AGGREGATE @extschema@.arg_max(duckdb.unresolved_type, "any", "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE arg_max_null(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.arg_max_null(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE arg_min(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.arg_min(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE arg_min(duckdb.unresolved_type, "any", "any") (
+CREATE AGGREGATE @extschema@.arg_min(duckdb.unresolved_type, "any", "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE arg_min_null(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.arg_min_null(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE array_agg(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.array_agg(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE avg(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.avg(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE bit_and(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.bit_and(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE bit_or(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.bit_or(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE bit_xor(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.bit_xor(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE bitstring_agg(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.bitstring_agg(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE bool_and(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.bool_and(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE bool_or(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.bool_or(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
@@ -379,115 +379,115 @@ CREATE AGGREGATE bool_or(duckdb.unresolved_type) (
 
 -- NOTE: count(*) and count(duckdb.unresolved_type) are already defined in the core
 
-CREATE AGGREGATE favg(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.favg(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE first(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.first(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE fsum(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.fsum(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE geomean(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.geomean(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE histogram(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.histogram(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE histogram(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.histogram(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE histogram_exact(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.histogram_exact(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE last(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.last(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE list(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.list(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE max(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.max(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE max(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.max(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE max_by(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.max_by(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE max_by(duckdb.unresolved_type, "any", "any") (
+CREATE AGGREGATE @extschema@.max_by(duckdb.unresolved_type, "any", "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE min(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.min(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE min_by(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.min_by(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE min_by(duckdb.unresolved_type, "any", "any") (
+CREATE AGGREGATE @extschema@.min_by(duckdb.unresolved_type, "any", "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE product(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.product(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE string_agg(duckdb.unresolved_type, "any") (
+CREATE AGGREGATE @extschema@.string_agg(duckdb.unresolved_type, "any") (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
 );
 
-CREATE AGGREGATE sum(duckdb.unresolved_type) (
+CREATE AGGREGATE @extschema@.sum(duckdb.unresolved_type) (
     SFUNC = duckdb_unresolved_type_state_trans,
     STYPE = duckdb.unresolved_type,
     FINALFUNC = duckdb_unresolved_type_final
