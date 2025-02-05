@@ -40,7 +40,7 @@ COPY --chown=postgres:postgres test test
 RUN make clean-all
 
 # build
-RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 echo "Available CPUs=$(nproc)" && make -j$(nproc)
+RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 echo "Available CPUs=$(nproc)" && make -j1
 # install into location specified by pg_config for tests
 RUN make install
 # install into /out for packaging
