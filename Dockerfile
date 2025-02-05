@@ -7,6 +7,7 @@ FROM base AS builder
 ARG POSTGRES_VERSION
 
 RUN apt-get update -qq && apt-get upgrade && \
+    apt-get install -y python3.11-minimal && \
     apt-get install -y python3-yaml && \
     apt-get install -y \
     postgresql-server-dev-${POSTGRES_VERSION} \
