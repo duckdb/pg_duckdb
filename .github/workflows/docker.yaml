@@ -18,8 +18,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        # postgres: ["14", "15", "16", "17"]
-        postgres: ["14"]
+        postgres: ["14", "15", "16", "17"]
 
     env:
       BUILDKIT_PROGRESS: plain
