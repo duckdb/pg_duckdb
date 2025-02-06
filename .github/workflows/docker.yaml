@@ -40,12 +40,25 @@ jobs:
       - name: Compute platform
         id: compute_platform
         run: |
+          # Tag is XX-YYYYY-<branch>-latest so 16 + branch name length
+          # since maximum docker tag is 128 characters, we need to truncate the branch name to 112
+          BRANCH=$(echo "${{ github.head_ref || github.ref_name }}" \
+              | sed 's/[^a-zA-Z0-9\-]/-/g' \
+              | cut -c 1-112 | tr '[:upper:]' '[:lower:]' \
+              | sed -e 's/-*$//')
+
+          echo "branch_tag=$BRANCH" >> "$GITHUB_OUTPUT"
           # Set platform depending on which runner we're using
           if [ "${{ matrix.runner }}" = "ubuntu-24.04" ]; then
             echo "platform=amd64" >> "$GITHUB_OUTPUT"
           else
             echo "platform=arm64" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Attempt to pull previous image
+        run: |
+          docker pull pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest || true
+
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -65,7 +78,7 @@ jobs:
             *.cache-to=type=gha,mode=max
             *.cache-from=type=gha
             postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ github.sha }}
-            ${{ !contains(github.ref_name, '/') && format('postgres.tags=pgduckdb/pgduckdb:{0}-${1}-{2}', matrix.postgres, steps.compute_platform.outputs.platform, github.ref_name) || '' }}
+            postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
 
   docker_merge:
     name: Merge Docker image for Postgres ${{ matrix.postgres }}
@@ -84,8 +97,8 @@ jobs:
 
       - name: Pull images
         run: |
-          docker pull pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }}
-          docker pull pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
+          docker pull --platform linux/amd64 pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }}
+          docker pull --platform linux/arm64 pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
           docker manifest create \
                     pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }} \
             --amend pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }} \
