@@ -2,8 +2,9 @@ SET duckdb.force_execution TO false;
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 5]
+[ Rows: 6]
 cached_httpfs	true	true
+core_functions	true	true
 icu	true	true
 json	true	true
 parquet	true	true
@@ -39,8 +40,9 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 5]
+[ Rows: 6]
 cached_httpfs	true	true
+core_functions	true	true
 icu	true	true
 json	true	true
 parquet	true	true
@@ -70,8 +72,9 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 5]
+[ Rows: 6]
 cached_httpfs	true	true
+core_functions	true	true
 icu	true	true
 json	true	true
 parquet	true	true
@@ -98,9 +101,10 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 6]
+[ Rows: 7]
 aws	true	true
 cached_httpfs	true	true
+core_functions	true	true
 icu	true	true
 json	true	true
 parquet	true	true
@@ -124,9 +128,10 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 NOTICE:  result: extension_name	loaded	installed	
 VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 6]
+[ Rows: 7]
 aws	true	true
 cached_httpfs	true	true
+core_functions	true	true
 icu	true	true
 json	true	true
 parquet	true	true
