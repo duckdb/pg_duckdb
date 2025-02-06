@@ -47,3 +47,9 @@ CREATE TABLE s (b INT);
 SELECT * FROM t JOIN s ON a = b;
 DROP TABLE t;
 DROP TABLE s;
+
+-- Check that we are counting detoasted value
+CREATE TABLE t(a INT, b VARCHAR);
+INSERT INTO t SELECT g, repeat('ABCDE', 10000) FROM generate_series(1, 10) g;
+SELECT LENGTH(b) FROM t WHERE a = 5;
+DROP TABLE t;
