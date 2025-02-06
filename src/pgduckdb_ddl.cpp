@@ -1,5 +1,6 @@
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -28,6 +29,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
+#include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
@@ -35,6 +37,9 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
+
+/* init alter table command flag */
+bool in_duckdb_alter_table = false;
 
 /*
  * ctas_skip_data stores the original value of the skipData field of the
@@ -211,6 +216,14 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
 		}
 		return;
+	} else if (IsA(parsetree, AlterTableStmt)) {
+		auto stmt = castNode(AlterTableStmt, parsetree);
+		Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
+		Relation relation = RelationIdGetRelation(relation_oid);
+		if (pgduckdb::IsMotherDuckTable(relation)) {
+			in_duckdb_alter_table = true;
+		}
+		RelationClose(relation);
 	}
 }
 
@@ -672,6 +685,9 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
+	/* Reset since we don't need it anymore */
+	in_duckdb_alter_table = false;
+
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/*
 		 * We're not installed, so don't mess with the query. Normally this
@@ -738,7 +754,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_possibly_duckdb_table = SPI_processed > 0;
-	if (!is_possibly_duckdb_table || pgduckdb::doing_motherduck_sync) {
+	if (!is_possibly_duckdb_table || pgduckdb::doing_motherduck_sync || duckdb_motherduck_allow_alter_table) {
 		/* No DuckDB tables were altered, or we don't want to forward DDL to
 		 * DuckDB because we're syncing with MotherDuck */
 		SPI_finish();
@@ -767,7 +783,14 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		}
 	}
 
-	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
+	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
+	AlterTableStmt *alter_table_stmt = (AlterTableStmt*) trigdata->parsetree;
+	char *alter_table_stmt_string = pgduckdb_get_alterdef(relid, alter_table_stmt);
+
+	elog(DEBUG1, "Alter Table Trigger (Motherduck): %s", alter_table_stmt_string);
+	auto res = pgduckdb::DuckDBQueryOrThrow(alter_table_stmt_string);
+
+	PG_RETURN_NULL();
 }
 
 /*
