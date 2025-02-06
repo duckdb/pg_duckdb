@@ -13,8 +13,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  docker:
-    name: Build Docker
+  docker_build:
+    name: Build Docker image for Postgres ${{ matrix.postgres }} on ${{ matrix.runner }}
     strategy:
       matrix:
         postgres: ["14", "15", "16", "17"]
@@ -36,6 +36,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           submodules: "recursive"
+
       - name: Compute platform
         id: compute_platform
         run: |
@@ -65,3 +66,28 @@ jobs:
             *.cache-from=type=gha
             postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ github.sha }}
             ${{ !contains(github.ref_name, '/') && format('postgres.tags=pgduckdb/pgduckdb:{0}-${1}-{2}', matrix.postgres, steps.compute_platform.outputs.platform, github.ref_name) || '' }}
+
+  docker_merge:
+    name: Merge Docker image for Postgres ${{ matrix.postgres }}
+    strategy:
+      matrix:
+        postgres: ["14", "15", "16", "17"]
+
+    runs-on: ubuntu-24.04
+    needs: docker_build
+    steps:
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: pgduckdb
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Pull images
+        run: |
+          docker pull pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }}
+          docker pull pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
+          docker manifest create \
+                    pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }} \
+            --amend pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }} \
+            --amend pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
+          docker manifest push pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
