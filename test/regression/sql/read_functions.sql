@@ -9,7 +9,7 @@ SELECT r['sepal.length'] FROM read_parquet('../../data/iris.parquet') r ORDER BY
 
 SELECT r['sepal.length'], r['file_row_number'], r['filename']
     FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true) r
-    ORDER BY r['sepal.length']  LIMIT 5;
+    ORDER BY r['sepal.length'], r['file_row_number']  LIMIT 5;
 
 -- Further subscripting is supported on duckdb.row
 SELECT r['jsoncol'][1], r['arraycol'][2] FROM read_parquet('../../data/indexable.parquet') r;

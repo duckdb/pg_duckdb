@@ -22,6 +22,10 @@ struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 	}
 	void ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input);
 
+private:
+	int ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name, duckdb::string &filters,
+	                        bool is_optional_filter_parent);
+
 public:
 	Snapshot snapshot;
 	Relation rel;
@@ -50,7 +54,6 @@ struct PostgresScanLocalState : public duckdb::LocalTableFunctionState {
 struct PostgresScanFunctionData : public duckdb::TableFunctionData {
 	PostgresScanFunctionData(Relation rel, uint64_t cardinality, Snapshot snapshot);
 	~PostgresScanFunctionData() override;
-
 	duckdb::vector<duckdb::string> complex_filters;
 	Relation rel;
 	uint64_t cardinality;
@@ -74,7 +77,7 @@ struct PostgresScanTableFunction : public duckdb::TableFunction {
 
 	static duckdb::unique_ptr<duckdb::NodeStatistics> PostgresScanCardinality(duckdb::ClientContext &context,
 	                                                                          const duckdb::FunctionData *data);
-	static std::string ToString(const duckdb::FunctionData *bind_data);
+	static duckdb::InsertionOrderPreservingMap<duckdb::string> ToString(duckdb::TableFunctionToStringInput &input);
 };
 
 } // namespace pgduckdb

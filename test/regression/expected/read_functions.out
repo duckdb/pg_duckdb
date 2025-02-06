@@ -19,7 +19,7 @@ SELECT r['sepal.length'] FROM read_parquet('../../data/iris.parquet') r ORDER BY
 
 SELECT r['sepal.length'], r['file_row_number'], r['filename']
     FROM read_parquet('../../data/iris.parquet', file_row_number => true, filename => true) r
-    ORDER BY r['sepal.length']  LIMIT 5;
+    ORDER BY r['sepal.length'], r['file_row_number']  LIMIT 5;
  sepal.length | file_row_number |        filename         
 --------------+-----------------+-------------------------
           4.3 |              13 | ../../data/iris.parquet
