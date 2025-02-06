@@ -22,7 +22,7 @@ jobs:
       - name: Install clang-format and ruff
         run: python3 -m pip install -r dev_requirements.txt
       - name: Run clang-format
-        run: find src include -iname '*.hpp' -o -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs git clang-format origin/main --diff
+        run: find src include -iname '*.hpp' -o -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs git clang-format --diff origin/main
       - name: Run ruff check
         run: ruff check --output-format=github .
       - name: Run ruff format
