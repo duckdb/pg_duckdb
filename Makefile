@@ -119,7 +119,7 @@ lintcheck:
 	ruff check
 
 format:
-	git clang-format origin/main
+	find src include -iname '*.hpp' -o -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs git clang-format origin/main
 	ruff format
 
 format-all:
