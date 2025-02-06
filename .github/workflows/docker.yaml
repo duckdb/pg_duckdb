@@ -40,14 +40,14 @@ jobs:
       - name: Set up Docker buildx
         uses: docker/setup-buildx-action@v3
         with:
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
       - name: docker bake
         uses: docker/bake-action@v5
         with:
           targets: pg_duckdb_${{ matrix.postgres }}
           push: true
           set: |
-            *.platform=linux/amd64,linux/arm64
+            *.platform=linux/amd64
             *.cache-to=type=gha,mode=max
             *.cache-from=type=gha
             postgres.tags=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
