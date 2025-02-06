@@ -8,7 +8,9 @@ extern "C" {
 #include "catalog/pg_class.h"
 #include "catalog/pg_collation.h"
 #include "commands/dbcommands.h"
+#include "commands/tablecmds.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/parsenodes.h"
 #include "lib/stringinfo.h"
 #include "parser/parsetree.h"
 #include "utils/builtins.h"
@@ -751,6 +753,66 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	}
 
 	relation_close(relation, AccessShareLock);
+
+	return (buffer.data);
+}
+
+char *
+pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
+	Relation relation = relation_open(relation_oid, AccessShareLock);
+	const char *relation_name = pgduckdb_relation_name(relation_oid);
+	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
+
+	StringInfoData buffer;
+	initStringInfo(&buffer);
+
+	if (get_rel_relkind(relation_oid) != RELKIND_RELATION) {
+		elog(ERROR, "Only regular tables are supported in DuckDB");
+	}
+
+	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
+
+	appendStringInfoString(&buffer, "ALTER ");
+
+	appendStringInfo(&buffer, "TABLE %s ", relation_name);
+
+	if (list_length(RelationGetFKeyList(relation)) > 0) {
+		elog(ERROR, "DuckDB tables do not support foreign keys");
+	}
+
+	ListCell *lcmd;
+
+	foreach (lcmd, alter_stmt->cmds) {
+		AlterTableCmd *cmd = (AlterTableCmd *)lfirst(lcmd);
+
+		switch (cmd->subtype) {
+		case AT_AddColumn:
+		case AT_AlterColumnType: {
+			ColumnDef *col = castNode(ColumnDef, cmd->def);
+			TupleDesc tupdesc = BuildDescForRelation(list_make1(col));
+			Form_pg_attribute attribute = TupleDescAttr(tupdesc, 0);
+			const char * column_fq_type = format_type_be_qualified(attribute->atttypid);
+			switch (cmd->subtype) {
+				case AT_AddColumn:
+					appendStringInfo(&buffer, "ADD COLUMN %s %s;", col->colname, column_fq_type);
+					break;
+				case AT_AlterColumnType:
+					appendStringInfo(&buffer, "ALTER COLUMN %s TYPE %s;", cmd->name, column_fq_type);
+					break;
+				default:
+					// unreachable
+					break;
+			}
+			break;
+		}
+
+		default:
+			elog(ERROR, "DuckDB does not support ALTER TABLE %d", cmd->subtype);
+		}
+
+		relation_close(relation, AccessShareLock);
+	}
 
 	return (buffer.data);
 }

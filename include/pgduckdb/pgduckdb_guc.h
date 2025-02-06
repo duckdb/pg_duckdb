@@ -17,3 +17,4 @@ extern char *duckdb_motherduck_token;
 extern char *duckdb_postgres_role;
 extern char *duckdb_motherduck_default_database;
 extern char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout;
+extern bool duckdb_motherduck_allow_alter_table;
