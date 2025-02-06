@@ -15,3 +15,4 @@ extern int duckdb_motherduck_enabled;
 extern char *duckdb_motherduck_token;
 extern char *duckdb_postgres_role;
 extern char *duckdb_motherduck_default_database;
+extern bool duckdb_motherduck_allow_alter_table;

@@ -21,6 +21,7 @@ char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_motherduck_default_database = strdup("");
 char *duckdb_postgres_role = strdup("");
+bool duckdb_motherduck_allow_alter_table = true;
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
@@ -186,4 +187,7 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.motherduck_default_database",
 	                     "Which database in MotherDuck to designate as default (in place of my_db)",
 	                     &duckdb_motherduck_default_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.motherduck_allow_alter_table", "(Experimental) Use ALTER TABLE command on duckdb tables",
+	                     &duckdb_motherduck_allow_alter_table);
 }
