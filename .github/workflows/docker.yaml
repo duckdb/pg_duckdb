@@ -25,6 +25,8 @@ jobs:
     env:
       BUILDKIT_PROGRESS: plain
       POSTGRES_VERSION: ${{ matrix.postgres }}
+    outputs:
+      branch_tag: ${{ steps.compute_platform.outputs.branch_tag }}
     steps:
       - name: Login to Docker Hub
         uses: docker/login-action@v3
@@ -99,8 +101,13 @@ jobs:
         run: |
           docker pull --platform linux/amd64 pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }}
           docker pull --platform linux/arm64 pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
-          docker manifest create \
-                    pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }} \
-            --amend pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }} \
-            --amend pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
-          docker manifest push pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
+
+          BRANCH="${{ needs.docker_build.outputs.branch_tag }}"
+
+          docker buildx imagetools create \
+            --tag pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }} \
+            --tag pgduckdb/pgduckdb:${{ matrix.postgres }}-${BRANCH}-latest \
+            pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }} \
+            pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
+
+          docker buildx imagetools inspect pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
