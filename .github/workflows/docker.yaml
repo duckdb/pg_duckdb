@@ -64,9 +64,7 @@ jobs:
       - name: Attempt to pull previous image
         run: |
           docker pull pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest || true
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+          docker pull moby/buildkit:buildx-stable-1
 
       - name: Set up Docker buildx
         uses: docker/setup-buildx-action@v3
