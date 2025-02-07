@@ -63,7 +63,6 @@ jobs:
 
       - name: Attempt to pull previous image
         run: |
-          docker pull pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest || true
           docker pull pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest || true
 
       - name: Set up QEMU
@@ -82,7 +81,6 @@ jobs:
           set: |
             *.platform=linux/${{ steps.compute_platform.outputs.platform }}
             *.cache-to=type=gha,mode=max
-            *.cache-from=type=registry,ref=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
             *.cache-from=type=registry,ref=pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
             *.cache-from=type=gha
             postgres.tags=pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ github.sha }}
@@ -103,17 +101,25 @@ jobs:
           username: pgduckdb
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Pull images
+      - name: Merge images
         run: |
           docker pull --platform linux/amd64 pgduckdb/ci-builds:${{ matrix.postgres }}-amd64-${{ github.sha }}
           docker pull --platform linux/arm64 pgduckdb/ci-builds:${{ matrix.postgres }}-arm64-${{ github.sha }}
 
           BRANCH="${{ needs.docker_build.outputs.branch_tag }}"
 
-          docker buildx imagetools create \
-            --tag pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }} \
-            --tag pgduckdb/pgduckdb:${{ matrix.postgres }}-${BRANCH}-latest \
+          # If main or tag, then push to `pgduckdb/pgduckdb`
+          if [ "$BRANCH" = "main" ] || [ "$BRANCH" = "v"* ]; then
+            TARGET_REPO='pgduckdb/pgduckdb'
+          else
+            TARGET_REPO='pgduckdb/ci-builds'
+            SHA_TAG="--tag ${TARGET_REPO}:${{ matrix.postgres }}-${{ github.sha }}"
+          fi
+
+          echo "Will push merged image to '${TARGET_REPO}'."
+          docker buildx imagetools create ${SHA_TAG} \
+            --tag ${TARGET_REPO}:${{ matrix.postgres }}-${BRANCH} \
             pgduckdb/ci-builds:${{ matrix.postgres }}-amd64-${{ github.sha }} \
             pgduckdb/ci-builds:${{ matrix.postgres }}-arm64-${{ github.sha }}
 
-          docker buildx imagetools inspect pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
+          docker buildx imagetools inspect ${TARGET_REPO}:${{ matrix.postgres }}-${{ github.sha }}
