@@ -38,13 +38,6 @@ jobs:
           username: pgduckdb
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GitHub Containers
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GH_TOKEN }}
-
       - name: Checkout pg_duckdb extension code
         uses: actions/checkout@v4
         with:
@@ -71,7 +64,7 @@ jobs:
       - name: Attempt to pull previous image
         run: |
           docker pull pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest || true
-          docker pull ghcr.io/duckdb/pg_duckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest || true
+          docker pull pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest || true
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -90,10 +83,10 @@ jobs:
             *.platform=linux/${{ steps.compute_platform.outputs.platform }}
             *.cache-to=type=gha,mode=max
             *.cache-from=type=registry,ref=pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
-            *.cache-from=type=registry,ref=ghcr.io/duckdb/pg_duckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
+            *.cache-from=type=registry,ref=pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
             *.cache-from=type=gha
-            postgres.tags=ghcr.io/duckdb/pg_duckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ github.sha }}
-            postgres.tags=ghcr.io/duckdb/pg_duckdb:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
+            postgres.tags=pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ github.sha }}
+            postgres.tags=pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.compute_platform.outputs.platform }}-${{ steps.compute_platform.outputs.branch_tag }}-latest
 
   docker_merge:
     name: Merge Docker image for Postgres ${{ matrix.postgres }}
@@ -112,15 +105,15 @@ jobs:
 
       - name: Pull images
         run: |
-          docker pull --platform linux/amd64 pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }}
-          docker pull --platform linux/arm64 pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
+          docker pull --platform linux/amd64 pgduckdb/ci-builds:${{ matrix.postgres }}-amd64-${{ github.sha }}
+          docker pull --platform linux/arm64 pgduckdb/ci-builds:${{ matrix.postgres }}-arm64-${{ github.sha }}
 
           BRANCH="${{ needs.docker_build.outputs.branch_tag }}"
 
           docker buildx imagetools create \
             --tag pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }} \
             --tag pgduckdb/pgduckdb:${{ matrix.postgres }}-${BRANCH}-latest \
-            pgduckdb/pgduckdb:${{ matrix.postgres }}-amd64-${{ github.sha }} \
-            pgduckdb/pgduckdb:${{ matrix.postgres }}-arm64-${{ github.sha }}
+            pgduckdb/ci-builds:${{ matrix.postgres }}-amd64-${{ github.sha }} \
+            pgduckdb/ci-builds:${{ matrix.postgres }}-arm64-${{ github.sha }}
 
           docker buildx imagetools inspect pgduckdb/pgduckdb:${{ matrix.postgres }}-${{ github.sha }}
