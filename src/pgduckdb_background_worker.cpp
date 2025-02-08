@@ -169,7 +169,9 @@ force_motherduck_sync(PG_FUNCTION_ARGS) {
 }
 
 namespace pgduckdb {
+#if PG_VERSION_NUM >= 150000
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
+#endif
 static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
 
 /*
@@ -178,8 +180,10 @@ static shmem_startup_hook_type prev_shmem_startup_hook = NULL;
  */
 static void
 ShmemRequest(void) {
+#if PG_VERSION_NUM >= 150000
 	if (prev_shmem_request_hook)
 		prev_shmem_request_hook();
+#endif
 
 	RequestAddinShmemSpace(sizeof(BackgoundWorkerShmemStruct));
 }
@@ -237,8 +241,12 @@ InitBackgroundWorker(void) {
 	RegisterBackgroundWorker(&worker);
 
 	/* Set up the shared memory hooks */
+#if PG_VERSION_NUM >= 150000
 	prev_shmem_request_hook = shmem_request_hook;
 	shmem_request_hook = ShmemRequest;
+#else
+	ShmemRequest();
+#endif
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = ShmemStartup;
 }
