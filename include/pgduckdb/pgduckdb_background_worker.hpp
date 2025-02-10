@@ -1,6 +1,6 @@
 #pragma once
 
-void DuckdbInitBackgroundWorker(void);
+void StartBackgroundWorkerIfNeeded(void);
 
 namespace pgduckdb {
 

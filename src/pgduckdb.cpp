@@ -44,7 +44,6 @@ _PG_init(void) {
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
-	DuckdbInitBackgroundWorker();
 	pgduckdb::RegisterDuckdbXactCallback();
 }
 } // extern "C"
