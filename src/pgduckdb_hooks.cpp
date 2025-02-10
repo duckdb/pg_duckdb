@@ -4,6 +4,7 @@
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -187,6 +188,12 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 
 static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+	if (pgduckdb::IsExplaining()) {
+		// Don't use DuckDB when explaining a PG query.
+		auto planner = prev_planner_hook ? prev_planner_hook : standard_planner;
+		return planner(parse, query_string, cursor_options, bound_params);
+	}
+
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (NeedsDuckdbExecution(parse)) {
 			IsAllowedStatement(parse, true);
@@ -215,11 +222,8 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 
 	pgduckdb::MarkStatementNotTopLevel();
 
-	if (prev_planner_hook) {
-		return prev_planner_hook(parse, query_string, cursor_options, bound_params);
-	} else {
-		return standard_planner(parse, query_string, cursor_options, bound_params);
-	}
+	auto planner = prev_planner_hook ? prev_planner_hook : standard_planner;
+	return planner(parse, query_string, cursor_options, bound_params);
 }
 
 static PlannedStmt *
