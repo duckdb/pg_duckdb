@@ -358,14 +358,9 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 
 static bool
 IsOutdatedMotherduckCatalogErrcode(int error_code) {
-	switch (error_code) {
-	case ERRCODE_UNDEFINED_COLUMN:
-	case ERRCODE_UNDEFINED_SCHEMA:
-	case ERRCODE_UNDEFINED_TABLE:
-		return true;
-	default:
-		return false;
-	}
+  return error_code == ERRCODE_UNDEFINED_COLUMN ||
+         error_code == ERRCODE_UNDEFINED_SCHEMA ||
+         error_code == ERRCODE_UNDEFINED_TABLE
 }
 
 static void
