@@ -20,7 +20,7 @@ int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_motherduck_default_database = strdup("");
-char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("5 minutes");
+char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("");
 char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
