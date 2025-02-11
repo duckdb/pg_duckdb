@@ -3,6 +3,7 @@ CREATE TABLE webpages AS SELECT r['column00'], r['column01'], r['column02'] FROM
 
 select * from webpages order by column00 limit 2;
 select count(*) from webpages;
+SELECT attname, atttypid::regtype FROM pg_attribute WHERE attrelid = 'webpages'::regclass AND attname in ('column00', 'column01', 'column02') ORDER BY attname;
 
 CREATE TEMP TABLE t_jsonb(data jsonb);
 INSERT INTO t_jsonb VALUES ('{"a": 1, "b": 2}');

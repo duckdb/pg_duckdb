@@ -13,6 +13,14 @@ select count(*) from webpages;
     60
 (1 row)
 
+SELECT attname, atttypid::regtype FROM pg_attribute WHERE attrelid = 'webpages'::regclass AND attname in ('column00', 'column01', 'column02') ORDER BY attname;
+ attname  | atttypid 
+----------+----------
+ column00 | bigint
+ column01 | text
+ column02 | date
+(3 rows)
+
 CREATE TEMP TABLE t_jsonb(data jsonb);
 INSERT INTO t_jsonb VALUES ('{"a": 1, "b": 2}');
 CREATE TEMP TABLE t_json AS SELECT * FROM t_jsonb WITH NO DATA;
