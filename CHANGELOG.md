@@ -1,3 +1,34 @@
+# 0.3.0 (2025-02-13)
+
+## Added
+
+- Support using Postgres indexes and reading from partitioned tables. ([#477])
+- Don't require the `AS (id bigint, name text)` syntax anymore when using `read_parquet`, `iceberg_scan`, etc. You can now use the following syntax instead. This is a breaking change as the previous syntax is not supported anymore. ([#531])
+
+  ```sql
+  SELECT * FROM read_parquet('file.parquet');
+  SELECT r['id'], r['name'] FROM read_parquet('file.parquet') r WHERE r['age'] > 21;
+  ```
+
+- Add a `duckdb.query` function which allows using DuckDB query syntax in Postgres. ([#531])
+- Support the `approx_count_distinct` DuckDB aggregate. ([#499])
+- Support the `bytea` (aka blob), `uhugeint`,`jsonb`, `timestamp_ns`, `timestamp_ms`, `timestamp_s` & `interval` types. ([#511], [#525], [#513], [#534], [(#573)])
+- Support DuckDB its [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). ([#546])
+- Add support for the `duckdb.allow_community_extensions` setting.
+
+## Changed
+
+- Allow executing `duckdb.raw_query`, `duckdb.cache_info`, `duckdb.cache_delete` and `duckdb.recycle_db` as non-superusers. ([#572])
+
+## Fixed
+
+- Correctly parse parameter lists in `COPY` commands. This allows using `PARTITION_BY` as one of the `COPY` options. ([#465])
+- Correctly read cache metadata for files larger than 4GB. ([#494])
+- Fix bug in parameter handling for prepared statements and PL/pgSQL functions. ([#491])
+- Fix comparisons and operators on the `timestamp with timezone` field by enabling DuckDB its `icu` extension by default. ([#512])
+- Allow using `read_parquet` functions when not using superuser privileges. ([#550])
+- Fix some case insensitivity issues when reading from Postgres tables.
+
 # 0.2.0 (2024-12-10)
 
 ## Added
