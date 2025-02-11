@@ -29,7 +29,8 @@ Note: `ALTER EXTENSION pg_duckdb WITH SCHEMA schema` is not currently supported.
 | Name | Description |
 | :--- | :---------- |
 | [`duckdb.install_extension`](#install_extension) | Installs a DuckDB extension |
-| [`duckdb.raw_query`](#raw_query) | Runs a query directly against DuckDB (meant for debugging)|
+| [`duckdb.query`](#query) | Runs a SELECT query directly against DuckDB |
+| [`duckdb.raw_query`](#raw_query) | Runs any query directly against DuckDB (meant for debugging)|
 | [`duckdb.recycle_ddb`](#recycle_ddb) | Force a reset the DuckDB instance in the current connection (meant for debugging) |
 
 ## Motherduck Functions
@@ -40,14 +41,16 @@ Note: `ALTER EXTENSION pg_duckdb WITH SCHEMA schema` is not currently supported.
 
 ## Detailed Descriptions
 
-#### <a name="read_parquet"></a>`read_parquet(path TEXT or TEXT[], /* optional parameters */) -> SETOF record`
+#### <a name="read_parquet"></a>`read_parquet(path TEXT or TEXT[], /* optional parameters */) -> SETOF duckdb.row`
 
 Reads a parquet file, either from a remote location (via httpfs) or a local file.
 
-Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
+This returns DuckDB rows, you can expand them using `*` or you can select specific columns using the `r['mycol']` syntax. If you want to select specific columns you should give the function call an easy alias, like `r`. For example:
 
 ```sql
-SELECT COUNT(i) FROM read_parquet('file.parquet') AS (int i);
+SELECT * FROM read_parquet('file.parquet');
+SELECT r['id'], r['name'] FROM read_parquet('file.parquet') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM read_parquet('file.parquet');
 ```
 
 Further information:
@@ -65,14 +68,16 @@ Further information:
 
 Optional parameters mirror [DuckDB's read_parquet function](https://duckdb.org/docs/data/parquet/overview.html#parameters). To specify optional parameters, use `parameter := 'value'`.
 
-#### <a name="read_csv"></a>`read_csv(path TEXT or TEXT[], /* optional parameters */) -> SETOF record`
+#### <a name="read_csv"></a>`read_csv(path TEXT or TEXT[], /* optional parameters */) -> SETOF duckdb.row`
 
 Reads a CSV file, either from a remote location (via httpfs) or a local file.
 
-Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
+This returns DuckDB rows, you can expand them using `*` or you can select specific columns using the `r['mycol']` syntax. If you want to select specific columns you should give the function call an easy alias, like `r`. For example:
 
 ```sql
-SELECT COUNT(i) FROM read_csv('file.csv') AS (int i);
+SELECT * FROM read_csv('file.csv');
+SELECT r['id'], r['name'] FROM read_csv('file.csv') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM read_csv('file.csv');
 ```
 
 Further information:
@@ -95,14 +100,16 @@ Compatibility notes:
 * `columns` is not currently supported.
 * `nullstr` must be an array (`TEXT[]`).
 
-#### <a name="read_json"></a>`read_json(path TEXT or TEXT[], /* optional parameters */) -> SETOF record`
+#### <a name="read_json"></a>`read_json(path TEXT or TEXT[], /* optional parameters */) -> SETOF duckdb.row`
 
 Reads a JSON file, either from a remote location (via httpfs) or a local file.
 
-Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
+This returns DuckDB rows, you can expand them using `*` or you can select specific columns using the `r['mycol']` syntax. If you want to select specific columns you should give the function call an easy alias, like `r`. For example:
 
 ```sql
-SELECT COUNT(i) FROM read_json('file.json') AS (int i);
+SELECT * FROM read_parquet('file.parquet');
+SELECT r['id'], r['name'] FROM read_parquet('file.parquet') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM read_parquet('file.parquet');
 ```
 
 Further information:
@@ -123,7 +130,7 @@ Compatibility notes:
 
 * `columns` is not currently supported.
 
-#### <a name="iceberg_scan"></a>`iceberg_scan(path TEXT, /* optional parameters */) -> SETOF record`
+#### <a name="iceberg_scan"></a>`iceberg_scan(path TEXT, /* optional parameters */) -> SETOF duckdb.row`
 
 Reads an Iceberg table, either from a remote location (via httpfs) or a local directory.
 
@@ -133,10 +140,12 @@ To use `iceberg_scan`, you must enable the `iceberg` extension:
 SELECT duckdb.install_extension('iceberg');
 ```
 
-Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
+This returns DuckDB rows, you can expand them using `*` or you can select specific columns using the `r['mycol']` syntax. If you want to select specific columns you should give the function call an easy alias, like `r`. For example:
 
 ```sql
-SELECT COUNT(i) FROM iceberg_scan('data/iceberg/table') AS (int i);
+SELECT * FROM iceberg_scan('data/iceberg/table');
+SELECT r['id'], r['name'] FROM iceberg_scan('data/iceberg/table') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM iceberg_scan('data/iceberg/table');
 ```
 
 Further information:
@@ -209,11 +218,9 @@ Optional parameters mirror DuckDB's `iceberg_metadata` function based on the Duc
 
 TODO
 
-#### <a name="delta_scan"></a>`delta_scan(path TEXT) -> SETOF record`
+#### <a name="delta_scan"></a>`delta_scan(path TEXT) -> SETOF duckdb.row`
 
 Reads a delta dataset, either from a remote (via httpfs) or a local location.
-
-Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
 
 To use `delta_scan`, you must enable the `delta` extension:
 
@@ -221,9 +228,14 @@ To use `delta_scan`, you must enable the `delta` extension:
 SELECT duckdb.install_extension('delta');
 ```
 
+This returns DuckDB rows, you can expand them using `*` or you can select specific columns using the `r['mycol']` syntax. If you want to select specific columns you should give the function call an easy alias, like `r`. For example:
+
 ```sql
-SELECT COUNT(i) FROM delta_scan('/path/to/delta/dataset') AS (int i);
+SELECT * FROM delta_scan('/path/to/delta/dataset');
+SELECT r['id'], r['name'] FROM delta_scan('/path/to/delta/dataset') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM delta_scan('/path/to/delta/dataset');
 ```
+
 
 Further information:
 
@@ -247,7 +259,6 @@ Note that cache management is not automated. Cached data must be deleted manuall
 | :--- | :--- | :---------- |
 | path | text | The path to a remote httpfs location to cache. |
 | type | text | File type, either `parquet` or `csv` |
-
 
 #### <a name="cache_info"></a>`duckdb.cache_info() -> (remote_path text, cache_key text, cache_file_size BIGINT, cache_file_timestamp TIMESTAMPTZ)`
 
@@ -280,6 +291,34 @@ WHERE remote_path = '...';
 
 #### <a name="install_extension"></a>`duckdb.install_extension(extension_name TEXT) -> bool`
 
+Installs a DuckDB extension and configures it to be loaded automatically in
+every session that uses pg_duckdb.
+
+```sql
+SELECT duckdb.install_extension('iceberg');
+```
+
+##### Security
+
+Since this function can be used to install and download any of the official
+extensions it can only be executed by a superuser by default. To allow
+execution by some other admin user, such as `my_admin`, you can grant such a
+user the following permissions:
+
+```sql
+GRANT ALL ON FUNCTION duckdb.install_extension(TEXT) TO my_admin;
+GRANT ALL ON TABLE duckdb.extensions TO my_admin;
+GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO my_admin;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| extension_name | text | The name of the extension to install |
+
+#### <a name="query"></a>`duckdb.query(query TEXT) -> SETOF duckdb.row`
+
 TODO
 
 #### <a name="raw_query"></a>`duckdb.raw_query(extension_name TEXT) -> void`
@@ -288,7 +327,14 @@ TODO
 
 #### <a name="recycle_ddb"></a>`duckdb.recycle_ddb() -> void`
 
-TODO
+pg_duckdb keeps the DuckDB instance open inbetween transactions. This is done
+to save session level state, such as manually done `SET` commands. If you want
+to clear this session level state for some reason you can close the currently
+open DuckDB instance using:
+
+```sql
+CALL duckdb.recycle_ddb();
+```
 
 #### <a name="force_motherduck_sync"></a>`duckdb.force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)`
 
