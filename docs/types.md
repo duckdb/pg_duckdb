@@ -20,12 +20,12 @@ following are known issues that you might run into. Feel free to contribute PRs
 to fix these limitations:
 
 1. `enum` types are not supported (PR is progress)
-2. DuckDB its `decimal` type doesn't support the wide range of values that Postgres its `numeric` type does. To avoid errors when converting between the two, `numeric` is converted to `double precision` internally if `DuckDB` does not support the required precision. Obviously this might cause precision loss of the values.
-3. DuckDB its `STRUCT` type is not supported
-4. DuckDB its `timestamp_ns` type gets truncated to microseconds when its converted to Postgres its `timestamp` type. So this loses precision in the output. Operations on a `timestamp_ns` value, such as sorting/grouping/comparing, will use the full precision though.
+2. The DuckDB `decimal` type doesn't support the wide range of values that the Postgres `numeric` type does. To avoid errors when converting between the two, `numeric` is converted to `double precision` internally if `DuckDB` does not support the required precision. Obviously this might cause precision loss of the values.
+3. The DuckDB `STRUCT` type is not supported
+4. The DuckDB `timestamp_ns` type gets truncated to microseconds when it is converted to the Postgres `timestamp` type, which loses precision in the output. Operations on a `timestamp_ns` value, such as sorting/grouping/comparing, will use the full precision.
 5. `jsonb` columns are converted to `json` columns when reading from DuckDB. This is because DuckDB does not have a `jsonb` type.
-6. Many of Postgres its `json` and `jsonb` functions and operators are not implemented in DuckDB. Instead you can use DuckDB its json functions and operators. See the [DuckDB documentation](https://duckdb.org/docs/data/json/json_functions) for more information on these functions.
-7. DuckDB its `tinyint` type is converted to a `char` type in Postgres. This is because Postgres does not have a `tinyint` type. This does cause it to be displayed as a hex code instead of a regular number.
+6. Many Postgres `json` and `jsonb` functions and operators are not implemented in DuckDB. Instead you can use DuckDB json functions and operators. See the [DuckDB documentation](https://duckdb.org/docs/data/json/json_functions) for more information on these functions.
+7. The DuckDB `tinyint` type is converted to a `char` type in Postgres. This is because Postgres does not have a `tinyint` type. This causes it to be displayed as a hex code instead of a regular number.
 
 ## Special types
 
