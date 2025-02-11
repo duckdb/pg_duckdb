@@ -319,11 +319,15 @@ GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO my_admin;
 
 #### <a name="query"></a>`duckdb.query(query TEXT) -> SETOF duckdb.row`
 
-TODO
+Executes the given SELECT query directly against DuckDB. This can be useful if DuckDB syntax makes the query easier to write or if you want to use a function that is not exposed by pg_duckdb yet. If you use it because of a missing function in pg_duckdb, please also open an issue on the GitHub repository so that we can add support. For example the below query shows a query that puts `FROM` before `SELECT` and uses a list comprehension. Both of those features are not supported in Postgres.
+
+```sql
+SELECT * FROM duckdb.query('FROM range(10) as a(a) SELECT [a for i in generate_series(0, a)] as arr');
+```
 
 #### <a name="raw_query"></a>`duckdb.raw_query(extension_name TEXT) -> void`
 
-TODO
+Runs an arbitrary query directly against DuckDB. Compared to `duckdb.query`, this function can execute any query, not just SELECT queries. The main downside is that it doesn't return its result as rows, but instead sends the query result to the logs. So the recommendation is to use `duckdb.query` when possible, but if you need to run e.g. some DDL you can use this function.
 
 #### <a name="recycle_ddb"></a>`duckdb.recycle_ddb() -> void`
 
