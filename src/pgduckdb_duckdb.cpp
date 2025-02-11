@@ -6,6 +6,7 @@
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/transactions.hpp"
@@ -190,15 +191,11 @@ DuckDBManager::Initialize() {
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
-	if (pgduckdb::IsMotherDuckEnabled()) {
-		/*
-		 * Workaround for MotherDuck catalog sync that turns off automatically,
-		 * in case of no queries being sent to MotherDuck. Since the background
-		 * worker never sends any query to MotherDuck we need to turn this off.
-		 * So we set the timeout to an arbitrary very large value.
-		 */
-		pgduckdb::DuckDBQueryOrThrow(context,
-		                             "SET motherduck_background_catalog_refresh_inactivity_timeout='99 years'");
+	if (pgduckdb::IsMotherDuckEnabled() &&
+	    strlen(duckdb_motherduck_background_catalog_refresh_inactivity_timeout) > 0) {
+		pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
+		                                          duckdb::KeywordHelper::WriteQuoted(
+		                                              duckdb_motherduck_background_catalog_refresh_inactivity_timeout));
 	}
 
 	LoadFunctions(context);

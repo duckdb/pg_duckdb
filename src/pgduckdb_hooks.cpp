@@ -27,6 +27,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
@@ -189,10 +190,12 @@ static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (NeedsDuckdbExecution(parse)) {
+			pgduckdb::TriggerActivity();
 			IsAllowedStatement(parse, true);
 
 			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
 		} else if (duckdb_force_execution && IsAllowedStatement(parse) && ContainsFromClause(parse)) {
+			pgduckdb::TriggerActivity();
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
@@ -353,6 +356,18 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }
 
+static bool
+IsOutdatedMotherduckCatalogErrcode(int error_code) {
+	switch (error_code) {
+	case ERRCODE_UNDEFINED_COLUMN:
+	case ERRCODE_UNDEFINED_SCHEMA:
+	case ERRCODE_UNDEFINED_TABLE:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static void
 DuckdbEmitLogHook(ErrorData *edata) {
 	if (prev_emit_log_hook) {
@@ -384,6 +399,22 @@ DuckdbEmitLogHook(ErrorData *edata) {
 		edata->hint = pstrdup(
 		    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax introduced "
 		    "in pg_duckdb 0.3.0. It seems like you might be using the outdated \"AS (colname coltype, ...)\" syntax");
+	}
+
+	/*
+	 * The background worker stops syncing the catalogs after the
+	 * motherduck_background_catalog_refresh_inactivity_timeout has been
+	 * reached. This means that the table metadata that Postgres knows about
+	 * could be out of date, which could then easily result in errors about
+	 * missing from the Postgres parser because it cannot understand the query.
+	 *
+	 * This mitigates the impact of that by triggering a restart of the catalog
+	 * syncing when one of those errors occurs AND the current user can
+	 * actually use DuckDB.
+	 */
+	if (IsOutdatedMotherduckCatalogErrcode(edata->sqlerrcode) && pgduckdb::IsExtensionRegistered() &&
+	    pgduckdb::IsDuckdbExecutionAllowed()) {
+		pgduckdb::TriggerActivity();
 	}
 }
 
