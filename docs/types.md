@@ -53,4 +53,4 @@ Once the query gets executed by DuckDB the actual type will be filled in by Duck
 
 ### `duckdb.json`
 
-The `duckdb.json` type is used as arguments to DuckDB its JSON function. The reason for this type to exist is so that these functions can take values of `json`, `jsonb` and `duckdb.unresolved_type`.
+The `duckdb.json` type is used as arguments to DuckDB JSON functions. This type exists so that these functions can take values of `json`, `jsonb` and `duckdb.unresolved_type`.

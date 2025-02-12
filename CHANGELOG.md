@@ -3,7 +3,7 @@
 ## Added
 
 - Support using Postgres indexes and reading from partitioned tables. ([#477])
-- Don't require the `AS (id bigint, name text)` syntax anymore when using `read_parquet`, `iceberg_scan`, etc. You can now use the following syntax instead. This is a breaking change as the previous syntax is not supported anymore. ([#531])
+- The `AS (id bigint, name text)` syntax is no longer supported when using `read_parquet`, `iceberg_scan`, etc. The new syntax is as follows: ([#531]) 
 
   ```sql
   SELECT * FROM read_parquet('file.parquet');
@@ -13,7 +13,7 @@
 - Add a `duckdb.query` function which allows using DuckDB query syntax in Postgres. ([#531])
 - Support the `approx_count_distinct` DuckDB aggregate. ([#499])
 - Support the `bytea` (aka blob), `uhugeint`,`jsonb`, `timestamp_ns`, `timestamp_ms`, `timestamp_s` & `interval` types. ([#511], [#525], [#513], [#534], [(#573)])
-- Support DuckDB its [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). ([#546])
+- Support DuckDB [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). ([#546])
 - Add support for the `duckdb.allow_community_extensions` setting.
 - We have an official logo! 🎉 ([#575])
 
