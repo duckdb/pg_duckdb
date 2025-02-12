@@ -161,6 +161,8 @@ ExecuteQuery(DuckdbScanState *state) {
 					execution_result = pending->ExecuteTask();
 				} while (execution_result != duckdb::PendingExecutionResult::EXECUTION_ERROR &&
 				         execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE);
+
+				pending->Close();
 			} catch (std::exception &ex) {
 			}
 			// Delete the scan state
