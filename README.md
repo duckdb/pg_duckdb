@@ -1,5 +1,8 @@
 <p align="center">
-    <img width="800" src="logo-light.svg" alt="pg_duckdb logo" />
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
+        <img width="800" src="logo-light.svg" alt="pg_duckdb logo" />
+    </picture>
 </p>
 
 0.3.0 release is here 🎉 Please [try](#installation) it out!
