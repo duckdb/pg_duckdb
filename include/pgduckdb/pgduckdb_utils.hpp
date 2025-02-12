@@ -88,7 +88,12 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 		sigjmp_buf _local_sigjmp_buf;
 		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
 			PG_exception_stack = &_local_sigjmp_buf;
-			return func(std::forward<FuncArgs>(args)...);
+			try {
+				return func(std::forward<FuncArgs>(args)...);
+			} catch (...) {
+				CurrentMemoryContext = ctx;
+				throw;
+			}
 		} else {
 			g.RestoreStacks();
 			CurrentMemoryContext = ctx;
