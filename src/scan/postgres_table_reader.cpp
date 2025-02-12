@@ -334,7 +334,7 @@ PostgresTableReader::GetNextWorkerTuple() {
 			 */
 			PostgresFunctionGuard(WaitLatch, MyLatch, WL_LATCH_SET | WL_EXIT_ON_PM_DEATH, 0, PG_WAIT_EXTENSION);
 			/* No need to use PostgresFunctionGuard here, because ResetLatch is a trivial function */
-			ResetLatch(MyLatch);
+			PostgresFunctionGuard(ResetLatch, MyLatch);
 			nvisited = 0;
 		}
 	}
