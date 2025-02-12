@@ -1,8 +1,8 @@
 <p align="center">
-    <img width="500" src="logo.png" alt="temporary logo" />
+    <img width="500" src="logo-light.svg" alt="pg_duckdb logo" />
 </p>
 
-0.2.0 release is here 🎉 Please [try](#installation) it out!
+0.3.0 release is here 🎉 Please [try](#installation) it out!
 
 # pg_duckdb: Official Postgres extension for DuckDB
 
