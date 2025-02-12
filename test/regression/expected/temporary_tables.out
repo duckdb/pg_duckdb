@@ -463,7 +463,7 @@ SELECT * FROM tc;
 -- Set Returning Function
 TRUNCATE TABLE ta;
 INSERT INTO ta (a) SELECT generate_series(1, 3); -- failed. DuckDB expects this "INSERT INTO ta (a) FROM generate_series(1, 3)"
-ERROR:  (PGDuckDB/Duckdb_ExecCustomScan) Conversion Error: Unimplemented type for cast (BIGINT[] -> INTEGER)
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Conversion Error: Unimplemented type for cast (BIGINT[] -> INTEGER)
 
 LINE 1: INSERT INTO pg_temp.main.ta (a) SELECT generate_series(1, 3) AS generate_series
                                                ^
