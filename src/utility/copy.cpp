@@ -21,7 +21,6 @@ extern "C" {
 
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_ruleutils.h"
-#include "pgduckdb/vendor/pg_list.hpp"
 }
 
 static constexpr char s3_filename_prefix[] = "s3://";
