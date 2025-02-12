@@ -4,6 +4,7 @@
 #include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/relations.hpp"
+#include "pgduckdb/pgduckdb_process_lock.hpp"
 
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
 #include "duckdb/parser/parsed_data/create_schema_info.hpp"
@@ -33,6 +34,7 @@ SchemaItems::SchemaItems(duckdb::unique_ptr<PostgresSchema> &&_schema, const duc
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
 SchemaItems::GetTable(const duckdb::string &entry_name) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	auto it = tables.find(entry_name);
 	if (it != tables.end()) {
 		return it->second.get();
@@ -63,6 +65,7 @@ SchemaItems::GetSchema() const {
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
 PostgresTransaction::GetSchema(const duckdb::string &name) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	auto context_state = context.lock()->registered_state->GetOrCreate<PostgresContextState>("pgduckdb");
 	auto schemas = &context_state->schemas;
 	auto it = schemas->find(name);
@@ -85,6 +88,7 @@ PostgresContextState::QueryEnd() {
 duckdb::optional_ptr<duckdb::CatalogEntry>
 PostgresTransaction::GetCatalogEntry(duckdb::CatalogType type, const duckdb::string &schema,
                                      const duckdb::string &name) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	switch (type) {
 	case duckdb::CatalogType::TABLE_ENTRY: {
 		auto context_state = context.lock()->registered_state->GetOrCreate<PostgresContextState>("pgduckdb");
