@@ -47,8 +47,7 @@ DuckdbPrepare(const Query *query) {
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
 	auto con = pgduckdb::DuckDBManager::GetConnection();
-	auto prepared_query = con->context->Prepare(query_string);
-	return prepared_query;
+	return con->context->Prepare(query_string);
 }
 
 static Plan *

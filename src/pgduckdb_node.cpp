@@ -97,8 +97,6 @@ Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) 
 static void
 ExecuteQuery(DuckdbScanState *state) {
 	auto &prepared = *state->prepared_statement;
-	auto &query_results = state->query_results;
-	auto &connection = state->duckdb_connection;
 	auto pg_params = state->params;
 	const auto num_params = pg_params ? pg_params->numParams : 0;
 	duckdb::case_insensitive_map_t<duckdb::BoundParameterData> named_values;
@@ -136,7 +134,7 @@ ExecuteQuery(DuckdbScanState *state) {
 		return pending->ThrowError();
 	}
 
-	duckdb::PendingExecutionResult execution_result;
+	duckdb::PendingExecutionResult execution_result = duckdb::PendingExecutionResult::RESULT_NOT_READY;
 	while (true) {
 		execution_result = pending->ExecuteTask();
 		if (duckdb::PendingQueryResult::IsResultReady(execution_result)) {
@@ -144,6 +142,7 @@ ExecuteQuery(DuckdbScanState *state) {
 		}
 
 		if (QueryCancelPending) {
+			auto &connection = state->duckdb_connection;
 			// Send an interrupt
 			connection->Interrupt();
 			auto &executor = duckdb::Executor::Get(*connection->context);
@@ -160,8 +159,8 @@ ExecuteQuery(DuckdbScanState *state) {
 		return pending->ThrowError();
 	}
 
-	query_results = pending->Execute();
-	state->column_count = query_results->ColumnCount();
+	state->query_results = pending->Execute();
+	state->column_count = state->query_results->ColumnCount();
 	state->is_executed = true;
 }
 
