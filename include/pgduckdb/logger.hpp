@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
 
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
@@ -43,19 +44,19 @@ namespace pgduckdb {
 
 #define pd_ereport_domain(elevel, domain, ...)                                                                         \
 	do {                                                                                                               \
+		std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());                            \
 		pd_prevent_errno_in_scope();                                                                                   \
 		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level");                       \
-		if (message_level_is_interesting(elevel)) {                                                                    \
-			std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());                                            \
-			if (errstart(elevel, domain))                                                                              \
-				__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__);                                                  \
+		if (PostgresFunctionGuard(message_level_is_interesting, elevel)) {                                             \
+			if (PostgresFunctionGuard(errstart, elevel, domain))                                                       \
+				__VA_ARGS__, PostgresFunctionGuard(errfinish, __FILE__, __LINE__, __func__);                           \
 		}                                                                                                              \
 	} while (0)
 
-#define TEXTDOMAIN NULL
+#define PD_TEXTDOMAIN nullptr
 
-#define pd_ereport(elevel, ...) pd_ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
+#define pd_ereport(elevel, ...) pd_ereport_domain(elevel, PD_TEXTDOMAIN, __VA_ARGS__)
 
-#define pd_log(elevel, ...) pd_ereport(elevel, errmsg_internal(__VA_ARGS__))
+#define pd_log(elevel, ...) pd_ereport(elevel, PostgresFunctionGuard(errmsg_internal, ##__VA_ARGS__))
 
 } // namespace pgduckdb

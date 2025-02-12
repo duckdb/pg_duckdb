@@ -67,9 +67,11 @@ struct PgExceptionGuard {
  */
 struct PostgresScopedStackReset {
 	PostgresScopedStackReset() {
+		std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 		saved_current_stack = set_stack_base();
 	}
 	~PostgresScopedStackReset() {
+		std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 		restore_stack_base(saved_current_stack);
 	}
 	pg_stack_base_t saved_current_stack;
@@ -81,6 +83,7 @@ struct PostgresScopedStackReset {
 template <typename Func, Func func, typename... FuncArgs>
 typename std::invoke_result<Func, FuncArgs...>::type
 __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
 	{ // Scope for PG_END_TRY
@@ -88,13 +91,19 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 		sigjmp_buf _local_sigjmp_buf;
 		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
 			PG_exception_stack = &_local_sigjmp_buf;
+			// try {
 			return func(std::forward<FuncArgs>(args)...);
+			// } catch (...) {
+			// 	CurrentMemoryContext = ctx;
+			// 	throw;
+			// }
 		} else {
 			g.RestoreStacks();
 			CurrentMemoryContext = ctx;
 			edata = CopyErrorData();
 			FlushErrorState();
 		}
+		g.RestoreStacks();
 	} // PG_END_TRY();
 
 	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, pg::GetErrorDataMessage(edata));

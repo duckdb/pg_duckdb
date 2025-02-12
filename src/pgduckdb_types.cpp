@@ -661,6 +661,7 @@ public:
 public:
 	void
 	AppendValueAtDimension(const duckdb::Value &value, idx_t dimension) {
+		std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 		// FIXME: verify that the amount of values does not overflow an `int` ?
 		auto &values = duckdb::ListValue::GetChildren(value);
 		int to_append = values.size();
@@ -723,6 +724,7 @@ public:
 template <class OP>
 static void
 ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
 	auto number_of_dimensions = GetDuckDBListDimensionality(value.type());
 
@@ -760,6 +762,7 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 
 bool
 ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
 
 	switch (oid) {
@@ -908,6 +911,7 @@ numeric_typmod_scale(int32 typmod) {
 
 duckdb::LogicalType
 ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	switch (attribute->atttypid) {
 	case BOOLOID:
 	case BOOLARRAYOID:
@@ -981,6 +985,7 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
 	auto dimensions = attribute->attndims;
 	if (dimensions == 0) {
@@ -995,6 +1000,7 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 
 Oid
 GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLARRAYOID;
@@ -1042,6 +1048,7 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 
 Oid
 GetPostgresDuckDBType(const duckdb::LogicalType &type) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
@@ -1118,12 +1125,14 @@ GetPostgresDuckDBTypemod(const duckdb::LogicalType &type) {
 template <class T>
 static void
 Append(duckdb::Vector &result, T value, idx_t offset) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	auto data = duckdb::FlatVector::GetData<T>(result);
 	data[offset] = value;
 }
 
 static void
 AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	const char *text = VARDATA_ANY(value);
 	/* Remove the padding of a BPCHAR type. DuckDB expects unpadded value. */
 	auto len = is_bpchar ? bpchartruelen(VARDATA_ANY(value), VARSIZE_ANY_EXHDR(value)) : VARSIZE_ANY_EXHDR(value);
@@ -1135,6 +1144,7 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 
 static void
 AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	auto jsonb = DatumGetJsonbP(value);
 	auto jsonb_str = JsonbToCString(NULL, &jsonb->root, VARSIZE(jsonb));
 	duckdb::string_t str(jsonb_str);
@@ -1145,6 +1155,7 @@ AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
 template <class T, class OP = DecimalConversionInteger>
 T
 ConvertDecimal(const NumericVar &numeric) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	auto scale_POWER = OP::GetPowerOfTen(numeric.dscale);
 
 	if (numeric.ndigits == 0) {
@@ -1212,6 +1223,7 @@ ConvertDecimal(const NumericVar &numeric) {
  */
 duckdb::Value
 ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	switch (postgres_type) {
 	case BOOLOID:
 		return duckdb::Value::BOOLEAN(DatumGetBool(value));
@@ -1250,6 +1262,7 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 
 void
 ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, idx_t offset) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	auto &type = result.GetType();
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
@@ -1452,6 +1465,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 
 void
 InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_local_state, TupleTableSlot *slot) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 
 	auto scan_global_state = scan_local_state.global_state;
 

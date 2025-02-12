@@ -5,6 +5,7 @@
 
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/logger.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -138,7 +139,14 @@ ExecuteQuery(DuckdbScanState *state) {
 
 	duckdb::PendingExecutionResult execution_result;
 	while (true) {
-		execution_result = pending->ExecuteTask();
+		{
+			std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
+			execution_result = pending->ExecuteTask();
+		}
+		{
+			std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
+			pd_log(WARNING, "pending->ExecuteTask() returned");
+		}
 		if (duckdb::PendingQueryResult::IsResultReady(execution_result)) {
 			break;
 		}
@@ -151,7 +159,8 @@ ExecuteQuery(DuckdbScanState *state) {
 			executor.CancelTasks();
 			// Delete the scan state
 			// Process the interrupt on the Postgres side
-			ProcessInterrupts();
+			std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
+			PostgresFunctionGuard(ProcessInterrupts);
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Query cancelled");
 		}
 	}

@@ -19,6 +19,7 @@ namespace pgduckdb {
 
 static duckdb::string
 FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	return std::accumulate(filters.begin() + 1, filters.end(), filters[0],
 	                       [&delimiter](duckdb::string l, duckdb::string r) { return l + delimiter + r; });
 }
@@ -26,6 +27,7 @@ FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) 
 int
 PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
                                              duckdb::string &query_filters, bool is_inside_optional_filter) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	switch (filter->filter_type) {
 	case duckdb::TableFilterType::CONSTANT_COMPARISON:
 	case duckdb::TableFilterType::IS_NULL:
@@ -76,6 +78,7 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 
 void
 PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	/* SELECT COUNT(*) FROM */
 	if (input.column_ids.size() == 1 && input.column_ids[0] == UINT64_MAX) {
 		scan_query << "SELECT COUNT(*) FROM " << pgduckdb::GenerateQualifiedRelationName(rel);
@@ -167,6 +170,7 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
                                                  const duckdb::TableFunctionInitInput &input)
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       total_row_count(0) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	ConstructTableScanQuery(input);
 	table_reader_global_state =
 	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
@@ -204,6 +208,7 @@ PostgresScanFunctionData::~PostgresScanFunctionData() {
 
 PostgresScanTableFunction::PostgresScanTableFunction()
     : TableFunction("postgres_scan", {}, PostgresScanFunction, nullptr, PostgresScanInitGlobal, PostgresScanInitLocal) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	named_parameters["cardinality"] = duckdb::LogicalType::UBIGINT;
 	named_parameters["relid"] = duckdb::LogicalType::UINTEGER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
@@ -216,6 +221,7 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 
 duckdb::InsertionOrderPreservingMap<duckdb::string>
 PostgresScanTableFunction::ToString(duckdb::TableFunctionToStringInput &input) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	auto &bind_data = input.bind_data->Cast<PostgresScanFunctionData>();
 	duckdb::InsertionOrderPreservingMap<duckdb::string> result;
 	result["Table"] = GetRelationName(bind_data.rel);
@@ -224,6 +230,7 @@ PostgresScanTableFunction::ToString(duckdb::TableFunctionToStringInput &input) {
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 PostgresScanTableFunction::PostgresScanInitGlobal(duckdb::ClientContext &, duckdb::TableFunctionInitInput &input) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	auto &bind_data = input.bind_data->CastNoConst<PostgresScanFunctionData>();
 	return duckdb::make_uniq<PostgresScanGlobalState>(bind_data.snapshot, bind_data.rel, input);
 }
@@ -231,11 +238,13 @@ PostgresScanTableFunction::PostgresScanInitGlobal(duckdb::ClientContext &, duckd
 duckdb::unique_ptr<duckdb::LocalTableFunctionState>
 PostgresScanTableFunction::PostgresScanInitLocal(duckdb::ExecutionContext &, duckdb::TableFunctionInitInput &,
                                                  duckdb::GlobalTableFunctionState *gstate) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	auto global_state = reinterpret_cast<PostgresScanGlobalState *>(gstate);
 	return duckdb::make_uniq<PostgresScanLocalState>(global_state);
 }
 void
 SetOutputCardinality(duckdb::DataChunk &output, PostgresScanLocalState &local_state) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	idx_t output_cardinality =
 	    local_state.output_vector_size <= STANDARD_VECTOR_SIZE ? local_state.output_vector_size : STANDARD_VECTOR_SIZE;
 	output.SetCardinality(output_cardinality);
@@ -245,6 +254,7 @@ SetOutputCardinality(duckdb::DataChunk &output, PostgresScanLocalState &local_st
 void
 PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb::TableFunctionInput &data,
                                                 duckdb::DataChunk &output) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	auto &local_state = data.local_state->Cast<PostgresScanLocalState>();
 
 	/* We have exhausted table scan */
@@ -255,7 +265,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 	local_state.output_vector_size = 0;
 
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {
@@ -273,6 +283,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 duckdb::unique_ptr<duckdb::NodeStatistics>
 PostgresScanTableFunction::PostgresScanCardinality(duckdb::ClientContext &, const duckdb::FunctionData *data) {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	auto &bind_data = data->Cast<PostgresScanFunctionData>();
 	return duckdb::make_uniq<duckdb::NodeStatistics>(bind_data.cardinality, bind_data.cardinality);
 }

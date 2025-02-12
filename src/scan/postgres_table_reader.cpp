@@ -31,7 +31,7 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
     : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
       entered_parallel_mode(false), cleaned_up(false) {
 
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
 
 	List *raw_parsetree_list = PostgresFunctionGuard(pg_parse_query, table_scan_query);
@@ -120,15 +120,21 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 }
 
 PostgresTableReader::~PostgresTableReader() {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	if (cleaned_up) {
 		return;
 	}
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+	// if (QueryCancelPending) {
+	// 	printf("NOPE\n");
+	// 	return;
+	// }
 	PostgresTableReaderCleanup();
 }
 
 void
 PostgresTableReader::PostgresTableReaderCleanup() {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	D_ASSERT(!cleaned_up);
 	cleaned_up = true;
 	PostgresScopedStackReset scoped_stack_reset;
@@ -157,7 +163,7 @@ PostgresTableReader::PostgresTableReaderCleanup() {
 	}
 
 	if (entered_parallel_mode) {
-		ExitParallelMode();
+		PostgresFunctionGuard(ExitParallelMode);
 		entered_parallel_mode = false;
 	}
 }
@@ -171,6 +177,7 @@ PostgresTableReader::PostgresTableReaderCleanup() {
 
 int
 PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	static const int cardinality_threshold = 1 << 16;
 	/* No parallel worker scan wanted */
 	if (!duckdb_max_workers_per_postgres_scan) {
@@ -185,6 +192,7 @@ PostgresTableReader::ParallelWorkerNumber(Cardinality cardinality) {
 
 const char *
 ExplainScanPlan_Unsafe(QueryDesc *query_desc) {
+	std::lock_guard<std::recursive_mutex> lk(GlobalProcessLock::GetLock());
 	ExplainState *es = (ExplainState *)palloc0(sizeof(ExplainState));
 	es->str = makeStringInfo();
 	es->format = EXPLAIN_FORMAT_TEXT;
@@ -194,11 +202,13 @@ ExplainScanPlan_Unsafe(QueryDesc *query_desc) {
 
 const char *
 PostgresTableReader::ExplainScanPlan(QueryDesc *query_desc) {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	return PostgresFunctionGuard(ExplainScanPlan_Unsafe, query_desc);
 }
 
 bool
 PostgresTableReader::CanTableScanRunInParallel(Plan *plan) {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	switch (nodeTag(plan)) {
 	case T_SeqScan:
 	case T_IndexScan:
@@ -224,6 +234,7 @@ PostgresTableReader::CanTableScanRunInParallel(Plan *plan) {
 
 bool
 PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	switch (nodeTag(plan)) {
 	case T_SeqScan:
 	case T_IndexScan:
@@ -260,6 +271,7 @@ PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
  */
 TupleTableSlot *
 PostgresTableReader::GetNextTuple() {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	if (nreaders > 0) {
 		MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
 		if (HeapTupleIsValid(worker_minmal_tuple)) {
@@ -281,6 +293,7 @@ PostgresTableReader::GetNextTuple() {
 
 MinimalTuple
 PostgresTableReader::GetNextWorkerTuple() {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	int nvisited = 0;
 	TupleQueueReader *reader = NULL;
 	MinimalTuple minimal_tuple = NULL;

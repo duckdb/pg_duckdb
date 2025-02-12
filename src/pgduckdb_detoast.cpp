@@ -36,6 +36,7 @@ namespace pgduckdb {
 
 struct varlena *
 PglzDecompressDatum(const struct varlena *value) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	struct varlena *result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
 
 	int32 raw_size = pglz_decompress((char *)value + VARHDRSZ_COMPRESSED, VARSIZE(value) - VARHDRSZ_COMPRESSED,
@@ -51,6 +52,7 @@ PglzDecompressDatum(const struct varlena *value) {
 
 struct varlena *
 Lz4DecompresDatum(const struct varlena *value) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 #ifndef USE_LZ4
 	(void)value; /* keep compiler quiet */
 	return NULL;
@@ -71,6 +73,7 @@ Lz4DecompresDatum(const struct varlena *value) {
 
 static struct varlena *
 ToastDecompressDatum(struct varlena *attr) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	ToastCompressionId cmid = (ToastCompressionId)TOAST_COMPRESS_METHOD(attr);
 	switch (cmid) {
 	case TOAST_PGLZ_COMPRESSION_ID:
@@ -86,6 +89,7 @@ ToastDecompressDatum(struct varlena *attr) {
 
 bool
 table_relation_fetch_toast_slice(const struct varatt_external &toast_pointer, int32 attrsize, struct varlena *result) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	Relation toast_rel = try_table_open(toast_pointer.va_toastrelid, AccessShareLock);
 
 	if (toast_rel == NULL) {
@@ -100,6 +104,7 @@ table_relation_fetch_toast_slice(const struct varatt_external &toast_pointer, in
 
 static struct varlena *
 ToastFetchDatum(struct varlena *attr) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	if (!VARATT_IS_EXTERNAL_ONDISK(attr)) {
 		throw duckdb::InvalidInputException("(PGDuckDB/ToastFetchDatum) Shouldn't be called for non-ondisk datums");
 	}
@@ -136,6 +141,7 @@ ToastFetchDatum(struct varlena *attr) {
 
 Datum
 DetoastPostgresDatum(struct varlena *attr, bool *should_free) {
+	std::lock_guard<std::recursive_mutex> lk(pgduckdb::GlobalProcessLock::GetLock());
 	struct varlena *toasted_value = nullptr;
 	*should_free = true;
 	if (VARATT_IS_EXTERNAL_ONDISK(attr)) {
