@@ -125,10 +125,9 @@ PostgresTableReader::~PostgresTableReader() {
 		return;
 	}
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	// if (QueryCancelPending) {
-	// 	printf("NOPE\n");
-	// 	return;
-	// }
+	if (QueryCancelPending) {
+		return;
+	}
 	PostgresTableReaderCleanup();
 }
 
