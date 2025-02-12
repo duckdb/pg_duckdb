@@ -15,6 +15,7 @@
 - Support the `bytea` (aka blob), `uhugeint`,`jsonb`, `timestamp_ns`, `timestamp_ms`, `timestamp_s` & `interval` types. ([#511], [#525], [#513], [#534], [(#573)])
 - Support DuckDB its [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). ([#546])
 - Add support for the `duckdb.allow_community_extensions` setting.
+- We have an official logo! 🎉 ([#575])
 
 ## Changed
 
