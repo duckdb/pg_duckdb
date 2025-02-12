@@ -1,5 +1,5 @@
 <p align="center">
-    <img width="500" src="logo-light.svg" alt="pg_duckdb logo" />
+    <img width="800" src="logo-light.svg" alt="pg_duckdb logo" />
 </p>
 
 0.3.0 release is here 🎉 Please [try](#installation) it out!
