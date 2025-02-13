@@ -176,7 +176,11 @@ ExecuteQuery(DuckdbScanState *state) {
 			}
 			// Delete the scan state
 			// Process the interrupt on the Postgres side
-			ProcessInterrupts();
+
+			{
+				std::lock_guard<std::mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
+				PostgresFunctionGuard(ProcessInterrupts);
+			}
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Query cancelled");
 		}
 	}
