@@ -53,6 +53,8 @@ CleanupDuckdbScanState(DuckdbScanState *state) {
 	}
 }
 
+bool pd_cancelling = false;
+
 /* static callbacks */
 static Node *Duckdb_CreateCustomScanState(CustomScan *cscan);
 static void Duckdb_BeginCustomScan(CustomScanState *node, EState *estate, int eflags);
@@ -130,6 +132,8 @@ ExecuteQuery(DuckdbScanState *state) {
 		named_values[duckdb::to_string(i + 1)] = duckdb::BoundParameterData(duckdb_param);
 	}
 
+	pd_cancelling = false;
+
 	auto pending = prepared.PendingQuery(named_values, true);
 	if (pending->HasError()) {
 		return pending->ThrowError();
@@ -145,6 +149,10 @@ ExecuteQuery(DuckdbScanState *state) {
 
 		if (QueryCancelPending) {
 			auto &connection = state->duckdb_connection;
+			{
+				std::lock_guard<std::mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
+				pd_cancelling = true;
+			}
 			// Send an interrupt
 			connection->Interrupt();
 			auto &executor = duckdb::Executor::Get(*connection->context);
