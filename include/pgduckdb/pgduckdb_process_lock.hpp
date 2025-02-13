@@ -11,9 +11,9 @@ namespace pgduckdb {
  */
 struct GlobalProcessLock {
 public:
-	static std::mutex &
+	static std::recursive_mutex &
 	GetLock() {
-		static std::mutex lock;
+		static std::recursive_mutex lock;
 		return lock;
 	}
 };
