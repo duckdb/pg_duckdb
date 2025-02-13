@@ -5,6 +5,7 @@
 
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/logger.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -137,6 +138,7 @@ ExecuteQuery(DuckdbScanState *state) {
 	duckdb::PendingExecutionResult execution_result = duckdb::PendingExecutionResult::RESULT_NOT_READY;
 	while (true) {
 		execution_result = pending->ExecuteTask();
+		pd_log(NOTICE, "pending->ExecuteTask() returned");
 		if (duckdb::PendingQueryResult::IsResultReady(execution_result)) {
 			break;
 		}
