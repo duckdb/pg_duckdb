@@ -53,6 +53,8 @@ CleanupDuckdbScanState(DuckdbScanState *state) {
 	}
 }
 
+bool pd_cancelling = false;
+
 /* static callbacks */
 static Node *Duckdb_CreateCustomScanState(CustomScan *cscan);
 static void Duckdb_BeginCustomScan(CustomScanState *node, EState *estate, int eflags);
@@ -132,6 +134,8 @@ ExecuteQuery(DuckdbScanState *state) {
 		named_values[duckdb::to_string(i + 1)] = duckdb::BoundParameterData(duckdb_param);
 	}
 
+	pd_cancelling = false;
+
 	auto pending = prepared.PendingQuery(named_values, true);
 	if (pending->HasError()) {
 		return pending->ThrowError();
@@ -152,6 +156,10 @@ ExecuteQuery(DuckdbScanState *state) {
 		}
 
 		if (QueryCancelPending) {
+			{
+				std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
+				pd_cancelling = true;
+			}
 			// Send an interrupt
 			connection->Interrupt();
 			auto &executor = duckdb::Executor::Get(*connection->context);
@@ -160,6 +168,22 @@ ExecuteQuery(DuckdbScanState *state) {
 			// Delete the scan state
 			// Process the interrupt on the Postgres side
 			std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
+
+			try {
+				// When the "Query cancelled" exception below is thrown,
+				// various destructors are called, among which `PostgresTableReader`'s
+				// which cleanup the PG state. If an exception is thrown during
+				// the stack unwinding and call to PG function, it results in an
+				// undefined behavior which materialize as a process crash.
+				// So to avoid that, we eagerly consume the pending tasks.
+				do {
+					execution_result = pending->ExecuteTask();
+				} while (execution_result != duckdb::PendingExecutionResult::EXECUTION_ERROR &&
+				         execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE);
+			} catch (std::exception &ex) {
+			}
+
+			RESUME_CANCEL_INTERRUPTS();
 			PostgresFunctionGuard(ProcessInterrupts);
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Query cancelled");
 		}

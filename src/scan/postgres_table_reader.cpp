@@ -22,6 +22,7 @@ extern "C" {
 }
 
 #include "pgduckdb/vendor/pg_list.hpp"
+extern bool pd_cancelling;
 
 #include <cmath>
 
@@ -125,7 +126,7 @@ PostgresTableReader::~PostgresTableReader() {
 		return;
 	}
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	if (QueryCancelPending) {
+	if (pd_cancelling) {
 		return;
 	}
 	PostgresTableReaderCleanup();
