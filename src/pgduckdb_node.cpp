@@ -148,6 +148,22 @@ ExecuteQuery(DuckdbScanState *state) {
 			auto &executor = duckdb::Executor::Get(*connection->context);
 			// Wait for all tasks to terminate
 			executor.CancelTasks();
+
+			try {
+				// When the "Query cancelled" exception below is thrown,
+				// various destructors are called, among which `PostgresTableReader`'s
+				// which cleanup the PG state. If an exception is thrown during
+				// the stack unwinding and call to PG function, it results in an
+				// undefined behavior which materialize as a process crash.
+				// So to avoid that, we eagerly consume the pending tasks.
+				do {
+					execution_result = pending->ExecuteTask();
+				} while (execution_result != duckdb::PendingExecutionResult::EXECUTION_ERROR &&
+				         execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE);
+
+				pending->Close();
+			} catch (std::exception &ex) {
+			}
 			// Delete the scan state
 			// Process the interrupt on the Postgres side
 			ProcessInterrupts();
