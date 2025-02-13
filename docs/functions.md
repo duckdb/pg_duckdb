@@ -16,6 +16,10 @@ Note: `ALTER EXTENSION pg_duckdb WITH SCHEMA schema` is not currently supported.
 | [`iceberg_snapshots`](#iceberg_snapshots) | Read Iceberg snapshot information |
 | [`delta_scan`](#delta_scan) | Read a Delta dataset |
 
+## JSON Functions
+
+All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). Postgres JSON/JSONB functions are not supported.
+
 ## Cache Management Functions
 
 | Name | Description |
