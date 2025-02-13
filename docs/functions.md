@@ -20,6 +20,12 @@ Note: `ALTER EXTENSION pg_duckdb WITH SCHEMA schema` is not currently supported.
 
 All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). Postgres JSON/JSONB functions are not supported.
 
+## Aggregates
+
+|Name|Description|
+| :--- | :---------- |
+|[`approx_count_distinct`](https://duckdb.org/docs/sql/functions/aggregates.html#approximate-aggregates)|Gives the approximate count of distinct elements using HyperLogLog|
+
 ## Cache Management Functions
 
 | Name | Description |
