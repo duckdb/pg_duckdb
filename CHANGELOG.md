@@ -1,3 +1,11 @@
+# 0.3.1 (2025-02-13)
+
+## Fixed
+
+- Fixed CI so docker images are built and pushed to Docker Hub for tags. ([#589])
+
+[#589]: https://github.com/duckdb/pg_duckdb/pull/589
+
 # 0.3.0 (2025-02-13)
 
 ## Added
