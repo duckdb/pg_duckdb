@@ -1,8 +1,11 @@
 <p align="center">
-    <img width="500" src="logo.png" alt="temporary logo" />
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="logo-dark.svg">
+        <img width="800" src="logo-light.svg" alt="pg_duckdb logo" />
+    </picture>
 </p>
 
-0.2.0 release is here 🎉 Please [try](#installation) it out!
+0.3.0 release is here 🎉 Please [try](#installation) it out!
 
 # pg_duckdb: Official Postgres extension for DuckDB
 
@@ -19,9 +22,9 @@ See our [official documentation][docs] for further details.
 	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
 - Read and Write support for object storage (AWS S3, Azure, Cloudflare R2, or Google GCS):
 	- Read parquet, CSV and JSON files:
-		- `SELECT n FROM read_parquet('s3://bucket/file.parquet') AS (n int)`
-		- `SELECT n FROM read_csv('s3://bucket/file.csv') AS (n int)`
-		- `SELECT n FROM read_json('s3://bucket/file.json') AS (n int)`
+		- `SELECT * FROM read_parquet('s3://bucket/file.parquet')`
+		- `SELECT r['id'], r['name'] FROM read_csv('s3://bucket/file.csv') r`
+		- `SELECT count(*) FROM read_json('s3://bucket/file.json')`
 		- You can pass globs and arrays to these functions, just like in DuckDB
 	- Enable the DuckDB Iceberg extension using `SELECT duckdb.install_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
 	- Enable the DuckDB Delta extension using `SELECT duckdb.install_extension('delta')` and read Delta files with `delta_scan`.
@@ -32,8 +35,8 @@ See our [official documentation][docs] for further details.
 
 			```sql
 			COPY (
-				SELECT count(*), name
-				FROM read_parquet('s3://bucket/file.parquet') AS (name text)
+				SELECT count(*), r['name']
+				FROM read_parquet('s3://bucket/file.parquet') r
 				GROUP BY name
 				ORDER BY count DESC
 			) TO 's3://bucket/results.parquet';
@@ -149,9 +152,8 @@ Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done
 3. Perform analytics on your data.
 
 	```sql
-	SELECT SUM(price) AS total, item_id
-	FROM read_parquet('s3://your-bucket/purchases.parquet')
-	  AS (price float, item_id int)
+	SELECT SUM(r['price']) AS total, r['item_id']
+	FROM read_parquet('s3://your-bucket/purchases.parquet') r
 	GROUP BY item_id
 	ORDER BY total DESC
 	LIMIT 100;
