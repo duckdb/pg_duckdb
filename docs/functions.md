@@ -47,7 +47,7 @@ Reads a parquet file, either from a remote location (via httpfs) or a local file
 Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
 
 ```sql
-SELECT COUNT(i) FROM read_parquet('file.parquet') AS (int i);
+SELECT COUNT(i) FROM read_parquet('file.parquet') AS (i int);
 ```
 
 Further information:
@@ -72,7 +72,7 @@ Reads a CSV file, either from a remote location (via httpfs) or a local file.
 Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
 
 ```sql
-SELECT COUNT(i) FROM read_csv('file.csv') AS (int i);
+SELECT COUNT(i) FROM read_csv('file.csv') AS (i int);
 ```
 
 Further information:
@@ -102,7 +102,7 @@ Reads a JSON file, either from a remote location (via httpfs) or a local file.
 Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
 
 ```sql
-SELECT COUNT(i) FROM read_json('file.json') AS (int i);
+SELECT COUNT(i) FROM read_json('file.json') AS (i int);
 ```
 
 Further information:
@@ -136,7 +136,7 @@ SELECT duckdb.install_extension('iceberg');
 Returns a record set (`SETOF record`). Functions that return record sets need to have their columns and types specified using `AS`. You must specify at least one column and any columns used in your query. For example:
 
 ```sql
-SELECT COUNT(i) FROM iceberg_scan('data/iceberg/table') AS (int i);
+SELECT COUNT(i) FROM iceberg_scan('data/iceberg/table') AS (i int);
 ```
 
 Further information:
@@ -222,7 +222,7 @@ SELECT duckdb.install_extension('delta');
 ```
 
 ```sql
-SELECT COUNT(i) FROM delta_scan('/path/to/delta/dataset') AS (int i);
+SELECT COUNT(i) FROM delta_scan('/path/to/delta/dataset') AS (i int);
 ```
 
 Further information:
