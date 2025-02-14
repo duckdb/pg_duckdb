@@ -87,10 +87,8 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 			RESUME_CANCEL_INTERRUPTS();
 		}
 
-		if (!IsInParallelMode()) {
-			EnterParallelMode();
-			entered_parallel_mode = true;
-		}
+		EnterParallelMode();
+		entered_parallel_mode = true;
 
 		ParallelContext *pcxt;
 		parallel_executor_info = PostgresFunctionGuard(ExecInitParallelPlan, table_scan_planstate,
