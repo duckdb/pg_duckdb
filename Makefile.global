@@ -1,5 +1,16 @@
 PG_CONFIG ?= pg_config
 
+PG_MIN_VER = 14
+PG_VER = $(shell $(PG_CONFIG) --version | sed "s/^[^ ]* \([0-9]*\).*$$/\1/" 2>/dev/null)
+ifeq ($(shell expr "$(PG_MIN_VER)" \<=  "$(PG_VER)"), 0)
+$(error Minimum version of PostgreSQL required is $(PG_MIN_VER) (but have $(PG_VER)))
+endif
+
+PG_MAX_VER = 17
+ifeq ($(shell expr "$(PG_MAX_VER)" \>=  "$(PG_VER)"), 0)
+$(error maximum version of PostgreSQL required is $(PG_MAX_VER) (but have $(PG_VER)))
+endif
+
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG_LIB := $(shell $(PG_CONFIG) --pkglibdir)
 PG_LIBDIR := $(shell $(PG_CONFIG) --libdir)
