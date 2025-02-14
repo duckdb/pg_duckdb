@@ -103,7 +103,7 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 }
 
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
-	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(__func__, ##__VA_ARGS__)
+	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(#FUNC, ##__VA_ARGS__)
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 
