@@ -11,6 +11,7 @@ extern "C" {
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
+#include "utils/rls.h"
 #include "utils/resowner.h"    // CurrentResourceOwner and TopTransactionResourceOwner
 #include "executor/tuptable.h" // TupIsNull
 #include "utils/syscache.h"    // RELOID
@@ -70,6 +71,12 @@ SlotGetAllAttrs(TupleTableSlot *slot) {
 
 Relation
 OpenRelation(Oid relationId) {
+	if (PostgresFunctionGuard(check_enable_rls, relationId, InvalidOid, false) == RLS_ENABLED) {
+		throw duckdb::NotImplementedException(
+		    "Cannot use \"%s\" relation in a DuckDB query, because RLS is enabled on it",
+		    PostgresFunctionGuard(get_rel_name, relationId));
+	}
+
 	/*
 	 * We always open & close the relation using the
 	 * TopTransactionResourceOwner to avoid having to close the relation

@@ -94,6 +94,13 @@ INSERT INTO varchar_array_1d SELECT CAST(a as VARCHAR[]) FROM (VALUES
 ) t(a);
 SELECT * FROM varchar_array_1d;
 
+-- INTERVAL (single dimension)
+CREATE TABLE interval_array_1d(a INTERVAL[]);
+INSERT INTO interval_array_1d (a) VALUES (ARRAY['2 years 5 months 1 day 3 hours 30 minutes 5 seconds', '5 days 5 hours']::INTERVAL[]);
+INSERT INTO interval_array_1d (a) VALUES (ARRAY['3 seconds']::INTERVAL[]);
+INSERT INTO interval_array_1d (a) VALUES (ARRAY[NULL]::INTERVAL[]);
+SELECT * FROM interval_array_1d;
+
 -- TIMESTAMP (single dimension)
 CREATE TABLE timestamp_array_1d(a TIMESTAMP[]);
 INSERT INTO timestamp_array_1d SELECT CAST(a as TIMESTAMP[]) FROM (VALUES
@@ -218,6 +225,11 @@ VALUES
     (ARRAY[decode('11223344', 'hex'), decode('55667788', 'hex')]);
 SELECT * FROM bytea_array_1d;
 
+-- INTERVAL (two dimensions)
+CREATE TABLE interval_array_2d(a INTERVAL[][]);
+INSERT INTO interval_array_2d (a) VALUES (ARRAY[ARRAY['3 seconds', '5 minutes'], ARRAY['1 day', '2 hours']]::INTERVAL[][]);
+SELECT * FROM interval_array_2d;
+
 -- TIMESTAMP (two dimensions)
 CREATE TABLE timestamp_array_2d(a TIMESTAMP[][]);
 INSERT INTO timestamp_array_2d VALUES
@@ -287,6 +299,7 @@ DROP TABLE bool_array_1d;
 DROP TABLE char_array_1d;
 DROP TABLE smallint_array_1d;
 DROP TABLE varchar_array_1d;
+DROP TABLE interval_array_1d;
 DROP TABLE timestamp_array_1d;
 DROP TABLE float4_array_1d;
 DROP TABLE float8_array_1d;
@@ -298,6 +311,7 @@ DROP TABLE regclass_array_1d;
 DROP TABLE char_array_2d;
 DROP TABLE smallint_array_2d;
 DROP TABLE varchar_array_2d;
+DROP TABLE interval_array_2d;
 DROP TABLE timestamp_array_2d;
 DROP TABLE float4_array_2d;
 DROP TABLE float8_array_2d;

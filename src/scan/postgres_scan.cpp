@@ -1,3 +1,5 @@
+#include "duckdb/planner/filter/optional_filter.hpp"
+
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -7,11 +9,70 @@
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/logger.hpp"
 
+#include <numeric> // std::accumulate
+
 namespace pgduckdb {
 
 //
 // PostgresScanGlobalState
 //
+
+static duckdb::string
+FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) {
+	return std::accumulate(filters.begin() + 1, filters.end(), filters[0],
+	                       [&delimiter](duckdb::string l, duckdb::string r) { return l + delimiter + r; });
+}
+
+int
+PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
+                                             duckdb::string &query_filters, bool is_inside_optional_filter) {
+	switch (filter->filter_type) {
+	case duckdb::TableFilterType::CONSTANT_COMPARISON:
+	case duckdb::TableFilterType::IS_NULL:
+	case duckdb::TableFilterType::IS_NOT_NULL:
+	case duckdb::TableFilterType::IN_FILTER: {
+		query_filters += filter->ToString(column_name).c_str();
+		return 1;
+	}
+	case duckdb::TableFilterType::CONJUNCTION_OR:
+	case duckdb::TableFilterType::CONJUNCTION_AND: {
+		auto conjuction_filter = reinterpret_cast<duckdb::ConjunctionFilter *>(filter);
+		duckdb::vector<std::string> conjuction_child_filters;
+		for (idx_t i = 0; i < conjuction_filter->child_filters.size(); i++) {
+			std::string child_filter;
+			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter,
+			                        is_inside_optional_filter)) {
+				conjuction_child_filters.emplace_back(child_filter);
+			}
+		}
+		duckdb::string conjuction_delimiter =
+		    filter->filter_type == duckdb::TableFilterType::CONJUNCTION_OR ? " OR " : " AND ";
+		if (conjuction_child_filters.size()) {
+			query_filters += "(" + FilterJoin(conjuction_child_filters, std::move(conjuction_delimiter)) + ")";
+		}
+		return conjuction_child_filters.size();
+	}
+	case duckdb::TableFilterType::OPTIONAL_FILTER: {
+		auto optional_filter = reinterpret_cast<duckdb::OptionalFilter *>(filter);
+		return ExtractQueryFilters(optional_filter->child_filter.get(), column_name, query_filters, true);
+	}
+	/* DYNAMIC_FILTER is push down filter from topN execution. STRUCT_EXTRACT is
+	 * only received if struct_extract function is used. Default will catch all
+	 * filter that could be added in future in DuckDB.
+	 */
+	case duckdb::TableFilterType::DYNAMIC_FILTER:
+	case duckdb::TableFilterType::STRUCT_EXTRACT:
+	default: {
+		if (is_inside_optional_filter) {
+			pd_log(DEBUG1, "(DuckDB/ExtractQueryFilters) Unsupported optional filter: %s",
+			       filter->ToString(column_name).c_str());
+			return 0;
+		}
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
+		                        "Invalid Filter Type: " + filter->ToString(column_name));
+	}
+	}
+}
 
 void
 PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input) {
@@ -82,27 +143,23 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 
 	scan_query << " FROM " << GenerateQualifiedRelationName(rel);
 
-	first = true;
-
+	duckdb::vector<duckdb::string> query_filters;
 	for (auto const &[attr_num, duckdb_scanned_index] : columns_to_scan) {
 		auto filter = column_filters[duckdb_scanned_index];
-
 		if (!filter) {
 			continue;
 		}
-
-		if (first) {
-			scan_query << " WHERE ";
-		} else {
-			scan_query << " AND ";
-		}
-
-		first = false;
-		scan_query << "(";
+		duckdb::string column_query_filters;
 		auto attr = GetAttr(table_tuple_desc, attr_num - 1);
 		auto col = pgduckdb::QuoteIdentifier(GetAttName(attr));
-		scan_query << filter->ToString(col).c_str();
-		scan_query << ") ";
+		if (ExtractQueryFilters(filter, col, column_query_filters, false)) {
+			query_filters.emplace_back(column_query_filters);
+		};
+	}
+
+	if (query_filters.size()) {
+		scan_query << " WHERE ";
+		scan_query << FilterJoin(query_filters, " AND ");
 	}
 }
 
@@ -157,12 +214,12 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 	to_string = ToString;
 }
 
-std::string
-PostgresScanTableFunction::ToString(const duckdb::FunctionData *data) {
-	auto &bind_data = data->Cast<PostgresScanFunctionData>();
-	std::ostringstream oss;
-	oss << "(POSTGRES_SCAN) " << GetRelationName(bind_data.rel);
-	return oss.str();
+duckdb::InsertionOrderPreservingMap<duckdb::string>
+PostgresScanTableFunction::ToString(duckdb::TableFunctionToStringInput &input) {
+	auto &bind_data = input.bind_data->Cast<PostgresScanFunctionData>();
+	duckdb::InsertionOrderPreservingMap<duckdb::string> result;
+	result["Table"] = GetRelationName(bind_data.rel);
+	return result;
 }
 
 duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
@@ -198,7 +255,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 	local_state.output_vector_size = 0;
 
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {

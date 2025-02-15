@@ -7,6 +7,10 @@ bool IsExtensionRegistered();
 bool IsDuckdbOnlyFunction(Oid function_oid);
 uint64 CacheVersion();
 Oid ExtensionOid();
+Oid SchemaOid();
+Oid DuckdbRowOid();
+Oid DuckdbUnresolvedTypeOid();
+Oid DuckdbJsonOid();
 Oid DuckdbTableAmOid();
 bool IsMotherDuckEnabled();
 bool IsMotherDuckEnabledAnywhere();
@@ -17,4 +21,5 @@ Oid IsDuckdbTable(Relation relation);
 Oid IsMotherDuckTable(Form_pg_class relation);
 Oid IsMotherDuckTable(Relation relation);
 Oid IsDuckdbExecutionAllowed();
+void RequireDuckdbExecution();
 } // namespace pgduckdb

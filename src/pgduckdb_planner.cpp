@@ -47,8 +47,7 @@ DuckdbPrepare(const Query *query) {
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
 
 	auto con = pgduckdb::DuckDBManager::GetConnection();
-	auto prepared_query = con->context->Prepare(query_string);
-	return prepared_query;
+	return con->context->Prepare(query_string);
 }
 
 static Plan *
@@ -164,9 +163,12 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	 * actual plan with our CustomScan node. This is useful to get the correct
 	 * values for all the other many fields of the PLannedStmt.
 	 *
-	 * XXX: The primary reason we do this is that Postgres fills in permInfos
-	 * and rtable correctly. Those are needed for postgres to do its permission
-	 * checks on the used tables.
+	 * XXX: The primary reason we did this in the past is so that Postgres
+	 * filled in permInfos and rtable correctly. Those are needed for postgres
+	 * to do its permission checks on the used tables. We do these checks
+	 * inside DuckDB as well, so that's not really necessary anymore. We still
+	 * do this though to get all the other fields filled in correctly. Possibly
+	 * we don't need to do this anymore.
 	 *
 	 * FIXME: For some reason this needs an additional query copy to allow
 	 * re-planning of the query later during execution. But I don't really

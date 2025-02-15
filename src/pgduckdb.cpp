@@ -20,12 +20,14 @@ int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_motherduck_default_database = strdup("");
+char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("");
 char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
 char *duckdb_disabled_filesystems = strdup("LocalFileSystem");
 bool duckdb_enable_external_access = true;
+bool duckdb_allow_community_extensions = false;
 bool duckdb_allow_unsigned_extensions = false;
 bool duckdb_autoinstall_known_extensions = true;
 bool duckdb_autoload_known_extensions = true;
@@ -43,7 +45,7 @@ _PG_init(void) {
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
-	DuckdbInitBackgroundWorker();
+	pgduckdb::InitBackgroundWorker();
 	pgduckdb::RegisterDuckdbXactCallback();
 }
 } // extern "C"
@@ -130,6 +132,9 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
 	                     &duckdb_enable_external_access, PGC_SUSET);
 
+	DefineCustomVariable("duckdb.allow_community_extensions", "Disable installing community extensions",
+	                     &duckdb_allow_community_extensions, PGC_SUSET);
+
 	DefineCustomVariable("duckdb.allow_unsigned_extensions",
 	                     "Allow DuckDB to load extensions with invalid or missing signatures",
 	                     &duckdb_allow_unsigned_extensions, PGC_SUSET);
@@ -182,4 +187,9 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.motherduck_default_database",
 	                     "Which database in MotherDuck to designate as default (in place of my_db)",
 	                     &duckdb_motherduck_default_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.motherduck_background_catalog_refresh_inactivity_timeout",
+	                     "When to stop syncing of the motherduck catalog when no activity has taken place",
+	                     &duckdb_motherduck_background_catalog_refresh_inactivity_timeout, PGC_POSTMASTER,
+	                     GUC_SUPERUSER_ONLY);
 }

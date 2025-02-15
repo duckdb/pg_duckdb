@@ -26,7 +26,7 @@ SET search_path TO '';
 SELECT count(*) FROM t, other.t;
 SELECT count(*) FROM public.t, other.t;
 
-SELECT count(*) FROM public.read_csv(:'pwd' || '/data/web_page.csv') as (column00 int);
+SELECT count(*) FROM public.read_csv(:'pwd' || '/data/web_page.csv');
 
 -- Cleanup
 DROP TABLE other.t;

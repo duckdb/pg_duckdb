@@ -81,6 +81,7 @@ struct PostgresScopedStackReset {
 template <typename Func, Func func, typename... FuncArgs>
 typename std::invoke_result<Func, FuncArgs...>::type
 __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
+	std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
 	MemoryContext ctx = CurrentMemoryContext;
 	ErrorData *edata = nullptr;
 	{ // Scope for PG_END_TRY
@@ -102,7 +103,7 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 }
 
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
-	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(__func__, ##__VA_ARGS__)
+	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(#FUNC, ##__VA_ARGS__)
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 

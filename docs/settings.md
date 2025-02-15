@@ -81,6 +81,14 @@ Whether known extensions are allowed to be automatically loaded when a DuckDB qu
 
 Default: `true`
 
+### `duckdb.allow_community_extensions`
+
+Disable installing community extensions.
+
+Default: `false`
+
+Access: Superuser-only
+
 ### `duckdb.enable_external_access` (experimental)
 
 Allow the DuckDB to access external access (e.g., HTTP, S3, etc.). This setting is not tested very well yet and disabling it may break unintended `pg_duckdb` functionality.
@@ -109,11 +117,11 @@ Default: `-1`
 
 Access: Superuser-only
 
-### `duckdb.max_threads_per_postgres_scan` (experimental)
+### `duckdb.max_workers_per_postgres_scan`
 
-Maximum number of DuckDB threads used for a single Postgres scan on heap tables (Postgres its regular storage format). In early testing, setting this to `1` has shown to be faster in most cases (for now). So changing this setting to a higher value than the default is currently not recommended.
+Maximum number of PostgreSQL workers used for a single Postgres scan. This is similar to Postgres its `max_parallel_workers_per_gather` setting.
 
-Default: `1`
+Default: `2`
 
 Access: General
 

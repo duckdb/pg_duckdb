@@ -27,6 +27,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
@@ -37,6 +38,7 @@ static planner_hook_type prev_planner_hook = NULL;
 static ExecutorStart_hook_type prev_executor_start_hook = NULL;
 static ExecutorFinish_hook_type prev_executor_finish_hook = NULL;
 static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
+static emit_log_hook_type prev_emit_log_hook = NULL;
 
 static bool
 ContainsCatalogTable(List *rtes) {
@@ -188,10 +190,12 @@ static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (NeedsDuckdbExecution(parse)) {
+			pgduckdb::TriggerActivity();
 			IsAllowedStatement(parse, true);
 
 			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
 		} else if (duckdb_force_execution && IsAllowedStatement(parse) && ContainsFromClause(parse)) {
+			pgduckdb::TriggerActivity();
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
@@ -352,6 +356,68 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }
 
+static bool
+IsOutdatedMotherduckCatalogErrcode(int error_code) {
+	switch (error_code) {
+	case ERRCODE_UNDEFINED_COLUMN:
+	case ERRCODE_UNDEFINED_SCHEMA:
+	case ERRCODE_UNDEFINED_TABLE:
+		return true;
+	default:
+		return false;
+	}
+}
+
+static void
+DuckdbEmitLogHook(ErrorData *edata) {
+	if (prev_emit_log_hook) {
+		prev_emit_log_hook(edata);
+	}
+
+	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_UNDEFINED_COLUMN && pgduckdb::IsExtensionRegistered()) {
+		/*
+		 * XXX: It would be nice if we could check if the query contained any
+		 * of the functions. We could probably check the debug_query_string
+		 * global for this. For now we don't consider that too important though.
+		 * So instead we simply always add this HINT for this specific error if
+		 * the pg_duckdb extension is installed.
+		 */
+		edata->hint = pstrdup(
+		    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If "
+		    "you're already doing that, maybe you forgot to to give the function the r alias.");
+	} else if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_SYNTAX_ERROR &&
+	           pgduckdb::IsExtensionRegistered() &&
+	           strcmp(edata->message_id,
+	                  "a column definition list is only allowed for functions returning \"record\"") == 0) {
+		/*
+		 * NOTE: We can probably remove this hint after a few releases once
+		 * we've updated all known blogposts that still used the old syntax.
+		 *
+		 * Similarly to the other hint, this could check for actual usages of
+		 * the relevant DuckDB functions.
+		 */
+		edata->hint = pstrdup(
+		    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax introduced "
+		    "in pg_duckdb 0.3.0. It seems like you might be using the outdated \"AS (colname coltype, ...)\" syntax");
+	}
+
+	/*
+	 * The background worker stops syncing the catalogs after the
+	 * motherduck_background_catalog_refresh_inactivity_timeout has been
+	 * reached. This means that the table metadata that Postgres knows about
+	 * could be out of date, which could then easily result in errors about
+	 * missing from the Postgres parser because it cannot understand the query.
+	 *
+	 * This mitigates the impact of that by triggering a restart of the catalog
+	 * syncing when one of those errors occurs AND the current user can
+	 * actually use DuckDB.
+	 */
+	if (IsOutdatedMotherduckCatalogErrcode(edata->sqlerrcode) && pgduckdb::IsExtensionRegistered() &&
+	    pgduckdb::IsDuckdbExecutionAllowed()) {
+		pgduckdb::TriggerActivity();
+	}
+}
+
 void
 DuckdbInitHooks(void) {
 	prev_planner_hook = planner_hook;
@@ -365,6 +431,9 @@ DuckdbInitHooks(void) {
 
 	prev_explain_one_query_hook = ExplainOneQuery_hook ? ExplainOneQuery_hook : standard_ExplainOneQuery;
 	ExplainOneQuery_hook = DuckdbExplainOneQueryHook;
+
+	prev_emit_log_hook = emit_log_hook ? emit_log_hook : NULL;
+	emit_log_hook = DuckdbEmitLogHook;
 
 	DuckdbInitUtilityHook();
 }

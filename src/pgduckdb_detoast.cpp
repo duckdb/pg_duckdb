@@ -52,7 +52,8 @@ PglzDecompressDatum(const struct varlena *value) {
 struct varlena *
 Lz4DecompresDatum(const struct varlena *value) {
 #ifndef USE_LZ4
-	return NULL; /* keep compiler quiet */
+	(void)value; /* keep compiler quiet */
+	return NULL;
 #else
 	struct varlena *result = (struct varlena *)duckdb_malloc(VARDATA_COMPRESSED_GET_EXTSIZE(value) + VARHDRSZ);
 
@@ -124,8 +125,6 @@ ToastFetchDatum(struct varlena *attr) {
 	if (attrsize == 0) {
 		return result;
 	}
-
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
 
 	if (!PostgresFunctionGuard(table_relation_fetch_toast_slice, toast_pointer, attrsize, result)) {
 		duckdb_free(result);

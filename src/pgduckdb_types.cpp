@@ -30,7 +30,6 @@ extern "C" {
 #include "utils/jsonb.h"
 }
 
-#include "pgduckdb/pgduckdb_filter.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 
@@ -220,10 +219,40 @@ ConvertDateDatum(const duckdb::Value &value) {
 	return date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
 }
 
+static Datum
+ConvertIntervalDatum(const duckdb::Value &value) {
+	duckdb::interval_t duckdb_interval = value.GetValue<duckdb::interval_t>();
+	Interval *pg_interval = static_cast<Interval *>(palloc(sizeof(Interval)));
+	pg_interval->month = duckdb_interval.months;
+	pg_interval->day = duckdb_interval.days;
+	pg_interval->time = duckdb_interval.micros;
+	return IntervalPGetDatum(pg_interval);
+}
+
 inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
-	duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
-	return timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+	// Extract raw int64_t value of timestamp
+	int64_t rawValue = value.GetValue<int64_t>();
+
+	// Handle specific Timestamp unit(sec, ms, ns) types
+	switch (value.type().id()) {
+	case duckdb::LogicalType::TIMESTAMP_MS:
+		// 1 ms = 10^3 micro-sec
+		rawValue *= 1000;
+		break;
+	case duckdb::LogicalType::TIMESTAMP_NS:
+		// 1 ns = 10^-3 micro-sec
+		rawValue /= 1000;
+		break;
+	case duckdb::LogicalType::TIMESTAMP_S:
+		// 1 s = 10^6 micro-sec
+		rawValue *= 1000000;
+		break;
+	default:
+		// Since we don't want to handle anything here
+		break;
+	}
+	return rawValue - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
 
 inline Datum
@@ -363,6 +392,16 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 	return UUIDPGetDatum(postgres_uuid);
 }
 
+static duckdb::interval_t
+DatumGetInterval(Datum value) {
+	Interval *pg_interval = DatumGetIntervalP(value);
+	duckdb::interval_t duck_interval;
+	duck_interval.months = pg_interval->month;
+	duck_interval.days = pg_interval->day;
+	duck_interval.micros = pg_interval->time;
+	return duck_interval;
+}
+
 template <int32_t OID>
 struct PostgresTypeTraits;
 
@@ -471,6 +510,19 @@ struct PostgresTypeTraits<TIMESTAMPOID> {
 	}
 };
 
+// INTERVAL type
+template <>
+struct PostgresTypeTraits<INTERVALOID> {
+	static constexpr int16_t typlen = 16;
+	static constexpr bool typbyval = false;
+	static constexpr char typalign = 'c';
+
+	static inline Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertIntervalDatum(val);
+	}
+};
+
 // DATE type
 template <>
 struct PostgresTypeTraits<DATEOID> {
@@ -573,6 +625,7 @@ using Float4Array = PODArray<PostgresOIDMapping<FLOAT4OID>>;
 using Float8Array = PODArray<PostgresOIDMapping<FLOAT8OID>>;
 using DateArray = PODArray<PostgresOIDMapping<DATEOID>>;
 using TimestampArray = PODArray<PostgresOIDMapping<TIMESTAMPOID>>;
+using IntervalArray = PODArray<PostgresOIDMapping<INTERVALOID>>;
 using UUIDArray = PODArray<PostgresOIDMapping<UUIDOID>>;
 using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
 using NumericArray = PODArray<PostgresOIDMapping<NUMERICOID>>;
@@ -745,8 +798,12 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	case TIMESTAMPTZOID: {
-		duckdb::timestamp_t timestamp = value.GetValue<duckdb::timestamp_t>();
+		duckdb::timestamp_tz_t timestamp = value.GetValue<duckdb::timestamp_tz_t>();
 		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+		break;
+	}
+	case INTERVALOID: {
+		slot->tts_values[col] = ConvertIntervalDatum(value);
 		break;
 	}
 	case FLOAT4OID: {
@@ -802,6 +859,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case TIMESTAMPARRAYOID: {
 		ConvertDuckToPostgresArray<TimestampArray>(slot, value, col);
+		break;
+	}
+	case INTERVALARRAYOID: {
+		ConvertDuckToPostgresArray<IntervalArray>(slot, value, col);
 		break;
 	}
 	case FLOAT4ARRAYOID: {
@@ -879,6 +940,9 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalTypeId::TIMESTAMP;
 	case TIMESTAMPTZOID:
 		return duckdb::LogicalTypeId::TIMESTAMP_TZ;
+	case INTERVALOID:
+	case INTERVALARRAYOID:
+		return duckdb::LogicalTypeId::INTERVAL;
 	case FLOAT4OID:
 	case FLOAT4ARRAYOID:
 		return duckdb::LogicalTypeId::FLOAT;
@@ -988,6 +1052,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 		return DATEARRAYOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		return TIMESTAMPARRAYOID;
+	case duckdb::LogicalTypeId::INTERVAL:
+		return INTERVALARRAYOID;
 	case duckdb::LogicalTypeId::FLOAT:
 		return FLOAT4ARRAYOID;
 	case duckdb::LogicalTypeId::DOUBLE:
@@ -1034,9 +1100,14 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::DATE:
 		return DATEOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
+	case duckdb::LogicalTypeId::TIMESTAMP_NS:
 		return TIMESTAMPOID;
 	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
 		return TIMESTAMPTZOID;
+	case duckdb::LogicalTypeId::INTERVAL:
+		return INTERVALOID;
 	case duckdb::LogicalTypeId::FLOAT:
 		return FLOAT4OID;
 	case duckdb::LogicalTypeId::DOUBLE:
@@ -1197,7 +1268,9 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::TIMESTAMP(duckdb::timestamp_t(DatumGetTimestamp(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
 	case TIMESTAMPTZOID:
 		return duckdb::Value::TIMESTAMPTZ(
-		    duckdb::timestamp_t(DatumGetTimestampTz(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
+		    duckdb::timestamp_tz_t(DatumGetTimestampTz(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
+	case INTERVALOID:
+		return duckdb::Value::INTERVAL(DatumGetInterval(value));
 	case FLOAT4OID:
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
 	case FLOAT8OID:
@@ -1255,13 +1328,20 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	case duckdb::LogicalTypeId::DATE:
 		Append<duckdb::date_t>(result, duckdb::date_t(static_cast<int32_t>(value + PGDUCKDB_DUCK_DATE_OFFSET)), offset);
 		break;
+
+	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
+	case duckdb::LogicalTypeId::TIMESTAMP_MS:
+	case duckdb::LogicalTypeId::TIMESTAMP_NS:
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		Append<duckdb::timestamp_t>(
 		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
 		break;
 	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
-		Append<duckdb::timestamp_t>(
-		    result, duckdb::timestamp_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
+		Append<duckdb::timestamp_tz_t>(
+		    result, duckdb::timestamp_tz_t(static_cast<int64_t>(value + PGDUCKDB_DUCK_TIMESTAMP_OFFSET)), offset);
+		break;
+	case duckdb::LogicalTypeId::INTERVAL:
+		Append<duckdb::interval_t>(result, DatumGetInterval(value), offset);
 		break;
 	case duckdb::LogicalTypeId::FLOAT:
 		Append<float>(result, DatumGetFloat4(value), offset);
@@ -1420,10 +1500,19 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state.output_vector_size);
 		} else {
-			/* Use returned tuple slot attr information. */
 			auto attr = slot->tts_tupleDescriptor->attrs[duckdb_output_index];
-			ConvertPostgresToDuckValue(attr.atttypid, slot->tts_values[duckdb_output_index], result,
-			                           scan_local_state.output_vector_size);
+			if (attr.attlen == -1) {
+				bool should_free = false;
+				Datum detoasted_value = DetoastPostgresDatum(
+				    reinterpret_cast<varlena *>(slot->tts_values[duckdb_output_index]), &should_free);
+				ConvertPostgresToDuckValue(attr.atttypid, detoasted_value, result, scan_local_state.output_vector_size);
+				if (should_free) {
+					duckdb_free(reinterpret_cast<void *>(detoasted_value));
+				}
+			} else {
+				ConvertPostgresToDuckValue(attr.atttypid, slot->tts_values[duckdb_output_index], result,
+				                           scan_local_state.output_vector_size);
+			}
 		}
 	}
 

@@ -6,6 +6,7 @@ test: execution_error
 test: extensions
 test: type_support
 test: array_type_support
+test: test_all_types
 test: views
 test: non_superuser
 test: projection_pushdown_unsupported_type
@@ -30,3 +31,4 @@ test: function
 test: timestamp_with_interval
 test: approx_count_distinct
 test: scan_postgres_tables
+test: json_functions_duckdb

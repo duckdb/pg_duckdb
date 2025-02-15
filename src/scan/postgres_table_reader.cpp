@@ -31,7 +31,7 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
     : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
       entered_parallel_mode(false), cleaned_up(false) {
 
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
 
 	List *raw_parsetree_list = PostgresFunctionGuard(pg_parse_query, table_scan_query);
@@ -87,10 +87,8 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 			RESUME_CANCEL_INTERRUPTS();
 		}
 
-		if (!IsInParallelMode()) {
-			EnterParallelMode();
-			entered_parallel_mode = true;
-		}
+		EnterParallelMode();
+		entered_parallel_mode = true;
 
 		ParallelContext *pcxt;
 		parallel_executor_info = PostgresFunctionGuard(ExecInitParallelPlan, table_scan_planstate,
@@ -123,7 +121,7 @@ PostgresTableReader::~PostgresTableReader() {
 	if (cleaned_up) {
 		return;
 	}
-	std::lock_guard<std::mutex> lock(GlobalProcessLock::GetLock());
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	PostgresTableReaderCleanup();
 }
 

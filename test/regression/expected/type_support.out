@@ -117,6 +117,23 @@ SELECT * FROM date_tbl;
  05-15-2023
 (3 rows)
 
+-- INTERVAL
+CREATE TABLE interval_tbl(a INTERVAL);
+INSERT INTO interval_tbl SELECT CAST(a AS INTERVAL) FROM (VALUES ('2 years 5 months 1 day 3 hours 30 minutes 5 seconds'::INTERVAL), ('5 day 5 hours'::INTERVAL), (NULL)) t(a);
+SELECT * FROM interval_tbl;
+                       a                       
+-----------------------------------------------
+ @ 2 years 5 mons 1 day 3 hours 30 mins 5 secs
+ @ 5 days 5 hours
+ 
+(3 rows)
+
+SELECT * FROM interval_tbl WHERE a = '5 day 5 hours'::INTERVAL;
+        a         
+------------------
+ @ 5 days 5 hours
+(1 row)
+
 -- TIMESTAMP
 CREATE TABLE timestamp_tbl(a TIMESTAMP);
 INSERT INTO timestamp_tbl SELECT CAST(a AS TIMESTAMP) FROM (VALUES
@@ -170,6 +187,27 @@ SELECT * FROM timestamptz_tbl WHERE a >= '2024-10-14 13:00:00 Europe/London';
  Mon Oct 14 09:00:00 2024 PDT
  Mon Oct 14 07:00:00 2024 PDT
 (3 rows)
+
+-- TIMESTAMP_NS Conversion from DuckDB to PostgreSQL
+SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12.123456789'::TIMESTAMP_NS as ts $$);
+               ts                
+---------------------------------
+ Sat Dec 12 12:12:12.123456 1992
+(1 row)
+
+-- TIMESTAMP_MS Conversion from DuckDB to PostgreSQL
+SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12.123'::TIMESTAMP_MS as ts $$);
+              ts              
+------------------------------
+ Sat Dec 12 12:12:12.123 1992
+(1 row)
+
+-- TIMESTAMP_S Conversion from DuckDB to PostgreSQL
+SELECT * FROM duckdb.query($$ SELECT '1992-12-12 12:12:12'::TIMESTAMP_S as ts $$);
+            ts            
+--------------------------
+ Sat Dec 12 12:12:12 1992
+(1 row)
 
 -- FLOAT4
 CREATE TABLE float4_tbl(a FLOAT4);
@@ -373,6 +411,7 @@ DROP TABLE bpchar_tbl;
 DROP TABLE varchar_tbl;
 DROP TABLE text_tbl;
 DROP TABLE date_tbl;
+DROP TABLE interval_tbl;
 DROP TABLE timestamp_tbl;
 DROP TABLE timestamptz_tbl;
 DROP TABLE float4_tbl;

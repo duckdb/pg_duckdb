@@ -615,6 +615,7 @@ class Postgres:
             # And finally, enable pg_duckdb
             pgconf.write("shared_preload_libraries = pg_duckdb\n")
             pgconf.write("duckdb.force_execution = 'true'\n")
+            pgconf.write("duckdb.postgres_role = 'duckdb_group'\n")
 
     def pgctl(self, command, **kwargs):
         pg_ctl = pg_bin("pg_ctl")

@@ -6041,11 +6041,22 @@ get_target_list(List *targetList, deparse_context *context,
 
 	sep = " ";
 	colno = 0;
+
+	StarReconstructionContext star_reconstruction_context = {0};
+	star_reconstruction_context.target_list = targetList;
+
+	bool outermost_targetlist = !processed_targetlist;
+	processed_targetlist = true;
+
 	foreach(l, targetList)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(l);
 		char	   *colname;
 		char	   *attname;
+
+		if (pgduckdb_reconstruct_star_step(&star_reconstruction_context, l)) {
+			continue;
+		}
 
 		if (tle->resjunk)
 			continue;			/* ignore junk entries */
@@ -6071,8 +6082,10 @@ get_target_list(List *targetList, deparse_context *context,
 		 * directly so that we can tell it to do the right thing, and so that
 		 * we can get the attribute name which is the default AS label.
 		 */
+		Var *var = NULL;
 		if (tle->expr && (IsA(tle->expr, Var)))
 		{
+			var = (Var *) tle->expr;
 			attname = get_variable((Var *) tle->expr, 0, true, context);
 		}
 		else
@@ -6098,8 +6111,33 @@ get_target_list(List *targetList, deparse_context *context,
 		else
 			colname = tle->resname;
 
+		/*
+		 * This makes sure we don't add Postgres its bad default alias to the
+		 * duckdb.row type.
+		 */
+		bool duckdb_skip_as = pgduckdb_var_is_duckdb_row(var);
+
+		/*
+		 * For r['abc'] expressions we don't want the column name to be r, but
+		 * instead we want it to be "abc". We can only to do this for the
+		 * target list of the outside most query though to make sure references
+		 * to the column name are still valid.
+		 */
+		if (!duckdb_skip_as && outermost_targetlist) {
+			Var *subscript_var = pgduckdb_duckdb_row_subscript_var(tle->expr);
+			if (subscript_var) {
+				/*
+				 * This cannot be moved to pgduckdb_ruleutils, because of
+				 * the reliance on the non-public deparse_namespace type.
+				 */
+				deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
+															subscript_var->varlevelsup);
+				duckdb_skip_as = !pgduckdb_subscript_has_custom_alias(dpns->plan, dpns->rtable, subscript_var, colname);
+			}
+		}
+
 		/* Show AS unless the column's name is correct as-is */
-		if (colname)			/* resname could be NULL */
+		if (colname && !duckdb_skip_as)			/* resname could be NULL */
 		{
 			if (attname == NULL || strcmp(attname, colname) != 0)
 				appendStringInfo(&targetbuf, " AS %s", quote_identifier(colname));
@@ -7504,6 +7542,11 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		if (attnum > colinfo->num_cols)
 			elog(ERROR, "invalid attnum %d for relation \"%s\"",
 				 attnum, rte->eref->aliasname);
+
+		if (pgduckdb_var_is_duckdb_row(var)) {
+			return pgduckdb_write_row_refname(context->buf, refname, istoplevel);
+		}
+
 		attname = colinfo->colnames[attnum - 1];
 
 		/*
@@ -9017,8 +9060,9 @@ get_rule_expr(Node *node, deparse_context *context,
 				}
 				else
 				{
+					SubscriptingRef *new_sbsref = pgduckdb_strip_first_subscript(sbsref, context->buf);
 					/* Just an ordinary container fetch, so print subscripts */
-					printSubscripts(sbsref, context);
+					printSubscripts(new_sbsref, context);
 				}
 			}
 			break;
@@ -10478,6 +10522,11 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		nargs++;
 	}
 
+	bool function_needs_subquery = pgduckdb_function_needs_subquery(funcoid);
+	if (function_needs_subquery) {
+		appendStringInfoString(buf, "(FROM ");
+	}
+
 	appendStringInfo(buf, "%s(",
 					 generate_function_name(funcoid, nargs,
 											argnames, argtypes,
@@ -10494,6 +10543,10 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		get_rule_expr((Node *) lfirst(l), context, true);
 	}
 	appendStringInfoChar(buf, ')');
+
+	if (function_needs_subquery) {
+		appendStringInfoChar(buf, ')');
+	}
 }
 
 /*
@@ -11047,6 +11100,10 @@ get_coercion_expr(Node *arg, deparse_context *context,
 			appendStringInfoChar(buf, ')');
 	}
 
+	if (pgduckdb_is_fake_type(resulttype)) {
+		return;
+	}
+
 	/*
 	 * Never emit resulttype(arg) functional notation. A pg_proc entry could
 	 * take precedence, and a resulttype in pg_temp would require schema
@@ -11081,6 +11138,8 @@ get_const_expr(Const *constval, deparse_context *context, int showtype)
 	bool		typIsVarlena;
 	char	   *extval;
 	bool		needlabel = false;
+
+	showtype = pgduckdb_show_type(constval, showtype);
 
 	if (constval->constisnull)
 	{
@@ -12121,8 +12180,18 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		/* Print the relation alias, if needed */
 		get_rte_alias(rte, varno, false, context);
 
+		if (pgduckdb_func_returns_duckdb_row(rtfunc1)) {
+			/*
+			 * We never want to print column aliases for functions that return
+			 * a duckdb.row. The common pattern is for people to not provide an
+			 * explicit column alias (i.e. "r" becomes "r(r)"). This obviously
+			 * is a naming collision and DuckDB resolves that in the opposite
+			 * way that we want. Never adding column aliases for duckdb.row
+			 * avoids this conflict.
+			 */
+		}
 		/* Print the column definitions or aliases, if needed */
-		if (rtfunc1 && rtfunc1->funccolnames != NIL)
+		else if (rtfunc1 && rtfunc1->funccolnames != NIL)
 		{
 			/* Reconstruct the columndef list, which is also the aliases */
 			get_from_clause_coldeflist(rtfunc1, colinfo, context);
