@@ -11,17 +11,12 @@ create table basictest
            , testnumeric domainnumeric
            );
 
+-- In fact, when we carry out an INSERT operation, the check regarding "domain" is conducted by PostgreSQL rather than DuckDB.
+-- When we execute a SELECT operation and the field of the query is "domain", we will convert it to the corresponding base type
+-- and let DuckDB handle it.
 INSERT INTO basictest values ('88', 'haha', 'short', '123.12');      -- Good
 INSERT INTO basictest values ('88', 'haha', 'short text', '123.12'); -- Bad varchar
 INSERT INTO basictest values ('88', 'haha', 'short', '123.1212');    -- Truncate numeric
-
--- domain check
-INSERT INTO basictest values ('-1', 'haha', 'short', '123.1212');   -- Bad int4
-INSERT INTO basictest values ('88', NULL, 'short', '123.1212');    -- Bad text
-INSERT INTO basictest values ('88', 'haha', NULL, '123.1212');   -- Bad varchar
-INSERT INTO basictest values ('88', 'haha', 'short', NULL);    -- Bad numeric
-SELECT 5::domainint4; -- Good
-SELECT (-5)::domainint4; -- Bad int4
 
 -- not support. It will be converted to the following statement
 -- SELECT ('-5'::integer)::domainint4 AS domainint4 FROM pgduckdb.xxx.basictest
