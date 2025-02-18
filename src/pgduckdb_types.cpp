@@ -31,6 +31,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_detoast.hpp"
+#include "pgduckdb/pgduckdb_process_lock.hpp"
 
 namespace pgduckdb {
 
@@ -908,7 +909,19 @@ numeric_typmod_scale(int32 typmod) {
 
 duckdb::LogicalType
 ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
-	switch (attribute->atttypid) {
+	Oid typoid = attribute->atttypid;
+	if (get_typtype(attribute->atttypid) == TYPTYPE_DOMAIN) {
+		/* It is a domain type that needs to be reduced to its base type */
+		typoid = getBaseType(attribute->atttypid);
+	} else if (type_is_array(attribute->atttypid)) {
+		Oid eltoid = get_base_element_type(attribute->atttypid);
+		if (OidIsValid(eltoid) && get_typtype(eltoid) == TYPTYPE_DOMAIN) {
+			/* When the member type of an array is domain, you need to build a base array type */
+			typoid = get_array_type(getBaseType(eltoid));
+		}
+	}
+
+	switch (typoid) {
 	case BOOLOID:
 	case BOOLARRAYOID:
 		return duckdb::LogicalTypeId::BOOLEAN;
@@ -981,8 +994,17 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
-	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
 	auto dimensions = attribute->attndims;
+	if (get_typtype(attribute->atttypid) == TYPTYPE_DOMAIN) {
+		/* If the domain is an array type, you need to obtain the corresponding array dimension information */
+		if (type_is_array_domain(attribute->atttypid)) {
+			HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(attribute->atttypid));
+			dimensions = ((Form_pg_type)GETSTRUCT(typeTuple))->typndims;
+			ReleaseSysCache(typeTuple);
+		}
+	}
+
+	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
 	if (dimensions == 0) {
 		return base_type;
 	}

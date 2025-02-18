@@ -11,6 +11,7 @@ Able to read many [data types](https://www.postgresql.org/docs/current/datatype.
 - `boolean`
 - `uuid`
 - `json`/`jsonb`
+- `domain`
 - `arrays` for all of the above types
 
 ## Known limitations
@@ -26,6 +27,7 @@ to fix these limitations:
 5. `jsonb` columns are converted to `json` columns when reading from DuckDB. This is because DuckDB does not have a `jsonb` type.
 6. Many Postgres `json` and `jsonb` functions and operators are not implemented in DuckDB. Instead you can use DuckDB json functions and operators. See the [DuckDB documentation](https://duckdb.org/docs/data/json/json_functions) for more information on these functions.
 7. The DuckDB `tinyint` type is converted to a `char` type in Postgres. This is because Postgres does not have a `tinyint` type. This causes it to be displayed as a hex code instead of a regular number.
+8. For the `domain` actually, during the execution of the INSERT operation, the check regarding `domain` is conducted by PostgreSQL rather than DuckDB. When we execute the SELECT operation and the type of the queried field is a `domain`, we will convert it to the corresponding base type and let DuckDB handle it.
 
 ## Special types
 
