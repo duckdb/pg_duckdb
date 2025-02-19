@@ -7,6 +7,7 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pg/types.hpp"
 
 extern "C" {
 
@@ -982,9 +983,33 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
-	auto dimensions = attribute->attndims;
-	if (dimensions == 0) {
+
+	if (!pg::IsArrayType(attribute->atttypid)) {
 		return base_type;
+	}
+
+	auto dimensions = attribute->attndims;
+
+	/*
+	 * Multi-dimensional arrays in Postgres and nested lists in DuckDB are
+	 * quite different in behaviour. We try to map them to eachother anyway,
+	 * because in a lot of cases that works fine. But there's also quite a few
+	 * where users will get errors.
+	 *
+	 * To support multi-dimensional arrays that are stored in Postgres tables,
+	 * we assume that the attndims value is correct. If people have specified
+	 * the matching number of [] when creating the table, that is the case.
+	 * It's even possible to store arrays of different dimensions in a single
+	 * column. DuckDB does not support that.
+	 *
+	 * In certain cases (such as tables created by a CTAS) attndims can even be
+	 * 0 for array types. It's impossible for us to find out what the actual
+	 * dimensions are without reading the first row. Given that it's most
+	 * to use single-dimensional arrays, we assume that such a column stores
+	 * those.
+	 */
+	if (dimensions == 0) {
+		dimensions = 1;
 	}
 
 	for (int i = 0; i < dimensions; i++) {
