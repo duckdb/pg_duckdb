@@ -14,6 +14,8 @@ To build and install, run:
 make install
 ```
 
+If you want to link `libduckdb` statically, set `DUCKDB_STATIC=1` when interacting with `make(1)`.
+
 Add `pg_duckdb` to the `shared_preload_libraries` in your `postgresql.conf` file:
 
 ```ini

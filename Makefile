@@ -32,7 +32,16 @@ else
 	DUCKDB_BUILD_TYPE = release
 endif
 
-DUCKDB_LIB = libduckdb$(DLSUFFIX)
+DUCKDB_STATIC ?= 0
+PG_DUCKDB_LINK_FLAGS = -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lstdc++ -llz4
+ifeq ($(DUCKDB_STATIC), 1)
+	DUCKDB_LIB = libduckdb_static.a
+	PG_DUCKDB_LINK_FLAGS += -l:$(DUCKDB_LIB)
+else
+	DUCKDB_LIB = libduckdb$(DLSUFFIX)
+	PG_DUCKDB_LINK_FLAGS += -lduckdb
+endif
+
 FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
 
 ERROR_ON_WARNING ?=
@@ -54,7 +63,7 @@ override PG_CXXFLAGS += -std=c++17 ${DUCKDB_BUILD_CXX_FLAGS} ${COMPILER_FLAGS} -
 # changes to the vendored code in one place.
 override PG_CFLAGS += -Wno-declaration-after-statement
 
-SHLIB_LINK += -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lduckdb -lstdc++ -llz4
+SHLIB_LINK += $(PG_DUCKDB_LINK_FLAGS)
 
 include Makefile.global
 
