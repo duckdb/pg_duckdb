@@ -103,6 +103,30 @@ SecretTypeToString(SecretType type) {
 	}
 }
 
+UrlStyle
+StringToUrlStyle(const std::string &style) {
+	auto uc_style = duckdb::StringUtil::Upper(style);
+	if (uc_style == "PATH") {
+		return UrlStyle::PATH;
+	} else if (uc_style == "VHOST") {
+		return UrlStyle::VIRTUAL_HOST;
+	} else {
+		throw std::runtime_error("Invalid URL style: '" + style + "'");
+	}
+}
+
+std::string
+UrlStyleToString(UrlStyle style) {
+	switch (style) {
+	case UrlStyle::PATH:
+		return "path";
+	case UrlStyle::VIRTUAL_HOST:
+		return "vhost";
+	default:
+		throw std::runtime_error("Invalid URL style: '" + std::to_string(style) + "'");
+	}
+}
+
 std::vector<DuckdbSecret>
 ReadDuckdbSecrets() {
 	HeapTuple tuple = NULL;
@@ -156,6 +180,11 @@ ReadDuckdbSecrets() {
 
 		if (!is_null_array[Anum_duckdb_secret_connection_string - 1])
 			secret.connection_string = DatumToString(datum_array[Anum_duckdb_secret_connection_string - 1]);
+
+		if (!is_null_array[Anum_duckdb_secret_url_style - 1])
+			secret.url_style = StringToUrlStyle(DatumToString(datum_array[Anum_duckdb_secret_url_style - 1]));
+		else
+			secret.url_style = UrlStyle::UNDEFINED;
 
 		duckdb_secrets.push_back(secret);
 	}
