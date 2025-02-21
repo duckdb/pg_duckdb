@@ -28,7 +28,7 @@ ifeq ($(DUCKDB_BUILD), Debug)
 	DUCKDB_BUILD_CXX_FLAGS = -g -O0 -D_GLIBCXX_ASSERTIONS
 	DUCKDB_BUILD_TYPE = debug
 	DUCKDB_MAKE_TARGET = debug
-else ifeq ($(DUCKDB_BUILD), Static)
+else ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	DUCKDB_BUILD_CXX_FLAGS =
 	DUCKDB_BUILD_TYPE = release
 	DUCKDB_MAKE_TARGET = bundle-library
@@ -41,7 +41,7 @@ endif
 PG_DUCKDB_LINK_FLAGS = -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lstdc++ -llz4
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
-ifeq ($(DUCKDB_BUILD), Static)
+ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	PG_DUCKDB_LINK_FLAGS += third_party/duckdb/build/release/libduckdb_bundle.a
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/$(DUCKDB_LIB)
 else
@@ -118,7 +118,7 @@ $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_MAKE_TARGET)
 
-ifeq ($(DUCKDB_BUILD), Static)
+ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
 else
 install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)

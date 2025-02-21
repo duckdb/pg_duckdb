@@ -111,6 +111,9 @@ jobs:
       - name: Build pg_duckdb extension
         id: build
         working-directory: duckdb
+        # For PG17 we build DuckDB as a static library. There's nothing special
+        # about the static library, nor PG17. This is only done so that we have
+        # CI coverage for our logic to build a static library version.
         run: |
           if [ '${{ matrix.version }}' = REL_17_STABLE ]; then
             ERROR_ON_WARNING=1 make -j8 install DUCKDB_BUILD=Static
