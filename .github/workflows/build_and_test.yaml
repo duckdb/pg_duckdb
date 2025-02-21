@@ -111,7 +111,13 @@ jobs:
       - name: Build pg_duckdb extension
         id: build
         working-directory: duckdb
-        run: ERROR_ON_WARNING=1 make -j8 install
+        run: |
+          if [ '${{ matrix.version }}' = REL_17_STABLE ]; then
+            ERROR_ON_WARNING=1 make -j8 install DUCKDB_BUILD=Static
+          else
+            ERROR_ON_WARNING=1 make -j8 install
+          fi
+
 
       - name: Run make installcheck
         id: installcheck
