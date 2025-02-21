@@ -33,7 +33,7 @@ typedef void (*SubXactCallback)(SubXactEvent event, SubTransactionId mySubid, Su
 }
 
 namespace pgduckdb::pg {
-bool DidWalWrites();
+void CommandCounterIncrement();
 CommandId GetCurrentCommandId(bool used = false);
 bool IsInTransactionBlock(bool top_level);
 void PreventInTransactionBlock(bool is_top_level, const char *statement_type);

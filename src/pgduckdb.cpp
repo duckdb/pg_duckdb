@@ -15,6 +15,7 @@ extern "C" {
 static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
+bool duckdb_unsafe_allow_mixed_transactions = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
@@ -128,6 +129,10 @@ static const struct config_enum_entry motherduck_enabled_options[] = {
 static void
 DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
+
+	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
+	                     "Allow mixed transactions between DuckDB and Postgres",
+	                     &duckdb_unsafe_allow_mixed_transactions);
 
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
 	                     &duckdb_enable_external_access, PGC_SUSET);
