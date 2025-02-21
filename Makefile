@@ -27,22 +27,27 @@ DUCKDB_BUILD_TYPE=
 ifeq ($(DUCKDB_BUILD), Debug)
 	DUCKDB_BUILD_CXX_FLAGS = -g -O0 -D_GLIBCXX_ASSERTIONS
 	DUCKDB_BUILD_TYPE = debug
+	DUCKDB_MAKE_TARGET = debug
+else ifeq ($(DUCKDB_BUILD), Static)
+	DUCKDB_BUILD_CXX_FLAGS =
+	DUCKDB_BUILD_TYPE = release
+	DUCKDB_MAKE_TARGET = bundle-library
 else
 	DUCKDB_BUILD_CXX_FLAGS =
 	DUCKDB_BUILD_TYPE = release
+	DUCKDB_MAKE_TARGET = release
 endif
 
-DUCKDB_STATIC ?= 0
 PG_DUCKDB_LINK_FLAGS = -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lstdc++ -llz4
-ifeq ($(DUCKDB_STATIC), 1)
-	DUCKDB_LIB = libduckdb_static.a
-	PG_DUCKDB_LINK_FLAGS += -l:$(DUCKDB_LIB)
-else
-	DUCKDB_LIB = libduckdb$(DLSUFFIX)
-	PG_DUCKDB_LINK_FLAGS += -lduckdb
-endif
+DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
-FULL_DUCKDB_LIB = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src/$(DUCKDB_LIB)
+ifeq ($(DUCKDB_BUILD), Static)
+	PG_DUCKDB_LINK_FLAGS += third_party/duckdb/build/release/libduckdb_bundle.a
+	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/$(DUCKDB_LIB)
+else
+	PG_DUCKDB_LINK_FLAGS += -lduckdb
+	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/$(DUCKDB_LIB)/libduckdb$(DLSUFFIX)
+endif
 
 ERROR_ON_WARNING ?=
 ifeq ($(ERROR_ON_WARNING), 1)
@@ -111,10 +116,14 @@ $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD
 	DISABLE_ASSERTIONS=$(DUCKDB_DISABLE_ASSERTIONS) \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake" \
 	$(MAKE) -C third_party/duckdb \
-	$(DUCKDB_BUILD_TYPE)
+	$(DUCKDB_MAKE_TARGET)
 
+ifeq ($(DUCKDB_BUILD), Static)
+install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
+else
 install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
 	$(install_bin) -m 755 $(FULL_DUCKDB_LIB) $(DESTDIR)$(PG_LIB)
+endif
 
 clean-duckdb:
 	rm -rf third_party/duckdb/build
