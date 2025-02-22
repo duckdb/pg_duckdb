@@ -77,7 +77,7 @@ static BackgoundWorkerShmemStruct *BgwShmemStruct;
 
 extern "C" {
 PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum /* main_arg */) {
+pgduckdb_background_worker_main(Datum arg) {
 	elog(LOG, "started pg_duckdb background worker");
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
@@ -94,7 +94,10 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 
 	duckdb::unique_ptr<duckdb::Connection> connection;
 
-	while (true) {
+	int backend_pid = (int)arg;
+	bool motherduck_connection_error = false;
+
+	while (!motherduck_connection_error) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
 		SetCurrentStatementStartTimestamp();
 		StartTransactionCommand();
@@ -103,7 +106,15 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 
 		if (pgduckdb::IsExtensionRegistered()) {
 			if (!connection) {
-				connection = pgduckdb::DuckDBManager::Get().CreateConnection();
+				try {
+					connection = pgduckdb::DuckDBManager::Get().CreateConnection();
+				} catch (...) {
+					// cosmetic, error thrown will not end with new line delimiter
+					fprintf(stdout, "\n");
+					elog(WARNING, "Error making connection to motherduck service. Re-check parameters.");
+					motherduck_connection_error = true;
+					continue;
+				}
 			}
 			SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
 			int64 new_activity_count = pgduckdb::BgwShmemStruct->activity_count;
@@ -134,7 +145,10 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 		ResetLatch(MyLatch);
 	}
 
-	// Unreachable
+	// We have motherduck connecton error so shut down so we don't retry
+	if (motherduck_connection_error) {
+		kill(backend_pid, SIGQUIT);
+	}
 }
 
 PG_FUNCTION_INFO_V1(force_motherduck_sync);
@@ -235,7 +249,7 @@ InitBackgroundWorker(void) {
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "pgduckdb_background_worker_main");
 	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_duckdb sync worker");
 	worker.bgw_restart_time = 1;
-	worker.bgw_main_arg = (Datum)0;
+	worker.bgw_main_arg = (Datum)MyProcPid;
 
 	// Register the worker
 	RegisterBackgroundWorker(&worker);
