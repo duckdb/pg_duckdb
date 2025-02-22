@@ -1056,3 +1056,6 @@ GRANT ALL ON FUNCTION duckdb.cache(TEXT, TEXT) TO PUBLIC;
 GRANT ALL ON FUNCTION duckdb.cache_info() TO PUBLIC;
 GRANT ALL ON FUNCTION duckdb.cache_delete(TEXT) TO PUBLIC;
 GRANT ALL ON PROCEDURE duckdb.recycle_ddb() TO PUBLIC;
+
+-- Add "url_style" column to "secrets" table
+ALTER TABLE duckdb.secrets ADD COLUMN url_style TEXT;
