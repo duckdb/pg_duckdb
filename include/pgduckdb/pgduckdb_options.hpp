@@ -18,7 +18,7 @@ namespace pgduckdb {
 #define Anum_duckdb_secret_use_ssl           9
 #define Anum_duckdb_secret_scope             10
 #define Anum_duckdb_secret_connection_string 11
-#define Anum_duckdb_secret_url_style		 12
+#define Anum_duckdb_secret_url_style         12
 
 enum SecretType { S3, R2, GCS, AZURE };
 enum UrlStyle { PATH, VIRTUAL_HOST, UNDEFINED };
