@@ -103,7 +103,7 @@ Since any connection that uses DuckDB will have its own DuckDB instance, these s
 
 ### `duckdb.max_memory` / `duckdb.memory_limit`
 
-The maximum memory DuckDB can use within a single Postgres connection. This is somewhat comparable to Postgres its `work_mem` setting.
+The maximum memory DuckDB can use within a single Postgres connection. This is somewhat comparable to Postgres its `work_mem` setting. When set to the empty string, this will use DuckDB its normal default which is 80% of RAM.
 
 Default: `"4GB"`
 

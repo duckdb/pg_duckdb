@@ -203,7 +203,8 @@ PostgresScanFunctionData::~PostgresScanFunctionData() {
 //
 
 PostgresScanTableFunction::PostgresScanTableFunction()
-    : TableFunction("postgres_scan", {}, PostgresScanFunction, nullptr, PostgresScanInitGlobal, PostgresScanInitLocal) {
+    : TableFunction("pgduckdb_postgres_scan", {}, PostgresScanFunction, nullptr, PostgresScanInitGlobal,
+                    PostgresScanInitLocal) {
 	named_parameters["cardinality"] = duckdb::LogicalType::UBIGINT;
 	named_parameters["relid"] = duckdb::LogicalType::UINTEGER;
 	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;

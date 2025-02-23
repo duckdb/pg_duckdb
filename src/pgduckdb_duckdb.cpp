@@ -142,7 +142,7 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
 
-	if (duckdb_maximum_memory != NULL) {
+	if (duckdb_maximum_memory != NULL && strlen(duckdb_maximum_memory) == 0) {
 		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
 	}

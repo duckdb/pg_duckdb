@@ -13,7 +13,7 @@ EXPLAIN SELECT count(*) FROM ta;
  │        count_star()       │
  └─────────────┬─────────────┘
  ┌─────────────┴─────────────┐
- │       POSTGRES_SCAN       │
+ │  PGDUCKDB_POSTGRES_SCAN   │
  │    ────────────────────   │
  │         Table: ta         │
  │                           │
@@ -37,7 +37,7 @@ EXPLAIN SELECT count(*) FROM ta;
  │        count_star()       │
  └─────────────┬─────────────┘
  ┌─────────────┴─────────────┐
- │       POSTGRES_SCAN       │
+ │  PGDUCKDB_POSTGRES_SCAN   │
  │    ────────────────────   │
  │         Table: ta         │
  │                           │

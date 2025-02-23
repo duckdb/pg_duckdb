@@ -7,6 +7,7 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pg/types.hpp"
 
 extern "C" {
 
@@ -909,18 +910,7 @@ numeric_typmod_scale(int32 typmod) {
 
 duckdb::LogicalType
 ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
-	Oid typoid = attribute->atttypid;
-	if (get_typtype(attribute->atttypid) == TYPTYPE_DOMAIN) {
-		/* It is a domain type that needs to be reduced to its base type */
-		typoid = getBaseType(attribute->atttypid);
-	} else if (type_is_array(attribute->atttypid)) {
-		Oid eltoid = get_base_element_type(attribute->atttypid);
-		if (OidIsValid(eltoid) && get_typtype(eltoid) == TYPTYPE_DOMAIN) {
-			/* When the member type of an array is domain, you need to build a base array type */
-			typoid = get_array_type(getBaseType(eltoid));
-		}
-	}
-
+	Oid typoid = pg::GetBaseDuckColumnType(attribute->atttypid);
 	switch (typoid) {
 	case BOOLOID:
 	case BOOLARRAYOID:
@@ -994,19 +984,35 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
-	auto dimensions = attribute->attndims;
-	if (get_typtype(attribute->atttypid) == TYPTYPE_DOMAIN) {
-		/* If the domain is an array type, you need to obtain the corresponding array dimension information */
-		if (type_is_array_domain(attribute->atttypid)) {
-			HeapTuple typeTuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(attribute->atttypid));
-			dimensions = ((Form_pg_type)GETSTRUCT(typeTuple))->typndims;
-			ReleaseSysCache(typeTuple);
+	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
+	if (!pg::IsArrayType(attribute->atttypid)) {
+		if (!pg::IsArrayDomainType(attribute->atttypid)) {
+			return base_type;
 		}
 	}
 
-	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
+	auto dimensions = attribute->attndims;
+
+	/*
+	 * Multi-dimensional arrays in Postgres and nested lists in DuckDB are
+	 * quite different in behaviour. We try to map them to eachother anyway,
+	 * because in a lot of cases that works fine. But there's also quite a few
+	 * where users will get errors.
+	 *
+	 * To support multi-dimensional arrays that are stored in Postgres tables,
+	 * we assume that the attndims value is correct. If people have specified
+	 * the matching number of [] when creating the table, that is the case.
+	 * It's even possible to store arrays of different dimensions in a single
+	 * column. DuckDB does not support that.
+	 *
+	 * In certain cases (such as tables created by a CTAS) attndims can even be
+	 * 0 for array types. It's impossible for us to find out what the actual
+	 * dimensions are without reading the first row. Given that it's most
+	 * to use single-dimensional arrays, we assume that such a column stores
+	 * those.
+	 */
 	if (dimensions == 0) {
-		return base_type;
+		dimensions = 1;
 	}
 
 	for (int i = 0; i < dimensions; i++) {
