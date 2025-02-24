@@ -32,21 +32,25 @@ IsArrayDomainType(Oid type_oid) {
 	return is_array_domain;
 }
 
-Oid
-GetBaseDuckColumnType(Oid attribute_typoid) {
-	std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
-	Oid typoid = attribute_typoid;
-	if (get_typtype(attribute_typoid) == TYPTYPE_DOMAIN) {
+static Oid
+GetBaseDuckColumnType_C(Oid attribute_type_oid) {
+	Oid typoid = attribute_type_oid;
+	if (get_typtype(attribute_type_oid) == TYPTYPE_DOMAIN) {
 		/* It is a domain type that needs to be reduced to its base type */
-		typoid = getBaseType(attribute_typoid);
-	} else if (type_is_array(attribute_typoid)) {
-		Oid eltoid = get_base_element_type(attribute_typoid);
+		typoid = getBaseType(attribute_type_oid);
+	} else if (type_is_array(attribute_type_oid)) {
+		Oid eltoid = get_base_element_type(attribute_type_oid);
 		if (OidIsValid(eltoid) && get_typtype(eltoid) == TYPTYPE_DOMAIN) {
 			/* When the member type of an array is domain, you need to build a base array type */
 			typoid = get_array_type(getBaseType(eltoid));
 		}
 	}
 	return typoid;
+}
+
+Oid
+GetBaseDuckColumnType(Oid attribute_type_oid) {
+	return PostgresFunctionGuard(GetBaseDuckColumnType_C, attribute_type_oid);
 }
 
 } // namespace pgduckdb::pg
