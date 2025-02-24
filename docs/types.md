@@ -11,6 +11,7 @@ Able to read many [data types](https://www.postgresql.org/docs/current/datatype.
 - `boolean`
 - `uuid`
 - `json`/`jsonb`
+- `domain`
 - `arrays` for all of the above types, but see limitations below about multi-dimensional arrays
 
 ## Known limitations
@@ -31,7 +32,7 @@ to fix these limitations:
     -- This configures the column to be a 3-dimensional array of text
     ALTER TABLE s ALTER COLUMN a SET DATA TYPE text[][][];
     ```
-
+9. For the `domain` actually, during the execution of the INSERT operation, the check regarding `domain` is conducted by PostgreSQL rather than DuckDB. When we execute the SELECT operation and the type of the queried field is a `domain`, we will convert it to the corresponding base type and let DuckDB handle it.
 ## Special types
 
 pg_duckdb introduces a few special Postgres types. You shouldn't create these types explicitly and normally you don't need to know about their existence, but they might show up in error messages from Postgres. These are explained below:

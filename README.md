@@ -18,7 +18,7 @@ pg_duckdb was developed in collaboration with our partners, [Hydra][] and [Mothe
 See our [official documentation][docs] for further details.
 
 - `SELECT` queries executed by the DuckDB engine can directly read Postgres tables. (If you only query Postgres tables you need to run `SET duckdb.force_execution TO true`, see the **IMPORTANT** section above for details)
-	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, and arrays.
+	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, domain, and arrays.
 	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
 - Read and Write support for object storage (AWS S3, Azure, Cloudflare R2, or Google GCS):
 	- Read parquet, CSV and JSON files:
