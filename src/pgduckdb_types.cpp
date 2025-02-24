@@ -32,6 +32,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_detoast.hpp"
+#include "pgduckdb/pgduckdb_process_lock.hpp"
 
 namespace pgduckdb {
 
@@ -909,7 +910,8 @@ numeric_typmod_scale(int32 typmod) {
 
 duckdb::LogicalType
 ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
-	switch (attribute->atttypid) {
+	Oid typoid = pg::GetBaseDuckColumnType(attribute->atttypid);
+	switch (typoid) {
 	case BOOLOID:
 	case BOOLARRAYOID:
 		return duckdb::LogicalTypeId::BOOLEAN;
@@ -983,9 +985,10 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
-
 	if (!pg::IsArrayType(attribute->atttypid)) {
-		return base_type;
+		if (!pg::IsArrayDomainType(attribute->atttypid)) {
+			return base_type;
+		}
 	}
 
 	auto dimensions = attribute->attndims;
