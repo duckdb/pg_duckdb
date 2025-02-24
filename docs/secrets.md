@@ -24,7 +24,7 @@ VALUES ('S3', 'access_key_id', 'secret_access_key', 'session_token', 'us-east-1'
 | use_ssl | boolean | no | `true` by default; `false` is principally for use with custom minio configurations |
 | scope | text | no | The URL prefix which applies to this credential. This is used to [select between multiple credentials](scope) for the same service. |
 | connection_string | text | Azure only | Connection string for Azure |
-| url_style | text | no | Either `vhost` or `path`; `path` is principally for use with custom minio configurations |
+| url_style | text | no | Either `vhost` or `path`. Default is `vhost` for S3 and `path` for R2 and GCS. Explicitely setting it to `path` is principally for use with custom minio configurations |
 
 [scope]: https://duckdb.org/docs/configuration/secrets_manager.html#creating-multiple-secrets-for-the-same-service-type
 
