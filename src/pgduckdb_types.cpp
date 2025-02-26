@@ -334,15 +334,25 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 	}
 }
 
+// A wrapper function to convert a string to a numeric value, used for `PostgresFunctionGuard` macro.
+static Datum
+ConvertStringToNumerics(Datum str, Datum typelem, Datum typmod) {
+	Datum pg_numeric = DirectFunctionCall3(numeric_in, str, typelem, typmod);
+	return pg_numeric;
+}
+
 static Datum
 ConvertNumericDatum(const duckdb::Value &value) {
 	auto value_type_id = value.type().id();
 
 	// Special handle duckdb VARINT type.
 	if (value.type().id() == duckdb::LogicalTypeId::VARINT) {
-		std::string value_str = value.ToString();
-		Datum pg_numeric = DirectFunctionCall3(numeric_in, CStringGetDatum(value_str.c_str()),
-		                                       ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
+		// The performant way to handle the translation is to parse VARINT out, here we leverage string conversion and
+		// parsing mainly for code simplicity.
+		const std::string value_str = value.ToString();
+		const Datum pg_numeric =
+		    PostgresFunctionGuard(ConvertStringToNumerics, /*str=*/CStringGetDatum(value_str.c_str()),
+		                          /*typelen=*/ObjectIdGetDatum(InvalidOid), /*typmod=*/Int32GetDatum(-1));
 		return pg_numeric;
 	}
 
