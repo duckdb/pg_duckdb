@@ -337,6 +337,16 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 static Datum
 ConvertNumericDatum(const duckdb::Value &value) {
 	auto value_type_id = value.type().id();
+
+	// Special handle duckdb VARINT type.
+	if (value.type().id() == duckdb::LogicalTypeId::VARINT) {
+		std::string value_str = value.ToString();
+		Datum pg_numeric = DirectFunctionCall3(numeric_in, CStringGetDatum(value_str.c_str()),
+		                                       ObjectIdGetDatum(InvalidOid), Int32GetDatum(-1));
+		return pg_numeric;
+	}
+
+	// Special handle duckdb DOUBLE TYPE.
 	if (value_type_id == duckdb::LogicalTypeId::DOUBLE) {
 		return ConvertDoubleDatum(value);
 	}
@@ -1112,6 +1122,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDOID;
+	case duckdb::LogicalTypeId::VARINT:
+		return NUMERICOID;
 	case duckdb::LogicalTypeId::LIST: {
 		const duckdb::LogicalType *duck_type = &type;
 		while (duck_type->id() == duckdb::LogicalTypeId::LIST) {
