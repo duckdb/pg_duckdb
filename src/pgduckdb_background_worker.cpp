@@ -73,11 +73,8 @@ typedef struct BackgoundWorkerShmemStruct {
 
 static BackgoundWorkerShmemStruct *BgwShmemStruct;
 
-static duckdb::Connection *
+static void
 BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count) {
-	if (!connection) {
-		connection = pgduckdb::DuckDBManager::Get().CreateConnection().get();
-	}
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
 	int64 new_activity_count = pgduckdb::BgwShmemStruct->activity_count;
 	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
@@ -91,8 +88,7 @@ BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count
 	 * means we essentially keep polling until the extension is
 	 * installed
 	 */
-	pgduckdb::SyncMotherDuckCatalogsWithPg(false, *connection->context);
-	return connection;
+	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
 }
 
 } // namespace pgduckdb
@@ -114,7 +110,7 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 	pgduckdb::doing_motherduck_sync = true;
 	pgduckdb::is_background_worker = true;
 
-	duckdb::Connection *connection = nullptr;
+	duckdb::unique_ptr<duckdb::Connection> connection = nullptr;
 
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
@@ -124,7 +120,10 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 		PushActiveSnapshot(GetTransactionSnapshot());
 
 		if (pgduckdb::IsExtensionRegistered()) {
-			connection = InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, connection, &last_activity_count);
+			if (!connection) {
+				connection = InvokeCPPFunc(pgduckdb::DuckDBManager::CreateConnection);
+			}
+			InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, connection.get(), &last_activity_count);
 		}
 
 		// Commit the transaction
