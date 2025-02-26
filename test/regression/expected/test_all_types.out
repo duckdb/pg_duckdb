@@ -5,8 +5,6 @@ FROM test_all_types()
 SELECT * exclude(
     tinyint, -- PG14 outputs this differently currently
     varint,
-    TIME,
-    time_tz,
     bit,
     small_enum,
     medium_enum,
@@ -40,10 +38,12 @@ usmallint       | 0
 uint            | 0
 ubigint         | 0
 date            | 07-14-5881580
+time            | 00:00:00
 timestamp       | Sun Jan 10 08:01:49.551616 294247
 timestamp_s     | Sun Jan 10 08:01:49.551616 294247
 timestamp_ms    | Sun Jan 10 08:01:49.551616 294247
 timestamp_ns    | Wed Sep 22 00:00:00 1677
+time_tz         | 00:00:00+15:59:59
 timestamp_tz    | Sun Jan 10 00:01:49.551616 294247 PST
 float           | -3.4028235e+38
 double          | -1.7976931348623157e+308
@@ -72,10 +72,12 @@ usmallint       | 65535
 uint            | 4294967295
 ubigint         | 18446744073709551615
 date            | 07-10-5881580
+time            | 24:00:00
 timestamp       | Sun Jan 10 04:00:54.775806 294247
 timestamp_s     | Sun Jan 10 04:00:54 294247
 timestamp_ms    | Sun Jan 10 04:00:54.775 294247
 timestamp_ns    | Fri Apr 11 23:47:16.854775 2262
+time_tz         | 24:00:00-15:59:59
 timestamp_tz    | Sat Jan 09 20:00:54.775806 294247 PST
 float           | 3.4028235e+38
 double          | 1.7976931348623157e+308
@@ -104,10 +106,12 @@ usmallint       |
 uint            | 
 ubigint         | 
 date            | 
+time            | 
 timestamp       | 
 timestamp_s     | 
 timestamp_ms    | 
 timestamp_ns    | 
+time_tz         | 
 timestamp_tz    | 
 float           | 
 double          | 

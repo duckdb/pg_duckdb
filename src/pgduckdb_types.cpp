@@ -230,6 +230,22 @@ ConvertIntervalDatum(const duckdb::Value &value) {
 	return IntervalPGetDatum(pg_interval);
 }
 
+static Datum
+ConvertTimeDatum(const duckdb::Value &value) {
+	std::string value_str = value.ToString();
+	Datum pg_time =
+	    DirectFunctionCall3(time_in, CStringGetDatum(value_str.c_str()), ObjectIdGetDatum(TIMEOID), Int32GetDatum(-1));
+	return pg_time;
+}
+
+static Datum
+ConvertTimeTzDatum(const duckdb::Value &value) {
+	std::string value_str = value.ToString();
+	Datum pg_timetz = DirectFunctionCall3(timetz_in, CStringGetDatum(value_str.c_str()), ObjectIdGetDatum(TIMETZOID),
+	                                      Int32GetDatum(-1));
+	return pg_timetz;
+}
+
 inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
 	// Extract raw int64_t value of timestamp
@@ -794,6 +810,14 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = ConvertDateDatum(value);
 		break;
 	}
+	case TIMEOID: {
+		slot->tts_values[col] = ConvertTimeDatum(value);
+		break;
+	}
+	case TIMETZOID: {
+		slot->tts_values[col] = ConvertTimeTzDatum(value);
+		break;
+	}
 	case TIMESTAMPOID: {
 		slot->tts_values[col] = ConvertTimestampDatum(value);
 		break;
@@ -1095,6 +1119,10 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return type.IsJSONType() ? JSONOID : VARCHAROID;
 	case duckdb::LogicalTypeId::DATE:
 		return DATEOID;
+	case duckdb::LogicalTypeId::TIME:
+		return TIMEOID;
+	case duckdb::LogicalTypeId::TIME_TZ:
+		return TIMETZOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
 	case duckdb::LogicalTypeId::TIMESTAMP_SEC:
 	case duckdb::LogicalTypeId::TIMESTAMP_MS:
