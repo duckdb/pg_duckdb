@@ -13,22 +13,21 @@ extern "C" {
 
 #include "pgduckdb/vendor/pg_numeric_c.hpp"
 
-#include "postgres.h"
 #include "fmgr.h"
+#include "postgres.h"
 #include "miscadmin.h"
 #include "access/tupdesc_details.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
-#include "utils/builtins.h"
-#include "utils/numeric.h"
-#include "utils/uuid.h"
 #include "utils/array.h"
-#include "fmgr.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
+#include "utils/builtins.h"
 #include "utils/date.h"
-#include "utils/timestamp.h"
 #include "utils/jsonb.h"
+#include "utils/lsyscache.h"
+#include "utils/numeric.h"
+#include "utils/syscache.h"
+#include "utils/timestamp.h"
+#include "utils/uuid.h"
 }
 
 #include "pgduckdb/pgduckdb_detoast.hpp"
@@ -334,13 +333,6 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 	}
 }
 
-// A wrapper function to convert a string to a numeric value, used for `PostgresFunctionGuard` macro.
-static Datum
-ConvertStringToNumerics(Datum str, Datum typelem, Datum typmod) {
-	Datum pg_numeric = DirectFunctionCall3(numeric_in, str, typelem, typmod);
-	return pg_numeric;
-}
-
 static Datum
 ConvertNumericDatum(const duckdb::Value &value) {
 	auto value_type_id = value.type().id();
@@ -350,9 +342,7 @@ ConvertNumericDatum(const duckdb::Value &value) {
 		// The performant way to handle the translation is to parse VARINT out, here we leverage string conversion and
 		// parsing mainly for code simplicity.
 		const std::string value_str = value.ToString();
-		const Datum pg_numeric =
-		    PostgresFunctionGuard(ConvertStringToNumerics, /*str=*/CStringGetDatum(value_str.c_str()),
-		                          /*typelen=*/ObjectIdGetDatum(InvalidOid), /*typmod=*/Int32GetDatum(-1));
+		Datum pg_numeric = pgduckdb::pg::StringToNumeric(value_str.c_str());
 		return pg_numeric;
 	}
 
