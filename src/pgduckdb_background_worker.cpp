@@ -114,7 +114,7 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 	pgduckdb::doing_motherduck_sync = true;
 	pgduckdb::is_background_worker = true;
 
-	duckdb::Connection *connection;
+	duckdb::Connection *connection = nullptr;
 
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
