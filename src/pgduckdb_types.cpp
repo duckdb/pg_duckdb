@@ -13,8 +13,8 @@ extern "C" {
 
 #include "pgduckdb/vendor/pg_numeric_c.hpp"
 
-#include "fmgr.h"
 #include "postgres.h"
+#include "fmgr.h"
 #include "miscadmin.h"
 #include "access/tupdesc_details.h"
 #include "catalog/pg_type.h"
