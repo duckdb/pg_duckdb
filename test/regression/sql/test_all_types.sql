@@ -7,7 +7,6 @@ SELECT * exclude(
     varint,
     TIME,
     time_tz,
-    bit,
     small_enum,
     medium_enum,
     large_enum,
