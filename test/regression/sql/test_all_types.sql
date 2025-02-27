@@ -4,7 +4,6 @@ SELECT * FROM duckdb.query($$
 FROM test_all_types()
 SELECT * exclude(
     tinyint, -- PG14 outputs this differently currently
-    varint,
     TIME,
     time_tz,
     bit,
