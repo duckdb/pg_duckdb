@@ -73,6 +73,24 @@ typedef struct BackgoundWorkerShmemStruct {
 
 static BackgoundWorkerShmemStruct *BgwShmemStruct;
 
+static void
+BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count) {
+	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
+	int64 new_activity_count = pgduckdb::BgwShmemStruct->activity_count;
+	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+	if (*last_activity_count != new_activity_count) {
+		*last_activity_count = new_activity_count;
+		/* Trigger some activity to restart the syncing */
+		pgduckdb::DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
+	}
+	/*
+	 * If the extension is not registerid this loop is a no-op, which
+	 * means we essentially keep polling until the extension is
+	 * installed
+	 */
+	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
+}
+
 } // namespace pgduckdb
 
 extern "C" {
@@ -92,7 +110,7 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 	pgduckdb::doing_motherduck_sync = true;
 	pgduckdb::is_background_worker = true;
 
-	duckdb::unique_ptr<duckdb::Connection> connection;
+	duckdb::unique_ptr<duckdb::Connection> connection = nullptr;
 
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
@@ -103,22 +121,9 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 
 		if (pgduckdb::IsExtensionRegistered()) {
 			if (!connection) {
-				connection = pgduckdb::DuckDBManager::Get().CreateConnection();
+				connection = InvokeCPPFunc(pgduckdb::DuckDBManager::CreateConnection);
 			}
-			SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
-			int64 new_activity_count = pgduckdb::BgwShmemStruct->activity_count;
-			SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
-			if (last_activity_count != new_activity_count) {
-				last_activity_count = new_activity_count;
-				/* Trigger some activity to restart the syncing */
-				pgduckdb::DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
-			}
-			/*
-			 * If the extension is not registerid this loop is a no-op, which
-			 * means we essentially keep polling until the extension is
-			 * installed
-			 */
-			pgduckdb::SyncMotherDuckCatalogsWithPg(false, *connection->context);
+			InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, connection.get(), &last_activity_count);
 		}
 
 		// Commit the transaction

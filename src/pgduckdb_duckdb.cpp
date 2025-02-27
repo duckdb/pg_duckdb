@@ -239,6 +239,9 @@ WriteSecretQueryForS3R2OrGCP(const DuckdbSecret &secret, std::ostringstream &que
 	if (secret.scope.length()) {
 		query << ", SCOPE '" << secret.scope << "'";
 	}
+	if (secret.url_style != UrlStyle::UNDEFINED) {
+		query << ", URL_STYLE '" << UrlStyleToString(secret.url_style) << "'";
+	}
 }
 
 void
