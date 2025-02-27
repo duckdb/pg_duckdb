@@ -19,16 +19,15 @@ extern "C" {
 #include "access/tupdesc_details.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
-#include "utils/builtins.h"
-#include "utils/numeric.h"
-#include "utils/uuid.h"
 #include "utils/array.h"
-#include "fmgr.h"
-#include "utils/lsyscache.h"
-#include "utils/syscache.h"
+#include "utils/builtins.h"
 #include "utils/date.h"
-#include "utils/timestamp.h"
 #include "utils/jsonb.h"
+#include "utils/lsyscache.h"
+#include "utils/numeric.h"
+#include "utils/syscache.h"
+#include "utils/timestamp.h"
+#include "utils/uuid.h"
 }
 
 #include "pgduckdb/pgduckdb_detoast.hpp"
@@ -344,6 +343,17 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 static Datum
 ConvertNumericDatum(const duckdb::Value &value) {
 	auto value_type_id = value.type().id();
+
+	// Special handle duckdb VARINT type.
+	if (value.type().id() == duckdb::LogicalTypeId::VARINT) {
+		// The performant way to handle the translation is to parse VARINT out, here we leverage string conversion and
+		// parsing mainly for code simplicity.
+		const std::string value_str = value.ToString();
+		Datum pg_numeric = pgduckdb::pg::StringToNumeric(value_str.c_str());
+		return pg_numeric;
+	}
+
+	// Special handle duckdb DOUBLE TYPE.
 	if (value_type_id == duckdb::LogicalTypeId::DOUBLE) {
 		return ConvertDoubleDatum(value);
 	}
@@ -1155,6 +1165,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDOID;
+	case duckdb::LogicalTypeId::VARINT:
+		return NUMERICOID;
 	case duckdb::LogicalTypeId::LIST: {
 		const duckdb::LogicalType *duck_type = &type;
 		while (duck_type->id() == duckdb::LogicalTypeId::LIST) {

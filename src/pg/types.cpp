@@ -2,8 +2,10 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 extern "C" {
 #include "postgres.h"
+#include "utils/fmgrprotos.h"
 #include "utils/lsyscache.h"
 #include "utils/syscache.h"
+#include "utils/numeric.h"
 #include "catalog/pg_type.h"
 #include "executor/tuptable.h"
 }
@@ -51,6 +53,18 @@ GetBaseDuckColumnType_C(Oid attribute_type_oid) {
 Oid
 GetBaseDuckColumnType(Oid attribute_type_oid) {
 	return PostgresFunctionGuard(GetBaseDuckColumnType_C, attribute_type_oid);
+}
+
+static Datum
+StringToNumeric_C(const char *str) {
+	Datum pg_numeric = DirectFunctionCall3(numeric_in, CStringGetDatum(str), /*typelen=*/ObjectIdGetDatum(InvalidOid),
+	                                       /*typmod=*/Int32GetDatum(-1));
+	return pg_numeric;
+}
+
+Datum
+StringToNumeric(const char *str) {
+	return PostgresFunctionGuard(StringToNumeric_C, str);
 }
 
 } // namespace pgduckdb::pg
