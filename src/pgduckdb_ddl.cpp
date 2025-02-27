@@ -138,6 +138,20 @@ DropTablePreCheck(DropStmt *stmt) {
 }
 
 static void
+DropSchemaPreCheck(DropStmt *stmt) {
+	Assert(stmt->removeType == OBJECT_SCHEMA);
+
+	foreach_ptr(Node, obj, stmt->objects) {
+		if (IsA(obj, String)) {
+			char *schema_name = strVal(obj);
+			if (strncmp("ddb$", schema_name, 4) == 0) {
+				elog(ERROR, "Dropping ddb$ schemas is currently not supported");
+			}
+		}
+	}
+}
+
+static void
 DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/* We're not installed, so don't mess with the query */
@@ -282,6 +296,9 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		switch (stmt->removeType) {
 		case OBJECT_TABLE:
 			DropTablePreCheck(stmt);
+			break;
+		case OBJECT_SCHEMA:
+			DropSchemaPreCheck(stmt);
 			break;
 		default:
 			/* ignore anything else */

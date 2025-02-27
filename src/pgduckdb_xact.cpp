@@ -87,9 +87,9 @@ CheckForDisallowedMixedWrites() {
 /*
  * In a new transaction the Postgres command id usually starts with 0, but not
  * always. Specifically for a series of implicit transactions triggered by
- * query pipelining, the command id will stay won't reset inbetween those
- * implicit transactions. This should probably be considered a Postgres bug,
- * but we need to deal with it.
+ * query pipelining, the command id won't reset inbetween those implicit
+ * transactions. This should probably be considered a Postgres bug, but we need
+ * to deal with it.
  *
  * We need to know what the next_expected_command_id is for our "mixed writes"
  * checks. Sadly Postgres has no hook for "start of transaction" so we need to
