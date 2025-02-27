@@ -192,9 +192,9 @@ ConvertInt8Datum(const duckdb::Value &value) {
 
 static Datum
 ConvertVarCharDatum(const duckdb::Value &value) {
-	auto str = value.GetValue<duckdb::string>();
-	auto varchar = str.c_str();
-	auto varchar_len = str.size();
+	auto str = value.GetValueUnsafe<duckdb::string_t>();
+	auto varchar = str.GetDataUnsafe();
+	auto varchar_len = str.GetSize();
 
 	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
 	SET_VARSIZE(result, varchar_len + VARHDRSZ);
