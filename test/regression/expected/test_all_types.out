@@ -5,7 +5,6 @@ FROM test_all_types()
 SELECT * exclude(
     tinyint, -- PG14 outputs this differently currently
     time_tz,
-    bit,
     small_enum,
     medium_enum,
     large_enum,
@@ -55,6 +54,7 @@ uuid            | 00000000-0000-0000-0000-000000000000
 interval        | @ 0
 varchar         | 🦆🦆🦆🦆🦆🦆
 blob            | thisisalongblob\000withnullbytes
+bit             | 0010001001011100010101011010111
 int_array       | {}
 double_array    | {}
 date_array      | {}
@@ -89,6 +89,7 @@ uuid            | ffffffff-ffff-ffff-ffff-ffffffffffff
 interval        | @ 83 years 3 mons 999 days 16 mins 39.999999 secs
 varchar         | goo
 blob            | \000\000\000a
+bit             | 10101
 int_array       | {42,999,NULL,NULL,-42}
 double_array    | {42,NaN,Infinity,-Infinity,NULL,-42}
 date_array      | {01-01-1970,07-11-5881580,07-13-5881580,NULL,05-12-2022}
@@ -123,6 +124,7 @@ uuid            |
 interval        | 
 varchar         | 
 blob            | 
+bit             | 
 int_array       | 
 double_array    | 
 date_array      | 

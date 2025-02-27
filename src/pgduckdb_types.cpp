@@ -156,6 +156,15 @@ struct DecimalConversionDouble {
 	}
 };
 
+static Datum
+ConvertVarbitDatum(const duckdb::Value &value) {
+	const std::string value_str = value.ToString();
+	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
+	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
+	Datum pg_varbit = pgduckdb::pg::StringToBitString(value_str.c_str());
+	return pg_varbit;
+}
+
 static inline Datum
 ConvertBoolDatum(const duckdb::Value &value) {
 	return value.GetValue<bool>();
@@ -803,6 +812,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
 
 	switch (oid) {
+	case VARBITOID: {
+		slot->tts_values[col] = ConvertVarbitDatum(value);
+		break;
+	}
 	case BOOLOID:
 		slot->tts_values[col] = ConvertBoolDatum(value);
 		break;
@@ -1122,6 +1135,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 Oid
 GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	switch (type.id()) {
+	case duckdb::LogicalTypeId::BIT:
+		return VARBITOID;
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
 	case duckdb::LogicalTypeId::TINYINT:

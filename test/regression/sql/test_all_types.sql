@@ -5,7 +5,6 @@ FROM test_all_types()
 SELECT * exclude(
     tinyint, -- PG14 outputs this differently currently
     time_tz,
-    bit,
     small_enum,
     medium_enum,
     large_enum,

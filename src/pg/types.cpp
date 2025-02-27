@@ -67,4 +67,16 @@ StringToNumeric(const char *str) {
 	return PostgresFunctionGuard(StringToNumeric_C, str);
 }
 
+static Datum
+StringToBitString_C(const char *str) {
+	Datum pg_varbit = DirectFunctionCall3(varbit_in, CStringGetDatum(str), /*typelen=*/ObjectIdGetDatum(VARBITOID),
+	                                      /*typmod=*/Int32GetDatum(-1));
+	return pg_varbit;
+}
+
+Datum
+StringToBitString(const char *str) {
+	return PostgresFunctionGuard(StringToBitString_C, str);
+}
+
 } // namespace pgduckdb::pg
