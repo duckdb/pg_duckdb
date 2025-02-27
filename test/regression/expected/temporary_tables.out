@@ -68,16 +68,14 @@ SELECT * FROM t2 ORDER BY a;
 BEGIN;
     INSERT INTO t2 VALUES (1), (2), (3);
 END;
--- We shouldn't be able to run DuckDB DDL in transactions (yet).
+-- We should be able to run DuckDB DDL in transactions
 BEGIN;
     CREATE TEMP TABLE t3(a int);
-ERROR:  DuckDB DDL statements cannot run inside a transaction block
 END;
 BEGIN;
-    DROP TABLE t2;
-ERROR:  DuckDB DDL statements cannot run inside a transaction block
+    DROP TABLE t3;
 END;
--- But plain postgres DDL and queries should work fine
+-- Plain postgres DDL and queries should work fine too
 BEGIN;
     CREATE TEMP TABLE t4(a int) USING heap;
     INSERT INTO t4 VALUES (1);
@@ -119,7 +117,12 @@ pg_temp	main	CREATE TABLE t2(a INTEGER);
  
 (1 row)
 
-DROP TABLE t, t_heap, t2;
+-- Ensure that we can drop the table with all the supported features inside a
+-- transaction.
+BEGIN;
+DROP TABLE t;
+END;
+DROP TABLE t_heap, t2;
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 NOTICE:  result: database_name	schema_name	sql	
 VARCHAR	VARCHAR	VARCHAR	

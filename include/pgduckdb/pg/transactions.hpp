@@ -5,6 +5,8 @@
 extern "C" {
 extern bool IsSubTransaction(void);
 
+#define FirstCommandId ((CommandId)0)
+
 /*
  * These enum definitions are vendored in so we can implement a postgres
  * XactCallback in C++. It's not expected that these will ever change.
@@ -33,7 +35,7 @@ typedef void (*SubXactCallback)(SubXactEvent event, SubTransactionId mySubid, Su
 }
 
 namespace pgduckdb::pg {
-bool DidWalWrites();
+void CommandCounterIncrement();
 CommandId GetCurrentCommandId(bool used = false);
 bool IsInTransactionBlock(bool top_level);
 void PreventInTransactionBlock(bool is_top_level, const char *statement_type);

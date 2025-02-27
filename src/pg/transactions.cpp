@@ -8,14 +8,14 @@ extern "C" {
 
 namespace pgduckdb::pg {
 
-bool
-DidWalWrites() {
-	return XactLastRecEnd != InvalidXLogRecPtr;
-}
-
 CommandId
 GetCurrentCommandId(bool used = false) {
 	return PostgresFunctionGuard(::GetCurrentCommandId, used);
+}
+
+void
+CommandCounterIncrement() {
+	return PostgresFunctionGuard(::CommandCounterIncrement);
 }
 
 bool
