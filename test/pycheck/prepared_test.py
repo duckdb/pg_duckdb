@@ -71,7 +71,7 @@ def test_extended(cur: Cursor):
         "t2",
         "t3",
         datetime.timedelta(days=5, hours=3, minutes=30),
-        datetime.timedelta(hours=3, minutes=30, seconds=30),
+        datetime.time(1, 2, 3),
         datetime.date(2024, 5, 4),
         datetime.datetime(2020, 1, 1, 1, 2, 3),
         datetime.datetime(2020, 1, 1, 1, 2, 3, tzinfo=datetime.timezone.utc),
