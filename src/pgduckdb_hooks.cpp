@@ -187,7 +187,6 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
-		pgduckdb::RememberCommandId();
 		if (NeedsDuckdbExecution(parse)) {
 			pgduckdb::TriggerActivity();
 			IsAllowedStatement(parse, true);
@@ -300,8 +299,6 @@ DuckdbExecutorStartHook(QueryDesc *queryDesc, int eflags) {
 		prev_executor_start_hook(queryDesc, eflags);
 		return;
 	}
-
-	pgduckdb::RememberCommandId();
 
 	prev_executor_start_hook(queryDesc, eflags);
 	InvokeCPPFunc(DuckdbExecutorStartHook_Cpp, queryDesc);

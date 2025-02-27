@@ -12,7 +12,6 @@ bool AllowWrites();
 bool MixedWritesAllowed();
 bool DidDisallowedMixedWrites();
 void CheckForDisallowedMixedWrites();
-void RememberCommandId();
 void ClaimCurrentCommandId(bool force = false);
 void ClaimWalWrites();
 bool DidUnclaimedWalWrites();

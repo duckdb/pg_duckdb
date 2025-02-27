@@ -9,8 +9,7 @@
 
 namespace pgduckdb {
 
-static int64_t next_expected_command_id = -1;
-static int64_t last_duckdb_command_id = -1;
+static CommandId next_expected_command_id = FirstCommandId;
 static bool top_level_statement = true;
 
 namespace pg {
@@ -39,8 +38,16 @@ PreventInTransactionBlock(const char *statement_type) {
  * Check if Postgres did any writes.
  *
  * We only update the next_expected_command_id when pgduckdb did a write. This
- * means that if the CurrentCommandId returns another number than the expected
- * one, that Postgres did a write.
+ * means that Postgres did a write if the GetCurrentCommandId returns another
+ * number than the expected one.
+ *
+ * NOTE: This function can return a false-negative (i.e. Postgres did writes,
+ * but this function doesn't return true). This only happens when Postgres
+ * already called GetCurrentCommandId() with used=true, but hasn't called
+ * CommandCounterIncrement() yet. An easy way to work around this is by calling
+ * DidWrites() before Postgres has done the above, so very early in the command
+ * handling. Even if you don't it's often not a problem, because we check again
+ * at transaction end and also during any next call to ClaimCurrentCommandId().
  */
 static bool
 DidWrites() {
@@ -85,33 +92,15 @@ CheckForDisallowedMixedWrites() {
 }
 
 /*
- * In a new transaction the Postgres command id usually starts with 0, but not
- * always. Specifically for a series of implicit transactions triggered by
- * query pipelining, the command id will stay won't reset inbetween those
- * implicit transactions. This should probably be considered a Postgres bug,
- * but we need to deal with it.
- *
- * We need to know what the next_expected_command_id is for our "mixed writes"
- * checks. Sadly Postgres has no hook for "start of transaction" so we need to
- * add this call to the start of all of our hooks that could potentially
- * increase the command id to be sure that we know the original command that
- * the transaction started with.
- */
-void
-RememberCommandId() {
-	if (next_expected_command_id == -1) {
-		next_expected_command_id = pg::GetCurrentCommandId();
-	}
-}
-
-/*
  * Claim the current command id as being executed by a DuckDB write query.
  *
  * Postgres increments its command id counter for every write query that
  * happens in a transaction. We use this counter to detect if the transaction
  * wrote to both Postgres and DuckDB within the same transaction. The way we do
  * this is by consuming a command ID for every DuckDB write query that we do
- * and tracking what the next expected command ID is. If we ever consume a
+ * and checking that it was only increased by one since the last query. If it
+ * ever increases by more than one it means that there was some Postgres query
+ * in the middle.
  */
 void
 ClaimCurrentCommandId(bool force) {
@@ -131,7 +120,6 @@ ClaimCurrentCommandId(bool force) {
 	}
 
 	pg::CommandCounterIncrement();
-	last_duckdb_command_id = new_command_id;
 	next_expected_command_id = pg::GetCurrentCommandId();
 }
 
@@ -242,8 +230,7 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 		CheckForDisallowedMixedWrites();
 
 		top_level_statement = true;
-		next_expected_command_id = -1;
-		last_duckdb_command_id = -1;
+		next_expected_command_id = FirstCommandId;
 		pg::force_allow_writes = false;
 		if (modified_temporary_duckdb_tables) {
 			modified_temporary_duckdb_tables = false;
@@ -259,8 +246,7 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 	case XACT_EVENT_ABORT:
 	case XACT_EVENT_PARALLEL_ABORT:
 		top_level_statement = true;
-		next_expected_command_id = -1;
-		last_duckdb_command_id = -1;
+		next_expected_command_id = FirstCommandId;
 		pg::force_allow_writes = false;
 		if (modified_temporary_duckdb_tables) {
 			modified_temporary_duckdb_tables = false;

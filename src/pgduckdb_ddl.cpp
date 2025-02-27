@@ -155,8 +155,6 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		return;
 	}
 
-	pgduckdb::RememberCommandId();
-
 	/*
 	 * Time to check for disallowed mixed writes here. The handling for some of
 	 * the DuckDB DDL, marks some some specific mixed writes as allowed. If we
