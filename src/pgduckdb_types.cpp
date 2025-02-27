@@ -159,8 +159,9 @@ struct DecimalConversionDouble {
 static Datum
 ConvertVarbitDatum(const duckdb::Value &value) {
 	const std::string value_str = value.ToString();
-	Datum pg_varbit = DirectFunctionCall3(varbit_in, CStringGetDatum(value_str.c_str()), ObjectIdGetDatum(VARBITOID),
-	                                      Int32GetDatum(-1));
+	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
+	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
+	Datum pg_varbit = pgduckdb::pg::StringToBitString(value_str.c_str());
 	return pg_varbit;
 }
 
