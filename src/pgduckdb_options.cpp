@@ -59,11 +59,7 @@ ExtensionsTableRelationId(void) {
 
 static std::string
 DatumToString(Datum datum) {
-	std::string column_value;
-	text *datum_text = DatumGetTextPP(datum);
-	column_value = VARDATA_ANY(datum_text);
-	column_value.resize(VARSIZE_ANY_EXHDR(datum_text));
-	return column_value;
+	return std::string(text_to_cstring(DatumGetTextPP(datum)));
 }
 
 bool
