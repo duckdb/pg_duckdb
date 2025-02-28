@@ -11987,7 +11987,7 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 	Oid		   *p_true_typeids;
 	bool		force_qualify = false;
 
-	result = pgduckdb_function_name(funcid);
+	result = pgduckdb_function_name(funcid, use_variadic_p);
 	if (result)
 		return result;
 
