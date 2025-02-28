@@ -9,7 +9,7 @@ typedef struct StarReconstructionContext {
 } StarReconstructionContext;
 
 char *pgduckdb_relation_name(Oid relid);
-char *pgduckdb_function_name(Oid function_oid);
+char *pgduckdb_function_name(Oid function_oid, bool *use_variadic_p);
 char *pgduckdb_get_querydef(Query *);
 char *pgduckdb_get_tabledef(Oid relation_id);
 bool pgduckdb_is_not_default_expr(Node *node, void *context);
