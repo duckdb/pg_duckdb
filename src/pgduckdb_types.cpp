@@ -238,6 +238,13 @@ ConvertIntervalDatum(const duckdb::Value &value) {
 	return IntervalPGetDatum(pg_interval);
 }
 
+static Datum
+ConvertTimeDatum(const duckdb::Value &value) {
+	const int64_t microsec = value.GetValue<int64_t>();
+	const TimeADT pg_time = microsec;
+	return Int64GetDatum(pg_time);
+}
+
 inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
 	// Extract raw int64_t value of timestamp
@@ -422,6 +429,13 @@ DatumGetInterval(Datum value) {
 	return duck_interval;
 }
 
+static duckdb::dtime_t
+DatumGetTime(Datum value) {
+	const TimeADT pg_time = DatumGetTimeADT(value);
+	duckdb::dtime_t duckdb_time {pg_time};
+	return duckdb_time;
+}
+
 template <int32_t OID>
 struct PostgresTypeTraits;
 
@@ -543,6 +557,19 @@ struct PostgresTypeTraits<INTERVALOID> {
 	}
 };
 
+// TIME type
+template <>
+struct PostgresTypeTraits<TIMEOID> {
+	static constexpr int16_t typlen = 8;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'd';
+
+	static inline Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertTimeDatum(val);
+	}
+};
+
 // DATE type
 template <>
 struct PostgresTypeTraits<DATEOID> {
@@ -646,6 +673,7 @@ using Float8Array = PODArray<PostgresOIDMapping<FLOAT8OID>>;
 using DateArray = PODArray<PostgresOIDMapping<DATEOID>>;
 using TimestampArray = PODArray<PostgresOIDMapping<TIMESTAMPOID>>;
 using IntervalArray = PODArray<PostgresOIDMapping<INTERVALOID>>;
+using TimeArray = PODArray<PostgresOIDMapping<TIMEOID>>;
 using UUIDArray = PODArray<PostgresOIDMapping<UUIDOID>>;
 using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
 using NumericArray = PODArray<PostgresOIDMapping<NUMERICOID>>;
@@ -830,6 +858,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = ConvertIntervalDatum(value);
 		break;
 	}
+	case TIMEOID: {
+		slot->tts_values[col] = ConvertTimeDatum(value);
+		break;
+	}
 	case FLOAT4OID: {
 		slot->tts_values[col] = ConvertFloatDatum(value);
 		break;
@@ -887,6 +919,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	}
 	case INTERVALARRAYOID: {
 		ConvertDuckToPostgresArray<IntervalArray>(slot, value, col);
+		break;
+	}
+	case TIMEARRAYOID: {
+		ConvertDuckToPostgresArray<TimeArray>(slot, value, col);
 		break;
 	}
 	case FLOAT4ARRAYOID: {
@@ -968,6 +1004,9 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case INTERVALOID:
 	case INTERVALARRAYOID:
 		return duckdb::LogicalTypeId::INTERVAL;
+	case TIMEOID:
+	case TIMEARRAYOID:
+		return duckdb::LogicalTypeId::TIME;
 	case FLOAT4OID:
 	case FLOAT4ARRAYOID:
 		return duckdb::LogicalTypeId::FLOAT;
@@ -1073,6 +1112,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 		return TIMESTAMPARRAYOID;
 	case duckdb::LogicalTypeId::INTERVAL:
 		return INTERVALARRAYOID;
+	case duckdb::LogicalTypeId::TIME:
+		return TIMEARRAYOID;
 	case duckdb::LogicalTypeId::FLOAT:
 		return FLOAT4ARRAYOID;
 	case duckdb::LogicalTypeId::DOUBLE:
@@ -1129,6 +1170,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return TIMESTAMPTZOID;
 	case duckdb::LogicalTypeId::INTERVAL:
 		return INTERVALOID;
+	case duckdb::LogicalTypeId::TIME:
+		return TIMEOID;
 	case duckdb::LogicalTypeId::FLOAT:
 		return FLOAT4OID;
 	case duckdb::LogicalTypeId::DOUBLE:
@@ -1294,6 +1337,8 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		    duckdb::timestamp_tz_t(DatumGetTimestampTz(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
 	case INTERVALOID:
 		return duckdb::Value::INTERVAL(DatumGetInterval(value));
+	case TIMEOID:
+		return duckdb::Value::TIME(DatumGetTime(value));
 	case FLOAT4OID:
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
 	case FLOAT8OID:
@@ -1365,6 +1410,9 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		break;
 	case duckdb::LogicalTypeId::INTERVAL:
 		Append<duckdb::interval_t>(result, DatumGetInterval(value), offset);
+		break;
+	case duckdb::LogicalTypeId::TIME:
+		Append<duckdb::dtime_t>(result, DatumGetTime(value), offset);
 		break;
 	case duckdb::LogicalTypeId::FLOAT:
 		Append<float>(result, DatumGetFloat4(value), offset);

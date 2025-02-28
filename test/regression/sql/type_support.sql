@@ -53,6 +53,12 @@ INSERT INTO interval_tbl SELECT CAST(a AS INTERVAL) FROM (VALUES ('2 years 5 mon
 SELECT * FROM interval_tbl;
 SELECT * FROM interval_tbl WHERE a = '5 day 5 hours'::INTERVAL;
 
+-- TIME
+CREATE TABLE time_tbl(a TIME);
+INSERT INTO time_tbl SELECT CAST(a AS TIME) FROM (VALUES ('13:45:30'::TIME), ('08:15:00'::TIME), (NULL)) t(a);
+SELECT * FROM time_tbl;
+SELECT * FROM time_tbl WHERE a = '08:15:00'::TIME;
+
 -- TIMESTAMP
 CREATE TABLE timestamp_tbl(a TIMESTAMP);
 INSERT INTO timestamp_tbl SELECT CAST(a AS TIMESTAMP) FROM (VALUES
@@ -207,6 +213,7 @@ DROP TABLE varchar_tbl;
 DROP TABLE text_tbl;
 DROP TABLE date_tbl;
 DROP TABLE interval_tbl;
+DROP TABLE time_tbl;
 DROP TABLE timestamp_tbl;
 DROP TABLE timestamptz_tbl;
 DROP TABLE float4_tbl;

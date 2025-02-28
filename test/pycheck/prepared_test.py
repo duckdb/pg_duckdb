@@ -53,6 +53,7 @@ def test_extended(cur: Cursor):
             t2 VARCHAR,
             t3 BPCHAR,
             ivl INTERVAL,
+            time TIME,
             d DATE,
             ts TIMESTAMP,
             tstz TIMESTAMP WITH TIME ZONE,
@@ -70,13 +71,14 @@ def test_extended(cur: Cursor):
         "t2",
         "t3",
         datetime.timedelta(days=5, hours=3, minutes=30),
+        datetime.time(1, 2, 3),
         datetime.date(2024, 5, 4),
         datetime.datetime(2020, 1, 1, 1, 2, 3),
         datetime.datetime(2020, 1, 1, 1, 2, 3, tzinfo=datetime.timezone.utc),
         psycopg.types.json.Json({"a": 1}),
     )
     cur.sql(
-        "INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         row,
     )
 
@@ -93,6 +95,7 @@ def test_extended(cur: Cursor):
             t2 = %s,
             t3 = %s,
             ivl = %s,
+            time = %s,
             d = %s,
             ts = %s,
             tstz = %s,

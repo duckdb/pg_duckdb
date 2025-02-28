@@ -12,3 +12,5 @@ compile_commands.json
 *.bc
 *.dylib
 *.pyc
+
+env/
