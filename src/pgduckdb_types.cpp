@@ -244,6 +244,8 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 
 	TimeTzADT *result = static_cast<TimeTzADT *>(palloc(sizeof(TimeTzADT)));
 	result->time = micros;
+	// pg and duckdb stores timezone with different signs, for example, for TIMETZ 01:02:03+05, duckdb stores offset =
+	// 18000, while pg stores zone = -18000.
 	result->zone = -tz_offset;
 	return TimeTzADTPGetDatum(result);
 }
@@ -442,6 +444,8 @@ DatumGetTime(Datum value) {
 static duckdb::dtime_tz_t
 DatumGetTimeTz(Datum value) {
 	TimeTzADT *tzt = static_cast<TimeTzADT *>(DatumGetTimeTzADTP(value));
+	// pg and duckdb stores timezone with different signs, for example, for TIMETZ 01:02:03+05, duckdb stores offset =
+	// 18000, while pg stores zone = -18000.
 	const uint64_t bits = duckdb::dtime_tz_t::encode_micros(tzt->time) | duckdb::dtime_tz_t::encode_offset(-tzt->zone);
 	const duckdb::dtime_tz_t duck_time_tz {bits};
 	return duck_time_tz;
