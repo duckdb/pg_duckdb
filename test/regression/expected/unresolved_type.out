@@ -101,7 +101,7 @@ select strftime(timestamp '1992-01-01 20:38:40', '%a, %-d %B %Y - %I:%M:%S %p');
 select strftime(timestamptz '1992-01-01 20:38:40', '%a, %-d %B %Y - %I:%M:%S %p');
              strftime              
 -----------------------------------
- Thu, 2 January 1992 - 05:38:40 AM
+ Wed, 1 January 1992 - 08:38:40 PM
 (1 row)
 
 select strftime(r['ts'], '%a, %-d %B %Y - %I:%M:%S %p') from duckdb.query($$ SELECT timestamp '1992-01-01 20:38:40' ts $$) r;
