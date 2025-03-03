@@ -9,6 +9,8 @@
 #include "duckdb/main/client_data.hpp"
 #include "http_metadata_cache.hpp"
 
+#include <mutex>
+
 namespace duckdb_httplib_openssl {
 struct Response;
 class Result;
@@ -115,6 +117,9 @@ public:
 	idx_t file_offset;
 	idx_t buffer_start;
 	idx_t buffer_end;
+
+	// Used when file handle created with parallel access flag specified.
+	std::mutex mu;
 
 	// Read buffer
 	duckdb::unique_ptr<data_t[]> read_buffer;
