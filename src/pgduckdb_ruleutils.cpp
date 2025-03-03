@@ -34,9 +34,17 @@ extern "C" {
 bool processed_targetlist = false;
 
 char *
-pgduckdb_function_name(Oid function_oid) {
+pgduckdb_function_name(Oid function_oid, bool *use_variadic_p) {
 	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
 		return nullptr;
+	}
+
+	/*
+	 * DuckDB currently doesn't support variadic functions, so we can just
+	 * always set this pointer to false.
+	 */
+	if (use_variadic_p) {
+		*use_variadic_p = false;
 	}
 
 	auto func_name = get_func_name(function_oid);
