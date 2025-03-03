@@ -173,6 +173,19 @@ SELECT * FROM time_array_1d;
  {NULL}
 (3 rows)
 
+-- TIMETZ (single dimension)
+CREATE TABLE timetz_array_1d(a TIMETZ[]);
+INSERT INTO timetz_array_1d (a) VALUES (ARRAY['08:30:00+05'::TIMETZ,'12:30:00-05'::TIMETZ]::TIMETZ[]);
+INSERT INTO timetz_array_1d (a) VALUES (ARRAY['23:59:59+00'::TIMETZ]::TIMETZ[]);
+INSERT INTO timetz_array_1d (a) VALUES (ARRAY[NULL::TIMETZ]::TIMETZ[]);
+SELECT * FROM timetz_array_1d;
+             a             
+---------------------------
+ {08:30:00+05,12:30:00-05}
+ {23:59:59+00}
+ {NULL}
+(3 rows)
+
 -- TIMESTAMP (single dimension)
 CREATE TABLE timestamp_array_1d(a TIMESTAMP[]);
 INSERT INTO timestamp_array_1d SELECT CAST(a as TIMESTAMP[]) FROM (VALUES
@@ -396,6 +409,20 @@ SELECT * FROM time_array_2d;
  {{13:45:30,08:15:00},{23:59:59,00:00:00}}
 (1 row)
 
+-- TIMETZ (two dimensions)
+CREATE TABLE timetz_array_2d(a TIMETZ[][]);
+INSERT INTO timetz_array_2d (a) VALUES (
+  ARRAY[
+    ARRAY['13:45:30+01'::TIMETZ, '08:15:00+02'::TIMETZ],
+    ARRAY['23:59:59-03'::TIMETZ, '00:00:00-04'::TIMETZ]
+  ]::TIMETZ[][]
+);
+SELECT * FROM timetz_array_2d;
+                           a                           
+-------------------------------------------------------
+ {{13:45:30+01,08:15:00+02},{23:59:59-03,00:00:00-04}}
+(1 row)
+
 -- TIMESTAMP (two dimensions)
 CREATE TABLE timestamp_array_2d(a TIMESTAMP[][]);
 INSERT INTO timestamp_array_2d VALUES
@@ -515,6 +542,7 @@ DROP TABLE smallint_array_1d;
 DROP TABLE varchar_array_1d;
 DROP TABLE interval_array_1d;
 DROP TABLE time_array_1d;
+DROP TABLE timetz_array_1d;
 DROP TABLE timestamp_array_1d;
 DROP TABLE float4_array_1d;
 DROP TABLE float8_array_1d;
@@ -528,6 +556,7 @@ DROP TABLE smallint_array_2d;
 DROP TABLE varchar_array_2d;
 DROP TABLE interval_array_2d;
 DROP TABLE time_array_2d;
+DROP TABLE timetz_array_2d;
 DROP TABLE timestamp_array_2d;
 DROP TABLE float4_array_2d;
 DROP TABLE float8_array_2d;
