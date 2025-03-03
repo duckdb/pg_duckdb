@@ -40,10 +40,6 @@ ERROR:  DuckDB execution is not allowed because you have not been granted the du
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
 ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
-SELECT * FROM duckdb.cache_info();
-ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
-SELECT * FROM duckdb.cache_delete('some file');
-ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
 CALL duckdb.recycle_ddb();
 ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
 SET duckdb.force_execution = true;

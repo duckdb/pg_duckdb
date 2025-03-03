@@ -262,87 +262,6 @@ DuckdbInstallExtension(const std::string &extension_name, const std::string &rep
 	SPI_finish();
 }
 
-static bool
-CanCacheRemoteObject(std::string remote_object) {
-	return (remote_object.rfind("https://", 0) == 0) || (remote_object.rfind("http://", 0) == 0) ||
-	       (remote_object.rfind("s3://", 0) == 0) || (remote_object.rfind("s3a://", 0) == 0) ||
-	       (remote_object.rfind("s3n://", 0) == 0) || (remote_object.rfind("gcs://", 0) == 0) ||
-	       (remote_object.rfind("gs://", 0) == 0) || (remote_object.rfind("r2://", 0) == 0);
-}
-
-static bool
-DuckdbCacheObject(Datum object, Datum type) {
-	auto object_path = DatumToString(object);
-	if (!CanCacheRemoteObject(object_path)) {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
-		return false;
-	}
-
-	auto object_type = DatumToString(type);
-	if (object_type != "parquet" && object_type != "csv") {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
-		return false;
-	}
-
-	/* Use a separate connection to cache the objects, so we are sure not to
-	 * leak the value change of enable_http_file_cache in case of an error */
-	auto con = DuckDBManager::CreateConnection();
-	auto &context = *con->context;
-
-	DuckDBQueryOrThrow(context, "SET enable_http_file_cache TO true;");
-
-	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
-	auto cache_object_query =
-	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
-	DuckDBQueryOrThrow(context, cache_object_query);
-
-	return true;
-}
-
-typedef struct CacheFileInfo {
-	std::string cache_key;
-	std::string remote_path;
-	int64_t file_size;
-	Timestamp file_timestamp;
-} CacheFileInfo;
-
-static std::vector<CacheFileInfo>
-DuckdbGetCachedFilesInfos() {
-	std::string ext(".meta");
-	std::vector<CacheFileInfo> cache_info;
-	for (auto &p : std::filesystem::recursive_directory_iterator(CreateOrGetDirectoryPath("duckdb_cache"))) {
-		if (p.path().extension() == ext) {
-			std::ifstream cache_file_metadata(p.path());
-			std::string metadata;
-			std::vector<std::string> metadata_tokens;
-			while (std::getline(cache_file_metadata, metadata, ',')) {
-				metadata_tokens.push_back(metadata);
-			}
-			if (metadata_tokens.size() != 4) {
-				elog(WARNING, "(PGDuckDB/DuckdbGetCachedFilesInfos) Invalid '%s' cache metadata file",
-				     p.path().c_str());
-				break;
-			}
-			cache_info.push_back(CacheFileInfo {metadata_tokens[0], metadata_tokens[1], std::stoll(metadata_tokens[2]),
-			                                    std::stoll(metadata_tokens[3])});
-		}
-	}
-	return cache_info;
-}
-
-static bool
-DuckdbCacheDelete(Datum cache_key_datum) {
-	auto cache_key = DatumToString(cache_key_datum);
-	if (!cache_key.size()) {
-		elog(WARNING, "(PGDuckDB/DuckdbGetCachedFilesInfos) Empty cache key");
-		return false;
-	}
-	auto cache_filename = CreateOrGetDirectoryPath("duckdb_cache") + "/" + cache_key;
-	bool removed = !std::remove(cache_filename.c_str());
-	std::remove(std::string(cache_filename + ".meta").c_str());
-	return removed;
-}
-
 namespace pg {
 
 std::string
@@ -377,59 +296,23 @@ DECLARE_PG_FUNCTION(pgduckdb_raw_query) {
 	PG_RETURN_BOOL(true);
 }
 
+/*
+ * We need these dummy cache functions so that people are able to load the
+ * new pg_duckdb.so file with an old SQL version (where these functions still
+ * exist). People should then upgrade the SQL part of the extension using the
+ * command described in the error message. Once we believe no-one is on these old
+ * version anymore we can remove these dummy functions.
+ */
 DECLARE_PG_FUNCTION(cache) {
-	Datum object = PG_GETARG_DATUM(0);
-	Datum type = PG_GETARG_DATUM(1);
-	bool result = pgduckdb::DuckdbCacheObject(object, type);
-	PG_RETURN_BOOL(result);
+	elog(ERROR, "duckdb.cache is not supported anymore, please run 'ALTER EXTENSION pg_duckdb UPDATE'");
 }
 
 DECLARE_PG_FUNCTION(cache_info) {
-	pgduckdb::RequireDuckdbExecution();
-	ReturnSetInfo *rsinfo = (ReturnSetInfo *)fcinfo->resultinfo;
-	Tuplestorestate *tuple_store;
-	TupleDesc cache_info_tuple_desc;
-
-	auto result = pgduckdb::DuckdbGetCachedFilesInfos();
-
-	cache_info_tuple_desc = CreateTemplateTupleDesc(4);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)1, "remote_path", TEXTOID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)2, "cache_file_name", TEXTOID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)3, "cache_file_size", INT8OID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)4, "cache_file_timestamp", TIMESTAMPTZOID, -1, 0);
-
-	// We need to switch to long running memory context
-	MemoryContext oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
-	tuple_store = tuplestore_begin_heap(rsinfo->allowedModes & SFRM_Materialize_Random, false, work_mem);
-	MemoryContextSwitchTo(oldcontext);
-
-	for (auto &cache_info : result) {
-		Datum values[4] = {0};
-		bool nulls[4] = {0};
-
-		values[0] = CStringGetTextDatum(cache_info.remote_path.c_str());
-		values[1] = CStringGetTextDatum(cache_info.cache_key.c_str());
-		values[2] = cache_info.file_size;
-		/* We have stored timestamp in *seconds* from epoch. We need to convert this to PG timestamptz. */
-		values[3] = (cache_info.file_timestamp * 1000000) - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
-
-		HeapTuple tuple = heap_form_tuple(cache_info_tuple_desc, values, nulls);
-		tuplestore_puttuple(tuple_store, tuple);
-		heap_freetuple(tuple);
-	}
-
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tuple_store;
-	rsinfo->setDesc = cache_info_tuple_desc;
-
-	return (Datum)0;
+	elog(ERROR, "duckdb.cache_info is not supported anymore, please run 'ALTER EXTENSION pg_duckdb UPDATE'");
 }
 
 DECLARE_PG_FUNCTION(cache_delete) {
-	pgduckdb::RequireDuckdbExecution();
-	Datum cache_key = PG_GETARG_DATUM(0);
-	bool result = pgduckdb::DuckdbCacheDelete(cache_key);
-	PG_RETURN_BOOL(result);
+	elog(ERROR, "duckdb.cache_delete is not supported anymore, please run 'ALTER EXTENSION pg_duckdb UPDATE'");
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
