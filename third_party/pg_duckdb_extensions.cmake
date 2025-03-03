@@ -1,7 +1,7 @@
 duckdb_extension_load(json)
 duckdb_extension_load(icu)
-# This is relative to third_party/duckdb dir
 duckdb_extension_load(httpfs
-    SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../httpfs"
-    INCLUDE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../httpfs/extension/httpfs/include"
+    GIT_URL https://github.com/duckdb/duckdb-httpfs
+    GIT_TAG 85ac4667bcb0d868199e156f8dd918b0278db7b9
+    INCLUDE_DIR extension/httpfs/include
 )
