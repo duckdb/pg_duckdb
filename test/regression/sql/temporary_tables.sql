@@ -46,16 +46,16 @@ BEGIN;
     INSERT INTO t2 VALUES (1), (2), (3);
 END;
 
--- We shouldn't be able to run DuckDB DDL in transactions (yet).
+-- We should be able to run DuckDB DDL in transactions
 BEGIN;
     CREATE TEMP TABLE t3(a int);
 END;
 
 BEGIN;
-    DROP TABLE t2;
+    DROP TABLE t3;
 END;
 
--- But plain postgres DDL and queries should work fine
+-- Plain postgres DDL and queries should work fine too
 BEGIN;
     CREATE TEMP TABLE t4(a int) USING heap;
     INSERT INTO t4 VALUES (1);
@@ -79,7 +79,13 @@ ANALYZE t;
 
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
-DROP TABLE t, t_heap, t2;
+-- Ensure that we can drop the table with all the supported features inside a
+-- transaction.
+BEGIN;
+DROP TABLE t;
+END;
+
+DROP TABLE t_heap, t2;
 
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 
