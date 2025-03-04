@@ -2,7 +2,7 @@
 
 The following extensions are installed by default:
 
-* httpfs - note that httpfs was forked to add [`duckdb.cache`](functions.md#cache)
+* httpfs
 * json
 
 Supported extensions for installation are:
