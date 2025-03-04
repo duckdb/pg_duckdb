@@ -73,7 +73,7 @@ SET duckdb.force_execution = true;
 -- It should be possible to install extensions as non-superuser after the
 -- following grants.
 RESET ROLE;
-GRANT ALL ON FUNCTION duckdb.install_extension(TEXT) TO user1;
+GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO user1;
 GRANT ALL ON TABLE duckdb.extensions TO user1;
 GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO user1;
 

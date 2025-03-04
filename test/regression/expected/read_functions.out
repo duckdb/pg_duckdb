@@ -304,7 +304,7 @@ LINE 1: SELECT r[q.col]
 SELECT duckdb.install_extension('delta');
  install_extension 
 -------------------
- t
+ 
 (1 row)
 
 SELECT count(r['a']) FROM delta_scan('../../data/delta_table') r;
@@ -324,7 +324,7 @@ SELECT * FROM delta_scan('../../data/delta_table') r WHERE (r['a'] = 1 OR r['b']
 SELECT duckdb.install_extension('iceberg');
  install_extension 
 -------------------
- t
+ 
 (1 row)
 
 SELECT COUNT(r['l_orderkey']) FROM iceberg_scan('../../data/lineitem_iceberg', allow_moved_paths => true) r;

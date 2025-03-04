@@ -299,24 +299,25 @@ WHERE remote_path = '...';
 | :--- | :--- | :---------- |
 | cache_key | text | The cache key (eTag) to delete |
 
-#### <a name="install_extension"></a>`duckdb.install_extension(extension_name TEXT) -> bool`
+#### <a name="install_extension"></a>`duckdb.install_extension(extension_name TEXT, repository TEXT DEFAULT 'core') -> bool`
 
 Installs a DuckDB extension and configures it to be loaded automatically in
 every session that uses pg_duckdb.
 
 ```sql
 SELECT duckdb.install_extension('iceberg');
+SELECT duckdb.install_extension('avro', 'community');
 ```
 
 ##### Security
 
-Since this function can be used to install and download any of the official
-extensions it can only be executed by a superuser by default. To allow
-execution by some other admin user, such as `my_admin`, you can grant such a
-user the following permissions:
+Since this function can be used to install and download any extensions it can
+only be executed by a superuser by default. To allow execution by some other
+admin user, such as `my_admin`, you can grant such a user the following
+permissions:
 
 ```sql
-GRANT ALL ON FUNCTION duckdb.install_extension(TEXT) TO my_admin;
+GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO my_admin;
 GRANT ALL ON TABLE duckdb.extensions TO my_admin;
 GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO my_admin;
 ```
