@@ -1,20 +1,15 @@
 SET duckdb.force_execution TO false;
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
-NOTICE:  result: extension_name	loaded	installed	
-VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 6]
-cached_httpfs	true	true
-core_functions	true	true
-icu	true	true
-json	true	true
-parquet	true	true
-pgduckdb	true	false
-
-
- raw_query 
------------
- 
-(1 row)
+SET duckdb.allow_community_extensions = true;
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+ extension_name | loaded | installed | installed_from 
+----------------+--------+-----------+----------------
+ cached_httpfs  | t      | t         | 
+ core_functions | t      | t         | 
+ icu            | t      | t         | 
+ json           | t      | t         | 
+ parquet        | t      | t         | 
+ pgduckdb       | t      | f         | 
+(6 rows)
 
 SELECT last_value FROM duckdb.extensions_table_seq;
  last_value 
@@ -26,7 +21,7 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 SELECT duckdb.install_extension('icu');
  install_extension 
 -------------------
- t
+ 
 (1 row)
 
 -- Increases the sequence twice because we use ON CONFLICT DO UPDATE. So
@@ -37,28 +32,22 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           3
 (1 row)
 
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
-NOTICE:  result: extension_name	loaded	installed	
-VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 6]
-cached_httpfs	true	true
-core_functions	true	true
-icu	true	true
-json	true	true
-parquet	true	true
-pgduckdb	true	false
-
-
- raw_query 
------------
- 
-(1 row)
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+ extension_name | loaded | installed | installed_from 
+----------------+--------+-----------+----------------
+ cached_httpfs  | t      | t         | 
+ core_functions | t      | t         | 
+ icu            | t      | t         | 
+ json           | t      | t         | 
+ parquet        | t      | t         | 
+ pgduckdb       | t      | f         | 
+(6 rows)
 
 -- Check that we can rerun this without issues
 SELECT duckdb.install_extension('icu');
  install_extension 
 -------------------
- t
+ 
 (1 row)
 
 -- Increases the sequence twice because we use ON CONFLICT DO UPDATE. So
@@ -69,27 +58,21 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           5
 (1 row)
 
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
-NOTICE:  result: extension_name	loaded	installed	
-VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 6]
-cached_httpfs	true	true
-core_functions	true	true
-icu	true	true
-json	true	true
-parquet	true	true
-pgduckdb	true	false
-
-
- raw_query 
------------
- 
-(1 row)
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+ extension_name | loaded | installed | installed_from 
+----------------+--------+-----------+----------------
+ cached_httpfs  | t      | t         | 
+ core_functions | t      | t         | 
+ icu            | t      | t         | 
+ json           | t      | t         | 
+ parquet        | t      | t         | 
+ pgduckdb       | t      | f         | 
+(6 rows)
 
 SELECT duckdb.install_extension('aws');
  install_extension 
 -------------------
- t
+ 
 (1 row)
 
 SELECT last_value FROM duckdb.extensions_table_seq;
@@ -98,23 +81,17 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           7
 (1 row)
 
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
-NOTICE:  result: extension_name	loaded	installed	
-VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 7]
-aws	true	true
-cached_httpfs	true	true
-core_functions	true	true
-icu	true	true
-json	true	true
-parquet	true	true
-pgduckdb	true	false
-
-
- raw_query 
------------
- 
-(1 row)
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+ extension_name | loaded | installed | installed_from 
+----------------+--------+-----------+----------------
+ aws            | t      | t         | core
+ cached_httpfs  | t      | t         | 
+ core_functions | t      | t         | 
+ icu            | t      | t         | 
+ json           | t      | t         | 
+ parquet        | t      | t         | 
+ pgduckdb       | t      | f         | 
+(7 rows)
 
 -- DELETE SHOULD TRIGGER UPDATE OF EXTENSIONS
 -- But we do not unload for now (would require a restart of DuckDB)
@@ -125,21 +102,42 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           8
 (1 row)
 
-SELECT * FROM duckdb.raw_query($$ SELECT extension_name, loaded, installed FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
-NOTICE:  result: extension_name	loaded	installed	
-VARCHAR	BOOLEAN	BOOLEAN	
-[ Rows: 7]
-aws	true	true
-cached_httpfs	true	true
-core_functions	true	true
-icu	true	true
-json	true	true
-parquet	true	true
-pgduckdb	true	false
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+ extension_name | loaded | installed | installed_from 
+----------------+--------+-----------+----------------
+ aws            | t      | t         | core
+ cached_httpfs  | t      | t         | 
+ core_functions | t      | t         | 
+ icu            | t      | t         | 
+ json           | t      | t         | 
+ parquet        | t      | t         | 
+ pgduckdb       | t      | f         | 
+(7 rows)
 
-
- raw_query 
------------
+SELECT duckdb.install_extension('duckpgq', 'community');
+ install_extension 
+-------------------
  
 (1 row)
 
+SELECT last_value FROM duckdb.extensions_table_seq;
+ last_value 
+------------
+         10
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+ extension_name | loaded | installed | installed_from 
+----------------+--------+-----------+----------------
+ aws            | t      | t         | core
+ cached_httpfs  | t      | t         | 
+ core_functions | t      | t         | 
+ duckpgq        | t      | t         | community
+ icu            | t      | t         | 
+ json           | t      | t         | 
+ parquet        | t      | t         | 
+ pgduckdb       | t      | f         | 
+(8 rows)
+
+-- cleanup
+TRUNCATE duckdb.extensions;

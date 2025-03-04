@@ -216,11 +216,15 @@ ReadDuckdbExtensions() {
 	return duckdb_extensions;
 }
 
-static bool
-DuckdbInstallExtension(Datum name_datum) {
-	auto extension_name = DatumToString(name_datum);
-
-	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name);
+static void
+DuckdbInstallExtension(const std::string &extension_name, const std::string &repository) {
+	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name) + " FROM ";
+	if (repository == "core" || repository == "core_nightly" || repository == "community" ||
+	    repository == "local_build_debug" || repository == "local_build_release") {
+		install_extension_command += repository;
+	} else {
+		install_extension_command += duckdb::KeywordHelper::WriteQuoted(repository);
+	}
 
 	/*
 	 * Temporily allow all filesystems for this query, because INSTALL needs
@@ -241,9 +245,10 @@ DuckdbInstallExtension(Datum name_datum) {
 	SetConfigOption("duckdb.disabled_filesystems", "", PGC_SUSET, PGC_S_SESSION);
 	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
 	AtEOXact_GUC(false, save_nestlevel);
+	Datum extension_name_datum = CStringGetTextDatum(extension_name.c_str());
 
 	Oid arg_types[] = {TEXTOID};
-	Datum values[] = {name_datum};
+	Datum values[] = {extension_name_datum};
 
 	SPI_connect();
 	auto ret = SPI_execute_with_args(R"(
@@ -255,8 +260,6 @@ DuckdbInstallExtension(Datum name_datum) {
 	if (ret != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 	SPI_finish();
-
-	return true;
 }
 
 static bool
@@ -340,14 +343,31 @@ DuckdbCacheDelete(Datum cache_key_datum) {
 	return removed;
 }
 
+namespace pg {
+
+std::string
+GetArgString(PG_FUNCTION_ARGS, int argno) {
+	if (PG_NARGS() <= argno) {
+		throw duckdb::InvalidInputException("argument %d is required", argno);
+	}
+
+	if (PG_ARGISNULL(argno)) {
+		throw duckdb::InvalidInputException("argument %d cannot be NULL", argno);
+	}
+
+	return DatumToString(PG_GETARG_DATUM(argno));
+}
+
+} // namespace pg
 } // namespace pgduckdb
 
 extern "C" {
 
 DECLARE_PG_FUNCTION(install_extension) {
-	Datum extension_name = PG_GETARG_DATUM(0);
-	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
-	PG_RETURN_BOOL(result);
+	std::string extension_name = pgduckdb::pg::GetArgString(fcinfo, 0);
+	std::string repository = pgduckdb::pg::GetArgString(fcinfo, 1);
+	pgduckdb::DuckdbInstallExtension(extension_name, repository);
+	PG_RETURN_VOID();
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_raw_query) {

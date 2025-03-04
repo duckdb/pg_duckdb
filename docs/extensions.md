@@ -35,11 +35,15 @@ SELECT * FROM duckdb.extensions;
 UPDATE duckdb.extensions SET enabled = (false|true) WHERE name = 'iceberg';
 -- remove an extension
 DELETE FROM duckdb.extensions WHERE name = 'iceberg';
+-- You can also install community extensions
+SELECT duckdb.install_extension('duckpgq', 'community');
 ```
 
 There is currently no practical difference between a disabled and uninstalled extension.
 
 ## Supported Extensions
+
+You can install any extension DuckDB extension, but you might run into various issues when trying to use them from Postgres. Often you should be able to work around such issues by using `duckdb.query` or `duckdb.raw_query`. For some extensions pg_duckdb has added dedicated support to Postgres. These extensions are listed below.
 
 ### `iceberg`
 
