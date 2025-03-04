@@ -287,19 +287,6 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 			continue;
 		}
 
-		/*
-		 * Skip the httpfs extension. It conflicts with our cached_httpfs
-		 * extension which is loaded by default, but people might still try to
-		 * install it manually. We could also throw an error by doing so, but
-		 * it seems nicer to just skip it, because it is clear what they meant
-		 * to do and this way we don't need to educate people about the
-		 * existence of our cached_httpfs extension (which might be removed in
-		 * the near future anyway).
-		 */
-		if (extension.name == "httpfs") {
-			continue;
-		}
-
 		DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 	}
 }
@@ -318,10 +305,6 @@ DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 		LoadSecrets(context);
 		UpdateSecretSeq(secret_table_last_seq);
 	}
-
-	auto http_file_cache_set_dir_query =
-	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
-	DuckDBQueryOrThrow(context, http_file_cache_set_dir_query);
 
 	if (duckdb_disabled_filesystems != NULL && !superuser()) {
 		/*

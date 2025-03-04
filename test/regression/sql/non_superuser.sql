@@ -32,8 +32,6 @@ SELECT * FROM t;
 -- actually open a duckdb connection.
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
-SELECT * FROM duckdb.cache_info();
-SELECT * FROM duckdb.cache_delete('some file');
 CALL duckdb.recycle_ddb();
 SET duckdb.force_execution = true;
 

@@ -3,8 +3,8 @@ SET duckdb.allow_community_extensions = true;
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
- cached_httpfs  | t      | t         | 
  core_functions | t      | t         | 
+ httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
@@ -35,8 +35,8 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
- cached_httpfs  | t      | t         | 
  core_functions | t      | t         | 
+ httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
@@ -61,8 +61,8 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
- cached_httpfs  | t      | t         | 
  core_functions | t      | t         | 
+ httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
@@ -85,8 +85,8 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  aws            | t      | t         | core
- cached_httpfs  | t      | t         | 
  core_functions | t      | t         | 
+ httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
@@ -106,8 +106,8 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  aws            | t      | t         | core
- cached_httpfs  | t      | t         | 
  core_functions | t      | t         | 
+ httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
@@ -130,9 +130,9 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  aws            | t      | t         | core
- cached_httpfs  | t      | t         | 
  core_functions | t      | t         | 
  duckpgq        | t      | t         | community
+ httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
