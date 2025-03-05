@@ -68,6 +68,7 @@ recommended because they might cause conflicts with other projects.
 * Try to test unexpected/incorrect usage as well, instead of only the happy path.
 * Make sure **all** unit tests pass before sending a PR.
 * pg_duckdb uses GitHub Actions as its continuous integration (CI) tool. You also have the option to run GitHub Actions on your forked repository. For detailed instructions, you can refer to the [GitHub documentation](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository).
+* To run the MotherDuck tests you need to set the `MOTHERDUCK_TEST_TOKEN` environment variable to a valid token and run `make pycheck`. Be sure to use a test token and not a production token, the tests CREATE and DROP databases and tables.
 
 ## Formatting
 

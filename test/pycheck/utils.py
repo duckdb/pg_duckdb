@@ -60,6 +60,16 @@ elif platform.system() == "OpenBSD":
 
 BSD = MACOS or FREEBSD or OPENBSD
 
+MOTHERDUCK_TEST_TOKEN = os.environ.get("MOTHERDUCK_TEST_TOKEN", "")
+MOTHERDUCK = bool(MOTHERDUCK_TEST_TOKEN)
+
+if MOTHERDUCK:
+    os.environ["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TEST_TOKEN
+else:
+    # Remove any normal user token from the environment so that we don't
+    # accidentally use it.
+    os.environ.pop("MOTHERDUCK_TOKEN", None)
+
 
 def eprint(*args, **kwargs):
     """eprint prints to stderr"""
@@ -238,6 +248,23 @@ def simplify_query_results(results) -> Any:
     return results
 
 
+class Duckdb:
+    def __init__(self, ddb):
+        self.ddb = ddb
+
+    def sql(self, query, params=None, **kwargs):
+        self.execute(query, params, **kwargs)
+        try:
+            return simplify_query_results(self.fetchall())
+        except psycopg.ProgrammingError as e:
+            if "the last operation didn't produce a result" == str(e):
+                return NoResult
+            raise
+
+    def __getattr__(self, name):
+        return getattr(self.ddb, name)
+
+
 # Re-exported classes, maybe in the future we want to add some extra
 # functionality, like having cursor return our custom cursor classes
 Connection = psycopg.Connection
@@ -262,6 +289,20 @@ class Cursor:
                 return NoResult
             raise
 
+    def dsql(self, query, **kwargs):
+        """Run a DuckDB query using duckdb.query()"""
+        return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
+
+    def wait_until_table_exists(self, table_name, timeout=5):
+        start = time.time()
+        while time.time() < start + timeout:
+            try:
+                self.sql("SELECT %s::regclass", (table_name,))
+                return
+            except psycopg.errors.UndefinedTable:
+                time.sleep(0.1)
+        raise TimeoutError(f"Table {table_name} did not appear in time")
+
 
 class AsyncCursor:
     """This is a wrapper around psycopg.AsyncCursor that adds a sql method"""
@@ -283,6 +324,10 @@ class AsyncCursor:
             if "the last operation didn't produce a result" == str(e):
                 return NoResult
             raise
+
+    def dsql(self, query, **kwargs):
+        """Run a DuckDB query using duckdb.query()"""
+        return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
 
 class Postgres:
@@ -385,6 +430,10 @@ class Postgres:
         """
         with self.cur(**kwargs) as cur:
             return cur.sql(query, params=params)
+
+    def dsql(self, query, **kwargs):
+        """Run a DuckDB query using duckdb.query()"""
+        return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
     def asql(self, query, **kwargs):
         """Run an SQL query in asynchronous task
@@ -687,13 +736,20 @@ class Postgres:
     def conf_path(self):
         return self.pgdata / "postgresql.conf"
 
+    @property
+    def auto_conf_path(self):
+        return self.pgdata / "postgresql.auto.conf"
+
     def configure(self, config):
         """Configure specific Postgres settings using ALTER SYSTEM SET
 
         NOTE: after configuring a call to reload or restart is needed for the
         settings to become effective.
         """
-        self.sql(f"alter system set {config}")
+        if not config.endswith("\n"):
+            config = config + "\n"
+
+        self.auto_conf_path.write_text(config, encoding="utf-8")
 
     @contextmanager
     def log_contains(self, re_string, times=None):
