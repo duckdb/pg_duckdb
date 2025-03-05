@@ -559,8 +559,8 @@ GrantAccessToSchema(const char *postgres_schema_name) {
 	}
 
 	/* Grant access to the schema to the current user */
-	const char *grant_query =
-	    psprintf("GRANT ALL ON SCHEMA %s TO %s", postgres_schema_name, quote_identifier(duckdb_postgres_role));
+	const char *grant_query = psprintf("GRANT ALL ON SCHEMA %s TO %s", quote_identifier(postgres_schema_name),
+	                                   quote_identifier(duckdb_postgres_role));
 	if (!SPI_run_utility_command(grant_query)) {
 		ereport(WARNING,
 		        (errmsg("Failed to grant access to MotherDuck schema %s", postgres_schema_name),

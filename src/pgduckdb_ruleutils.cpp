@@ -606,7 +606,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	} else if (!pgduckdb::IsMotherDuckPostgresDatabase()) {
 		elog(ERROR, "MotherDuck tables must be created in the duckb.motherduck_postgres_database");
 	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUser()) {
-		elog(ERROR, "MotherDuck tables must be created by the duckb.motherduck_postgres_user");
+		elog(ERROR, "MotherDuck tables must be owned by the duckb.postgres_role");
 	}
 
 	appendStringInfo(&buffer, "TABLE %s (", relation_name);
