@@ -773,30 +773,194 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 		elog(ERROR, "DuckDB tables do not support foreign keys");
 	}
 
+	List *relation_context = pgduckdb_deparse_context_for(relation_name, relation_oid);
+
 	foreach_node(AlterTableCmd, cmd, alter_stmt->cmds) {
+		/*
+		 * DuckDB does not support doing multiple ALTER TABLE commands in
+		 * one statement, so we split them up.
+		 */
+		appendStringInfo(&buffer, "ALTER TABLE %s ", relation_name);
+
 		switch (cmd->subtype) {
-		case AT_AddColumn:
-		case AT_AlterColumnType: {
-			/*
-			 * DuckDB does not support doing multiple ALTER TABLE commands in
-			 * one statement, so we split them up.
-			 */
-			appendStringInfo(&buffer, "ALTER TABLE %s ", relation_name);
+		case AT_AddColumn: {
 			ColumnDef *col = castNode(ColumnDef, cmd->def);
 			TupleDesc tupdesc = BuildDescForRelation(list_make1(col));
 			Form_pg_attribute attribute = TupleDescAttr(tupdesc, 0);
 			const char *column_fq_type = format_type_with_typemod(attribute->atttypid, attribute->atttypmod);
-			switch (cmd->subtype) {
-			case AT_AddColumn:
-				appendStringInfo(&buffer, "ADD COLUMN %s %s; ", quote_identifier(col->colname), column_fq_type);
-				break;
-			case AT_AlterColumnType:
-				appendStringInfo(&buffer, "ALTER COLUMN %s TYPE %s; ", cmd->name, column_fq_type);
-				break;
-			default:
-				// unreachable
+
+			appendStringInfo(&buffer, "ADD COLUMN %s %s", quote_identifier(col->colname), column_fq_type);
+
+			/* Add default if specified */
+			if (col->raw_default) {
+				char *default_string = pgduckdb_deparse_expression(col->raw_default, relation_context, false, false);
+				appendStringInfo(&buffer, " DEFAULT %s", default_string);
+			}
+
+			/* Add NOT NULL if specified */
+			if (col->is_not_null) {
+				appendStringInfoString(&buffer, " NOT NULL");
+			}
+
+			appendStringInfoString(&buffer, "; ");
+			break;
+		}
+
+		case AT_AlterColumnType: {
+			const char *column_name = cmd->name;
+			ColumnDef *col = castNode(ColumnDef, cmd->def);
+			TupleDesc tupdesc = BuildDescForRelation(list_make1(col));
+			Form_pg_attribute attribute = TupleDescAttr(tupdesc, 0);
+			const char *column_fq_type = format_type_with_typemod(attribute->atttypid, attribute->atttypmod);
+
+			appendStringInfo(&buffer, "ALTER COLUMN %s TYPE %s; ", quote_identifier(column_name), column_fq_type);
+			break;
+		}
+
+		case AT_DropColumn: {
+			appendStringInfo(&buffer, "DROP COLUMN %s", quote_identifier(cmd->name));
+
+			/* Add CASCADE or RESTRICT if specified */
+			if (cmd->behavior == DROP_CASCADE) {
+				appendStringInfoString(&buffer, " CASCADE");
+			} else if (cmd->behavior == DROP_RESTRICT) {
+				appendStringInfoString(&buffer, " RESTRICT");
+			}
+
+			appendStringInfoString(&buffer, "; ");
+			break;
+		}
+
+		case AT_ColumnDefault: {
+			appendStringInfo(&buffer, "ALTER COLUMN %s ", quote_identifier(cmd->name));
+
+			if (cmd->def) {
+				char *default_string = pgduckdb_deparse_expression(cmd->def, relation_context, false, false);
+				appendStringInfo(&buffer, "SET DEFAULT %s; ", default_string);
+			} else {
+				appendStringInfoString(&buffer, "DROP DEFAULT; ");
+			}
+			break;
+		}
+
+		case AT_DropNotNull: {
+			appendStringInfo(&buffer, "ALTER COLUMN %s DROP NOT NULL; ", quote_identifier(cmd->name));
+			break;
+		}
+
+		case AT_SetNotNull: {
+			appendStringInfo(&buffer, "ALTER COLUMN %s SET NOT NULL; ", quote_identifier(cmd->name));
+			break;
+		}
+
+		case AT_AddConstraint: {
+			Constraint *constraint = castNode(Constraint, cmd->def);
+
+			appendStringInfoString(&buffer, "ADD ");
+
+			switch (constraint->contype) {
+			case CONSTR_CHECK: {
+				appendStringInfo(&buffer, "CONSTRAINT %s CHECK ",
+				                 quote_identifier(constraint->conname ? constraint->conname : ""));
+
+				char *check_string = pgduckdb_deparse_expression(constraint->raw_expr, relation_context, false, false);
+
+				appendStringInfo(&buffer, "(%s); ", check_string);
 				break;
 			}
+
+			case CONSTR_PRIMARY: {
+				appendStringInfoString(&buffer, "PRIMARY KEY (");
+				ListCell *cell;
+				bool first = true;
+				foreach (cell, constraint->keys) {
+					char *key = strVal(lfirst(cell));
+					if (!first) {
+						appendStringInfoString(&buffer, ", ");
+					}
+					appendStringInfoString(&buffer, quote_identifier(key));
+					first = false;
+				}
+				appendStringInfoString(&buffer, "); ");
+				break;
+			}
+
+			case CONSTR_UNIQUE: {
+				appendStringInfoString(&buffer, "UNIQUE (");
+				ListCell *ucell;
+				bool ufirst = true;
+				foreach (ucell, constraint->keys) {
+					char *key = strVal(lfirst(ucell));
+					if (!ufirst) {
+						appendStringInfoString(&buffer, ", ");
+					}
+					appendStringInfoString(&buffer, quote_identifier(key));
+					ufirst = false;
+				}
+				appendStringInfoString(&buffer, "); ");
+				break;
+			}
+
+			default: {
+				elog(ERROR, "DuckDB does not support this constraint type");
+				break;
+			}
+			}
+			break;
+		}
+
+		case AT_DropConstraint: {
+			appendStringInfo(&buffer, "DROP CONSTRAINT %s", quote_identifier(cmd->name));
+
+			/* Add CASCADE or RESTRICT if specified */
+			if (cmd->behavior == DROP_CASCADE) {
+				appendStringInfoString(&buffer, " CASCADE");
+			} else if (cmd->behavior == DROP_RESTRICT) {
+				appendStringInfoString(&buffer, " RESTRICT");
+			}
+
+			appendStringInfoString(&buffer, "; ");
+			break;
+		}
+
+		case AT_SetRelOptions:
+		case AT_ResetRelOptions: {
+			List *options = (List *)cmd->def;
+			bool is_set = (cmd->subtype == AT_SetRelOptions);
+
+			if (is_set) {
+				appendStringInfoString(&buffer, "SET (");
+			} else {
+				appendStringInfoString(&buffer, "RESET (");
+			}
+
+			ListCell *cell;
+			bool first = true;
+			foreach (cell, options) {
+				DefElem *def = (DefElem *)lfirst(cell);
+				if (!first) {
+					appendStringInfoString(&buffer, ", ");
+				}
+
+				appendStringInfoString(&buffer, quote_identifier(def->defname));
+
+				if (is_set && def->arg) {
+					char *val = NULL;
+					if (IsA(def->arg, String)) {
+						val = strVal(def->arg);
+						appendStringInfo(&buffer, " = %s", quote_literal_cstr(val));
+					} else if (IsA(def->arg, Integer)) {
+						val = psprintf("%d", intVal(def->arg));
+						appendStringInfo(&buffer, " = %s", val);
+					} else {
+						elog(ERROR, "Unsupported option value type");
+					}
+				}
+
+				first = false;
+			}
+
+			appendStringInfoString(&buffer, "); ");
 			break;
 		}
 
