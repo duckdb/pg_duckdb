@@ -7,8 +7,9 @@ import psycopg.sql
 
 def test_community_extensions(pg: Postgres):
     pg.create_user("user1", psycopg.sql.SQL("IN ROLE duckdb_group"))
-    # Raw extension installation should not be possible non-superusers, because
-    # that would allow installing extensions from community repos.
+    # Raw extension installation should not be possible for non-superusers,
+    # because that would allow installing arbitrary code form the internet, for
+    # instance the community extensions.
     with pg.cur() as cur:
         cur.sql("SET ROLE user1")
         print(cur.sql("SHOW ROLE"))
@@ -21,9 +22,9 @@ def test_community_extensions(pg: Postgres):
                 "SELECT * FROM duckdb.raw_query($$ INSTALL duckpgq FROM community; $$)"
             )
 
-    # Even if such community extensions somehow get installed, it's not possible
-    # to load them without changing allow_community_extensions. Not even for a
-    # superuser.
+    # Even if such code somehow gets onto the machine, it's not possible to
+    # load this code without changing the duckdb.allow_community_extensions
+    # default setting. Not even for a superuser.
     with pg.cur() as cur:
         cur.sql("SET duckdb.force_execution = false")
         cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL duckpgq FROM community; $$)")
