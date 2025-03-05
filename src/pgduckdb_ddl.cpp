@@ -23,6 +23,7 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/lsyscache.h"
 #include "commands/event_trigger.h"
+#include "commands/tablecmds.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
 #include "rewrite/rewriteHandler.h"
@@ -164,14 +165,40 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 
 	if (IsA(parsetree, CreateStmt)) {
 		auto stmt = castNode(CreateStmt, parsetree);
+
+		/* Default to duckdb AM for ddb$ schemas and disallow other AMs */
+		Oid schema_oid = RangeVarGetCreationNamespace(stmt->relation);
+		char *schema_name = get_namespace_name(schema_oid);
+		if (strncmp("ddb$", schema_name, 4) == 0) {
+			if (!stmt->accessMethod) {
+				stmt->accessMethod = pstrdup("duckdb");
+			} else if (strcmp(stmt->accessMethod, "duckdb") != 0) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Creating a non-DuckDB table in a ddb$ schema is not supported")));
+			}
+		}
+
 		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
 			pgduckdb::ClaimCurrentCommandId();
 		}
+
 		return;
 	} else if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
+
+		/* Default to duckdb AM for ddb$ schemas and disallow other AMs */
+		Oid schema_oid = RangeVarGetCreationNamespace(stmt->into->rel);
+		char *schema_name = get_namespace_name(schema_oid);
+		if (strncmp("ddb$", schema_name, 4) == 0) {
+			if (!stmt->into->accessMethod) {
+				stmt->into->accessMethod = pstrdup("duckdb");
+			} else if (strcmp(stmt->into->accessMethod, "duckdb") != 0) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Creating a non-DuckDB table in a ddb$ schema is not supported")));
+			}
+		}
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
@@ -463,8 +490,6 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
 		const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
 		auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
-		GetUserIdAndSecContext(&saved_userid, &sec_context);
-		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
 		Datum values[] = {relid_datum, CStringGetTextDatum(duckdb_db), 0, CStringGetTextDatum(default_db.c_str())};
@@ -475,6 +500,8 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 			nulls[2] = ' ';
 		}
 
+		GetUserIdAndSecContext(&saved_userid, &sec_context);
+		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 		pgduckdb::pg::SetForceAllowWrites(true);
 		ret = SPI_execute_with_args(R"(
 			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version, default_database)
@@ -488,6 +515,8 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 
 		if (ret != SPI_OK_INSERT)
 			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+
+		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
 	}
 
 	AtEOXact_GUC(false, save_nestlevel);
