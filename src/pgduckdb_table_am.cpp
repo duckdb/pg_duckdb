@@ -90,8 +90,8 @@ duckdb_scan_rescan(TableScanDesc /*sscan*/, ScanKey /*key*/, bool /*set_params*/
 
 static bool
 duckdb_scan_getnextslot(TableScanDesc /*sscan*/, ScanDirection /*direction*/, TupleTableSlot *slot) {
-	/* If we are executing ALTER TABLE  we return empty tuple */
-	if (in_duckdb_alter_table) {
+	/* If we are executing ALTER TABLE we return empty tuple */
+	if (pgduckdb::in_duckdb_alter_table) {
 		ExecClearTuple(slot);
 		return false;
 	}
@@ -219,7 +219,7 @@ duckdb_tuple_lock(Relation /*relation*/, ItemPointer /*tid*/, Snapshot /*snapsho
 
 static void
 duckdb_finish_bulk_insert(Relation /*relation*/, int /*options*/) {
-	if (in_duckdb_alter_table) {
+	if (pgduckdb::in_duckdb_alter_table) {
 		return;
 	}
 	NOT_IMPLEMENTED();

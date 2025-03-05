@@ -24,7 +24,6 @@ char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_motherduck_default_database = strdup("");
 char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("");
 char *duckdb_postgres_role = strdup("");
-bool duckdb_motherduck_allow_alter_table = true;
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
@@ -199,8 +198,4 @@ DuckdbInitGUC(void) {
 	                     "When to stop syncing of the motherduck catalog when no activity has taken place",
 	                     &duckdb_motherduck_background_catalog_refresh_inactivity_timeout, PGC_POSTMASTER,
 	                     GUC_SUPERUSER_ONLY);
-
-	DefineCustomVariable("duckdb.motherduck_allow_alter_table",
-	                     "(Experimental) Use ALTER TABLE command on duckdb tables",
-	                     &duckdb_motherduck_allow_alter_table);
 }

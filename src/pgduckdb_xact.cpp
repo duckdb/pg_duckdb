@@ -1,4 +1,5 @@
 #include "duckdb/common/exception.hpp"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_xact.hpp"
@@ -231,6 +232,7 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 	case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		CheckForDisallowedMixedWrites();
 
+		in_duckdb_alter_table = false;
 		top_level_statement = true;
 		next_expected_command_id = FirstCommandId;
 		pg::force_allow_writes = false;
@@ -247,6 +249,7 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 
 	case XACT_EVENT_ABORT:
 	case XACT_EVENT_PARALLEL_ABORT:
+		in_duckdb_alter_table = false;
 		top_level_statement = true;
 		next_expected_command_id = FirstCommandId;
 		pg::force_allow_writes = false;

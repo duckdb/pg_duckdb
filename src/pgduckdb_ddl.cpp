@@ -42,8 +42,9 @@ extern "C" {
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
 
-/* init alter table command flag */
+namespace pgduckdb {
 bool in_duckdb_alter_table = false;
+}
 
 /*
  * ctas_skip_data stores the original value of the skipData field of the
@@ -322,8 +323,8 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		auto stmt = castNode(AlterTableStmt, parsetree);
 		Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
 		Relation relation = RelationIdGetRelation(relation_oid);
-		if (pgduckdb::IsMotherDuckTable(relation)) {
-			in_duckdb_alter_table = true;
+		if (pgduckdb::IsDuckdbTable(relation)) {
+			pgduckdb::in_duckdb_alter_table = true;
 		}
 		RelationClose(relation);
 	}
@@ -865,7 +866,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		elog(ERROR, "not fired by event trigger manager");
 
 	/* Reset since we don't need it anymore */
-	in_duckdb_alter_table = false;
+	pgduckdb::in_duckdb_alter_table = false;
 
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/*
@@ -933,7 +934,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 
 	/* if we inserted a row it was a duckdb table */
 	auto is_possibly_duckdb_table = SPI_processed > 0;
-	if (!is_possibly_duckdb_table || pgduckdb::doing_motherduck_sync || duckdb_motherduck_allow_alter_table) {
+	if (!is_possibly_duckdb_table || pgduckdb::doing_motherduck_sync) {
 		/* No DuckDB tables were altered, or we don't want to forward DDL to
 		 * DuckDB because we're syncing with MotherDuck */
 		SPI_finish();
