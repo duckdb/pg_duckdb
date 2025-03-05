@@ -289,8 +289,8 @@ class Cursor:
         return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
     def wait_until_table_exists(self, table_name, timeout=5):
-        start = time.time()
-        while time.time() < start + timeout:
+        end = time.time() + timeout
+        while time.time() < end:
             try:
                 self.sql("SELECT %s::regclass", (table_name,))
                 return
