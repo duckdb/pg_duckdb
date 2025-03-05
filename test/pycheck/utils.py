@@ -281,6 +281,7 @@ class Cursor:
             return simplify_query_results(self.fetchall())
         except psycopg.ProgrammingError as e:
             if "the last operation didn't produce a result" == str(e):
+                # This happens when the query is a DDL statement
                 return NoResult
             raise
 
@@ -317,6 +318,7 @@ class AsyncCursor:
             return simplify_query_results(await self.fetchall())
         except psycopg.ProgrammingError as e:
             if "the last operation didn't produce a result" == str(e):
+                # This happens when the query is a DDL statement
                 return NoResult
             raise
 
