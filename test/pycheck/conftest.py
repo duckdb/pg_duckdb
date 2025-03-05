@@ -1,7 +1,9 @@
 import os
 import pytest
 
-from .utils import Postgres
+import duckdb
+
+from .utils import Postgres, Duckdb
 
 
 @pytest.fixture(scope="session")
@@ -11,6 +13,8 @@ def shared_pg(tmp_path_factory):
     pg.initdb()
 
     pg.start()
+    pg.sql("CREATE ROLE duckdb_group")
+    pg.sql("GRANT CREATE ON SCHEMA public TO duckdb_group")
     pg.sql("create extension pg_duckdb")
 
     yield pg
@@ -53,3 +57,34 @@ def cur(pg):
 def conn(pg):
     with pg.conn() as conn:
         yield conn
+
+
+@pytest.fixture
+def md_cur(pg, ddb, request):
+    """A cursor to a MotherDuck enabled pg_duckdb"""
+    _ = ddb  # silence warning, we only need ddb the ddb
+    test_db = request.node.name.removeprefix("test_")
+    pg.configure("duckdb.motherduck_enabled = true")
+    pg.restart()
+    pg.search_path = f"ddb${test_db}, public"
+    with pg.cur() as cur:
+        yield cur
+
+
+@pytest.fixture
+def ddb(request):
+    """A DuckDB connection to MotherDuck
+
+    This also creates a database for the test to use.
+    """
+    test_db = request.node.name.removeprefix("test_")
+    ddb = duckdb.connect("md:")
+    ddb.execute(f"DROP DATABASE IF EXISTS {test_db}")
+    ddb.execute(f"CREATE DATABASE {test_db}")
+    ddb.execute(f"USE {test_db}")
+
+    try:
+        yield Duckdb(ddb)
+    finally:
+        ddb.execute("USE my_db")
+        ddb.execute(f"DROP DATABASE {test_db}")
