@@ -254,12 +254,7 @@ class Duckdb:
 
     def sql(self, query, params=None, **kwargs):
         self.execute(query, params, **kwargs)
-        try:
-            return simplify_query_results(self.fetchall())
-        except psycopg.ProgrammingError as e:
-            if "the last operation didn't produce a result" == str(e):
-                return NoResult
-            raise
+        return simplify_query_results(self.fetchall())
 
     def __getattr__(self, name):
         return getattr(self.ddb, name)

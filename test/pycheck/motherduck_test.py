@@ -40,7 +40,7 @@ def test_md_create_table(md_cur: Cursor, ddb):
 
 
 def test_md_ctas(md_cur: Cursor, ddb):
-    ddb.execute("CREATE TABLE t1 AS SELECT 1 a")
+    ddb.sql("CREATE TABLE t1 AS SELECT 1 a")
     md_cur.wait_until_table_exists("t1")
 
     assert md_cur.sql("SELECT * FROM t1") == 1
