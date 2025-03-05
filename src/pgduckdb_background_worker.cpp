@@ -279,12 +279,12 @@ CanTakeLockForDatabase(Oid database_oid) {
 	auto fd = open(lock_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 	if (fd < 0) {
 		auto err = strerror(errno);
-		elog(ERROR, "Could not take lock on file '%s': %s", lock_file_name, err);
+		elog(ERROR, "Could not open file '%s': %s", lock_file_name, err);
 	}
 
 	// Take exclusive lock on the file
 	auto ret = flock(fd, LOCK_EX | LOCK_NB);
-	if (ret == EWOULDBLOCK) {
+	if (ret == EWOULDBLOCK || ret == EAGAIN) {
 		return false;
 	}
 
