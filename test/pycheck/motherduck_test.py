@@ -6,8 +6,6 @@ different client that pg_duckdb. By using python we can use the DuckDB python
 library for that purpose.
 """
 
-import os
-
 from .utils import Cursor, MOTHERDUCK
 
 import pytest
