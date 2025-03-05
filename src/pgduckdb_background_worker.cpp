@@ -296,6 +296,12 @@ CanTakeLockForDatabase(Oid database_oid) {
 	return true;
 }
 
+void
+InitBackgroundWorkersShmem(void) {
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = ShmemStartup;
+}
+
 /*
 Will start the background worker if:
 - MotherDuck is enabled (TODO: should be database-specific)
@@ -334,8 +340,6 @@ StartBackgroundWorkerIfNeeded(void) {
 #else
 	ShmemRequest();
 #endif
-	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = ShmemStartup;
 }
 
 void

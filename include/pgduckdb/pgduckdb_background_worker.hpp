@@ -2,6 +2,7 @@
 
 namespace pgduckdb {
 
+void InitBackgroundWorkersShmem(void);
 void StartBackgroundWorkerIfNeeded(void);
 void TriggerActivity(void);
 
