@@ -963,12 +963,16 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		}
 	}
 
+	/* We're going to run multiple queries in DuckDB, so we need to start a
+	 * transaction to ensure ACID guarantees hold. */
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+
 	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
 	AlterTableStmt *alter_table_stmt = (AlterTableStmt *)trigdata->parsetree;
 	char *alter_table_stmt_string = pgduckdb_get_alterdef(relid, alter_table_stmt);
 
 	elog(DEBUG1, "Alter Table Trigger (Motherduck): %s", alter_table_stmt_string);
-	auto res = pgduckdb::DuckDBQueryOrThrow(alter_table_stmt_string);
+	auto res = pgduckdb::DuckDBQueryOrThrow(*connection, alter_table_stmt_string);
 
 	PG_RETURN_NULL();
 }
