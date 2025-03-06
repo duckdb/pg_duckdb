@@ -112,9 +112,10 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 	BackgroundWorkerUnblockSignals();
 
 	BackgroundWorkerInitializeConnection(duckdb_motherduck_postgres_database, NULL, 0);
+
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
 	pgduckdb::BgwShmemStruct->bgw_latch = MyLatch;
-	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count;
+	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count - 1; // force a check on the first iteration
 	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
 
 	pgduckdb::doing_motherduck_sync = true;
@@ -344,7 +345,9 @@ StartBackgroundWorkerIfNeeded(void) {
 
 void
 TriggerActivity(void) {
-	if (!IsMotherDuckEnabled()) {
+	// The lock may not be initialized yet since we lazily start the BGW
+	// It is fine to skip it then because we force a check on the first iteration
+	if (!IsMotherDuckEnabled() || !BgwShmemStruct->lock) {
 		return;
 	}
 
