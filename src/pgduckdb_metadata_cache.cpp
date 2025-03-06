@@ -60,8 +60,6 @@ struct {
 	Oid json_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
-	/* The OID of the duckdb.motherduck_postgres_database */
-	Oid motherduck_postgres_database_oid;
 	/* The OID of the duckdb.postgres_role */
 	Oid postgres_role_oid;
 	/*
@@ -220,8 +218,6 @@ IsExtensionRegistered() {
 
 		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
 
-		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
-
 		if (duckdb_postgres_role[0] != '\0') {
 			cache.postgres_role_oid =
 			    GetSysCacheOid1(AUTHNAME, Anum_pg_authid_oid, CStringGetDatum(duckdb_postgres_role));
@@ -322,7 +318,7 @@ IsMotherDuckTable(Relation relation) {
 
 bool
 IsMotherDuckEnabled() {
-	return IsMotherDuckEnabledAnywhere() && IsMotherDuckPostgresDatabase();
+	return IsMotherDuckEnabledAnywhere();
 }
 
 bool
@@ -332,12 +328,6 @@ IsMotherDuckEnabledAnywhere() {
 	if (duckdb_motherduck_enabled == MotherDuckEnabled::MOTHERDUCK_AUTO)
 		return duckdb_motherduck_token[0] != '\0';
 	return false;
-}
-
-bool
-IsMotherDuckPostgresDatabase() {
-	Assert(cache.valid);
-	return MyDatabaseId == cache.motherduck_postgres_database_oid;
 }
 
 Oid
