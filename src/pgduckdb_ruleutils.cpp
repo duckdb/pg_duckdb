@@ -850,6 +850,14 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 			appendStringInfo(&buffer, "ADD COLUMN %s %s", quote_identifier(col->colname), column_fq_type);
 			foreach_node(Constraint, constraint, col->constraints) {
 				switch (constraint->contype) {
+				case CONSTR_NULL: {
+					appendStringInfoString(&buffer, " NULL");
+					break;
+				}
+				case CONSTR_NOTNULL: {
+					appendStringInfoString(&buffer, " NOT NULL");
+					break;
+				}
 				case CONSTR_DEFAULT: {
 					if (constraint->raw_expr) {
 						auto expr = cookDefault(pstate, constraint->raw_expr, attribute->atttypid, attribute->atttypmod,
@@ -859,13 +867,31 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 					}
 					break;
 				}
-				case CONSTR_NOTNULL: {
-					appendStringInfoString(&buffer, " NOT NULL");
+				case CONSTR_CHECK: {
+					appendStringInfo(&buffer, "CHECK ");
+
+					auto expr = cookConstraint(pstate, constraint->raw_expr, RelationGetRelationName(relation));
+
+					char *check_string = pgduckdb_deparse_expression(expr, relation_context, false, false);
+
+					appendStringInfo(&buffer, "(%s); ", check_string);
+					break;
+				}
+				case CONSTR_PRIMARY: {
+					appendStringInfoString(&buffer, " PRIMARY KEY");
+					break;
+				}
+				case CONSTR_UNIQUE: {
+					appendStringInfoString(&buffer, " UNIQUE");
 					break;
 				}
 				default:
 					elog(ERROR, "pg_duckdb does not support this ALTER TABLE yet");
 				}
+			}
+
+			if (col->collClause || col->collOid != InvalidOid) {
+				elog(ERROR, "Column collations are not supported in DuckDB");
 			}
 
 			appendStringInfoString(&buffer, "; ");

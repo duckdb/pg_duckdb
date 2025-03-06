@@ -18,7 +18,12 @@ SELECT * FROM duckdb.query('DESCRIBE pg_temp.alter_test');
 -- ADD COLUMN
 ALTER TABLE alter_test ADD COLUMN description TEXT;
 ALTER TABLE alter_test ADD COLUMN active BOOLEAN DEFAULT true;
-ALTER TABLE alter_test ADD COLUMN score INT DEFAULT 100 NOT NULL;
+ALTER TABLE alter_test ADD COLUMN score INT DEFAULT 100 NULL;
+ALTER TABLE alter_test ADD COLUMN score2 INT DEFAULT 100 NOT NULL;
+ALTER TABLE alter_test ADD COLUMN score3 INT DEFAULT 100 CHECK (score3 >= score);
+ALTER TABLE alter_test ADD COLUMN id2 INT PRIMARY KEY;
+ALTER TABLE alter_test ADD COLUMN id3 INT UNIQUE;
+ALTER TABLE alter_test ADD COLUMN german text COLLATE "de-x-icu";
 
 -- Verify columns were added
 SELECT * FROM alter_test ORDER BY id;
