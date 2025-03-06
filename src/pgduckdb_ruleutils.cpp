@@ -813,6 +813,27 @@ cookConstraint(ParseState *pstate, Node *raw_constraint, char *relname) {
 }
 
 char *
+pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
+	Assert(rename_stmt->renameType == OBJECT_TABLE);
+
+	Relation relation = relation_open(relation_oid, AccessShareLock);
+	Assert(pgduckdb::IsDuckdbTable(relation));
+
+	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
+	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
+
+	StringInfoData buffer;
+	initStringInfo(&buffer);
+
+	appendStringInfo(&buffer, "ALTER TABLE %s RENAME TO %s;", old_table_name, quote_identifier(rename_stmt->newname));
+
+	relation_close(relation, AccessShareLock);
+
+	return buffer.data;
+}
+
+char *
 pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 	Relation relation = relation_open(relation_oid, AccessShareLock);
 	const char *relation_name = pgduckdb_relation_name(relation_oid);

@@ -171,5 +171,26 @@ ALTER TABLE alter_test SET (fillfactor = 90);
 ERROR:  (PGDuckDB/duckdb_alter_table_trigger_cpp) Not implemented Error: No support for that ALTER TABLE option yet!
 ALTER TABLE alter_test RESET (fillfactor);
 ERROR:  (PGDuckDB/duckdb_alter_table_trigger_cpp) Not implemented Error: No support for that ALTER TABLE option yet!
+ALTER TABLE alter_test RENAME TO alter_test2;
+SELECT * FROM duckdb.query('DESCRIBE pg_temp.alter_test2');
+ column_name | column_type | null | key |       default        | extra 
+-------------+-------------+------+-----+----------------------+-------
+ id          | BIGINT      | NO   | PRI |                      | 
+ name        | VARCHAR     | YES  |     |                      | 
+ value       | FLOAT       | YES  |     | 0.0                  | 
+ created_at  | TIMESTAMP   | YES  |     |                      | 
+ active      | BOOLEAN     | YES  |     | CAST('t' AS BOOLEAN) | 
+ score       | INTEGER     | YES  |     | 100                  | 
+(6 rows)
+
+SELECT * from alter_test2 ORDER BY id;
+ id |   name   | value |        created_at        | active | score 
+----+----------+-------+--------------------------+--------+-------
+ -1 | negative |     0 |                          | t      |   100
+  1 |          |  10.5 | Sun Jan 01 12:00:00 2023 | t      |   100
+  2 | test2    |  20.5 | Mon Jan 02 12:00:00 2023 | t      |   100
+  3 | test2    |     0 |                          | t      |   100
+(4 rows)
+
 -- Clean up
-DROP TABLE alter_test;
+DROP TABLE alter_test2;

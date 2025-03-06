@@ -968,8 +968,17 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
 
 	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
-	AlterTableStmt *alter_table_stmt = (AlterTableStmt *)trigdata->parsetree;
-	char *alter_table_stmt_string = pgduckdb_get_alterdef(relid, alter_table_stmt);
+	char *alter_table_stmt_string;
+	if (IsA(trigdata->parsetree, AlterTableStmt)) {
+		AlterTableStmt *alter_table_stmt = (AlterTableStmt *)trigdata->parsetree;
+		alter_table_stmt_string = pgduckdb_get_alterdef(relid, alter_table_stmt);
+	} else if (IsA(trigdata->parsetree, RenameStmt)) {
+		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
+		pprint(rename_stmt);
+		alter_table_stmt_string = pgduckdb_get_rename_tabledef(relid, rename_stmt);
+	} else {
+		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
+	}
 
 	elog(DEBUG1, "Alter Table Trigger (Motherduck): %s", alter_table_stmt_string);
 	auto res = pgduckdb::DuckDBQueryOrThrow(*connection, alter_table_stmt_string);

@@ -95,6 +95,10 @@ SELECT * FROM alter_test WHERE id = -1;
 ALTER TABLE alter_test SET (fillfactor = 90);
 ALTER TABLE alter_test RESET (fillfactor);
 
+ALTER TABLE alter_test RENAME TO alter_test2;
+SELECT * FROM duckdb.query('DESCRIBE pg_temp.alter_test2');
+SELECT * from alter_test2 ORDER BY id;
+
 -- Clean up
-DROP TABLE alter_test;
+DROP TABLE alter_test2;
 
