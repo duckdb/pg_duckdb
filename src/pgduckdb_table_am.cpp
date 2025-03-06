@@ -323,6 +323,9 @@ duckdb_index_build_range_scan(Relation /*tableRelation*/, Relation /*indexRelati
                               bool /*allow_sync*/, bool /*anyvisible*/, bool /*progress*/,
                               BlockNumber /*start_blockno*/, BlockNumber /*numblocks*/, IndexBuildCallback /*callback*/,
                               void * /*callback_state*/, TableScanDesc /*scan*/) {
+	if (pgduckdb::in_duckdb_alter_table) {
+		return 0;
+	}
 	NOT_IMPLEMENTED();
 }
 

@@ -6,6 +6,7 @@ extern "C" {
 #include "access/relation.h"
 #include "access/htup_details.h"
 #include "catalog/pg_class.h"
+#include "catalog/heap.h"
 #include "catalog/pg_collation.h"
 #include "commands/dbcommands.h"
 #include "commands/tablecmds.h"
@@ -13,11 +14,16 @@ extern "C" {
 #include "nodes/parsenodes.h"
 #include "lib/stringinfo.h"
 #include "parser/parsetree.h"
+#include "parser/parse_coerce.h"
+#include "parser/parse_collate.h"
+#include "parser/parse_expr.h"
+#include "parser/parse_relation.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
 #include "utils/relcache.h"
 #include "utils/rel.h"
+#include "nodes/print.h"
 #include "utils/rls.h"
 #include "utils/syscache.h"
 #include "storage/lockdefs.h"
@@ -756,6 +762,55 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 
 	return (buffer.data);
 }
+Form_pg_attribute
+GetAttributeByName(TupleDesc tupdesc, const char *colname) {
+	for (int i = 0; i < tupdesc->natts; i++) {
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+		if (strcmp(NameStr(attr->attname), colname) == 0) {
+			return attr;
+		}
+	}
+	return NULL; // Return NULL if the column name is not found
+}
+
+/*
+ * Take a raw CHECK constraint expression and convert it to a cooked format
+ * ready for storage.
+ *
+ * Parse state must be set up to recognize any vars that might appear
+ * in the expression.
+ *
+ * Vendored in from src/backend/catalog/heap.c
+ */
+static Node *
+cookConstraint(ParseState *pstate, Node *raw_constraint, char *relname) {
+	Node *expr;
+
+	/*
+	 * Transform raw parsetree to executable expression.
+	 */
+	expr = transformExpr(pstate, raw_constraint, EXPR_KIND_CHECK_CONSTRAINT);
+
+	/*
+	 * Make sure it yields a boolean result.
+	 */
+	expr = coerce_to_boolean(pstate, expr, "CHECK");
+
+	/*
+	 * Take care of collations.
+	 */
+	assign_expr_collations(pstate, expr);
+
+	/*
+	 * Make sure no outside relations are referred to (this is probably dead
+	 * code now that add_missing_from is history).
+	 */
+	if (list_length(pstate->p_rtable) != 1)
+		ereport(ERROR, (errcode(ERRCODE_INVALID_COLUMN_REFERENCE),
+		                errmsg("only table \"%s\" can be referenced in check constraint", relname)));
+
+	return expr;
+}
 
 char *
 pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
@@ -774,6 +829,9 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 	}
 
 	List *relation_context = pgduckdb_deparse_context_for(relation_name, relation_oid);
+	ParseState *pstate = make_parsestate(NULL);
+	ParseNamespaceItem *nsitem = addRangeTableEntryForRelation(pstate, relation, AccessShareLock, NULL, false, true);
+	addNSItemToQuery(pstate, nsitem, true, true, true);
 
 	foreach_node(AlterTableCmd, cmd, alter_stmt->cmds) {
 		/*
@@ -790,16 +848,24 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 			const char *column_fq_type = format_type_with_typemod(attribute->atttypid, attribute->atttypmod);
 
 			appendStringInfo(&buffer, "ADD COLUMN %s %s", quote_identifier(col->colname), column_fq_type);
-
-			/* Add default if specified */
-			if (col->raw_default) {
-				char *default_string = pgduckdb_deparse_expression(col->raw_default, relation_context, false, false);
-				appendStringInfo(&buffer, " DEFAULT %s", default_string);
-			}
-
-			/* Add NOT NULL if specified */
-			if (col->is_not_null) {
-				appendStringInfoString(&buffer, " NOT NULL");
+			foreach_node(Constraint, constraint, col->constraints) {
+				switch (constraint->contype) {
+				case CONSTR_DEFAULT: {
+					if (constraint->raw_expr) {
+						auto expr = cookDefault(pstate, constraint->raw_expr, attribute->atttypid, attribute->atttypmod,
+						                        col->colname, attribute->attgenerated);
+						char *default_string = pgduckdb_deparse_expression(expr, relation_context, false, false);
+						appendStringInfo(&buffer, " DEFAULT %s", default_string);
+					}
+					break;
+				}
+				case CONSTR_NOTNULL: {
+					appendStringInfoString(&buffer, " NOT NULL");
+					break;
+				}
+				default:
+					elog(ERROR, "pg_duckdb does not support this ALTER TABLE yet");
+				}
 			}
 
 			appendStringInfoString(&buffer, "; ");
@@ -812,6 +878,7 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 			TupleDesc tupdesc = BuildDescForRelation(list_make1(col));
 			Form_pg_attribute attribute = TupleDescAttr(tupdesc, 0);
 			const char *column_fq_type = format_type_with_typemod(attribute->atttypid, attribute->atttypmod);
+			/* TODO: Disallow after SET DEFAULT/ADD CHECK CONSTRAINTin the same ALTER command */
 
 			appendStringInfo(&buffer, "ALTER COLUMN %s TYPE %s; ", quote_identifier(column_name), column_fq_type);
 			break;
@@ -832,10 +899,19 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 		}
 
 		case AT_ColumnDefault: {
+			const char *column_name = cmd->name;
+			TupleDesc tupdesc = RelationGetDescr(relation);
+			Form_pg_attribute attribute = GetAttributeByName(tupdesc, column_name);
+			if (!attribute) {
+				elog(ERROR, "Column %s not found in table %s", column_name, relation_name);
+			}
+
 			appendStringInfo(&buffer, "ALTER COLUMN %s ", quote_identifier(cmd->name));
 
 			if (cmd->def) {
-				char *default_string = pgduckdb_deparse_expression(cmd->def, relation_context, false, false);
+				auto expr = cookDefault(pstate, cmd->def, attribute->atttypid, attribute->atttypmod, column_name,
+				                        attribute->attgenerated);
+				char *default_string = pgduckdb_deparse_expression(expr, relation_context, false, false);
 				appendStringInfo(&buffer, "SET DEFAULT %s; ", default_string);
 			} else {
 				appendStringInfoString(&buffer, "DROP DEFAULT; ");
@@ -854,6 +930,7 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 		}
 
 		case AT_AddConstraint: {
+			pprint(cmd);
 			Constraint *constraint = castNode(Constraint, cmd->def);
 
 			appendStringInfoString(&buffer, "ADD ");
@@ -863,7 +940,9 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 				appendStringInfo(&buffer, "CONSTRAINT %s CHECK ",
 				                 quote_identifier(constraint->conname ? constraint->conname : ""));
 
-				char *check_string = pgduckdb_deparse_expression(constraint->raw_expr, relation_context, false, false);
+				auto expr = cookConstraint(pstate, constraint->raw_expr, RelationGetRelationName(relation));
+
+				char *check_string = pgduckdb_deparse_expression(expr, relation_context, false, false);
 
 				appendStringInfo(&buffer, "(%s); ", check_string);
 				break;
