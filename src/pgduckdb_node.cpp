@@ -5,6 +5,7 @@
 
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/vendor/pg_explain.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -78,7 +79,7 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 
 	if (prepared_query->HasError()) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-								"DuckDB re-planning failed: " + prepared_query->GetError());
+		                        "DuckDB re-planning failed: " + prepared_query->GetError());
 	}
 
 	duckdb_scan_state->duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
@@ -160,7 +161,7 @@ ExecuteQuery(DuckdbScanState *state) {
 				do {
 					execution_result = pending->ExecuteTask();
 				} while (execution_result != duckdb::PendingExecutionResult::EXECUTION_ERROR &&
-						 execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE);
+				         execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE);
 
 				pending->Close();
 			} catch (std::exception &ex) {
@@ -276,7 +277,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 
 	std::ostringstream explain_output;
 	explain_output << "\n\n" << value << "\n";
-	if (duckdb_explain_format == duckdb::ExplainFormat::JSON){
+	if (duckdb_explain_format == EXPLAIN_FORMAT_JSON){
 
 		// Formatting, copied formatting in JSON mode
 		if (linitial_int(es->grouping_stack) != 0)
@@ -285,7 +286,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 			linitial_int(es->grouping_stack) = 1;
 		appendStringInfoChar(es->str, '\n');
 		appendStringInfoSpaces(es->str, es->indent * 2);
-		appendStringInfoString(es->str,"DuckDB Execution Plan: ");
+		appendStringInfoString(es->str,"\"DuckDB Execution Plan\": ");
 		es->indent++;
 		formatDuckDbPlanForPG(value.c_str(),es);
 		es->indent--;
@@ -304,7 +305,7 @@ formatDuckDbPlanForPG(const char *duckdb_plan,ExplainState *es)
 			// Add indentation after each newline
 			appendStringInfoSpaces(es->str, es->indent * 2);
 		}
-		
+
 		ptr++;
 	}
 }

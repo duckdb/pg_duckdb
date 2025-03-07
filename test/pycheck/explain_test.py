@@ -8,6 +8,7 @@ from .utils import Cursor
 
 import pytest
 import psycopg.errors
+import json
 
 
 def test_explain(cur: Cursor):
@@ -53,6 +54,33 @@ def test_explain(cur: Cursor):
     assert "UNGROUPED_AGGREGATE" in plan
     assert "Total Time:" in plan
     assert "Output:" in plan
+
+    # Test for Json Output Format , psycopg internal convert json to dict
+    result = cur.sql("EXPLAIN (FORMAT JSON) SELECT count(*) FROM test_table")
+    assert len(result) == 1
+    assert type(result[0]) == dict
+    plan=json.dumps(result[0])
+    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Total Time" not in plan
+    assert "Output" not in plan
+
+    result = cur.sql("EXPLAIN (VERBOSE, FORMAT JSON) SELECT count(*) FROM test_table")
+    assert len(result) == 1
+    assert type(result[0]) == dict
+    plan=json.dumps(result[0])
+    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Total Time" not in plan
+    assert "Output" in plan
+
+    result = cur.sql("EXPLAIN (VERBOSE, ANALYZE, FORMAT JSON) SELECT count(*) FROM test_table")
+    assert len(result) == 1
+    assert type(result[0]) == dict
+    plan=json.dumps(result[0])
+    print(plan)
+    assert "EXPLAIN_ANALYZE" in plan
+    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Total Time" in plan
+    assert "Output" in plan
 
 
 def test_explain_ctas(cur: Cursor):
