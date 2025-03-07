@@ -299,6 +299,14 @@ CanTakeLockForDatabase(Oid database_oid) {
 
 void
 InitBackgroundWorkersShmem(void) {
+	/* Set up the shared memory hooks */
+#if PG_VERSION_NUM >= 150000
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = ShmemRequest;
+#else
+	ShmemRequest();
+#endif
+
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = ShmemStartup;
 }
@@ -333,14 +341,6 @@ StartBackgroundWorkerIfNeeded(void) {
 
 	// Register the worker
 	RegisterDynamicBackgroundWorker(&worker, NULL);
-
-	/* Set up the shared memory hooks */
-#if PG_VERSION_NUM >= 150000
-	prev_shmem_request_hook = shmem_request_hook;
-	shmem_request_hook = ShmemRequest;
-#else
-	ShmemRequest();
-#endif
 }
 
 void
