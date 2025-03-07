@@ -1100,7 +1100,8 @@ pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 		}
 
 		default:
-			elog(ERROR, "DuckDB does not support ALTER TABLE %d", cmd->subtype);
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			                errmsg("DuckDB does not support this ALTER TABLE command")));
 		}
 	}
 	relation_close(relation, AccessShareLock);
