@@ -112,9 +112,16 @@ BEGIN;
     CREATE TEMP TABLE t_ddb2(a int) USING duckdb;
     CREATE TEMP TABLE t_ddb3(a) USING duckdb AS SELECT 1;
     DROP TABLE t_ddb3;
+    INSERT INTO t_ddb2 VALUES (1);
+    ALTER TABLE t_ddb2 ADD COLUMN b int;
+    ALTER TABLE t_ddb2 ADD COLUMN c int;
+    ALTER TABLE t_ddb2 ADD COLUMN d int DEFAULT 100, ADD COLUMN e int DEFAULT 10;
+    ALTER TABLE t_ddb2 RENAME COLUMN b TO f;
+    ALTER TABLE t_ddb2 RENAME TO t_ddb4;
+    SELECT * FROM t_ddb4;
 END;
 
-DROP TABLE t_ddb2;
+DROP TABLE t_ddb4;
 
 -- Similarly is DDL in functions
 
@@ -127,12 +134,18 @@ BEGIN
     CREATE TEMP TABLE t_ddb2(a int) USING duckdb;
     CREATE TEMP TABLE t_ddb3(a) USING duckdb AS SELECT 1;
     DROP TABLE t_ddb3;
+    INSERT INTO t_ddb2 VALUES (1);
+    ALTER TABLE t_ddb2 ADD COLUMN b int;
+    ALTER TABLE t_ddb2 ADD COLUMN c int;
+    ALTER TABLE t_ddb2 ADD COLUMN d int DEFAULT 100, ADD COLUMN e int DEFAULT 10;
+    ALTER TABLE t_ddb2 RENAME COLUMN b TO f;
+    ALTER TABLE t_ddb2 RENAME TO t_ddb4;
 END;
 $$;
 
 SELECT * FROM f2();
 
-DROP TABLE t_ddb2;
+DROP TABLE t_ddb4;
 
 -- ...unless there's also PG only changes happing in the same transaction (no matter the order of statements).
 BEGIN;
@@ -199,6 +212,16 @@ BEGIN;
     DROP TABLE t_ddb;
 END;
 
+BEGIN;
+    CREATE TABLE t_x(a int);
+    ALTER TABLE t_ddb ADD COLUMN b int;
+END;
+
+BEGIN;
+    ALTER TABLE t_ddb ADD COLUMN b int;
+    CREATE TABLE t_x(a int);
+END;
+
 -- Dropping both duckdb tables and postgres tables in the same command is
 -- disallowed in a transaction.
 BEGIN;
@@ -218,10 +241,10 @@ BEGIN;
 END;
 
 -- ...in any order
--- BEGIN;
---     DROP TABLE t_ddb;
---     DROP TABLE t;
--- END;
+BEGIN;
+    DROP TABLE t_ddb;
+    DROP TABLE t;
+END;
 
 -- Non-existing tables should be allowed to be dropped in a transaction
 -- together with DuckDB.

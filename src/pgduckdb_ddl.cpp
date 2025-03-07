@@ -325,6 +325,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		Relation relation = RelationIdGetRelation(relation_oid);
 		if (pgduckdb::IsDuckdbTable(relation)) {
 			pgduckdb::in_duckdb_alter_table = true;
+			pgduckdb::ClaimCurrentCommandId();
 		}
 		RelationClose(relation);
 	}
@@ -963,6 +964,9 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		}
 	}
 
+	/* Forcibly allow whatever writes Postgres did for this command */
+	pgduckdb::ClaimCurrentCommandId(true);
+
 	/* We're going to run multiple queries in DuckDB, so we need to start a
 	 * transaction to ensure ACID guarantees hold. */
 	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
@@ -974,7 +978,6 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		alter_table_stmt_string = pgduckdb_get_alter_tabledef(relid, alter_table_stmt);
 	} else if (IsA(trigdata->parsetree, RenameStmt)) {
 		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
-		pprint(rename_stmt);
 		alter_table_stmt_string = pgduckdb_get_rename_tabledef(relid, rename_stmt);
 	} else {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
