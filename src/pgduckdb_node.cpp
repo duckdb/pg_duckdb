@@ -59,6 +59,7 @@ static TupleTableSlot *Duckdb_ExecCustomScan(CustomScanState *node);
 static void Duckdb_EndCustomScan(CustomScanState *node);
 static void Duckdb_ReScanCustomScan(CustomScanState *node);
 static void Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es);
+static inline void formatDuckDbPlanForPG(const char *duckdb_plan,ExplainState *es);
 
 static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
@@ -77,7 +78,7 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 
 	if (prepared_query->HasError()) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-		                        "DuckDB re-planning failed: " + prepared_query->GetError());
+								"DuckDB re-planning failed: " + prepared_query->GetError());
 	}
 
 	duckdb_scan_state->duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
@@ -159,7 +160,7 @@ ExecuteQuery(DuckdbScanState *state) {
 				do {
 					execution_result = pending->ExecuteTask();
 				} while (execution_result != duckdb::PendingExecutionResult::EXECUTION_ERROR &&
-				         execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE);
+						 execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE);
 
 				pending->Close();
 			} catch (std::exception &ex) {
@@ -275,7 +276,37 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 
 	std::ostringstream explain_output;
 	explain_output << "\n\n" << value << "\n";
-	ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
+	if (duckdb_explain_format == duckdb::ExplainFormat::JSON){
+
+		// Formatting, copied formatting in JSON mode
+		if (linitial_int(es->grouping_stack) != 0)
+			appendStringInfoChar(es->str, ',');
+		else
+			linitial_int(es->grouping_stack) = 1;
+		appendStringInfoChar(es->str, '\n');
+		appendStringInfoSpaces(es->str, es->indent * 2);
+		appendStringInfoString(es->str,"DuckDB Execution Plan: ");
+		es->indent++;
+		formatDuckDbPlanForPG(value.c_str(),es);
+		es->indent--;
+
+	}else
+		ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
+}
+
+static inline void
+formatDuckDbPlanForPG(const char *duckdb_plan,ExplainState *es)
+{
+	const char *ptr = duckdb_plan;
+	while (*ptr != '\0') {
+		appendStringInfoChar(es->str, *ptr);
+		if (*ptr == '\n') {
+			// Add indentation after each newline
+			appendStringInfoSpaces(es->str, es->indent * 2);
+		}
+		
+		ptr++;
+	}
 }
 
 void

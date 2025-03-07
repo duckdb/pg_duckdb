@@ -9,7 +9,7 @@
 extern "C" {
 #include "postgres.h"
 #include "access/xact.h"
-#include "catalog/pg_type.h"
+#include "catalog/pg_type.h" 
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
 #include "nodes/params.h"
@@ -30,6 +30,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_types.hpp"
 
 bool duckdb_explain_analyze = false;
+duckdb::ExplainFormat duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
 
 duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query) {
@@ -37,11 +38,26 @@ DuckdbPrepare(const Query *query) {
 	const char *query_string = pgduckdb_get_querydef(copied_query);
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
-		if (duckdb_explain_analyze) {
-			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);
-		} else {
-			query_string = psprintf("EXPLAIN %s", query_string);
+		StringInfo explain_options = makeStringInfo();
+		appendStringInfoString(explain_options, "EXPLAIN ");
+
+		if (duckdb_explain_analyze || duckdb_explain_format == duckdb::ExplainFormat::JSON) {
+			appendStringInfoChar(explain_options,'(');
 		}
+		if (duckdb_explain_analyze)
+			appendStringInfoString(explain_options, "ANALYZE ");
+
+		if (duckdb_explain_format == duckdb::ExplainFormat::JSON){
+			if(duckdb_explain_analyze)
+				appendStringInfoChar(explain_options, ',');
+			appendStringInfoString(explain_options, "FORMAT JSON");
+		}
+		
+		if (duckdb_explain_analyze || duckdb_explain_format == duckdb::ExplainFormat::JSON) {
+			appendStringInfoChar(explain_options,')');
+		}
+		
+		query_string = psprintf("%s %s", explain_options->data, query_string);
 	}
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
