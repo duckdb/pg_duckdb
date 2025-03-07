@@ -814,7 +814,9 @@ cookConstraint(ParseState *pstate, Node *raw_constraint, char *relname) {
 
 char *
 pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
-	Assert(rename_stmt->renameType == OBJECT_TABLE);
+	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_COLUMN) {
+		elog(ERROR, "Only renaming tables and columns is supported in DuckDB");
+	}
 
 	Relation relation = relation_open(relation_oid, AccessShareLock);
 	Assert(pgduckdb::IsDuckdbTable(relation));
@@ -826,7 +828,14 @@ pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
 	StringInfoData buffer;
 	initStringInfo(&buffer);
 
-	appendStringInfo(&buffer, "ALTER TABLE %s RENAME TO %s;", old_table_name, quote_identifier(rename_stmt->newname));
+	if (rename_stmt->subname) {
+		appendStringInfo(&buffer, "ALTER TABLE %s RENAME COLUMN %s TO %s;", old_table_name,
+		                 quote_identifier(rename_stmt->subname), quote_identifier(rename_stmt->newname));
+
+	} else {
+		appendStringInfo(&buffer, "ALTER TABLE %s RENAME TO %s;", old_table_name,
+		                 quote_identifier(rename_stmt->newname));
+	}
 
 	relation_close(relation, AccessShareLock);
 

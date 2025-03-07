@@ -192,5 +192,26 @@ SELECT * from alter_test2 ORDER BY id;
   3 | test2    |     0 |                          | t      |   100
 (4 rows)
 
+ALTER TABLE alter_test2 RENAME COLUMN active TO active2;
+SELECT * FROM duckdb.query('DESCRIBE pg_temp.alter_test2');
+ column_name | column_type | null | key |       default        | extra 
+-------------+-------------+------+-----+----------------------+-------
+ id          | BIGINT      | NO   | PRI |                      | 
+ name        | VARCHAR     | YES  |     |                      | 
+ value       | FLOAT       | YES  |     | 0.0                  | 
+ created_at  | TIMESTAMP   | YES  |     |                      | 
+ active2     | BOOLEAN     | YES  |     | CAST('t' AS BOOLEAN) | 
+ score       | INTEGER     | YES  |     | 100                  | 
+(6 rows)
+
+SELECT * from alter_test2 ORDER BY id;
+ id |   name   | value |        created_at        | active2 | score 
+----+----------+-------+--------------------------+---------+-------
+ -1 | negative |     0 |                          | t       |   100
+  1 |          |  10.5 | Sun Jan 01 12:00:00 2023 | t       |   100
+  2 | test2    |  20.5 | Mon Jan 02 12:00:00 2023 | t       |   100
+  3 | test2    |     0 |                          | t       |   100
+(4 rows)
+
 -- Clean up
 DROP TABLE alter_test2;

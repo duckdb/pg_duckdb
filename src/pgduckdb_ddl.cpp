@@ -906,20 +906,20 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		UNION ALL
 		SELECT objid as relid, false AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN duckdb.tables AS ddbtables
 		ON cmds.objid = ddbtables.relid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		UNION ALL
 		SELECT objid as relid, true AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		AND pg_class.relam != (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		AND pg_class.relpersistence = 't'
 		)",

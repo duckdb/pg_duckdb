@@ -99,6 +99,10 @@ ALTER TABLE alter_test RENAME TO alter_test2;
 SELECT * FROM duckdb.query('DESCRIBE pg_temp.alter_test2');
 SELECT * from alter_test2 ORDER BY id;
 
+ALTER TABLE alter_test2 RENAME COLUMN active TO active2;
+SELECT * FROM duckdb.query('DESCRIBE pg_temp.alter_test2');
+SELECT * from alter_test2 ORDER BY id;
+
 -- Clean up
 DROP TABLE alter_test2;
 
