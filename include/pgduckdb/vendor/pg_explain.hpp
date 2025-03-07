@@ -9,3 +9,5 @@ void standard_ExplainOneQuery(Query *query, int cursorOptions, IntoClause *into,
                               const char *queryString, ParamListInfo params, QueryEnvironment *queryEnv);
 #endif
 }
+
+extern ExplainFormat duckdb_explain_format;
