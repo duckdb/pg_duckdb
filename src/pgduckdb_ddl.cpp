@@ -2,6 +2,7 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -32,6 +33,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
+#include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
@@ -39,6 +41,10 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
+
+namespace pgduckdb {
+bool in_duckdb_alter_table = false;
+}
 
 /*
  * ctas_skip_data stores the original value of the skipData field of the
@@ -313,6 +319,15 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			break;
 		}
 		return;
+	} else if (IsA(parsetree, AlterTableStmt)) {
+		auto stmt = castNode(AlterTableStmt, parsetree);
+		Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
+		Relation relation = RelationIdGetRelation(relation_oid);
+		if (pgduckdb::IsDuckdbTable(relation)) {
+			pgduckdb::in_duckdb_alter_table = true;
+			pgduckdb::ClaimCurrentCommandId();
+		}
+		RelationClose(relation);
 	}
 }
 
@@ -851,6 +866,9 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
+	/* Reset since we don't need it anymore */
+	pgduckdb::in_duckdb_alter_table = false;
+
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/*
 		 * We're not installed, so don't mess with the query. Normally this
@@ -889,20 +907,20 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		UNION ALL
 		SELECT objid as relid, false AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN duckdb.tables AS ddbtables
 		ON cmds.objid = ddbtables.relid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		UNION ALL
 		SELECT objid as relid, true AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		AND pg_class.relam != (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		AND pg_class.relpersistence = 't'
 		)",
@@ -946,7 +964,29 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		}
 	}
 
-	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
+	/* Forcibly allow whatever writes Postgres did for this command */
+	pgduckdb::ClaimCurrentCommandId(true);
+
+	/* We're going to run multiple queries in DuckDB, so we need to start a
+	 * transaction to ensure ACID guarantees hold. */
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+
+	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
+	char *alter_table_stmt_string;
+	if (IsA(trigdata->parsetree, AlterTableStmt)) {
+		AlterTableStmt *alter_table_stmt = (AlterTableStmt *)trigdata->parsetree;
+		alter_table_stmt_string = pgduckdb_get_alter_tabledef(relid, alter_table_stmt);
+	} else if (IsA(trigdata->parsetree, RenameStmt)) {
+		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
+		alter_table_stmt_string = pgduckdb_get_rename_tabledef(relid, rename_stmt);
+	} else {
+		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
+	}
+
+	elog(DEBUG1, "Executing: %s", alter_table_stmt_string);
+	auto res = pgduckdb::DuckDBQueryOrThrow(*connection, alter_table_stmt_string);
+
+	PG_RETURN_NULL();
 }
 
 /*

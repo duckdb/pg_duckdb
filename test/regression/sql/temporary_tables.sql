@@ -261,4 +261,13 @@ INSERT INTO ta (a) SELECT * FROM generate_series(1, 3); -- OK
 INSERT INTO ta (b) SELECT * FROM generate_series(1, 3); -- OK
 SELECT * FROM ta;
 
+ALTER TABLE ta
+    ADD COLUMN xyz int,
+    ADD COLUMN "column with spaces" text,
+    ALTER COLUMN b TYPE bigint;
+
+select * from duckdb.query( $$ describe pg_temp.ta $$ );
+
+SELECT * FROM ta;
+
 DROP TABLE webpages, t, t_heap, t_heap2, t_heap3, ta, tb, tc, td;
