@@ -980,7 +980,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
 	}
 
-	elog(DEBUG1, "Alter Table Trigger (Motherduck): %s", alter_table_stmt_string);
+	elog(DEBUG1, "Executing: %s", alter_table_stmt_string);
 	auto res = pgduckdb::DuckDBQueryOrThrow(*connection, alter_table_stmt_string);
 
 	PG_RETURN_NULL();
