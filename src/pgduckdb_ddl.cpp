@@ -971,7 +971,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	char *alter_table_stmt_string;
 	if (IsA(trigdata->parsetree, AlterTableStmt)) {
 		AlterTableStmt *alter_table_stmt = (AlterTableStmt *)trigdata->parsetree;
-		alter_table_stmt_string = pgduckdb_get_alterdef(relid, alter_table_stmt);
+		alter_table_stmt_string = pgduckdb_get_alter_tabledef(relid, alter_table_stmt);
 	} else if (IsA(trigdata->parsetree, RenameStmt)) {
 		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
 		pprint(rename_stmt);

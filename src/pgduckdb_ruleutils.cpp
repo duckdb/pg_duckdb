@@ -842,8 +842,14 @@ pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
 	return buffer.data;
 }
 
+/*
+ * pgduckdb_get_alter_tabledef returns the DuckDB version of an ALTER TABLE
+ * command for the given table.
+ *
+ * TODO: Add support indexes
+ */
 char *
-pgduckdb_get_alterdef(Oid relation_oid, AlterTableStmt *alter_stmt) {
+pgduckdb_get_alter_tabledef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 	Relation relation = relation_open(relation_oid, AccessShareLock);
 	const char *relation_name = pgduckdb_relation_name(relation_oid);
 
