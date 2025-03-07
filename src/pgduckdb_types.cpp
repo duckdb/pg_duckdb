@@ -36,6 +36,7 @@ extern "C" {
 namespace pgduckdb {
 
 NumericVar FromNumeric(Numeric num);
+bool ValidDate(duckdb::date_t dt);
 
 struct NumericAsDouble : public duckdb::ExtraTypeInfo {
 	// Dummy struct to indicate at conversion that the source is a Numeric
@@ -216,6 +217,12 @@ ConvertBinaryDatum(const duckdb::Value &value) {
 inline Datum
 ConvertDateDatum(const duckdb::Value &value) {
 	duckdb::date_t date = value.GetValue<duckdb::date_t>();
+	if(!ValidDate(date))
+		throw duckdb::OutOfRangeException(
+			"The value should be between min and max value (%s <-> %s)",
+			duckdb::Date::ToString(pgduckdb::PGDUCKDB_PG_MIN_DATE_VALUE),
+			duckdb::Date::ToString(pgduckdb::PGDUCKDB_PG_MAX_DATE_VALUE));
+	
 	return date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
 }
 
@@ -1646,4 +1653,11 @@ FromNumeric(Numeric num) {
 	return dest;
 }
 
+bool
+ValidDate(duckdb::date_t dt)
+{
+	if (dt < pgduckdb::PGDUCKDB_PG_MIN_DATE_VALUE || dt > pgduckdb::PGDUCKDB_PG_MAX_DATE_VALUE)
+		return false;
+	return true;
+}
 } // namespace pgduckdb
