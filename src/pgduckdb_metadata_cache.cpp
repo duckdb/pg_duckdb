@@ -145,7 +145,11 @@ BuildDuckdbOnlyFunctions() {
 	                                "from_json_strict",
 	                                "json_value",
 	                                "strftime",
-	                                "strptime"};
+	                                "strptime",
+	                                "epoch",
+	                                "epoch_ms",
+	                                "epoch_us",
+	                                "epoch_ns"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
