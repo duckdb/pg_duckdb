@@ -217,12 +217,20 @@ ConvertBinaryDatum(const duckdb::Value &value) {
 inline Datum
 ConvertDateDatum(const duckdb::Value &value) {
 	duckdb::date_t date = value.GetValue<duckdb::date_t>();
-	if(!ValidDate(date))
-		throw duckdb::OutOfRangeException(
-			"The value should be between min and max value (%s <-> %s)",
-			duckdb::Date::ToString(pgduckdb::PGDUCKDB_PG_MIN_DATE_VALUE),
-			duckdb::Date::ToString(pgduckdb::PGDUCKDB_PG_MAX_DATE_VALUE));
-	
+	if (!ValidDate(date))
+		throw duckdb::OutOfRangeException("The value should be between min and max value (%s <-> %s)",
+		                                  duckdb::Date::ToString(pgduckdb::PGDUCKDB_PG_MIN_DATE_VALUE),
+		                                  duckdb::Date::ToString(pgduckdb::PGDUCKDB_PG_MAX_DATE_VALUE));
+
+	// Special Handling for +/-infinity date values
+	if (!duckdb::Date::IsFinite(date)) {
+		// -infinity value is different for PG date
+		if (date == duckdb::date_t::ninfinity())
+			return date.days - 1;
+		else
+			return date.days;
+	}
+
 	return date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
 }
 
@@ -1654,9 +1662,9 @@ FromNumeric(Numeric num) {
 }
 
 bool
-ValidDate(duckdb::date_t dt)
-{
-	if (dt < pgduckdb::PGDUCKDB_PG_MIN_DATE_VALUE || dt > pgduckdb::PGDUCKDB_PG_MAX_DATE_VALUE)
+ValidDate(duckdb::date_t dt) {
+	if ((dt < pgduckdb::PGDUCKDB_PG_MIN_DATE_VALUE || dt > pgduckdb::PGDUCKDB_PG_MAX_DATE_VALUE) &&
+	    !(dt == duckdb::date_t::infinity() || dt == duckdb::date_t::ninfinity()))
 		return false;
 	return true;
 }
