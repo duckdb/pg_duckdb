@@ -323,7 +323,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		auto stmt = castNode(AlterTableStmt, parsetree);
 		Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
 		Relation relation = RelationIdGetRelation(relation_oid);
-		if (pgduckdb::IsDuckdbTable(relation)) {
+		if (pgduckdb::IsDuckdbTable(relation) && pgduckdb::IsStatementTopLevel()) {
 			pgduckdb::in_duckdb_alter_table = true;
 			pgduckdb::ClaimCurrentCommandId();
 		}
