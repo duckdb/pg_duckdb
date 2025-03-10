@@ -94,7 +94,7 @@ BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count
 	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
 }
 
-bool CanTakeLockForDatabase(Oid database_oid);
+bool CanTakeBgwLockForDatabase(Oid database_oid);
 
 } // namespace pgduckdb
 
@@ -103,7 +103,7 @@ extern "C" {
 PGDLLEXPORT void
 pgduckdb_background_worker_main(Datum /* main_arg */) {
 	elog(LOG, "started pg_duckdb background worker");
-	if (!pgduckdb::CanTakeLockForDatabase(0)) {
+	if (!pgduckdb::CanTakeBgwLockForDatabase(0)) {
 		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", 0);
 		return;
 	}
@@ -274,7 +274,7 @@ Attempts to take a lock on a file named 'pgduckdb_worker_<database_oid>.lock'
 If the lock is taken, the function returns true. If the lock is not taken, the function returns false.
 */
 bool
-CanTakeLockForDatabase(Oid database_oid) {
+CanTakeBgwLockForDatabase(Oid database_oid) {
 	char lock_file_name[MAXPGPATH];
 	snprintf(lock_file_name, MAXPGPATH, "%s/%s.pgduckdb_worker.%d", DataDir, PG_TEMP_FILE_PREFIX, database_oid);
 
