@@ -231,6 +231,7 @@ ShmemStartup(void) {
 		 */
 		MemSet(BgwShmemStruct, 0, size);
 		SpinLockInit(&BgwShmemStruct->lock);
+		BgwShmemStruct->bgw_latch = nullptr;
 	}
 
 	LWLockRelease(AddinShmemInitLock);
@@ -347,14 +348,16 @@ void
 TriggerActivity(void) {
 	// The lock may not be initialized yet since we lazily start the BGW
 	// It is fine to skip it then because we force a check on the first iteration
-	if (!IsMotherDuckEnabled() || !BgwShmemStruct->lock) {
+	if (!IsMotherDuckEnabled()) {
 		return;
 	}
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
 	BgwShmemStruct->activity_count++;
 	/* Force wake up the background worker */
-	SetLatch(BgwShmemStruct->bgw_latch);
+	if (BgwShmemStruct->bgw_latch) {
+		SetLatch(BgwShmemStruct->bgw_latch);
+	}
 	SpinLockRelease(&BgwShmemStruct->lock);
 }
 
