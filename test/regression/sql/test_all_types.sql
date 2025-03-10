@@ -23,5 +23,11 @@ SELECT * exclude(
     fixed_array_of_int_list,
     list_of_fixed_int_array,
     nested_int_array, -- The nested array has different lengths, which is not possible in PG
+    date,
+    timestamp,
+    timestamp_s,
+    timestamp_ms,
+    timestamp_ns,
+    timestamp_tz
 )
 $$)

@@ -26,6 +26,10 @@ constexpr int64_t PGDUCKDB_DUCK_TIMESTAMP_OFFSET =
 const duckdb::date_t PGDUCKDB_PG_MIN_DATE_VALUE = duckdb::Date::FromDate(PG_MINYEAR, PG_MINMONTH, PG_MINDAY);
 const duckdb::date_t PGDUCKDB_PG_MAX_DATE_VALUE = duckdb::Date::FromDate(PG_MAXYEAR, PG_MAXMONTH, PG_MAXDAY);
 
+// Check ValidTimestampOrTimestampTz() for the logic, These values are counted from 1/1/1970
+constexpr int64_t PGDUCKDB_MAX_TIMESTAMP_VALUE = 9223371244800000000;
+constexpr int64_t PGDUCKDB_MIN_TIMESTAMP_VALUE = -210866803200000000;
+
 duckdb::LogicalType ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute);
 Oid GetPostgresDuckDBType(const duckdb::LogicalType &type);
 int32_t GetPostgresDuckDBTypemod(const duckdb::LogicalType &type);
