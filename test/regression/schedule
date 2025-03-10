@@ -31,4 +31,5 @@ test: function
 test: timestamp_with_interval
 test: approx_count_distinct
 test: scan_postgres_tables
+test: unresolved_type
 test: json_functions_duckdb

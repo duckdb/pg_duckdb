@@ -25,6 +25,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
 
 namespace pgduckdb {
@@ -87,9 +88,11 @@ InvalidateCaches(Datum /*arg*/, int /*cache_id*/, uint32 hash_value) {
 	if (hash_value != schema_hash_value) {
 		return;
 	}
+
 	if (!cache.valid) {
 		return;
 	}
+
 	cache.valid = false;
 	if (cache.installed) {
 		list_free(cache.duckdb_only_functions);
@@ -143,7 +146,13 @@ BuildDuckdbOnlyFunctions() {
 	                                "from_json",
 	                                "json_transform_strict",
 	                                "from_json_strict",
-	                                "json_value"};
+	                                "json_value",
+	                                "strftime",
+	                                "strptime",
+	                                "epoch",
+	                                "epoch_ms",
+	                                "epoch_us",
+	                                "epoch_ns"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
@@ -205,6 +214,9 @@ IsExtensionRegistered() {
 	if (cache.installed) {
 		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();
+
+		StartBackgroundWorkerIfNeeded();
+
 		cache.table_am_oid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum("duckdb"));
 
 		cache.schema_oid = get_namespace_oid("duckdb", false);
