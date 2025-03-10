@@ -21,6 +21,7 @@ int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
 char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_motherduck_default_database = strdup("");
+char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("");
 char *duckdb_postgres_role = strdup("");
 
@@ -192,6 +193,9 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.motherduck_default_database",
 	                     "Which database in MotherDuck to designate as default (in place of my_db)",
 	                     &duckdb_motherduck_default_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.motherduck_session_hint", "The session hint to use for MotherDuck connections",
+	                     &duckdb_motherduck_session_hint);
 
 	DefineCustomVariable("duckdb.motherduck_background_catalog_refresh_inactivity_timeout",
 	                     "When to stop syncing of the motherduck catalog when no activity has taken place",

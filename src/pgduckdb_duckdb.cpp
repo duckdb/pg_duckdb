@@ -97,6 +97,14 @@ uri_escape(const char *str) {
 	return buf.data;
 }
 
+static const char *
+GetSessionHint() {
+	if (strcmp(duckdb_motherduck_session_hint, "") != 0) {
+		return duckdb_motherduck_session_hint;
+	}
+	return PossiblyReuseBgwSessionHint();
+}
+
 namespace ddb {
 bool
 DidWrites() {
@@ -167,13 +175,20 @@ DuckDBManager::Initialize() {
 		 * is not trivial, so for now we simply disable the web login.
 		 */
 		setenv("motherduck_disable_web_login", "1", 1);
-		duckdb_motherduck_default_database = uri_escape(duckdb_motherduck_default_database);
-		if (duckdb_motherduck_token[0] == '\0') {
-			connection_string = psprintf("md:%s", duckdb_motherduck_default_database);
-		} else {
-			connection_string =
-			    psprintf("md:%s?motherduck_token=%s", duckdb_motherduck_default_database, duckdb_motherduck_token);
+		const char *escaped_default_database = uri_escape(duckdb_motherduck_default_database);
+		const char *escaped_session_hint = uri_escape(GetSessionHint());
+
+		StringInfoData buf;
+		initStringInfo(&buf);
+		appendStringInfo(&buf, "md:%s?", escaped_default_database);
+
+		if (strcmp(escaped_session_hint, "") != 0) {
+			appendStringInfo(&buf, "session_hint=%s&", escaped_session_hint);
 		}
+		if (duckdb_motherduck_token[0] != '\0') {
+			appendStringInfo(&buf, "motherduck_token=%s&", duckdb_motherduck_token);
+		}
+		connection_string = buf.data;
 	}
 
 	std::string pg_time_zone(pg::GetConfigOption("TimeZone"));
@@ -212,6 +227,14 @@ DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	context.transaction.Commit();
+}
+
+void
+DuckDBManager::Reset() {
+	connection = nullptr;
+	delete database;
+	database = nullptr;
+	UnclaimBgwSessionHint();
 }
 
 int64

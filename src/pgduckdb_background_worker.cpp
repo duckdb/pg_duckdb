@@ -62,6 +62,20 @@ static uint64 initial_cache_version = 0;
 namespace pgduckdb {
 
 bool is_background_worker = false;
+/*
+ * This stores a UUIDv4 that's generated on Postgres statrup. This cannot be a
+ * hardcoded token otherwise you could get contention on the matching
+ * MotherDuck read-instance if multiple pg_duckdb instances connect to the same
+ * MotherDuck account.
+ *
+ * The length is 37, because a UUID has 36 characters and we need to add a NULL
+ * byte.
+ */
+static char bgw_session_hint[37];
+
+/* Did this backend reuse the session hint of the background worker? */
+static bool reused_bgw_session_hint = false;
+static bool set_up_unclaim_session_hint_hook = false;
 
 static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
 static void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *context);
@@ -72,6 +86,7 @@ typedef struct BackgoundWorkerShmemStruct {
 	slock_t lock; /* protects all the fields below */
 
 	int64 activity_count; /* the number of times activity was triggered by other backends */
+	bool bgw_session_hint_is_reused;
 } BackgoundWorkerShmemStruct;
 
 static BackgoundWorkerShmemStruct *BgwShmemStruct;
@@ -232,6 +247,8 @@ ShmemStartup(void) {
 		MemSet(BgwShmemStruct, 0, size);
 		SpinLockInit(&BgwShmemStruct->lock);
 		BgwShmemStruct->bgw_latch = nullptr;
+		BgwShmemStruct->activity_count = 0;
+		BgwShmemStruct->bgw_session_hint_is_reused = false;
 	}
 
 	LWLockRelease(AddinShmemInitLock);
@@ -299,6 +316,18 @@ CanTakeBgwLockForDatabase(Oid database_oid) {
 }
 
 void
+UnclaimBgwSessionHint(int /*code*/, Datum /*arg*/) {
+	if (!reused_bgw_session_hint) {
+		return;
+	}
+
+	SpinLockAcquire(&BgwShmemStruct->lock);
+	BgwShmemStruct->bgw_session_hint_is_reused = false;
+	SpinLockRelease(&BgwShmemStruct->lock);
+	reused_bgw_session_hint = false;
+}
+
+void
 InitBackgroundWorkersShmem(void) {
 	/* Set up the shared memory hooks */
 #if PG_VERSION_NUM >= 150000
@@ -310,6 +339,11 @@ InitBackgroundWorkersShmem(void) {
 
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = ShmemStartup;
+
+	Datum random_uuid = DirectFunctionCall1(gen_random_uuid, 0);
+	Datum uuid_datum = DirectFunctionCall1(uuid_out, random_uuid);
+	char *uuid_cstr = DatumGetCString(uuid_datum);
+	strcpy(bgw_session_hint, uuid_cstr);
 }
 
 /*
@@ -357,6 +391,38 @@ TriggerActivity(void) {
 		SetLatch(BgwShmemStruct->bgw_latch);
 	}
 	SpinLockRelease(&BgwShmemStruct->lock);
+}
+
+/*
+ * When motherduck read scaling is used we don't want to have the background
+ * worker use a dedicated read-scaling instance. Instead we want to have it
+ * share an instance with the backend that's doing the actual query. We do this
+ * having a single normal backend use the same session_hint as the background
+ * worker. This function decides if that's necessary and returns the
+ * session_hint that the background uses.
+ *
+ * If it's not necessary this returns the empty string.
+ */
+const char *
+PossiblyReuseBgwSessionHint(void) {
+	if (is_background_worker || reused_bgw_session_hint) {
+		return bgw_session_hint;
+	}
+
+	const char *result = "";
+	SpinLockAcquire(&BgwShmemStruct->lock);
+	if (!BgwShmemStruct->bgw_session_hint_is_reused) {
+		result = bgw_session_hint;
+		BgwShmemStruct->bgw_session_hint_is_reused = true;
+		reused_bgw_session_hint = true;
+	}
+	SpinLockRelease(&BgwShmemStruct->lock);
+
+	if (reused_bgw_session_hint && !set_up_unclaim_session_hint_hook) {
+		before_shmem_exit(UnclaimBgwSessionHint, 0);
+	}
+
+	return result;
 }
 
 /* Global variables that are used to communicate with our event triggers so
