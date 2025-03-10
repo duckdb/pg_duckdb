@@ -53,7 +53,7 @@ DuckdbPrepare(const Query *query) {
 			appendStringInfoString(explain_options, "FORMAT JSON");
 		}
 
-		if (duckdb_explain_analyze || duckdb_explain_format == EXPLAIN_FORMAT_JSON) {
+		if (duckdb_explain_analyze || duckdb_explain_format == duckdb::ExplainFormat::JSON) {
 			appendStringInfoChar(explain_options,')');
 		}
 

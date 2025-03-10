@@ -350,7 +350,10 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	 * standard_ExplainOneQuery).
 	 */
 	duckdb_explain_analyze = es->analyze;
-	duckdb_explain_format = es->format;
+	if(es->format == EXPLAIN_FORMAT_JSON)
+		duckdb_explain_format = duckdb::ExplainFormat::JSON;
+	else
+		duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }
 

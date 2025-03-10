@@ -286,7 +286,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 			linitial_int(es->grouping_stack) = 1;
 		appendStringInfoChar(es->str, '\n');
 		appendStringInfoSpaces(es->str, es->indent * 2);
-		appendStringInfoString(es->str,"\"DuckDB Execution Plan\": ");
+		appendStringInfoString(es->str, "\"DuckDB Execution Plan\": ");
 		es->indent++;
 		formatDuckDbPlanForPG(value.c_str(),es);
 		es->indent--;

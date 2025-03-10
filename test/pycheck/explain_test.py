@@ -76,7 +76,6 @@ def test_explain(cur: Cursor):
     assert len(result) == 1
     assert type(result[0]) == dict
     plan=json.dumps(result[0])
-    print(plan)
     assert "EXPLAIN_ANALYZE" in plan
     assert "UNGROUPED_AGGREGATE" in plan
     assert "Total Time" in plan
