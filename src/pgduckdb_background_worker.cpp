@@ -346,8 +346,6 @@ StartBackgroundWorkerIfNeeded(void) {
 
 void
 TriggerActivity(void) {
-	// The lock may not be initialized yet since we lazily start the BGW
-	// It is fine to skip it then because we force a check on the first iteration
 	if (!IsMotherDuckEnabled()) {
 		return;
 	}
