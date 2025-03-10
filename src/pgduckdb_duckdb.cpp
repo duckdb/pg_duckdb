@@ -10,6 +10,7 @@
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pg/guc.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
@@ -175,6 +176,8 @@ DuckDBManager::Initialize() {
 		}
 	}
 
+	std::string pg_time_zone(pg::GetConfigOption("TimeZone"));
+
 	database = new duckdb::DuckDB(connection_string, &config);
 
 	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
@@ -188,6 +191,7 @@ DuckDBManager::Initialize() {
 
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	default_dbname = db_manager.GetDefaultDatabase(context);
+	pgduckdb::DuckDBQueryOrThrow(context, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(pg_time_zone));
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
