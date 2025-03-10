@@ -91,7 +91,7 @@ duckdb_scan_rescan(TableScanDesc /*sscan*/, ScanKey /*key*/, bool /*set_params*/
 static bool
 duckdb_scan_getnextslot(TableScanDesc /*sscan*/, ScanDirection /*direction*/, TupleTableSlot *slot) {
 	/* If we are executing ALTER TABLE we return empty tuple */
-	if (pgduckdb::in_duckdb_alter_table) {
+	if (pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::ALTER_TABLE) {
 		ExecClearTuple(slot);
 		return false;
 	}
@@ -219,7 +219,7 @@ duckdb_tuple_lock(Relation /*relation*/, ItemPointer /*tid*/, Snapshot /*snapsho
 
 static void
 duckdb_finish_bulk_insert(Relation /*relation*/, int /*options*/) {
-	if (pgduckdb::in_duckdb_alter_table) {
+	if (pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::ALTER_TABLE) {
 		return;
 	}
 	NOT_IMPLEMENTED();
@@ -323,7 +323,7 @@ duckdb_index_build_range_scan(Relation /*tableRelation*/, Relation /*indexRelati
                               bool /*allow_sync*/, bool /*anyvisible*/, bool /*progress*/,
                               BlockNumber /*start_blockno*/, BlockNumber /*numblocks*/, IndexBuildCallback /*callback*/,
                               void * /*callback_state*/, TableScanDesc /*scan*/) {
-	if (pgduckdb::in_duckdb_alter_table) {
+	if (pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::ALTER_TABLE) {
 		return 0;
 	}
 	NOT_IMPLEMENTED();

@@ -43,8 +43,8 @@ extern "C" {
 #include <inttypes.h>
 
 namespace pgduckdb {
-bool in_duckdb_alter_table = false;
-}
+DDLType top_level_duckdb_ddl_type = DDLType::NONE;
+} // namespace pgduckdb
 
 /*
  * ctas_skip_data stores the original value of the skipData field of the
@@ -187,6 +187,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
+			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::CREATE_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
 		}
 
@@ -208,6 +209,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
+			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::CREATE_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
 			/*
 			 * Force skipData to false for duckdb tables, so that Postgres does
@@ -323,8 +325,14 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		auto stmt = castNode(AlterTableStmt, parsetree);
 		Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
 		Relation relation = RelationIdGetRelation(relation_oid);
-		if (pgduckdb::IsDuckdbTable(relation) && pgduckdb::IsStatementTopLevel()) {
-			pgduckdb::in_duckdb_alter_table = true;
+		/*
+		 * Certain CREATE TABLE commands also trigger an ALTER TABLE command,
+		 * specifically if you use REFERENCES it will alter the table
+		 * afterwards. We currently only do this to get a better error message,
+		 * because we don't support REFERENCES anyway.
+		 */
+		if (pgduckdb::IsDuckdbTable(relation) && pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::NONE) {
+			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::ALTER_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
 		}
 		RelationClose(relation);
@@ -430,6 +438,9 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		 */
 		PG_RETURN_NULL();
 	}
+
+	/* Reset since we don't need it anymore */
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
 	Node *parsetree = trigger_data->parsetree;
@@ -866,9 +877,6 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
 
-	/* Reset since we don't need it anymore */
-	pgduckdb::in_duckdb_alter_table = false;
-
 	if (!pgduckdb::IsExtensionRegistered()) {
 		/*
 		 * We're not installed, so don't mess with the query. Normally this
@@ -876,6 +884,9 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		 */
 		PG_RETURN_NULL();
 	}
+
+	/* Reset since we don't need it anymore */
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	SPI_connect();
 
