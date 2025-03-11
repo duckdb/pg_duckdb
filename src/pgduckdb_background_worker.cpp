@@ -75,6 +75,12 @@ static char bgw_session_hint[37];
 
 /* Did this backend reuse the session hint of the background worker? */
 static bool reused_bgw_session_hint = false;
+/*
+ * For some reason we cannot configure the before_shmem_exit hook in _PG_init,
+ * nor in shmem_startup_hook. So instead we configure it lazily for a backend
+ * whenever it is needed. We need to make sure we only do that at most once for
+ * each backend though. So this boolean keeps track of that.
+ */
 static bool set_up_unclaim_session_hint_hook = false;
 
 static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
