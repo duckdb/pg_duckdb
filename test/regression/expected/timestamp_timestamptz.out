@@ -5,11 +5,11 @@
 CREATE TABLE t(a TIMESTAMP);
 INSERT INTO t VALUES('Infinity'), ('-Infinity');
 -- PG Execution
-SELECT * from t;
+SELECT * from t ORDER BY a;
      a     
 -----------
- infinity
  -infinity
+ infinity
 (2 rows)
 
 SELECT isfinite(a) FROM t;
@@ -21,11 +21,11 @@ SELECT isfinite(a) FROM t;
 
 set duckdb.force_execution = true;
 -- DuckDB execution
-SELECT * from t;
+SELECT * from t ORDER BY a;
      a     
 -----------
- infinity
  -infinity
+ infinity
 (2 rows)
 
 SELECT isfinite(a) FROM t;
@@ -38,22 +38,6 @@ SELECT isfinite(a) FROM t;
 -- Cleanup
 set duckdb.force_execution = false;
 DROP TABLE t;
-SELECT * FROM duckdb.query($$ SELECT '4714-11-24 (BC) 00:00:00'::timestamp as timestamp $$);
-          timestamp          
------------------------------
- Mon Nov 24 00:00:00 4714 BC
-(1 row)
-
-SELECT * FROM duckdb.query($$ SELECT '4714-11-23 (BC) 23:59:59'::timestamp as timestamp $$);  -- out of range
-ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp value should be between min and max value (4714-11-24 (BC) 00:00:00 <-> 294247-01-01 00:00:00)
-SELECT * FROM duckdb.query($$ SELECT '294246-12-31 23:59:59'::timestamp as timestamp $$);
-         timestamp          
-----------------------------
- Thu Dec 31 23:59:59 294246
-(1 row)
-
-SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00'::timestamp as timestamp $$);  -- out of range
-ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp value should be between min and max value (4714-11-24 (BC) 00:00:00 <-> 294247-01-01 00:00:00)
 SELECT * FROM duckdb.query($$ SELECT '4714-11-24 (BC) 00:00:00'::timestamp_s as timestamp_s $$);
          timestamp_s         
 -----------------------------
@@ -70,21 +54,37 @@ SELECT * FROM duckdb.query($$ SELECT '294246-12-31 23:59:59'::timestamp_s as tim
 
 SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00'::timestamp_s as timestamp_s $$);  -- out of range
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp value should be between min and max value (4714-11-24 (BC) 00:00:00 <-> 294247-01-01 00:00:00)
-SELECT * FROM duckdb.query($$ SELECT '4714-11-24 (BC) 00:00:00'::timestamp_ms as timestamp_ms $$);
+SELECT * FROM duckdb.query($$ SELECT '4714-11-24 (BC) 00:00:00.000000'::timestamp as timestamp $$);
+          timestamp          
+-----------------------------
+ Mon Nov 24 00:00:00 4714 BC
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT '4714-11-23 (BC) 23:59:59.999999'::timestamp as timestamp $$);  -- out of range
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp value should be between min and max value (4714-11-24 (BC) 00:00:00 <-> 294247-01-01 00:00:00)
+SELECT * FROM duckdb.query($$ SELECT '294246-12-31 23:59:59.999999'::timestamp as timestamp $$);
+             timestamp             
+-----------------------------------
+ Thu Dec 31 23:59:59.999999 294246
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00.000000'::timestamp as timestamp $$);  -- out of range
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp value should be between min and max value (4714-11-24 (BC) 00:00:00 <-> 294247-01-01 00:00:00)
+SELECT * FROM duckdb.query($$ SELECT '4714-11-24 (BC) 00:00:00.000'::timestamp_ms as timestamp_ms $$);
         timestamp_ms         
 -----------------------------
  Mon Nov 24 00:00:00 4714 BC
 (1 row)
 
-SELECT * FROM duckdb.query($$ SELECT '4714-11-23 (BC) 23:59:59'::timestamp_ms as timestamp_ms $$);  -- out of range
+SELECT * FROM duckdb.query($$ SELECT '4714-11-23 (BC) 23:59:59.999'::timestamp_ms as timestamp_ms $$);  -- out of range
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp value should be between min and max value (4714-11-24 (BC) 00:00:00 <-> 294247-01-01 00:00:00)
-SELECT * FROM duckdb.query($$ SELECT '294246-12-31 23:59:59'::timestamp_ms as timestamp_ms $$);
-        timestamp_ms        
-----------------------------
- Thu Dec 31 23:59:59 294246
+SELECT * FROM duckdb.query($$ SELECT '294246-12-31 23:59:59.999'::timestamp_ms as timestamp_ms $$);
+          timestamp_ms          
+--------------------------------
+ Thu Dec 31 23:59:59.999 294246
 (1 row)
 
-SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00'::timestamp_ms as timestamp_ms $$);  -- out of range
+SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00.000'::timestamp_ms as timestamp_ms $$);  -- out of range
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp value should be between min and max value (4714-11-24 (BC) 00:00:00 <-> 294247-01-01 00:00:00)
 ----------------------------------------
 -- TimestampTz tests
@@ -93,11 +93,11 @@ ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Out of Range Error: The Timestamp v
 CREATE TABLE t(a TIMESTAMPTZ);
 INSERT INTO t VALUES('Infinity'), ('-Infinity');
 -- PG Execution
-SELECT * from t;
+SELECT * from t ORDER BY a;
      a     
 -----------
- infinity
  -infinity
+ infinity
 (2 rows)
 
 SELECT isfinite(a) FROM t;
@@ -109,11 +109,11 @@ SELECT isfinite(a) FROM t;
 
 set duckdb.force_execution = true;
 -- DuckDB execution
-SELECT * from t;
+SELECT * from t ORDER BY a;
      a     
 -----------
- infinity
  -infinity
+ infinity
 (2 rows)
 
 SELECT isfinite(a) FROM t;

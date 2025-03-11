@@ -23,12 +23,12 @@ SELECT * exclude(
     fixed_array_of_int_list,
     list_of_fixed_int_array,
     nested_int_array, -- The nested array has different lengths, which is not possible in PG
-    date,
-    timestamp,
-    timestamp_s,
-    timestamp_ms,
-    timestamp_ns,
-    timestamp_tz
+    date, -- the min/max values of dates overflow in Postgres so selecting these would throw an error
+    timestamp, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_s, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_ms, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_ns, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_tz -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
 )
 $$)
 -[ RECORD 1 ]---+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -86,7 +86,7 @@ varchar         | goo
 blob            | \000\000\000a
 int_array       | {42,999,NULL,NULL,-42}
 double_array    | {42,NaN,Infinity,-Infinity,NULL,-42}
-date_array      | {01-01-1970,infinity,-infinity,NULL,05-12-2022}
+date_array      | {01-01-1970,-infinity,infinity,NULL,05-12-2022}
 timestamp_array | {"Thu Jan 01 00:00:00 1970",infinity,-infinity,NULL,"Thu May 12 16:23:45 2022"}
 varchar_array   | {🦆🦆🦆🦆🦆🦆,goose,NULL,""}
 -[ RECORD 3 ]---+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------

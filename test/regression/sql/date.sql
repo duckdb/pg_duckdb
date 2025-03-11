@@ -3,12 +3,12 @@ CREATE TABLE t(a DATE);
 INSERT INTO t VALUES('Infinity'), ('-Infinity');
 
 -- PG Execution
-SELECT * from t;
+SELECT * from t ORDER by a;
 SELECT isfinite(a) FROM t;
 
 set duckdb.force_execution = true;
 -- DuckDB execution
-SELECT * from t;
+SELECT * from t ORDER BY a;
 SELECT isfinite(a) FROM t;
 
 -- Cleanup
