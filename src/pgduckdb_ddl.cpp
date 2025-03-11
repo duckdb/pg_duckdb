@@ -213,6 +213,10 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
+			if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Only one DuckDB table can be created in a single statement")));
+			}
 			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::CREATE_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
 			/*
