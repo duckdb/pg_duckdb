@@ -32,11 +32,11 @@ extern "C" {
 bool duckdb_explain_analyze = false;
 
 duckdb::unique_ptr<duckdb::PreparedStatement>
-DuckdbPrepare(const Query *query) {
+DuckdbPrepare(const Query *query, bool allow_explain) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
 	const char *query_string = pgduckdb_get_querydef(copied_query);
 
-	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+	if (allow_explain && ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {
 			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);
 		} else {
@@ -57,7 +57,7 @@ CreatePlan(Query *query, bool throw_error) {
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
 
-	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(query);
+	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(query, false);
 
 	if (prepared_query->HasError()) {
 		elog(elevel, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s", prepared_query->GetError().c_str());
