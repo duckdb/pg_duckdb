@@ -4,14 +4,25 @@
         <img width="800" src="logo-light.svg" alt="pg_duckdb logo" />
     </picture>
 </p>
-
-0.3.0 release is here 🎉 Please [try](#installation) it out!
+<p align="center">
+	0.3.0 release is here 🎉<br />
+	Please <a href="#try-it-out">try</a> it out!
+</p>
 
 # pg_duckdb: Official Postgres extension for DuckDB
 
 pg_duckdb is a Postgres extension that embeds DuckDB's columnar-vectorized analytics engine and features into Postgres. We recommend using pg_duckdb to build high performance analytics and data-intensive applications.
 
 pg_duckdb was developed in collaboration with our partners, [Hydra][] and [MotherDuck][].
+
+## Try It Out
+
+An easy way to try pg_duckdb is using the Hydra python package. Try now locally or deploy to the cloud:
+
+```
+pip install hydra-cli
+hydra
+```
 
 ## Features
 
