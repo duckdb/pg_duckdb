@@ -224,6 +224,42 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts date)
+RETURNS date
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts date, "offset" interval)
+RETURNS date
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp, "offset" interval)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts date, origin date)
+RETURNS date
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp, origin timestamp)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
 CREATE CAST (duckdb.unresolved_type AS interval)
     WITH INOUT;
 CREATE CAST (duckdb.unresolved_type AS interval[])
