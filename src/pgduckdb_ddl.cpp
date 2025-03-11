@@ -187,6 +187,10 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
+			if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Only one DuckDB table can be created in a single statement")));
+			}
 			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::CREATE_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
 		}
@@ -439,7 +443,13 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		PG_RETURN_NULL();
 	}
 
-	/* Reset since we don't need it anymore */
+	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::CREATE_TABLE &&
+	    pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Cannot create a DuckDB table this way, use CREATE TABLE or CREATE TABLE ... AS")));
+		PG_RETURN_NULL();
+	}
+	/* Reset it back to NONE, for the remainder of the event trigger */
 	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
@@ -886,6 +896,13 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	}
 
 	/* Reset since we don't need it anymore */
+	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::ALTER_TABLE &&
+	    pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Cannot ALTER a DuckDB table this way, please use ALTER TABLE")));
+		PG_RETURN_NULL();
+	}
+	/* Reset it back to NONE, for the remainder of the event trigger */
 	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	SPI_connect();
