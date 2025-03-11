@@ -30,7 +30,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_types.hpp"
 
 bool duckdb_explain_analyze = false;
-ExplainFormat duckdb_explain_format = EXPLAIN_FORMAT_TEXT;
+duckdb::ExplainFormat duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
 
 duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query) {
@@ -41,13 +41,13 @@ DuckdbPrepare(const Query *query) {
 		StringInfo explain_options = makeStringInfo();
 		appendStringInfoString(explain_options, "EXPLAIN ");
 
-		if (duckdb_explain_analyze || duckdb_explain_format == EXPLAIN_FORMAT_JSON) {
+		if (duckdb_explain_analyze || duckdb_explain_format == duckdb::ExplainFormat::JSON) {
 			appendStringInfoChar(explain_options,'(');
 		}
 		if (duckdb_explain_analyze)
 			appendStringInfoString(explain_options, "ANALYZE ");
 
-		if (duckdb_explain_format == EXPLAIN_FORMAT_JSON){
+		if (duckdb_explain_format == duckdb::ExplainFormat::JSON) {
 			if(duckdb_explain_analyze)
 				appendStringInfoChar(explain_options, ',');
 			appendStringInfoString(explain_options, "FORMAT JSON");

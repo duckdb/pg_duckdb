@@ -277,7 +277,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 
 	std::ostringstream explain_output;
 	explain_output << "\n\n" << value << "\n";
-	if (duckdb_explain_format == EXPLAIN_FORMAT_JSON){
+	if (duckdb_explain_format == duckdb::ExplainFormat::JSON) {
 
 		// Formatting, copied formatting in JSON mode
 		if (linitial_int(es->grouping_stack) != 0)
@@ -291,7 +291,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 		formatDuckDbPlanForPG(value.c_str(),es);
 		es->indent--;
 
-	}else
+	} else
 		ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
 }
 
