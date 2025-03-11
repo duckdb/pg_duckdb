@@ -760,7 +760,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 
 	relation_close(relation, AccessShareLock);
 
-	return (buffer.data);
+	return buffer.data;
 }
 Form_pg_attribute
 GetAttributeByName(TupleDesc tupdesc, const char *colname) {
@@ -1112,7 +1112,7 @@ pgduckdb_get_alter_tabledef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 	}
 	relation_close(relation, AccessShareLock);
 
-	return (buffer.data);
+	return buffer.data;
 }
 
 /*
