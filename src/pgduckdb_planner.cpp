@@ -30,6 +30,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_types.hpp"
 
 bool duckdb_explain_analyze = false;
+bool duckdb_explain_ctas = false;
 
 duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query, bool allow_explain) {
@@ -38,6 +39,11 @@ DuckdbPrepare(const Query *query, bool allow_explain) {
 
 	if (allow_explain && ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 		if (duckdb_explain_analyze) {
+			if (duckdb_explain_ctas) {
+				throw duckdb::NotImplementedException(
+				    "Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution");
+			}
+
 			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);
 		} else {
 			query_string = psprintf("EXPLAIN %s", query_string);

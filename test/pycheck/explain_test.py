@@ -62,12 +62,17 @@ def test_explain_ctas(cur: Cursor):
     assert "POSTGRES_SCAN" in plan
     assert "Total Time:" not in plan
 
-    result = cur.sql(
-        "EXPLAIN ANALYZE CREATE TEMP TABLE heap2(id) AS SELECT * from heap1"
-    )
-    plan = "\n".join(result)
-    assert "TABLE_SCAN" in plan
-    assert "Total Time:" in plan
+    # EXPLAIN ANALYZE of a CTAS doesn't work if we use DuckDB execution
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="Not implemented Error: Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution",
+    ):
+        cur.sql("EXPLAIN ANALYZE CREATE TEMP TABLE heap2(id) AS SELECT * from heap1")
+
+    # But it continues to work fine when we PG execution is used
+    cur.sql("SET duckdb.force_execution = false")
+    cur.sql("EXPLAIN ANALYZE CREATE TEMP TABLE heap2(id) AS SELECT * from heap1")
+    cur.sql("SET duckdb.force_execution = true")
 
     result = cur.sql(
         "EXPLAIN CREATE TEMP TABLE duckdb1(id) USING duckdb AS SELECT * from heap1"
@@ -77,7 +82,10 @@ def test_explain_ctas(cur: Cursor):
     assert "Total Time:" not in plan
 
     # EXPLAIN ANALYZE is not supported for DuckDB CTAS (yet)
-    with pytest.raises(psycopg.errors.FeatureNotSupported):
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="Not implemented Error: Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution",
+    ):
         cur.sql(
             "EXPLAIN ANALYZE CREATE TEMP TABLE duckdb2(id) USING duckdb AS SELECT * from heap1"
         )
