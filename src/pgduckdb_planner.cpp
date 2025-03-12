@@ -5,6 +5,7 @@
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_planner.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -29,25 +30,12 @@ extern "C" {
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
-bool duckdb_explain_analyze = false;
-bool duckdb_explain_ctas = false;
-
 duckdb::unique_ptr<duckdb::PreparedStatement>
-DuckdbPrepare(const Query *query, bool allow_explain) {
+DuckdbPrepare(const Query *query, const char *explain_prefix) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
 	const char *query_string = pgduckdb_get_querydef(copied_query);
-
-	if (allow_explain && ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
-		if (duckdb_explain_analyze) {
-			if (duckdb_explain_ctas) {
-				throw duckdb::NotImplementedException(
-				    "Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution");
-			}
-
-			query_string = psprintf("EXPLAIN ANALYZE %s", query_string);
-		} else {
-			query_string = psprintf("EXPLAIN %s", query_string);
-		}
+	if (explain_prefix) {
+		query_string = psprintf("%s %s", explain_prefix, query_string);
 	}
 
 	elog(DEBUG2, "(PGDuckDB/DuckdbPrepare) Preparing: %s", query_string);
@@ -63,7 +51,7 @@ CreatePlan(Query *query, bool throw_error) {
 	 * Prepare the query, se we can get the returned types and column names.
 	 */
 
-	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(query, false);
+	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(query);
 
 	if (prepared_query->HasError()) {
 		elog(elevel, "(PGDuckDB/CreatePlan) Prepared query returned an error: '%s", prepared_query->GetError().c_str());
