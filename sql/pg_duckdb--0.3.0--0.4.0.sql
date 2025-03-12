@@ -230,32 +230,56 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
-CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp)
-RETURNS timestamp
-SET search_path = pg_catalog, pg_temp
-AS 'MODULE_PATHNAME', 'duckdb_only_function'
-LANGUAGE C;
-
-CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts date, "offset" interval)
-RETURNS date
-SET search_path = pg_catalog, pg_temp
-AS 'MODULE_PATHNAME', 'duckdb_only_function'
-LANGUAGE C;
-
-CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp, "offset" interval)
-RETURNS timestamp
-SET search_path = pg_catalog, pg_temp
-AS 'MODULE_PATHNAME', 'duckdb_only_function'
-LANGUAGE C;
-
 CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts date, origin date)
 RETURNS date
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts date, time_offset interval)
+RETURNS date
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp, time_offset interval)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
 CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp, origin timestamp)
 RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp with time zone)
+RETURNS timestamp with time zone
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp with time zone, time_offset interval)
+RETURNS timestamp with time zone
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp with time zone, origin timestamp with time zone)
+RETURNS timestamp with time zone
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts timestamp with time zone, timezone varchar)
+RETURNS timestamp with time zone
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
