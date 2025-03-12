@@ -18,6 +18,9 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
+bool duckdb_explain_analyze = false;
+bool duckdb_explain_ctas = false;
+
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
 
@@ -73,7 +76,24 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 void
 Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*eflags*/) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
-	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(duckdb_scan_state->query);
+
+	const char *explain_prefix = NULL;
+
+	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+		if (duckdb_explain_analyze) {
+			if (duckdb_explain_ctas) {
+				throw duckdb::NotImplementedException(
+				    "Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution");
+			}
+
+			explain_prefix = "EXPLAIN ANALYZE";
+		} else {
+			explain_prefix = "EXPLAIN";
+		}
+	}
+
+	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query =
+	    DuckdbPrepare(duckdb_scan_state->query, explain_prefix);
 
 	if (prepared_query->HasError()) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
@@ -185,6 +205,11 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
 	MemoryContext old_context;
+
+	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+		ExecClearTuple(slot);
+		return slot;
+	}
 
 	bool already_executed = duckdb_scan_state->is_executed;
 	if (!already_executed) {

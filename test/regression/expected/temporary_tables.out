@@ -407,10 +407,10 @@ SELECT count(*) FROM td;
 
 TRUNCATE TABLE tc;
 EXPLAIN VERBOSE INSERT INTO tc(c) SELECT md5('ta');
-                          QUERY PLAN                          
---------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
-   Output: duckdb_scan.explain_key, duckdb_scan.explain_value
+   Output: duckdb_scan."Count"
    DuckDB Execution Plan: 
  
  ┌───────────────────────────┐
@@ -432,10 +432,10 @@ EXPLAIN VERBOSE INSERT INTO tc(c) SELECT md5('ta');
 
 INSERT INTO tc(c) SELECT md5('ta');
 EXPLAIN VERBOSE INSERT INTO tc(d) SELECT md5('test');
-                          QUERY PLAN                          
---------------------------------------------------------------
+                         QUERY PLAN                         
+------------------------------------------------------------
  Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
-   Output: duckdb_scan.explain_key, duckdb_scan.explain_value
+   Output: duckdb_scan."Count"
    DuckDB Execution Plan: 
  
  ┌───────────────────────────┐
