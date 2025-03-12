@@ -2,6 +2,7 @@
 
 extern bool duckdb_force_execution;
 extern bool duckdb_unsafe_allow_mixed_transactions;
+extern bool duckdb_log_pg_explain;
 extern int duckdb_maximum_threads;
 extern char *duckdb_maximum_memory;
 extern char *duckdb_disabled_filesystems;

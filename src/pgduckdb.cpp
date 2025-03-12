@@ -16,6 +16,7 @@ static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
+bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
 char *duckdb_motherduck_token = strdup("");
@@ -133,6 +134,9 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
 	                     "Allow mixed transactions between DuckDB and Postgres",
 	                     &duckdb_unsafe_allow_mixed_transactions);
+
+	DefineCustomVariable("duckdb.log_pg_explain", "Logs the EXPLAIN plan of a Postgres scan at the NOTICE log level",
+	                     &duckdb_log_pg_explain);
 
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
 	                     &duckdb_enable_external_access, PGC_SUSET);
