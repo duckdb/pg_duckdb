@@ -206,6 +206,11 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 	TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
 	MemoryContext old_context;
 
+	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+		ExecClearTuple(slot);
+		return slot;
+	}
+
 	bool already_executed = duckdb_scan_state->is_executed;
 	if (!already_executed) {
 		ExecuteQuery(duckdb_scan_state);

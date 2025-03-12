@@ -55,6 +55,30 @@ def test_explain(cur: Cursor):
     assert "Output:" in plan
 
 
+def test_explain_dml(cur: Cursor):
+    cur.sql("CREATE TEMP TABLE test_table (id int) USING duckdb")
+    result = cur.sql(
+        "EXPLAIN INSERT INTO test_table SELECT * FROM generate_series(1, 5)"
+    )
+    plan = "\n".join(result)
+    print(plan)
+    assert "GENERATE_SERIES" in plan
+    assert "Total Time:" not in plan
+
+    # The insert should not have been executed
+    assert cur.sql("SELECT * FROM test_table") == []
+
+    result = cur.sql(
+        "EXPLAIN ANALYZE INSERT INTO test_table SELECT * FROM generate_series(1, 5)"
+    )
+    plan = "\n".join(result)
+    print(plan)
+    assert "GENERATE_SERIES" in plan
+    assert "Total Time:" in plan
+    # The insert should have been executed exactly once
+    assert cur.sql("SELECT * FROM test_table ORDER BY id") == [1, 2, 3, 4, 5]
+
+
 def test_explain_ctas(cur: Cursor):
     cur.sql("CREATE TEMP TABLE heap1(id) AS SELECT 1")
     result = cur.sql("EXPLAIN CREATE TEMP TABLE heap2(id) AS SELECT * from heap1")
