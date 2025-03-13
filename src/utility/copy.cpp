@@ -2,12 +2,17 @@
 
 #include <inttypes.h>
 
+#include "pgduckdb/pgduckdb_guc.h"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_hooks.hpp"
+
 extern "C" {
 #include "postgres.h"
 
 #include "access/table.h"
 #include "catalog/namespace.h"
 #include "commands/defrem.h"
+#include "common/string.h"
 #include "executor/executor.h"
 #include "nodes/parsenodes.h"
 #include "parser/parse_node.h"
@@ -208,32 +213,103 @@ CheckRewritten(List *rewritten) {
 	}
 }
 
-bool
+static bool
 CheckPrefix(const char *str, const char *prefix) {
-	while (*prefix) {
-		if (*prefix++ != *str++) {
+	return strncmp(str, prefix, strlen(prefix)) == 0;
+}
+
+static bool
+IsAllowedStatement(CopyStmt *stmt, bool throw_error = false) {
+	int elevel = throw_error ? ERROR : DEBUG4;
+
+	if (stmt->relation) {
+		Relation rel = table_openrv(stmt->relation, AccessShareLock);
+		bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
+		bool is_catalog_table = pgduckdb::IsCatalogTable(rel);
+		table_close(rel, NoLock);
+		if (is_catalog_table) {
+			elog(elevel, "DuckDB does not support querying PG catalog tables");
+			return false;
+		}
+
+		if (stmt->is_from && !is_duckdb_table) {
+			elog(elevel, "pg_duckdb does not support COPY ... FROM ... yet for Postgres tables");
 			return false;
 		}
 	}
+
+	if (stmt->filename == NULL) {
+		elog(elevel, "COPY ... TO STDOUT/FROM STDIN is not supported by DuckDB");
+		return false;
+	}
+
 	return true;
+}
+static bool
+ContainsDuckdbCopyOption(CopyStmt *stmt) {
+	foreach_node(DefElem, defel, stmt->options) {
+		if (strcmp(defel->defname, "format") == 0) {
+			char *fmt = defGetString(defel);
+			if (strcmp(fmt, "parquet") == 0) {
+				return true;
+			} else if (strcmp(fmt, "json") == 0) {
+				return true;
+			}
+		} else if (strcmp(defel->defname, "partition_by") == 0 || strcmp(defel->defname, "use_tmp_file") == 0 ||
+		           strcmp(defel->defname, "overwrite_or_ignore") == 0 || strcmp(defel->defname, "overwrite") == 0 ||
+		           strcmp(defel->defname, "append") == 0 || strcmp(defel->defname, "filename_pattern") == 0 ||
+		           strcmp(defel->defname, "file_extension") == 0 || strcmp(defel->defname, "per_thread_output") == 0 ||
+		           strcmp(defel->defname, "file_size_bytes") == 0 ||
+		           strcmp(defel->defname, "write_partition_columns") == 0 || strcmp(defel->defname, "array") == 0 ||
+		           strcmp(defel->defname, "compression") == 0 || strcmp(defel->defname, "dateformat") == 0 ||
+		           strcmp(defel->defname, "timestampformat") == 0 || strcmp(defel->defname, "nullstr") == 0 ||
+		           strcmp(defel->defname, "prefix") == 0 || strcmp(defel->defname, "suffix") == 0 ||
+		           strcmp(defel->defname, "compression_level") == 0 || strcmp(defel->defname, "field_ids") == 0 ||
+		           strcmp(defel->defname, "row_group_size_bytes") == 0 ||
+		           strcmp(defel->defname, "row_group_size") == 0 ||
+		           strcmp(defel->defname, "row_groups_per_file") == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
+NeedsDuckdbExecution(CopyStmt *stmt) {
+	/* Copy `filename` should start with S3/GS/R2 prefix */
+	if (stmt->filename != NULL) {
+		if (CheckPrefix(stmt->filename, s3_filename_prefix) || CheckPrefix(stmt->filename, gcs_filename_prefix) ||
+		    CheckPrefix(stmt->filename, r2_filename_prefix)) {
+			return true;
+		}
+		if (pg_str_endswith(stmt->filename, ".parquet") || pg_str_endswith(stmt->filename, ".json") ||
+		    pg_str_endswith(stmt->filename, ".ndjson") || pg_str_endswith(stmt->filename, ".jsonl") ||
+		    pg_str_endswith(stmt->filename, ".gz") || pg_str_endswith(stmt->filename, ".zst")) {
+			return true;
+		}
+	}
+
+	if (ContainsDuckdbCopyOption(stmt)) {
+		return true;
+	}
+
+	if (!stmt->relation) {
+		return false;
+	}
+
+	Relation rel = table_openrv(stmt->relation, AccessShareLock);
+	bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
+	table_close(rel, NoLock);
+	return is_duckdb_table;
 }
 
 const char *
 MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env) {
 	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
-	if (!copy_stmt->filename) {
-		return nullptr;
-	}
 
-	/* Copy `filename` should start with S3/GS/R2 prefix */
-	if (!CheckPrefix(copy_stmt->filename, s3_filename_prefix) &&
-	    !CheckPrefix(copy_stmt->filename, gcs_filename_prefix) &&
-	    !CheckPrefix(copy_stmt->filename, r2_filename_prefix)) {
-		return nullptr;
-	}
-
-	/* We handle only COPY .. TO */
-	if (copy_stmt->is_from) {
+	if (NeedsDuckdbExecution(copy_stmt)) {
+		IsAllowedStatement(copy_stmt, true);
+	} else if (!duckdb_force_execution || !IsAllowedStatement(copy_stmt)) {
 		return nullptr;
 	}
 
@@ -254,6 +330,7 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 
 		Query *query = linitial_node(Query, rewritten);
 		CheckQueryPermissions(query, query_string);
+		pgduckdb::IsAllowedStatement(query, true);
 
 		appendStringInfo(rewritten_query_info, "(");
 		appendStringInfoString(rewritten_query_info, pgduckdb_get_querydef(query));
@@ -265,7 +342,11 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 		AppendCreateRelationCopyString(rewritten_query_info, pstate, copy_stmt);
 	}
 
-	appendStringInfo(rewritten_query_info, " TO ");
+	if (copy_stmt->is_from) {
+		appendStringInfo(rewritten_query_info, " FROM ");
+	} else {
+		appendStringInfo(rewritten_query_info, " TO ");
+	}
 	appendStringInfoString(rewritten_query_info, quote_literal_cstr(copy_stmt->filename));
 	appendStringInfo(rewritten_query_info, " ");
 	AppendCreateCopyOptions(rewritten_query_info, copy_stmt);
