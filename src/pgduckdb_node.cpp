@@ -262,6 +262,11 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 		 * In case any error happens we need to still cleanup the scan state,
 		 * otherwise we do not clean up the prepared statement and various
 		 * other DuckDB objects.
+		 *
+		 * NOTE: We only clean this up on error, not on success. On success we
+		 * still need these objects to be around for the next call to
+		 * ExecCustomScan. If the full scan completes successfully, the cleanup
+		 * will be done in EndCustomScan.
 		 */
 		CleanupDuckdbScanState(duckdb_scan_state);
 		throw;
