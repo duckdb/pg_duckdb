@@ -1,0 +1,28 @@
+show duckdb.memory_limit;
+ duckdb.memory_limit 
+---------------------
+ 4GB
+(1 row)
+
+select * from duckdb.query($$ select current_setting('memory_limit') == '3.7 GiB' $$);
+ (current_setting('memory_limit') = '3.7 GiB') 
+-----------------------------------------------
+ t
+(1 row)
+
+set duckdb.memory_limit = '1GiB';
+CALL duckdb.recycle_ddb();
+select * from duckdb.query($$ select current_setting('memory_limit') $$);
+ current_setting('memory_limit') 
+---------------------------------
+ 1.0 GiB
+(1 row)
+
+set duckdb.memory_limit = '';
+CALL duckdb.recycle_ddb();
+select * from duckdb.query($$ select current_setting('memory_limit') != '3.7 GiB' $$);
+ (current_setting('memory_limit') != '3.7 GiB') 
+------------------------------------------------
+ t
+(1 row)
+

@@ -27,6 +27,7 @@ test: transactions
 test: transaction_errors
 test: secrets
 test: prepare
+test: gucs
 test: function
 test: issue_410
 test: timestamp_with_interval
