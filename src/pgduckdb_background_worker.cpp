@@ -55,6 +55,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
 static uint64 initial_cache_version = 0;
@@ -101,17 +102,20 @@ bool CanTakeBgwLockForDatabase(Oid database_oid);
 extern "C" {
 
 PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum /* main_arg */) {
-	elog(LOG, "started pg_duckdb background worker");
+pgduckdb_background_worker_main(Datum main_arg) {
+	Oid database_oid = DatumGetObjectId(main_arg);
 	if (!pgduckdb::CanTakeBgwLockForDatabase(0)) {
-		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", 0);
+		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
 		return;
 	}
+
+	elog(LOG, "started pg_duckdb background worker for database %u", database_oid);
+
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
 	BackgroundWorkerUnblockSignals();
 
-	BackgroundWorkerInitializeConnection(duckdb_motherduck_postgres_database, NULL, 0);
+	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
 
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
 	pgduckdb::BgwShmemStruct->bgw_latch = MyLatch;
@@ -292,7 +296,7 @@ CanTakeBgwLockForDatabase(Oid database_oid) {
 
 	if (ret != 0) {
 		auto err = strerror(errno);
-		elog(ERROR, "Could not take lock on file '%s': %s", lock_file_name, err);
+		elog(ERROR, "Could not take lock on file '%s': %d %s", lock_file_name, ret, err);
 	}
 
 	return true;
@@ -319,7 +323,7 @@ Will start the background worker if:
 */
 void
 StartBackgroundWorkerIfNeeded(void) {
-	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
+	if (!pgduckdb::IsMotherDuckEnabled()) {
 		elog(DEBUG3, "pg_duckdb background worker not started because MotherDuck is not enabled");
 		return;
 	}
@@ -338,7 +342,7 @@ StartBackgroundWorkerIfNeeded(void) {
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "pgduckdb_background_worker_main");
 	snprintf(worker.bgw_name, BGW_MAXLEN, PGDUCKDB_SYNC_WORKER_NAME);
 	worker.bgw_restart_time = 1;
-	worker.bgw_main_arg = (Datum)0;
+	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
 
 	// Register the worker
 	RegisterDynamicBackgroundWorker(&worker, NULL);
@@ -844,7 +848,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 			}
 
 			std::string postgres_schema_name = PgSchemaName(motherduck_db, schema.name, is_default_db);
-
 			if (!CreateSchemaIfNotExists(postgres_schema_name.c_str(), is_default_db)) {
 				/* We failed to create the schema, so we skip the tables in it */
 				continue;
