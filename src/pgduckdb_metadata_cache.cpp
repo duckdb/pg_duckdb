@@ -70,8 +70,6 @@ struct {
 	Oid json_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
-	/* The OID of the duckdb.motherduck_postgres_database */
-	Oid motherduck_postgres_database_oid;
 	/* The OID of the duckdb.postgres_role */
 	Oid postgres_role_oid;
 	/*
@@ -233,8 +231,6 @@ IsExtensionRegistered() {
 		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();
 
-		StartBackgroundWorkerIfNeeded();
-
 		cache.table_am_oid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum("duckdb"));
 
 		cache.schema_oid = get_namespace_oid("duckdb", false);
@@ -243,8 +239,6 @@ IsExtensionRegistered() {
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("unresolved_type"), cache.schema_oid);
 
 		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
-
-		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
 
 		if (duckdb_postgres_role[0] != '\0') {
 			cache.postgres_role_oid =
