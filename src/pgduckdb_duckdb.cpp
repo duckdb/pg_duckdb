@@ -27,6 +27,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -168,12 +169,14 @@ DuckDBManager::Initialize() {
 		 * is not trivial, so for now we simply disable the web login.
 		 */
 		setenv("motherduck_disable_web_login", "1", 1);
-		duckdb_motherduck_default_database = uri_escape(duckdb_motherduck_default_database);
-		if (duckdb_motherduck_token[0] == '\0') {
-			connection_string = psprintf("md:%s", duckdb_motherduck_default_database);
+
+		auto default_database = FindMotherDuckDefaultDatabase();
+		auto token = FindMotherDuckToken();
+		auto db = default_database ? uri_escape(default_database) : "";
+		if (token == nullptr) {
+			connection_string = psprintf("md:%s", db);
 		} else {
-			connection_string =
-			    psprintf("md:%s?motherduck_token=%s", duckdb_motherduck_default_database, duckdb_motherduck_token);
+			connection_string = psprintf("md:%s?motherduck_token=%s", db, token);
 		}
 	}
 

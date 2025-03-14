@@ -103,4 +103,16 @@ MotherDuckPostgresUser() {
 	return cache.motherduck_postgres_role_oid;
 }
 
+Oid
+GetMotherduckForeignServerOid() {
+	Assert(cache.valid);
+	return cache.motherduck_foreign_server_oid;
+}
+
+Oid
+GetMotherDuckUserMappingOid() {
+	Assert(cache.valid);
+	return cache.motherduck_user_mapping_oid;
+}
+
 } // namespace pgduckdb
