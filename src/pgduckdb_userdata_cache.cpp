@@ -1,11 +1,13 @@
 extern "C" {
 #include "postgres.h"
 
+#include "commands/extension.h"
 #include "foreign/foreign.h"
 #include "utils/inval.h"
 #include "utils/syscache.h"
 }
 
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_fdw.hpp"
@@ -83,6 +85,10 @@ InitUserDataCache() {
 	LoadMotherDuckCache();
 
 	cache.valid = true;
+
+	// Now that the cache is valid we can start the background worker
+	// if needed. Note that the function needs a valid cache to work.
+	StartBackgroundWorkerIfNeeded();
 }
 
 bool

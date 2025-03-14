@@ -21,7 +21,6 @@ bool duckdb_unsafe_allow_mixed_transactions = false;
 bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_token = strdup("");
-char *duckdb_motherduck_postgres_database = strdup("postgres");
 char *duckdb_motherduck_default_database = strdup("");
 char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("");
@@ -159,9 +158,6 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.motherduck_token", "The token to use for MotherDuck", &duckdb_motherduck_token,
 	                     PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
-
-	DefineCustomVariable("duckdb.motherduck_postgres_database", "Which database to enable MotherDuck support in",
-	                     &duckdb_motherduck_postgres_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 
 	DefineCustomVariable("duckdb.motherduck_default_database",
 	                     "Which database in MotherDuck to designate as default (in place of my_db)",
