@@ -24,5 +24,7 @@ const char *FindMotherDuckDefaultDatabase();
 //   > returns nullptr otherwise
 const char *FindMotherDuckToken();
 
+const char *FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
+
 } // namespace pgduckdb
 }

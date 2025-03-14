@@ -220,11 +220,13 @@ DuckDBManager::Initialize() {
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
-	if (pgduckdb::IsMotherDuckEnabled() &&
-	    strlen(duckdb_motherduck_background_catalog_refresh_inactivity_timeout) > 0) {
-		pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
-		                                          duckdb::KeywordHelper::WriteQuoted(
-		                                              duckdb_motherduck_background_catalog_refresh_inactivity_timeout));
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		auto timeout = FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
+		if (timeout != nullptr) {
+			auto quoted_to = duckdb::KeywordHelper::WriteQuoted(timeout);
+			pgduckdb::DuckDBQueryOrThrow(context,
+			                             "SET motherduck_background_catalog_refresh_inactivity_timeout=" + quoted_to);
+		}
 	}
 
 	LoadFunctions(context);

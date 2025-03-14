@@ -21,7 +21,6 @@ bool duckdb_unsafe_allow_mixed_transactions = false;
 bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_session_hint = strdup("");
-char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("");
 char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
@@ -156,9 +155,4 @@ DuckdbInitGUC(void) {
 
 	DefineCustomVariable("duckdb.motherduck_session_hint", "The session hint to use for MotherDuck connections",
 	                     &duckdb_motherduck_session_hint);
-
-	DefineCustomVariable("duckdb.motherduck_background_catalog_refresh_inactivity_timeout",
-	                     "When to stop syncing of the motherduck catalog when no activity has taken place",
-	                     &duckdb_motherduck_background_catalog_refresh_inactivity_timeout, PGC_POSTMASTER,
-	                     GUC_SUPERUSER_ONLY);
 }

@@ -50,6 +50,7 @@ static const struct PGDuckDBFdwOption valid_options[] = {
     /* --- MD Server --- */
     // the role bgw assigns to MD tables (by default server creator/owner)
     {"tables_owner_role", MD, ForeignServerRelationId},
+    {"background_catalog_refresh_inactivity_timeout", MD, ForeignServerRelationId},
 
     // a specific token to synchronize MD tables, by default the token of the user mapping which belongs creator/owner
     {"sync_token", MD, ForeignServerRelationId},
@@ -208,6 +209,17 @@ FindMotherDuckDefaultDatabase() {
 
 	auto server = GetForeignServer(server_oid);
 	return FindOption(server->options, "default_database");
+}
+
+const char *
+FindMotherDuckBackgroundCatalogRefreshInactivityTimeout() {
+	Oid server_oid = GetMotherduckForeignServerOid();
+	if (server_oid == InvalidOid) {
+		return nullptr;
+	}
+
+	auto server = GetForeignServer(server_oid);
+	return FindOption(server->options, "background_catalog_refresh_inactivity_timeout");
 }
 
 // * if `pgduckdb::is_background_worker` then:
