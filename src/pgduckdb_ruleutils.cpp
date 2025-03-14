@@ -607,12 +607,10 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 
 	if (relation->rd_rel->relpersistence == RELPERSISTENCE_TEMP) {
 		// allowed
-	} else if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
+	} else if (!pgduckdb::IsMotherDuckEnabled()) {
 		elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
 	} else if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
 		elog(ERROR, "Only TEMP and non-UNLOGGED tables are supported in DuckDB");
-	} else if (!pgduckdb::IsMotherDuckPostgresDatabase()) {
-		elog(ERROR, "MotherDuck tables must be created in the duckb.motherduck_postgres_database");
 	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUser()) {
 		elog(ERROR, "MotherDuck tables must be owned by the duckb.postgres_role");
 	}
