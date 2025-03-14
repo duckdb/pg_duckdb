@@ -38,6 +38,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 namespace pgduckdb {
@@ -294,6 +295,10 @@ DECLARE_PG_FUNCTION(pgduckdb_raw_query) {
 	auto result = pgduckdb::DuckDBQueryOrThrow(query);
 	elog(NOTICE, "result: %s", result->ToString().c_str());
 	PG_RETURN_BOOL(true);
+}
+
+DECLARE_PG_FUNCTION(pgduckdb_is_motherduck_enabled) {
+	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
 }
 
 /*
