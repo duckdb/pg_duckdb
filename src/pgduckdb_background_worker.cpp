@@ -382,7 +382,7 @@ StartBackgroundWorkerIfNeeded(void) {
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "pgduckdb_background_worker_main");
 	snprintf(worker.bgw_name, BGW_MAXLEN, PGDUCKDB_SYNC_WORKER_NAME);
 	worker.bgw_restart_time = 1;
-	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);;
+	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
 
 	// Register the worker
 	RegisterDynamicBackgroundWorker(&worker, NULL);

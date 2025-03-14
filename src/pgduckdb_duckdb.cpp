@@ -27,6 +27,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -176,19 +177,27 @@ DuckDBManager::Initialize() {
 		 * is not trivial, so for now we simply disable the web login.
 		 */
 		setenv("motherduck_disable_web_login", "1", 1);
-		const char *escaped_default_database = uri_escape(duckdb_motherduck_default_database);
-		const char *escaped_session_hint = uri_escape(GetSessionHint());
 
 		StringInfoData buf;
 		initStringInfo(&buf);
-		appendStringInfo(&buf, "md:%s?", escaped_default_database);
 
+		// Default database
+		auto default_database = FindMotherDuckDefaultDatabase();
+		auto escaped_default_db = default_database ? uri_escape(default_database) : "";
+		appendStringInfo(&buf, "md:%s?", escaped_default_db);
+
+		// Session hint
+		auto escaped_session_hint = uri_escape(GetSessionHint());
 		if (strcmp(escaped_session_hint, "") != 0) {
 			appendStringInfo(&buf, "session_hint=%s&", escaped_session_hint);
 		}
-		if (duckdb_motherduck_token[0] != '\0') {
-			appendStringInfo(&buf, "motherduck_token=%s&", duckdb_motherduck_token);
+
+		// Token
+		auto token = FindMotherDuckToken();
+		if (token != nullptr) {
+			appendStringInfo(&buf, "motherduck_token=%s&", token);
 		}
+
 		connection_string = buf.data;
 	}
 
