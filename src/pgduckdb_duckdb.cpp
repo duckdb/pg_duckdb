@@ -26,6 +26,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>

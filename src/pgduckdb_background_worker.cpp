@@ -55,6 +55,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
 static uint64 initial_cache_version = 0;
@@ -359,7 +360,7 @@ Will start the background worker if:
 */
 void
 StartBackgroundWorkerIfNeeded(void) {
-	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
+	if (!pgduckdb::IsMotherDuckEnabled()) {
 		elog(DEBUG3, "pg_duckdb background worker not started because MotherDuck is not enabled");
 		return;
 	}

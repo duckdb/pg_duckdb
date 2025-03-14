@@ -38,6 +38,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
@@ -143,6 +144,9 @@ DropTablePreCheck(DropStmt *stmt) {
 		elog(ERROR, "Dropping both DuckDB and non-DuckDB tables in the same transaction is not supported");
 	}
 }
+
+static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
+static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
 
 static void
 DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
@@ -344,7 +348,49 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			pgduckdb::ClaimCurrentCommandId();
 		}
 		RelationClose(relation);
+	} else if (IsA(parsetree, CreateForeignServerStmt)) {
+		DuckdbHandleCreateForeignServerStmt(parsetree);
+		return;
+	} else if (IsA(parsetree, CreateUserMappingStmt)) {
+		DuckdbHandleCreateUserMappingStmt(parsetree);
+		return;
 	}
+}
+
+static void
+AssertOptionNotSet(List *options, const char *option_name) {
+	foreach_node(DefElem, def, options) {
+		if (strcmp(def->defname, option_name) == 0) {
+			elog(ERROR, "`%s` should not be set in the options", option_name);
+		}
+	}
+}
+
+static void
+DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
+	// Propagate the "TYPE" to the server options, don't validate it here though
+	auto stmt = castNode(CreateForeignServerStmt, parsetree);
+	AssertOptionNotSet(stmt->options, "type");
+
+	if (stmt->servertype == NULL) {
+		return; // Don't do anything quite yet, let the validator raise an error
+	}
+
+	// Wasn't set, add it.
+	stmt->options = lappend(stmt->options, makeDefElem(pstrdup("type"), (Node *)makeString(stmt->servertype), -1));
+}
+
+static void
+DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
+	// Propagate the "servername" to the user mapping options
+	auto stmt = castNode(CreateUserMappingStmt, parsetree);
+
+	Assert(stmt->servername);
+	AssertOptionNotSet(stmt->options, "servername");
+
+	// Wasn't set, add it.
+	stmt->options =
+	    lappend(stmt->options, makeDefElem(pstrdup("servername"), (Node *)makeString(stmt->servername), -1));
 }
 
 static void

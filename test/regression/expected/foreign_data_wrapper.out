@@ -1,0 +1,39 @@
+SET duckdb.force_execution TO false;
+-- MD is not enabled
+SELECT * FROM duckdb.is_motherduck_enabled();
+ is_motherduck_enabled 
+-----------------------
+ f
+(1 row)
+
+-- Must provide a TYPE clause
+CREATE SERVER invalid_server1 FOREIGN DATA WRAPPER pg_duckdb;
+ERROR:  Missing required option: 'type'
+-- Must be a valid TYPE
+CREATE SERVER invalid_server2
+TYPE 'foo'
+FOREIGN DATA WRAPPER pg_duckdb;
+ERROR:  Unknown SERVER type: 'foo'
+-- Should succeed with no option
+CREATE SERVER valid_md_server1
+TYPE 'motherduck'
+FOREIGN DATA WRAPPER pg_duckdb;
+-- MD is still NOT enabled
+SELECT * FROM duckdb.is_motherduck_enabled();
+ is_motherduck_enabled 
+-----------------------
+ f
+(1 row)
+
+-- Should create a USER MAPPING
+CREATE USER user1 IN ROLE duckdb_group;
+CREATE USER MAPPING FOR user1 SERVER valid_md_server1;
+-- Now MD is enabled
+SELECT * FROM duckdb.is_motherduck_enabled();
+ is_motherduck_enabled 
+-----------------------
+ t
+(1 row)
+
+-- TODO: test ALTER & DROP SERVER
+-- TODO: test ALTER & DROP USER MAPPING
