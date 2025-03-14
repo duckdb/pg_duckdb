@@ -117,7 +117,7 @@ def test_copy_to_stdout(cur: Cursor):
         for row in copy.rows():
             assert row == ("123",)
 
-    # ... but only in formats that Postgres supports
+    # ... but only in formats that Postgres natively supports
     with pytest.raises(
         psycopg.errors.InternalError,
         match="COPY ... TO STDOUT/FROM STDIN is not supported by DuckDB",
@@ -131,12 +131,13 @@ def test_copy_to_stdout(cur: Cursor):
     cur.sql("CREATE TEMP TABLE pg_table (id INT, name TEXT)")
     cur.sql("INSERT INTO pg_table (id, name) VALUES (1, 'Alice'), (2, 'Bob')")
 
-    # We can COPY the result from a DuckDB query to STDOUT
+    # We can COPY the result from a postgres table to STDOUT (i.e. we don't
+    # break normal Postgres functionality)
     with cur.copy("COPY pg_table TO STDOUT") as copy:
         rows = list(copy.rows())
         assert rows == [("1", "Alice"), ("2", "Bob")]
 
-    # ... but only in formats that Postgres supports
+    # ... but only in formats that Postgres natively supports
     with pytest.raises(
         psycopg.errors.InternalError,
         match="COPY ... TO STDOUT/FROM STDIN is not supported by DuckDB",
@@ -147,20 +148,17 @@ def test_copy_to_stdout(cur: Cursor):
     cur.sql("CREATE TEMP TABLE duck_table (id INT, name TEXT) USING duckdb")
     cur.sql("INSERT INTO duck_table (id, name) VALUES (1, 'Alice'), (2, 'Bob')")
 
-    # We cannot copy a DuckDB table to STDOUT
-    with pytest.raises(
-        psycopg.errors.InternalError,
-        match="COPY ... TO STDOUT/FROM STDIN is not supported by DuckDB",
-    ):
-        with cur.copy("COPY duck_table TO STDOUT"):
-            pass
+    # We can COPY a DuckDB table to STDOUT
+    with cur.copy("COPY duck_table TO STDOUT") as copy:
+        rows = list(copy.rows())
+        assert rows == [("1", "Alice"), ("2", "Bob")]
 
-    # ... and definitely not in formats that Postgres doesn't support
+    # ... but only in formats that Postgres natively supports
     with pytest.raises(
         psycopg.errors.InternalError,
         match="COPY ... TO STDOUT/FROM STDIN is not supported by DuckDB",
     ):
-        with cur.copy("COPY duck_table TO STDOUT (FORMAT PARQUET)"):
+        with cur.copy("COPY duck_table TO STDOUT (FORMAT PARQUET)") as copy:
             pass
 
 

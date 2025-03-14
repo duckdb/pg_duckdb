@@ -15,6 +15,7 @@ extern "C" {
 #include "common/string.h"
 #include "executor/executor.h"
 #include "nodes/parsenodes.h"
+#include "parser/parser.h"
 #include "parser/parse_node.h"
 #include "parser/parse_relation.h"
 #include "storage/lockdefs.h"
@@ -325,10 +326,19 @@ NeedsDuckdbExecution(CopyStmt *stmt) {
 		return false;
 	}
 
-	Relation rel = table_openrv(stmt->relation, AccessShareLock);
-	bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
-	table_close(rel, NoLock);
-	return is_duckdb_table;
+	if (stmt->is_from) {
+		/*
+		 * For COPY ... FROM we require duckdb execution if it's a duckdb
+		 * table. For COPY ... TO this is not the case, because we can use
+		 * Postgres its COPY implementation on duckdb tables.
+		 */
+		Relation rel = table_openrv(stmt->relation, AccessShareLock);
+		bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
+		table_close(rel, NoLock);
+		/* We do support duckdb tables */
+		return is_duckdb_table;
+	}
+	return false;
 }
 
 const char *
@@ -338,6 +348,28 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 	if (NeedsDuckdbExecution(copy_stmt)) {
 		IsAllowedStatement(copy_stmt, true);
 	} else if (!duckdb_force_execution || !IsAllowedStatement(copy_stmt)) {
+		if (copy_stmt->relation && !copy_stmt->is_from) {
+			/*
+			 * We don't support enough of the table access method API to allow
+			 * Postgres to read from the table directly when users use:
+			 * COPY duckdb_table TO ...
+			 *
+			 * Luckily we can easily work around that lack of support by
+			 * creating a SELECT * query on the duckdb table, because COPY from
+			 * a duckdb query works fine.
+			 */
+			Relation rel = table_openrv(copy_stmt->relation, AccessShareLock);
+			bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
+			table_close(rel, NoLock);
+			if (is_duckdb_table) {
+				char *select_query;
+				select_query = psprintf("SELECT * FROM %s", quote_identifier(get_rel_name(RelationGetRelid(rel))));
+				RawStmt *raw_stmt = linitial_node(RawStmt, raw_parser(select_query, RAW_PARSE_DEFAULT));
+				copy_stmt->query = raw_stmt->stmt;
+				copy_stmt->relation = nullptr;
+			}
+		}
+
 		return nullptr;
 	}
 
