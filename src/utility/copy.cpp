@@ -219,6 +219,23 @@ CheckPrefix(const char *str, const char *prefix) {
 }
 
 static bool
+StringEquals(const char *str1, const char *str2) {
+	return strcmp(str1, str2) == 0;
+}
+
+static bool
+StringOneOfInternal(const char *str, const char *compare_to[], int length_of_compare_to) {
+	for (int i = 0; i < length_of_compare_to; i++) {
+		if (StringEquals(str, compare_to[i])) {
+			return true;
+		}
+	}
+	return false;
+}
+
+#define StringOneOf(str, compare_to) StringOneOfInternal(str, compare_to, lengthof(compare_to))
+
+static bool
 IsAllowedStatement(CopyStmt *stmt, bool throw_error = false) {
 	int elevel = throw_error ? ERROR : DEBUG4;
 
@@ -245,29 +262,40 @@ IsAllowedStatement(CopyStmt *stmt, bool throw_error = false) {
 
 	return true;
 }
+
 static bool
 ContainsDuckdbCopyOption(CopyStmt *stmt) {
+	static const char *duckdb_only_formats[] = {"parquet", "json"};
+	static const char *duckdb_only_options[] = {"partition_by",
+	                                            "use_tmp_file",
+	                                            "overwrite_or_ignore",
+	                                            "overwrite",
+	                                            "append",
+	                                            "filename_pattern",
+	                                            "file_extension",
+	                                            "per_thread_output",
+	                                            "file_size_bytes",
+	                                            "write_partition_columns",
+	                                            "array",
+	                                            "compression",
+	                                            "dateformat",
+	                                            "timestampformat",
+	                                            "nullstr",
+	                                            "prefix",
+	                                            "suffix",
+	                                            "compression_level",
+	                                            "field_ids",
+	                                            "row_group_size_bytes",
+	                                            "row_group_size",
+	                                            "row_groups_per_file"};
+
 	foreach_node(DefElem, defel, stmt->options) {
 		if (strcmp(defel->defname, "format") == 0) {
 			char *fmt = defGetString(defel);
-			if (strcmp(fmt, "parquet") == 0) {
-				return true;
-			} else if (strcmp(fmt, "json") == 0) {
+			if (StringOneOf(fmt, duckdb_only_formats)) {
 				return true;
 			}
-		} else if (strcmp(defel->defname, "partition_by") == 0 || strcmp(defel->defname, "use_tmp_file") == 0 ||
-		           strcmp(defel->defname, "overwrite_or_ignore") == 0 || strcmp(defel->defname, "overwrite") == 0 ||
-		           strcmp(defel->defname, "append") == 0 || strcmp(defel->defname, "filename_pattern") == 0 ||
-		           strcmp(defel->defname, "file_extension") == 0 || strcmp(defel->defname, "per_thread_output") == 0 ||
-		           strcmp(defel->defname, "file_size_bytes") == 0 ||
-		           strcmp(defel->defname, "write_partition_columns") == 0 || strcmp(defel->defname, "array") == 0 ||
-		           strcmp(defel->defname, "compression") == 0 || strcmp(defel->defname, "dateformat") == 0 ||
-		           strcmp(defel->defname, "timestampformat") == 0 || strcmp(defel->defname, "nullstr") == 0 ||
-		           strcmp(defel->defname, "prefix") == 0 || strcmp(defel->defname, "suffix") == 0 ||
-		           strcmp(defel->defname, "compression_level") == 0 || strcmp(defel->defname, "field_ids") == 0 ||
-		           strcmp(defel->defname, "row_group_size_bytes") == 0 ||
-		           strcmp(defel->defname, "row_group_size") == 0 ||
-		           strcmp(defel->defname, "row_groups_per_file") == 0) {
+		} else if (StringOneOf(defel->defname, duckdb_only_options)) {
 			return true;
 		}
 	}

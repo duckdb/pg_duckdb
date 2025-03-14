@@ -53,7 +53,7 @@ ContainsCatalogTable(List *rtes) {
 
 		if (rte->relid) {
 			Relation rel = RelationIdGetRelation(rte->relid);
-			auto is_catalog_table = pgduckdb::IsCatalogTable(rel);
+			bool is_catalog_table = pgduckdb::IsCatalogTable(rel);
 			RelationClose(rel);
 			if (is_catalog_table) {
 				return true;
@@ -156,6 +156,7 @@ IsCatalogTable(Relation rel) {
 	auto namespace_oid = RelationGetNamespace(rel);
 	return namespace_oid == PG_CATALOG_NAMESPACE || namespace_oid == PG_TOAST_NAMESPACE;
 }
+
 bool
 IsAllowedStatement(Query *query, bool throw_error) {
 	int elevel = throw_error ? ERROR : DEBUG4;
