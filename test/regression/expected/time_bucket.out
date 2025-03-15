@@ -1,0 +1,62 @@
+-- All functions should automatically use duckdb
+set duckdb.execution = false;
+SELECT time_bucket('1 day'::interval, '2023-01-15'::date);
+ time_bucket 
+-------------
+ 01-15-2023
+(1 row)
+
+SELECT time_bucket('1 month'::interval, '2023-01-15'::date, '2022-12-25'::date);
+ time_bucket 
+-------------
+ 01-01-2023
+(1 row)
+
+SELECT time_bucket('1 week'::interval, '2023-01-15'::date, '2 days'::interval);
+ time_bucket 
+-------------
+ 01-11-2023
+(1 row)
+
+SELECT time_bucket('1 hour'::interval, '2023-01-15 14:30:00'::timestamp);
+       time_bucket        
+--------------------------
+ Sun Jan 15 14:00:00 2023
+(1 row)
+
+SELECT time_bucket('4 hours'::interval, '2023-01-15 14:30:00'::timestamp, '1 hour'::interval);
+       time_bucket        
+--------------------------
+ Sun Jan 15 13:00:00 2023
+(1 row)
+
+SELECT time_bucket('1 day'::interval, '2023-01-15 14:30:00'::timestamp, '2022-12-25 06:00:00'::timestamp);
+       time_bucket        
+--------------------------
+ Sun Jan 15 06:00:00 2023
+(1 row)
+
+SELECT time_bucket('12 hours'::interval, '2023-01-15 14:30:00+00'::timestamp with time zone);
+         time_bucket          
+------------------------------
+ Sun Jan 15 04:00:00 2023 PST
+(1 row)
+
+SELECT time_bucket('1 day'::interval, '2023-01-15 14:30:00+00'::timestamp with time zone, '6 hours'::interval);
+         time_bucket          
+------------------------------
+ Sat Jan 14 22:00:00 2023 PST
+(1 row)
+
+SELECT time_bucket('1 week'::interval, '2023-01-15 14:30:00+00'::timestamp with time zone, '2022-12-25 12:00:00+00'::timestamp with time zone);
+         time_bucket          
+------------------------------
+ Sun Jan 15 04:00:00 2023 PST
+(1 row)
+
+SELECT time_bucket('1 day'::interval, '2023-01-15 14:30:00+00'::timestamp with time zone, 'America/New_York');
+         time_bucket          
+------------------------------
+ Sat Jan 14 21:00:00 2023 PST
+(1 row)
+

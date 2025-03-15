@@ -109,9 +109,11 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 		}
 	}
 
-	elog(DEBUG1, "(PGDuckDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
-	     !nreaders ? "IN PROCESS THREAD" : psprintf("ON %d PARALLEL WORKER(S)", nreaders),
-	     ExplainScanPlan(table_scan_query_desc));
+	if (duckdb_log_pg_explain) {
+		elog(NOTICE, "(PGDuckDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
+		     !nreaders ? "IN PROCESS THREAD" : psprintf("ON %d PARALLEL WORKER(S)", nreaders),
+		     ExplainScanPlan(table_scan_query_desc));
+	}
 
 	slot = PostgresFunctionGuard(ExecInitExtraTupleSlot, table_scan_query_desc->estate,
 	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
