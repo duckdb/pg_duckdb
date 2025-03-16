@@ -251,6 +251,12 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 }
 
 inline Datum
+ConvertDuckRowDatum(const duckdb::Value &value) {
+	auto val = value.GetValue<duckdb::StructValue>();
+	return pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
+}
+
+inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
 	// Extract raw int64_t value of timestamp
 	int64_t rawValue = value.GetValue<int64_t>();
@@ -875,6 +881,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = ConvertTimestampDatum(value);
 		break;
 	}
+	case 17496: {
+		elog(LOG, "ROW TYPEE!!!!!!!!");
+		slot->tts_values[col] = ConvertDuckRowDatum(value);
+		break;
+	}
 	case TIMESTAMPTZOID: {
 		duckdb::timestamp_tz_t timestamp = value.GetValue<duckdb::timestamp_tz_t>();
 		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
@@ -1220,6 +1231,10 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return UUIDOID;
 	case duckdb::LogicalTypeId::VARINT:
 		return NUMERICOID;
+	case duckdb::LogicalTypeId::STRUCT:
+		elog(LOG, "hi returning the appropriate type");
+		return 17496;
+		/* return pgduckdb::DuckdbRowOid(); */
 	case duckdb::LogicalTypeId::LIST: {
 		const duckdb::LogicalType *duck_type = &type;
 		while (duck_type->id() == duckdb::LogicalTypeId::LIST) {
@@ -1517,6 +1532,11 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		const duckdb::string_t s(bytea_data, bytea_length);
 		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
 		data[offset] = duckdb::StringVector::AddStringOrBlob(result, s);
+		break;
+	}
+	case duckdb::LogicalTypeId::STRUCT: {
+		elog(LOG, "Hi in Struct type");
+
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
