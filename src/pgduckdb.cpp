@@ -10,6 +10,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 
 static void DuckdbInitGUC(void);
