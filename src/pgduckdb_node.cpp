@@ -5,6 +5,7 @@
 
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/vendor/pg_explain.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -20,6 +21,9 @@ extern "C" {
 
 bool duckdb_explain_analyze = false;
 bool duckdb_explain_ctas = false;
+duckdb::ExplainFormat duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
+
+#define NEED_JSON_PLAN(explain_format) (explain_format == duckdb::ExplainFormat::JSON)
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
@@ -62,6 +66,7 @@ static TupleTableSlot *Duckdb_ExecCustomScan(CustomScanState *node);
 static void Duckdb_EndCustomScan(CustomScanState *node);
 static void Duckdb_ReScanCustomScan(CustomScanState *node);
 static void Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es);
+static inline void formatDuckDbPlanForPG(const char *duckdb_plan, ExplainState *es);
 
 static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
@@ -77,23 +82,32 @@ void
 Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*eflags*/) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
 
-	const char *explain_prefix = NULL;
+	StringInfo explain_prefix = makeStringInfo();
 
 	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+		appendStringInfoString(explain_prefix, "EXPLAIN ");
+
+		if (NEED_JSON_PLAN(duckdb_explain_format))
+			appendStringInfoChar(explain_prefix, '(');
+
 		if (duckdb_explain_analyze) {
 			if (duckdb_explain_ctas) {
 				throw duckdb::NotImplementedException(
 				    "Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution");
 			}
+			if (NEED_JSON_PLAN(duckdb_explain_format))
+				appendStringInfoString(explain_prefix, "ANALYZE, ");
+			else
+				appendStringInfoString(explain_prefix, "ANALYZE ");
+		}
 
-			explain_prefix = "EXPLAIN ANALYZE";
-		} else {
-			explain_prefix = "EXPLAIN";
+		if (NEED_JSON_PLAN(duckdb_explain_format)) {
+			appendStringInfoString(explain_prefix, "FORMAT JSON )");
 		}
 	}
 
 	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query =
-	    DuckdbPrepare(duckdb_scan_state->query, explain_prefix);
+	    DuckdbPrepare(duckdb_scan_state->query, explain_prefix->data);
 
 	if (prepared_query->HasError()) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
@@ -314,7 +328,33 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 
 	std::ostringstream explain_output;
 	explain_output << "\n\n" << value << "\n";
-	ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
+	if (NEED_JSON_PLAN(duckdb_explain_format)) {
+
+		// Formatting, copied formatting in JSON mode
+		if (linitial_int(es->grouping_stack) != 0)
+			appendStringInfoChar(es->str, ',');
+		else
+			linitial_int(es->grouping_stack) = 1;
+		appendStringInfoChar(es->str, '\n');
+		appendStringInfoSpaces(es->str, es->indent * 2);
+		appendStringInfoString(es->str, "\"DuckDB Execution Plan\": ");
+		formatDuckDbPlanForPG(value.c_str(), es);
+	} else
+		ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
+}
+
+static inline void
+formatDuckDbPlanForPG(const char *duckdb_plan, ExplainState *es) {
+	const char *ptr = duckdb_plan;
+	while (*ptr != '\0') {
+		appendStringInfoChar(es->str, *ptr);
+		if (*ptr == '\n') {
+			// Add indentation after each newline
+			appendStringInfoSpaces(es->str, es->indent * 2);
+		}
+
+		ptr++;
+	}
 }
 
 void
