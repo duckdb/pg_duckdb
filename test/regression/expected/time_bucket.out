@@ -61,70 +61,70 @@ SELECT time_bucket('1 day'::interval, '2023-01-15 14:30:00+00'::timestamp with t
 (1 row)
 
 SELECT time_bucket('1 day'::interval, r['date_col'])
-FROM duckdb.query('SELECT DATE ''2023-01-15'' AS date_col') r;
+FROM duckdb.query($$ SELECT DATE '2023-01-15' AS date_col $$) r;
  time_bucket 
 -------------
  01-15-2023
 (1 row)
 
 SELECT time_bucket('1 week'::interval, r['date_col'], '2 days'::interval)
-FROM duckdb.query('SELECT DATE ''2023-01-15'' AS date_col') r;
+FROM duckdb.query($$ SELECT DATE '2023-01-15' AS date_col $$) r;
  time_bucket 
 -------------
  01-11-2023
 (1 row)
 
 SELECT time_bucket('1 month'::interval, r['date_col'], '2022-12-25'::date)
-FROM duckdb.query('SELECT DATE ''2023-01-15'' AS date_col') r;
+FROM duckdb.query($$ SELECT DATE '2023-01-15' AS date_col $$) r;
  time_bucket 
 -------------
  01-01-2023
 (1 row)
 
 SELECT time_bucket('1 hour'::interval, r['ts_col'])
-FROM duckdb.query('SELECT TIMESTAMP ''2023-01-15 14:30:00'' AS ts_col') r;
+FROM duckdb.query($$ SELECT TIMESTAMP '2023-01-15 14:30:00' AS ts_col $$) r;
        time_bucket        
 --------------------------
  Sun Jan 15 14:00:00 2023
 (1 row)
 
 SELECT time_bucket('4 hours'::interval, r['ts_col'], '1 hour'::interval)
-FROM duckdb.query('SELECT TIMESTAMP ''2023-01-15 14:30:00'' AS ts_col') r;
+FROM duckdb.query($$ SELECT TIMESTAMP '2023-01-15 14:30:00' AS ts_col $$) r;
        time_bucket        
 --------------------------
  Sun Jan 15 13:00:00 2023
 (1 row)
 
 SELECT time_bucket('1 day'::interval, r['ts_col'], '2022-12-25 06:00:00'::timestamp)
-FROM duckdb.query('SELECT TIMESTAMP ''2023-01-15 14:30:00'' AS ts_col') r;
+FROM duckdb.query($$ SELECT TIMESTAMP '2023-01-15 14:30:00' AS ts_col $$) r;
        time_bucket        
 --------------------------
  Sun Jan 15 06:00:00 2023
 (1 row)
 
 SELECT time_bucket('12 hours'::interval, r['tstz_col'])
-FROM duckdb.query('SELECT TIMESTAMP WITH TIME ZONE ''2023-01-15 14:30:00+00'' AS tstz_col') r;
+FROM duckdb.query($$ SELECT TIMESTAMP WITH TIME ZONE '2023-01-15 14:30:00+00' AS tstz_col $$) r;
          time_bucket          
 ------------------------------
  Sun Jan 15 04:00:00 2023 PST
 (1 row)
 
 SELECT time_bucket('1 day'::interval, r['tstz_col'], '6 hours'::interval)
-FROM duckdb.query('SELECT TIMESTAMP WITH TIME ZONE ''2023-01-15 14:30:00+00'' AS tstz_col') r;
+FROM duckdb.query($$ SELECT TIMESTAMP WITH TIME ZONE '2023-01-15 14:30:00+00' AS tstz_col $$) r;
          time_bucket          
 ------------------------------
  Sat Jan 14 22:00:00 2023 PST
 (1 row)
 
 SELECT time_bucket('1 week'::interval, r['tstz_col'], '2022-12-25 12:00:00+00'::timestamp with time zone)
-FROM duckdb.query('SELECT TIMESTAMP WITH TIME ZONE ''2023-01-15 14:30:00+00'' AS tstz_col') r;
+FROM duckdb.query($$ SELECT TIMESTAMP WITH TIME ZONE '2023-01-15 14:30:00+00' AS tstz_col $$) r;
          time_bucket          
 ------------------------------
  Sun Jan 15 04:00:00 2023 PST
 (1 row)
 
 SELECT time_bucket('1 day'::interval, r['tstz_col'], 'America/New_York')
-FROM duckdb.query('SELECT TIMESTAMP WITH TIME ZONE ''2023-01-15 14:30:00+00'' AS tstz_col') r;
+FROM duckdb.query($$ SELECT TIMESTAMP WITH TIME ZONE '2023-01-15 14:30:00+00' AS tstz_col $$) r;
          time_bucket          
 ------------------------------
  Sat Jan 14 21:00:00 2023 PST
