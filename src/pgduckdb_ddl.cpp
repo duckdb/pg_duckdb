@@ -571,6 +571,10 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (is_temporary) {
 		pgduckdb::RegisterDuckdbTempTable(relid);
 	} else {
+		if (!pgduckdb::IsMotherDuckEnabled()) {
+			elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
+		}
+
 		Oid saved_userid;
 		int sec_context;
 		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
@@ -599,8 +603,9 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		/* Revert back to original privileges */
 		SetUserIdAndSecContext(saved_userid, sec_context);
 
-		if (ret != SPI_OK_INSERT)
+		if (ret != SPI_OK_INSERT) {
 			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+		}
 
 		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
 	}
