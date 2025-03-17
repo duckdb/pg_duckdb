@@ -13,6 +13,7 @@ extern "C" {
 #include "fmgr.h"
 #include "catalog/pg_authid_d.h"
 #include "catalog/namespace.h"
+#include "foreign/foreign.h"
 #include "funcapi.h"
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
@@ -370,6 +371,10 @@ static void
 DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
 	// Propagate the "TYPE" to the server options, don't validate it here though
 	auto stmt = castNode(CreateForeignServerStmt, parsetree);
+	if (strcmp(stmt->fdwname, "pg_duckdb") != 0) {
+		return; // Not our FDW, don't do anything
+	}
+
 	AssertOptionNotSet(stmt->options, "type");
 
 	if (stmt->servertype == NULL) {
@@ -384,6 +389,12 @@ static void
 DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 	// Propagate the "servername" to the user mapping options
 	auto stmt = castNode(CreateUserMappingStmt, parsetree);
+
+	auto server = GetForeignServerByName(stmt->servername, false);
+	auto fdw = GetForeignDataWrapper(server->fdwid);
+	if (strcmp(fdw->fdwname, "pg_duckdb") != 0) {
+		return; // Not our FDW, don't do anything
+	}
 
 	Assert(stmt->servername);
 	AssertOptionNotSet(stmt->options, "servername");
