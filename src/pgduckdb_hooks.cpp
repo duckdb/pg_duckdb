@@ -225,11 +225,7 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 
 	pgduckdb::MarkStatementNotTopLevel();
 
-	if (prev_planner_hook) {
-		return prev_planner_hook(parse, query_string, cursor_options, bound_params);
-	} else {
-		return standard_planner(parse, query_string, cursor_options, bound_params);
-	}
+	return prev_planner_hook(parse, query_string, cursor_options, bound_params);
 }
 
 static PlannedStmt *
@@ -428,7 +424,7 @@ DuckdbEmitLogHook(ErrorData *edata) {
 
 void
 DuckdbInitHooks(void) {
-	prev_planner_hook = planner_hook;
+	prev_planner_hook = planner_hook ? planner_hook : standard_planner;
 	planner_hook = DuckdbPlannerHook;
 
 	prev_executor_start_hook = ExecutorStart_hook ? ExecutorStart_hook : standard_ExecutorStart;
