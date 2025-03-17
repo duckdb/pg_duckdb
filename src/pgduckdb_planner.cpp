@@ -42,19 +42,19 @@ DuckdbPrepare(const Query *query) {
 		appendStringInfoString(explain_options, "EXPLAIN ");
 
 		if (duckdb_explain_analyze || duckdb_explain_format == duckdb::ExplainFormat::JSON) {
-			appendStringInfoChar(explain_options,'(');
+			appendStringInfoChar(explain_options, '(');
 		}
 		if (duckdb_explain_analyze)
 			appendStringInfoString(explain_options, "ANALYZE ");
 
 		if (duckdb_explain_format == duckdb::ExplainFormat::JSON) {
-			if(duckdb_explain_analyze)
+			if (duckdb_explain_analyze)
 				appendStringInfoChar(explain_options, ',');
 			appendStringInfoString(explain_options, "FORMAT JSON");
 		}
 
 		if (duckdb_explain_analyze || duckdb_explain_format == duckdb::ExplainFormat::JSON) {
-			appendStringInfoChar(explain_options,')');
+			appendStringInfoChar(explain_options, ')');
 		}
 
 		query_string = psprintf("%s %s", explain_options->data, query_string);

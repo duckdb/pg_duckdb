@@ -60,7 +60,7 @@ static TupleTableSlot *Duckdb_ExecCustomScan(CustomScanState *node);
 static void Duckdb_EndCustomScan(CustomScanState *node);
 static void Duckdb_ReScanCustomScan(CustomScanState *node);
 static void Duckdb_ExplainCustomScan(CustomScanState *node, List *ancestors, ExplainState *es);
-static inline void formatDuckDbPlanForPG(const char *duckdb_plan,ExplainState *es);
+static inline void formatDuckDbPlanForPG(const char *duckdb_plan, ExplainState *es);
 
 static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
@@ -288,7 +288,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 		appendStringInfoSpaces(es->str, es->indent * 2);
 		appendStringInfoString(es->str, "\"DuckDB Execution Plan\": ");
 		es->indent++;
-		formatDuckDbPlanForPG(value.c_str(),es);
+		formatDuckDbPlanForPG(value.c_str(), es);
 		es->indent--;
 
 	} else
@@ -296,8 +296,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 }
 
 static inline void
-formatDuckDbPlanForPG(const char *duckdb_plan,ExplainState *es)
-{
+formatDuckDbPlanForPG(const char *duckdb_plan, ExplainState *es) {
 	const char *ptr = duckdb_plan;
 	while (*ptr != '\0') {
 		appendStringInfoChar(es->str, *ptr);

@@ -58,28 +58,31 @@ def test_explain(cur: Cursor):
     # Test for Json Output Format , psycopg internal convert json to dict
     result = cur.sql("EXPLAIN (FORMAT JSON) SELECT count(*) FROM test_table")
     assert len(result) == 1
-    assert type(result[0]) == dict
-    plan=json.dumps(result[0])
-    assert "UNGROUPED_AGGREGATE" in plan
-    assert "Total Time" not in plan
-    assert "Output" not in plan
+    assert type(result[0]) is dict
+    assert type(result[0]["Plan"]["DuckDB Execution Plan"]) is list
+    assert result[0]["Plan"]["Custom Plan Provider"] == "DuckDBScan"
+    assert type(result[0]["Plan"]["DuckDB Execution Plan"][0]["extra_info"]) is dict
 
     result = cur.sql("EXPLAIN (VERBOSE, FORMAT JSON) SELECT count(*) FROM test_table")
     assert len(result) == 1
     assert type(result[0]) == dict
-    plan=json.dumps(result[0])
-    assert "UNGROUPED_AGGREGATE" in plan
-    assert "Total Time" not in plan
-    assert "Output" in plan
+    assert type(result[0]["Plan"]["DuckDB Execution Plan"]) is list
+    assert result[0]["Plan"]["Custom Plan Provider"] == "DuckDBScan"
+    assert type(result[0]["Plan"]["DuckDB Execution Plan"][0]["extra_info"]) is dict
+    assert type(result[0]["Plan"]["Output"]) is list
 
-    result = cur.sql("EXPLAIN (VERBOSE, ANALYZE, FORMAT JSON) SELECT count(*) FROM test_table")
+    result = cur.sql(
+        "EXPLAIN (VERBOSE, ANALYZE, FORMAT JSON) SELECT count(*) FROM test_table"
+    )
     assert len(result) == 1
     assert type(result[0]) == dict
-    plan=json.dumps(result[0])
-    assert "EXPLAIN_ANALYZE" in plan
-    assert "UNGROUPED_AGGREGATE" in plan
-    assert "Total Time" in plan
-    assert "Output" in plan
+    assert (
+        result[0]["Plan"]["DuckDB Execution Plan"]["children"][0]["operator_name"]
+        == "EXPLAIN_ANALYZE"
+    )
+    assert type(result[0]["Plan"]["Output"]) is list
+    assert "Planning Time" in (result[0]).keys()
+    assert "Execution Time" in (result[0]).keys()
 
 
 def test_explain_ctas(cur: Cursor):
