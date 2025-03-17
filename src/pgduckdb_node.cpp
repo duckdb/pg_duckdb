@@ -19,6 +19,12 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
+bool duckdb_explain_analyze = false;
+bool duckdb_explain_ctas = false;
+duckdb::ExplainFormat duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
+
+#define NEED_JSON_PLAN(explain_format) (explain_format == duckdb::ExplainFormat::JSON)
+
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
 
@@ -75,7 +81,33 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 void
 Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*eflags*/) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
-	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(duckdb_scan_state->query);
+
+	StringInfo explain_prefix = makeStringInfo();
+
+	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+		appendStringInfoString(explain_prefix, "EXPLAIN ");
+
+		if (NEED_JSON_PLAN(duckdb_explain_format))
+			appendStringInfoChar(explain_prefix, '(');
+
+		if (duckdb_explain_analyze) {
+			if (duckdb_explain_ctas) {
+				throw duckdb::NotImplementedException(
+				    "Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution");
+			}
+			if (NEED_JSON_PLAN(duckdb_explain_format))
+				appendStringInfoString(explain_prefix, "ANALYZE, ");
+			else
+				appendStringInfoString(explain_prefix, "ANALYZE ");
+		}
+
+		if (NEED_JSON_PLAN(duckdb_explain_format)) {
+			appendStringInfoString(explain_prefix, "FORMAT JSON )");
+		}
+	}
+
+	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query =
+	    DuckdbPrepare(duckdb_scan_state->query, explain_prefix->data);
 
 	if (prepared_query->HasError()) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
@@ -185,55 +217,74 @@ ExecuteQuery(DuckdbScanState *state) {
 static TupleTableSlot *
 Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
-	TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
-	MemoryContext old_context;
+	try {
+		TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
+		MemoryContext old_context;
 
-	bool already_executed = duckdb_scan_state->is_executed;
-	if (!already_executed) {
-		ExecuteQuery(duckdb_scan_state);
-	}
-
-	if (duckdb_scan_state->fetch_next) {
-		duckdb_scan_state->current_data_chunk = duckdb_scan_state->query_results->Fetch();
-		duckdb_scan_state->current_row = 0;
-		duckdb_scan_state->fetch_next = false;
-		if (!duckdb_scan_state->current_data_chunk || duckdb_scan_state->current_data_chunk->size() == 0) {
-			MemoryContextReset(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
+		if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
 			ExecClearTuple(slot);
 			return slot;
 		}
-	}
 
-	MemoryContextReset(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
-	ExecClearTuple(slot);
+		bool already_executed = duckdb_scan_state->is_executed;
+		if (!already_executed) {
+			ExecuteQuery(duckdb_scan_state);
+		}
 
-	/* MemoryContext used for allocation */
-	old_context = MemoryContextSwitchTo(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
-
-	for (idx_t col = 0; col < duckdb_scan_state->column_count; col++) {
-		// FIXME: we should not use the Value API here, it's complicating the LIST conversion logic
-		auto value = duckdb_scan_state->current_data_chunk->GetValue(col, duckdb_scan_state->current_row);
-		if (value.IsNull()) {
-			slot->tts_isnull[col] = true;
-		} else {
-			slot->tts_isnull[col] = false;
-			if (!pgduckdb::ConvertDuckToPostgresValue(slot, value, col)) {
-				CleanupDuckdbScanState(duckdb_scan_state);
-				throw duckdb::ConversionException("Value conversion failed");
+		if (duckdb_scan_state->fetch_next) {
+			duckdb_scan_state->current_data_chunk = duckdb_scan_state->query_results->Fetch();
+			duckdb_scan_state->current_row = 0;
+			duckdb_scan_state->fetch_next = false;
+			if (!duckdb_scan_state->current_data_chunk || duckdb_scan_state->current_data_chunk->size() == 0) {
+				MemoryContextReset(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
+				ExecClearTuple(slot);
+				return slot;
 			}
 		}
+
+		MemoryContextReset(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
+		ExecClearTuple(slot);
+
+		/* MemoryContext used for allocation */
+		old_context = MemoryContextSwitchTo(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
+
+		for (idx_t col = 0; col < duckdb_scan_state->column_count; col++) {
+			// FIXME: we should not use the Value API here, it's complicating the LIST conversion logic
+			auto value = duckdb_scan_state->current_data_chunk->GetValue(col, duckdb_scan_state->current_row);
+			if (value.IsNull()) {
+				slot->tts_isnull[col] = true;
+			} else {
+				slot->tts_isnull[col] = false;
+				if (!pgduckdb::ConvertDuckToPostgresValue(slot, value, col)) {
+					throw duckdb::ConversionException("Value conversion failed");
+				}
+			}
+		}
+
+		MemoryContextSwitchTo(old_context);
+
+		duckdb_scan_state->current_row++;
+		if (duckdb_scan_state->current_row >= duckdb_scan_state->current_data_chunk->size()) {
+			duckdb_scan_state->current_data_chunk.reset();
+			duckdb_scan_state->fetch_next = true;
+		}
+
+		ExecStoreVirtualTuple(slot);
+		return slot;
+	} catch (std::exception &ex) {
+		/*
+		 * In case any error happens we need to still cleanup the scan state,
+		 * otherwise we do not clean up the prepared statement and various
+		 * other DuckDB objects.
+		 *
+		 * NOTE: We only clean this up on error, not on success. On success we
+		 * still need these objects to be around for the next call to
+		 * ExecCustomScan. If the full scan completes successfully, the cleanup
+		 * will be done in EndCustomScan.
+		 */
+		CleanupDuckdbScanState(duckdb_scan_state);
+		throw;
 	}
-
-	MemoryContextSwitchTo(old_context);
-
-	duckdb_scan_state->current_row++;
-	if (duckdb_scan_state->current_row >= duckdb_scan_state->current_data_chunk->size()) {
-		duckdb_scan_state->current_data_chunk.reset();
-		duckdb_scan_state->fetch_next = true;
-	}
-
-	ExecStoreVirtualTuple(slot);
-	return slot;
 }
 
 static TupleTableSlot *
@@ -277,7 +328,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 
 	std::ostringstream explain_output;
 	explain_output << "\n\n" << value << "\n";
-	if (duckdb_explain_format == duckdb::ExplainFormat::JSON) {
+	if (NEED_JSON_PLAN(duckdb_explain_format)) {
 
 		// Formatting, copied formatting in JSON mode
 		if (linitial_int(es->grouping_stack) != 0)
