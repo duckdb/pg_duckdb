@@ -41,6 +41,14 @@ CREATE USER MAPPING FOR user1
 SERVER valid_md_server1
 OPTIONS (token 'foo');
 
+-- MD is still not enabled (no mapping for current user)
+SELECT * FROM duckdb.is_motherduck_enabled();
+
+-- Mapping for current user
+CREATE USER MAPPING FOR CURRENT_USER
+SERVER valid_md_server1
+OPTIONS (token 'foo');
+
 -- Now MD is enabled
 SELECT * FROM duckdb.is_motherduck_enabled();
 

@@ -149,30 +149,35 @@ namespace pgduckdb {
 
 namespace {
 Oid
-FindOid(const char *query) {
-	SPI_connect();
-	int ret = SPI_exec(query, 0);
-
+ExtractOidFromSPIQuery(int ret) {
 	if (ret != SPI_OK_SELECT) {
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 	}
 
-	Oid oid = InvalidOid;
-	if (SPI_processed > 0) {
-		HeapTuple tuple = SPI_tuptable->vals[0];
-		bool isnull = false;
-		Datum oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
-
-		if (isnull) {
-			elog(ERROR, "FATAL: Expected oid to be returned, but found NULL");
-		}
-
-		oid = DatumGetObjectId(oid_datum);
+	if (SPI_processed == 0) {
+		return InvalidOid;
 	}
 
+	HeapTuple tuple = SPI_tuptable->vals[0];
+	bool isnull = false;
+	Datum oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
+
+	if (isnull) {
+		elog(ERROR, "FATAL: Expected oid to be returned, but found NULL");
+	}
+
+	return DatumGetObjectId(oid_datum);
+}
+
+Oid
+FindOid(const char *query) {
+	SPI_connect();
+	int ret = SPI_exec(query, 0);
+	auto oid = ExtractOidFromSPIQuery(ret);
 	SPI_finish();
 	return oid;
 }
+
 } // namespace
 
 Oid
@@ -187,15 +192,25 @@ FindMotherDuckForeignServerOid() {
 
 Oid
 FindMotherDuckUserMappingOid() {
-	return FindOid(R"(
+	SPI_connect();
+	auto query = R"(
 		SELECT um.oid
 		FROM pg_foreign_server fs
 		INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
 		INNER JOIN pg_user_mapping um ON um.umserver = fs.oid
 		WHERE
 			fdw.fdwname = 'pg_duckdb'
-		AND fs.srvtype = 'motherduck';
-	)");
+		AND fs.srvtype = 'motherduck'
+		AND um.umuser = $1;
+	)";
+
+	Oid types[] = {OIDOID};
+	Datum values[] = {GetUserId()};
+	int ret = SPI_execute_with_args(query, 1, types, values, NULL, false, 0);
+	Oid oid = ExtractOidFromSPIQuery(ret);
+
+	SPI_finish();
+	return oid;
 }
 
 // Return the `default_database` setting defined in the `motherduck` SERVER
