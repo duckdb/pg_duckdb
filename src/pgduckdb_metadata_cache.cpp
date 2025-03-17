@@ -261,7 +261,7 @@ IsDuckdbOnlyFunction(Oid function_oid) {
 	return false;
 }
 
-uint64
+uint64_t
 CacheVersion() {
 	Assert(cache.valid);
 	return cache.version;
