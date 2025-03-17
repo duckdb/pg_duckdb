@@ -8,7 +8,6 @@ from .utils import Cursor
 
 import pytest
 import psycopg.errors
-import json
 
 
 def test_explain(cur: Cursor):
@@ -65,7 +64,7 @@ def test_explain(cur: Cursor):
 
     result = cur.sql("EXPLAIN (VERBOSE, FORMAT JSON) SELECT count(*) FROM test_table")
     assert len(result) == 1
-    assert type(result[0]) == dict
+    assert type(result[0]) is dict
     assert type(result[0]["Plan"]["DuckDB Execution Plan"]) is list
     assert result[0]["Plan"]["Custom Plan Provider"] == "DuckDBScan"
     assert type(result[0]["Plan"]["DuckDB Execution Plan"][0]["extra_info"]) is dict
@@ -75,7 +74,7 @@ def test_explain(cur: Cursor):
         "EXPLAIN (VERBOSE, ANALYZE, FORMAT JSON) SELECT count(*) FROM test_table"
     )
     assert len(result) == 1
-    assert type(result[0]) == dict
+    assert type(result[0]) is dict
     assert (
         result[0]["Plan"]["DuckDB Execution Plan"]["children"][0]["operator_name"]
         == "EXPLAIN_ANALYZE"
