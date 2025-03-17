@@ -338,10 +338,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 		appendStringInfoChar(es->str, '\n');
 		appendStringInfoSpaces(es->str, es->indent * 2);
 		appendStringInfoString(es->str, "\"DuckDB Execution Plan\": ");
-		es->indent++;
 		formatDuckDbPlanForPG(value.c_str(), es);
-		es->indent--;
-
 	} else
 		ExplainPropertyText("DuckDB Execution Plan", explain_output.str().c_str(), es);
 }
