@@ -152,7 +152,8 @@ BuildDuckdbOnlyFunctions() {
 	                                "epoch",
 	                                "epoch_ms",
 	                                "epoch_us",
-	                                "epoch_ns"};
+	                                "epoch_ns",
+	                                "time_bucket"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
@@ -260,7 +261,7 @@ IsDuckdbOnlyFunction(Oid function_oid) {
 	return false;
 }
 
-uint64
+uint64_t
 CacheVersion() {
 	Assert(cache.valid);
 	return cache.version;
