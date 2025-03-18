@@ -326,9 +326,9 @@ ConvertTimestampTzDatum(const duckdb::Value &value) {
 
 	// Early Return for +/-Inf
 	if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::ninfinity()))
-		return Int64GetDatum(DT_NOBEGIN);
+		return TimestampTzGetDatum(DT_NOBEGIN);
 	else if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::infinity()))
-		return Int64GetDatum(DT_NOEND);
+		return TimestampTzGetDatum(DT_NOEND);
 
 	if (!ValidTimestampOrTimestampTz(rawValue))
 		throw duckdb::OutOfRangeException(
