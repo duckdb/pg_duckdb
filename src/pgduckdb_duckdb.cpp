@@ -194,7 +194,7 @@ DuckDBManager::Initialize() {
 
 		// Token
 		auto token = FindMotherDuckToken();
-		if (token != nullptr) {
+		if (token != nullptr && strcmp(token, "::FROM_ENV::") != 0) {
 			appendStringInfo(&buf, "motherduck_token=%s&", token);
 		}
 
