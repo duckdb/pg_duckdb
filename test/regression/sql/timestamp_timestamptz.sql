@@ -2,17 +2,17 @@
 -- Timestamp tests
 ----------------------------------------
 -- Test +/- inf values
-CREATE TABLE t(a TIMESTAMP);
-INSERT INTO t VALUES('Infinity'), ('-Infinity');
+CREATE TABLE t(a TIMESTAMP, b TEXT);
+INSERT INTO t VALUES('Infinity','Positive INF'), ('-Infinity','Negative INF');
 
 -- PG Execution
-SELECT * from t ORDER BY a;
-SELECT isfinite(a) FROM t;
+SELECT * from t;
+SELECT isfinite(a),b FROM t;
 
 set duckdb.force_execution = true;
 -- DuckDB execution
-SELECT * from t ORDER BY a;
-SELECT isfinite(a) FROM t;
+SELECT * from t;
+SELECT isfinite(a),b FROM t;
 
 -- Cleanup
 set duckdb.force_execution = false;
@@ -36,23 +36,23 @@ SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00.000'::timestamp_ms a
 -- TimestampTz tests
 ----------------------------------------
 -- Test +/- inf valuestz
-CREATE TABLE t(a TIMESTAMPTZ);
-INSERT INTO t VALUES('Infinity'), ('-Infinity');
+CREATE TABLE t(a TIMESTAMPTZ, b TEXT);
+INSERT INTO t VALUES('Infinity','Positive INF'), ('-Infinity','Negative INF');
 
 -- PG Execution
-SELECT * from t ORDER BY a;
-SELECT isfinite(a) FROM t;
+SELECT * from t;
+SELECT isfinite(a), b FROM t;
 
 set duckdb.force_execution = true;
 -- DuckDB execution
-SELECT * from t ORDER BY a;
-SELECT isfinite(a) FROM t;
+SELECT * from t;
+SELECT isfinite(a), b FROM t;
 
 -- Cleanup
 set duckdb.force_execution = false;
 DROP TABLE t;
 
-SELECT * FROM duckdb.query($$ SELECT '4714-11-24 (BC) 00:00:00'::timestamptz as timestamptz $$);
-SELECT * FROM duckdb.query($$ SELECT '4714-11-23 (BC) 23:59:59'::timestamptz as timestamptz $$);  -- out of range
-SELECT * FROM duckdb.query($$ SELECT '294246-12-31 23:59:59'::timestamptz as timestamptz $$);
-SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00'::timestamptz as timestamptz $$);  -- out of range
+SELECT * FROM duckdb.query($$ SELECT '4714-11-24 (BC) 00:00:00+00'::timestamptz as timestamptz $$);
+SELECT * FROM duckdb.query($$ SELECT '4714-11-23 (BC) 23:59:59+00'::timestamptz as timestamptz $$);  -- out of range
+SELECT * FROM duckdb.query($$ SELECT '294246-12-31 23:59:59+00'::timestamptz as timestamptz $$);
+SELECT * FROM duckdb.query($$ SELECT '294247-01-01 00:00:00+00'::timestamptz as timestamptz $$);  -- out of range

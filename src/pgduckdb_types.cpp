@@ -240,13 +240,11 @@ ConvertDateDatum(const duckdb::Value &value) {
 		                                  duckdb::Date::ToString(pgduckdb::PGDUCKDB_PG_MAX_DATE_VALUE));
 
 	// Special Handling for +/-infinity date values
-	if (!duckdb::Date::IsFinite(date)) {
-		// -infinity value is different for PG date
-		if (date == duckdb::date_t::ninfinity())
-			return DATEVAL_NOEND;
-		else if (date == duckdb::date_t::infinity())
-			return DATEVAL_NOBEGIN;
-	}
+	// -infinity value is different for PG date
+	if (date == duckdb::date_t::ninfinity())
+		return DATEVAL_NOBEGIN;
+	else if (date == duckdb::date_t::infinity())
+		return DATEVAL_NOEND;
 
 	return date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
 }
@@ -288,12 +286,10 @@ ConvertTimestampDatum(const duckdb::Value &value) {
 	int64_t rawValue = value.GetValue<int64_t>();
 
 	// Early Return for +/-Inf
-	if (!duckdb::Timestamp::IsFinite(static_cast<duckdb::timestamp_t>(rawValue))) {
-		if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::ninfinity()))
-			return Int64GetDatum(PG_INT64_MIN);
-		else
-			return Int64GetDatum(PG_INT64_MAX);
-	}
+	if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::ninfinity()))
+		return Int64GetDatum(DT_NOBEGIN);
+	else if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::infinity()))
+		return Int64GetDatum(DT_NOEND);
 
 	// Handle specific Timestamp unit(sec, ms, ns) types
 	switch (value.type().id()) {
@@ -329,12 +325,10 @@ ConvertTimestampTzDatum(const duckdb::Value &value) {
 	int64_t rawValue = timestamp.value;
 
 	// Early Return for +/-Inf
-	if (!duckdb::Timestamp::IsFinite(static_cast<duckdb::timestamp_t>(rawValue))) {
-		if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::ninfinity()))
-			return Int64GetDatum(PG_INT64_MIN);
-		else
-			return Int64GetDatum(PG_INT64_MAX);
-	}
+	if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::ninfinity()))
+		return Int64GetDatum(DT_NOBEGIN);
+	else if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::infinity()))
+		return Int64GetDatum(DT_NOEND);
 
 	if (!ValidTimestampOrTimestampTz(rawValue))
 		throw duckdb::OutOfRangeException(
@@ -1365,12 +1359,12 @@ AppendDate(duckdb::Vector &result, Datum value, idx_t offset) {
 static void
 AppendTimestamp(duckdb::Vector &result, Datum value, idx_t offset) {
 	int64_t timestamp = static_cast<int64_t>(DatumGetTimestamp(value));
-	if (timestamp == PG_INT64_MIN) {
+	if (timestamp == DT_NOBEGIN) {
 		// -infinity value is different between PG and duck
 		Append<duckdb::timestamp_t>(result, duckdb::timestamp_t::ninfinity(), offset);
 		return;
 	}
-	if (timestamp == PG_INT64_MAX) {
+	if (timestamp == DT_NOEND) {
 		Append<duckdb::timestamp_t>(result, duckdb::timestamp_t::infinity(), offset);
 		return;
 	}
@@ -1388,13 +1382,13 @@ AppendTimestamp(duckdb::Vector &result, Datum value, idx_t offset) {
 static void
 AppendTimestampTz(duckdb::Vector &result, Datum value, idx_t offset) {
 	int64_t timestamp = static_cast<int64_t>(DatumGetTimestamp(value));
-	if (timestamp == PG_INT64_MIN) {
+	if (timestamp == DT_NOBEGIN) {
 		// -infinity value is different between PG and duck
 		Append<duckdb::timestamp_tz_t>(result, static_cast<duckdb::timestamp_tz_t>(duckdb::timestamp_t::ninfinity()),
 		                               offset);
 		return;
 	}
-	if (timestamp == PG_INT64_MAX) {
+	if (timestamp == DT_NOEND) {
 		Append<duckdb::timestamp_tz_t>(result, static_cast<duckdb::timestamp_tz_t>(duckdb::timestamp_t::infinity()),
 		                               offset);
 		return;

@@ -1,15 +1,15 @@
 -- Test +/- inf values
-CREATE TABLE t(a DATE);
-INSERT INTO t VALUES('Infinity'), ('-Infinity');
+CREATE TABLE t(a DATE, b TEXT);
+INSERT INTO t VALUES('Infinity','Positive INF'), ('-Infinity','Negative INF');
 
 -- PG Execution
-SELECT * from t ORDER by a;
-SELECT isfinite(a) FROM t;
+SELECT * from t;
+SELECT isfinite(a),b FROM t;
 
 set duckdb.force_execution = true;
 -- DuckDB execution
-SELECT * from t ORDER BY a;
-SELECT isfinite(a) FROM t;
+SELECT * from t;
+SELECT isfinite(a),b FROM t;
 
 -- Cleanup
 set duckdb.force_execution = false;
