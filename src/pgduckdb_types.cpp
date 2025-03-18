@@ -6,6 +6,7 @@
 
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/types.hpp"
 
@@ -881,11 +882,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = ConvertTimestampDatum(value);
 		break;
 	}
-	case 17496: {
-		elog(LOG, "ROW TYPEE!!!!!!!!");
-		slot->tts_values[col] = ConvertDuckRowDatum(value);
-		break;
-	}
+	/* case pgduckdb::DuckdbRowOid(): { */
+	/* 	elog(LOG, "ROW TYPEE!!!!!!!!"); */
+	/* 	slot->tts_values[col] = ConvertDuckRowDatum(value); */
+	/* 	break; */
+	/* } */
 	case TIMESTAMPTZOID: {
 		duckdb::timestamp_tz_t timestamp = value.GetValue<duckdb::timestamp_tz_t>();
 		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
@@ -989,9 +990,15 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<ByteArray>(slot, value, col);
 		break;
 	}
-	default:
+	default:{
+		if(oid == pgduckdb::DuckdbRowOid()){
+			elog(LOG, "ROW TYPEE!!!!!!!!");
+			slot->tts_values[col] = ConvertDuckRowDatum(value);
+			return true;
+		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 		return false;
+	}
 	}
 	return true;
 }
