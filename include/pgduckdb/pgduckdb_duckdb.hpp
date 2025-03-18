@@ -33,12 +33,7 @@ public:
 		return default_dbname;
 	}
 
-	void
-	Reset() {
-		connection = nullptr;
-		delete database;
-		database = nullptr;
-	}
+	void Reset();
 
 private:
 	DuckDBManager();

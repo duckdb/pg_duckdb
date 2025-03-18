@@ -21,5 +21,11 @@ SELECT * exclude(
     fixed_array_of_int_list,
     list_of_fixed_int_array,
     nested_int_array, -- The nested array has different lengths, which is not possible in PG
+    date, -- the min/max values of dates overflow in Postgres so selecting these would throw an error
+    timestamp, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_s, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_ms, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_ns, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
+    timestamp_tz -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
 )
 $$)

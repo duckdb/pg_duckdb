@@ -36,3 +36,5 @@ test: time_bucket
 test: scan_postgres_tables
 test: unresolved_type
 test: json_functions_duckdb
+test: date
+test: timestamp_timestamptz
