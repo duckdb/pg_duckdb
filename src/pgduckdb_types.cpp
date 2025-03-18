@@ -800,7 +800,7 @@ GetChildType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::ARRAY:
 		return duckdb::ArrayType::GetChildType(type);
 	default:
-		throw std::runtime_error("Unsupported nested type");
+		throw duckdb::InvalidInputException("Expected a LIST or ARRAY type, got '%s' instead", type.ToString());
 	}
 }
 
@@ -832,11 +832,26 @@ public:
 		}
 	}
 
+private:
+	static inline const duckdb::vector<duckdb::Value> &
+	GetChildren(const duckdb::Value &value) {
+		switch (value.type().InternalType()) {
+		case duckdb::PhysicalType::LIST:
+			return duckdb::ListValue::GetChildren(value);
+		case duckdb::PhysicalType::ARRAY:
+			return duckdb::ArrayValue::GetChildren(value);
+		default:
+			throw duckdb::InvalidInputException("Expected a LIST or ARRAY type, got '%s' instead",
+			                                    value.type().ToString());
+		}
+	}
+
 public:
 	void
 	AppendValueAtDimension(const duckdb::Value &value, idx_t dimension) {
+		auto &values = GetChildren(value);
+
 		// FIXME: verify that the amount of values does not overflow an `int` ?
-		auto &values = duckdb::ListValue::GetChildren(value);
 		int to_append = values.size();
 
 		D_ASSERT(dimension < number_of_dimensions);
@@ -851,7 +866,7 @@ public:
 			                                    dimensions[dimension], dimension, to_append);
 		}
 
-		auto &child_type = duckdb::ListType::GetChildType(value.type());
+		auto &child_type = GetChildType(value.type());
 		if (child_type.id() == duckdb::LogicalTypeId::LIST) {
 			for (auto &child_val : values) {
 				if (child_val.IsNull()) {
