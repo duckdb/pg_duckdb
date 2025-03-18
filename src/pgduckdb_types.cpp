@@ -287,9 +287,9 @@ ConvertTimestampDatum(const duckdb::Value &value) {
 
 	// Early Return for +/-Inf
 	if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::ninfinity()))
-		return Int64GetDatum(DT_NOBEGIN);
+		return TimestampGetDatum(DT_NOBEGIN);
 	else if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::infinity()))
-		return Int64GetDatum(DT_NOEND);
+		return TimestampGetDatum(DT_NOEND);
 
 	// Handle specific Timestamp unit(sec, ms, ns) types
 	switch (value.type().id()) {
