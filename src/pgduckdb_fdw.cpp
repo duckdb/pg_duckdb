@@ -190,29 +190,6 @@ FindMotherDuckForeignServerOid() {
 	)");
 }
 
-Oid
-FindMotherDuckUserMappingOid() {
-	SPI_connect();
-	auto query = R"(
-		SELECT um.oid
-		FROM pg_foreign_server fs
-		INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
-		INNER JOIN pg_user_mapping um ON um.umserver = fs.oid
-		WHERE
-			fdw.fdwname = 'pg_duckdb'
-		AND fs.srvtype = 'motherduck'
-		AND um.umuser = $1;
-	)";
-
-	Oid types[] = {OIDOID};
-	Datum values[] = {GetUserId()};
-	int ret = SPI_execute_with_args(query, 1, types, values, NULL, false, 0);
-	Oid oid = ExtractOidFromSPIQuery(ret);
-
-	SPI_finish();
-	return oid;
-}
-
 // Return the `default_database` setting defined in the `motherduck` SERVER
 // if it exists, returns nullptr otherwise.
 const char *
@@ -252,6 +229,7 @@ FindMotherDuckToken() {
 		return nullptr;
 	}
 
+	auto userid = GetUserId();
 	if (pgduckdb::is_background_worker) {
 		auto server = GetForeignServer(server_oid);
 		auto sync_token = FindOption(server->options, "sync_token");
@@ -264,26 +242,17 @@ FindMotherDuckToken() {
 			return nullptr;
 		}
 
-		auto user_mapping_oid = FindMotherDuckUserMappingOid();
-		if (user_mapping_oid == InvalidOid) {
-			return nullptr;
-		}
-
 		auto role_oid = get_role_oid(tables_owner_role, true);
-		auto user_mapping = GetUserMapping(user_mapping_oid, server_oid);
-		if (user_mapping->userid != role_oid) {
+		if (userid != role_oid) {
 			return nullptr;
 		}
-
-		return FindOption(user_mapping->options, "token");
 	}
 
-	auto user_mapping_oid = FindMotherDuckUserMappingOid();
-	if (user_mapping_oid == InvalidOid) {
+	if (GetMotherDuckUserMappingOid() == InvalidOid) {
 		return nullptr;
 	}
 
-	auto user_mapping = GetUserMapping(user_mapping_oid, server_oid);
+	auto user_mapping = GetUserMapping(userid, server_oid);
 	return FindOption(user_mapping->options, "token");
 }
 

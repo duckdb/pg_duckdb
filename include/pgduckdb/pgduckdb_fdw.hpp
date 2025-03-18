@@ -6,10 +6,6 @@ extern "C" {
 namespace pgduckdb {
 Oid FindMotherDuckForeignServerOid();
 
-// For now we support one unique USER MAPPING for a given `motherduck` SERVER
-// And since there could be only 0 or 1 server, there could be only 0 or 1 UM.
-Oid FindMotherDuckUserMappingOid();
-
 // Return the `default_database` setting defined in the `motherduck` SERVER
 // if it exists, returns nullptr otherwise.
 const char *FindMotherDuckDefaultDatabase();

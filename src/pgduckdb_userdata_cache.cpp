@@ -1,8 +1,11 @@
 extern "C" {
 #include "postgres.h"
 
+#include "miscadmin.h"
+#include "catalog/pg_user_mapping.h"
 #include "commands/extension.h"
 #include "foreign/foreign.h"
+#include "access/htup_details.h"
 #include "utils/inval.h"
 #include "utils/syscache.h"
 }
@@ -38,7 +41,7 @@ struct {
 
 bool callback_is_configured = false;
 
-static void
+void
 InvalidateCache(Datum, int, uint32) {
 	InvalidateUserDataCache();
 }
@@ -52,6 +55,10 @@ InvalidateUserDataCache() {
 	}
 
 	cache.valid = false;
+
+	cache.motherduck_foreign_server_oid = InvalidOid;
+	cache.motherduck_postgres_role_oid = InvalidOid;
+	cache.motherduck_user_mapping_oid = InvalidOid;
 }
 
 void
@@ -68,7 +75,13 @@ LoadMotherDuckCache() {
 	auto server = GetForeignServer(server_oid);
 	cache.motherduck_postgres_role_oid = server->owner; // TODO - make configurable
 
-	cache.motherduck_user_mapping_oid = pgduckdb::FindMotherDuckUserMappingOid();
+	{
+		auto tp = SearchSysCache2(USERMAPPINGUSERSERVER, ObjectIdGetDatum(GetUserId()), ObjectIdGetDatum(server_oid));
+		if (HeapTupleIsValid(tp)) {
+			cache.motherduck_user_mapping_oid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
+			ReleaseSysCache(tp);
+		}
+	}
 }
 
 void
@@ -79,7 +92,7 @@ InitUserDataCache() {
 
 	if (!callback_is_configured) {
 		callback_is_configured = true;
-		CacheRegisterSyscacheCallback(FOREIGNSERVEROID, InvalidateCache, (Datum)0);
+		CacheRegisterSyscacheCallback(USERMAPPINGOID, InvalidateCache, (Datum)0);
 	}
 
 	LoadMotherDuckCache();
