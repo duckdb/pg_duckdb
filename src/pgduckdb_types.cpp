@@ -1381,7 +1381,7 @@ AppendTimestamp(duckdb::Vector &result, Datum value, idx_t offset) {
 
 static void
 AppendTimestampTz(duckdb::Vector &result, Datum value, idx_t offset) {
-	int64_t timestamp = static_cast<int64_t>(DatumGetTimestamp(value));
+	int64_t timestamp = static_cast<int64_t>(DatumGetTimestampTz(value));
 	if (timestamp == DT_NOBEGIN) {
 		// -infinity value is different between PG and duck
 		Append<duckdb::timestamp_tz_t>(result, static_cast<duckdb::timestamp_tz_t>(duckdb::timestamp_t::ninfinity()),
