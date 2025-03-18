@@ -63,5 +63,42 @@ SELECT * FROM duckdb.is_motherduck_enabled();
  t
 (1 row)
 
--- TODO: test ALTER & DROP SERVER
--- TODO: test ALTER & DROP USER MAPPING
+-- Drop server
+DROP SERVER valid_md_server1 CASCADE;
+NOTICE:  drop cascades to 2 other objects
+DETAIL:  drop cascades to user mapping for user1 on server valid_md_server1
+drop cascades to user mapping for runner on server valid_md_server1
+-- Now MD is not enabled anymore
+SELECT * FROM duckdb.is_motherduck_enabled();
+ is_motherduck_enabled 
+-----------------------
+ f
+(1 row)
+
+-- Use helper to enable MD: will fail since there's no token in environment
+SELECT duckdb.enable_motherduck();
+ERROR:  No token was provided and `motherduck_token` environment variable was not set
+-- Use helper to enable MD: will succeed
+SELECT duckdb.enable_motherduck('foo');
+ enable_motherduck 
+-------------------
+ t
+(1 row)
+
+-- Now MD is enabled again
+SELECT * FROM duckdb.is_motherduck_enabled();
+ is_motherduck_enabled 
+-----------------------
+ t
+(1 row)
+
+-- Drop user mapping
+DROP USER MAPPING FOR CURRENT_USER SERVER md_server;
+-- Now MD is not enabled anymore
+SELECT * FROM duckdb.is_motherduck_enabled();
+ is_motherduck_enabled 
+-----------------------
+ f
+(1 row)
+
+-- TODO: test ALTER SERVER & USER MAPPING

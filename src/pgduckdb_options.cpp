@@ -301,6 +301,47 @@ DECLARE_PG_FUNCTION(pgduckdb_is_motherduck_enabled) {
 	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
 }
 
+DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		elog(NOTICE, "MotherDuck is already enabled");
+		PG_RETURN_BOOL(false);
+	}
+
+	auto token = pgduckdb::pg::GetArgString(fcinfo, 0);
+
+	// If no token provided, check that token exists in the environment
+	if (token == "::FROM_ENV::" && getenv("MOTHERDUCK_TOKEN") == nullptr && getenv("motherduck_token") == nullptr) {
+		elog(ERROR, "No token was provided and `motherduck_token` environment variable was not set");
+	}
+
+	SPI_connect();
+
+	if (pgduckdb::GetMotherduckForeignServerOid() == InvalidOid) {
+		auto query = "CREATE SERVER md_server TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb;";
+		auto ret = SPI_exec(query, 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create 'motherduck' SERVER: %s", SPI_result_code_string(ret));
+		}
+	}
+
+	{
+		// Create mapping for current user
+		Datum token_datum = CStringGetTextDatum(token.c_str());
+		Oid types[] = {TEXTOID};
+		Datum values[] = {token_datum};
+		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER md_server OPTIONS (token " +
+		             duckdb::KeywordHelper::WriteQuoted(token) + ");";
+		auto ret = SPI_execute_with_args(query.c_str(), 1, types, values, NULL, false, 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create USER MAPPING for current user: %s", SPI_result_code_string(ret));
+		}
+	}
+
+	SPI_finish();
+
+	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
+}
+
 /*
  * We need these dummy cache functions so that people are able to load the
  * new pg_duckdb.so file with an old SQL version (where these functions still

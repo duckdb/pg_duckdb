@@ -52,5 +52,25 @@ OPTIONS (token 'foo');
 -- Now MD is enabled
 SELECT * FROM duckdb.is_motherduck_enabled();
 
--- TODO: test ALTER & DROP SERVER
--- TODO: test ALTER & DROP USER MAPPING
+-- Drop server
+DROP SERVER valid_md_server1 CASCADE;
+
+-- Now MD is not enabled anymore
+SELECT * FROM duckdb.is_motherduck_enabled();
+
+-- Use helper to enable MD: will fail since there's no token in environment
+SELECT duckdb.enable_motherduck();
+
+-- Use helper to enable MD: will succeed
+SELECT duckdb.enable_motherduck('foo');
+
+-- Now MD is enabled again
+SELECT * FROM duckdb.is_motherduck_enabled();
+
+-- Drop user mapping
+DROP USER MAPPING FOR CURRENT_USER SERVER md_server;
+
+-- Now MD is not enabled anymore
+SELECT * FROM duckdb.is_motherduck_enabled();
+
+-- TODO: test ALTER SERVER & USER MAPPING
