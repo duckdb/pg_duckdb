@@ -58,6 +58,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
+static duckdb::unique_ptr<duckdb::Connection> ddb_connection = nullptr;
 static uint64 initial_cache_version = 0;
 
 namespace pgduckdb {
@@ -118,6 +119,31 @@ BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count
 
 bool CanTakeBgwLockForDatabase(Oid database_oid);
 
+bool
+RunOneCheck(int64 &last_activity_count) {
+	// No need to run if MD is not enabled.
+	if (!pgduckdb::IsMotherDuckEnabled()) {
+		elog(LOG, "pg_duckdb background worker: MotherDuck is not enabled, will exit.");
+		return true; // should exit
+	}
+
+	if (!pgduckdb::IsExtensionRegistered()) {
+		return false; // XXX: shouldn't we exit actually?
+	}
+
+	if (!ddb_connection) {
+		try {
+			ddb_connection = pgduckdb::DuckDBManager::CreateConnection();
+		} catch (std::exception &ex) {
+			elog(LOG, "pg_duckdb background worker: failed to create connection: %s", ex.what());
+			return true; // should exit
+		}
+	}
+
+	InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
+	return false;
+}
+
 } // namespace pgduckdb
 
 extern "C" {
@@ -146,8 +172,6 @@ pgduckdb_background_worker_main(Datum main_arg) {
 	pgduckdb::doing_motherduck_sync = true;
 	pgduckdb::is_background_worker = true;
 
-	duckdb::unique_ptr<duckdb::Connection> connection = nullptr;
-
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
 		SetCurrentStatementStartTimestamp();
@@ -155,17 +179,17 @@ pgduckdb_background_worker_main(Datum main_arg) {
 		SPI_connect();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
-		if (pgduckdb::IsExtensionRegistered()) {
-			if (!connection) {
-				connection = InvokeCPPFunc(pgduckdb::DuckDBManager::CreateConnection);
-			}
-			InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, connection.get(), &last_activity_count);
-		}
+		const bool should_exit = pgduckdb::RunOneCheck(last_activity_count);
 
 		// Commit the transaction
 		PopActiveSnapshot();
 		SPI_finish();
 		CommitTransactionCommand();
+
+		if (should_exit) {
+			break;
+		}
+
 		pgstat_report_stat(false);
 		pgstat_report_activity(STATE_IDLE, NULL);
 
