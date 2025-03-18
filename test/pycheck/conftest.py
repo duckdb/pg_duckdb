@@ -16,6 +16,7 @@ def shared_pg(tmp_path_factory):
     pg.sql("CREATE ROLE duckdb_group")
     pg.sql("GRANT CREATE ON SCHEMA public TO duckdb_group")
     pg.sql("create extension pg_duckdb")
+    pg.md_setup = False
 
     yield pg
 
@@ -62,10 +63,16 @@ def conn(pg):
 @pytest.fixture
 def md_cur(pg, ddb, request):
     """A cursor to a MotherDuck enabled pg_duckdb"""
-    _ = ddb  # silence warning, we only need ddb the ddb
+    _ = ddb  # silence warning, we only need ddb
     test_db = request.node.name.removeprefix("test_")
-    pg.configure("duckdb.motherduck_enabled = true")
-    pg.restart()
+
+    if not pg.md_setup:
+        pg.sql("CREATE SERVER md_fdw TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb")
+        pg.sql(
+            "CREATE USER MAPPING FOR CURRENT_USER SERVER md_fdw OPTIONS (token '::FROM_ENV::');"
+        )
+        pg.md_setup = True
+
     pg.search_path = f"ddb${test_db}, public"
     with pg.cur() as cur:
         yield cur

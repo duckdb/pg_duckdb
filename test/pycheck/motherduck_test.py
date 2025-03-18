@@ -15,12 +15,16 @@ import psycopg.errors
 if not MOTHERDUCK:
     pytestmark = pytest.mark.skip(reason="Skipping all motherduck tests")
 
+
 def test_md_duckdb_version(md_cur: Cursor, ddb):
     version_query = "SELECT library_version FROM pragma_version();"
     python_duckdb_version = ddb.sql(version_query)
-    pg_duckdb_duckdb_version = md_cur.sql(f"SELECT * FROM duckdb.query('{version_query}');")
+    pg_duckdb_duckdb_version = md_cur.sql(
+        f"SELECT * FROM duckdb.query('{version_query}');"
+    )
 
     assert python_duckdb_version == pg_duckdb_duckdb_version
+
 
 def test_md_create_table(md_cur: Cursor, ddb):
     ddb.sql("CREATE TABLE t1(a int)")
