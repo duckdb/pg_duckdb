@@ -8,7 +8,6 @@ SELECT * exclude(
     small_enum,
     medium_enum,
     large_enum,
-    timestamptz_array,
     struct,
     struct_of_arrays,
     array_of_structs,
