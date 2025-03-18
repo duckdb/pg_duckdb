@@ -242,11 +242,11 @@ ConvertDateDatum(const duckdb::Value &value) {
 	// Special Handling for +/-infinity date values
 	// -infinity value is different for PG date
 	if (date == duckdb::date_t::ninfinity())
-		return DATEVAL_NOBEGIN;
+		return DateADTGetDatum(DATEVAL_NOBEGIN);
 	else if (date == duckdb::date_t::infinity())
-		return DATEVAL_NOEND;
+		return DateADTGetDatum(DATEVAL_NOEND);
 
-	return date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET;
+	return DateADTGetDatum(date.days - pgduckdb::PGDUCKDB_DUCK_DATE_OFFSET);
 }
 
 static Datum
