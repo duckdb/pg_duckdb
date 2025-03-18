@@ -623,6 +623,18 @@ struct PostgresTypeTraits<TIMESTAMPOID> {
 	}
 };
 
+template <>
+struct PostgresTypeTraits<TIMESTAMPTZOID> {
+	static constexpr int16_t typlen = 8;
+	static constexpr bool typbyval = true;
+	static constexpr char typalign = 'd';
+
+	static inline Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertTimestampTzDatum(val);
+	}
+};
+
 // INTERVAL type
 template <>
 struct PostgresTypeTraits<INTERVALOID> {
@@ -764,6 +776,7 @@ using Float4Array = PODArray<PostgresOIDMapping<FLOAT4OID>>;
 using Float8Array = PODArray<PostgresOIDMapping<FLOAT8OID>>;
 using DateArray = PODArray<PostgresOIDMapping<DATEOID>>;
 using TimestampArray = PODArray<PostgresOIDMapping<TIMESTAMPOID>>;
+using TimestampTzArray = PODArray<PostgresOIDMapping<TIMESTAMPTZOID>>;
 using IntervalArray = PODArray<PostgresOIDMapping<INTERVALOID>>;
 using TimeArray = PODArray<PostgresOIDMapping<TIMEOID>>;
 using TimeTzArray = PODArray<PostgresOIDMapping<TIMETZOID>>;
@@ -1027,6 +1040,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<TimestampArray>(slot, value, col);
 		break;
 	}
+	case TIMESTAMPTZARRAYOID: {
+		ConvertDuckToPostgresArray<TimestampTzArray>(slot, value, col);
+		break;
+	}
 	case INTERVALARRAYOID: {
 		ConvertDuckToPostgresArray<IntervalArray>(slot, value, col);
 		break;
@@ -1227,6 +1244,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 		return DATEARRAYOID;
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		return TIMESTAMPARRAYOID;
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+		return TIMESTAMPTZARRAYOID;
 	case duckdb::LogicalTypeId::INTERVAL:
 		return INTERVALARRAYOID;
 	case duckdb::LogicalTypeId::TIME:
