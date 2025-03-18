@@ -3,6 +3,7 @@
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
@@ -51,10 +52,10 @@ ContainsCatalogTable(List *rtes) {
 		}
 
 		if (rte->relid) {
-			auto rel = RelationIdGetRelation(rte->relid);
-			auto namespace_oid = RelationGetNamespace(rel);
+			Relation rel = RelationIdGetRelation(rte->relid);
+			bool is_catalog_table = pgduckdb::IsCatalogTable(rel);
 			RelationClose(rel);
-			if (namespace_oid == PG_CATALOG_NAMESPACE || namespace_oid == PG_TOAST_NAMESPACE) {
+			if (is_catalog_table) {
 				return true;
 			}
 		}
@@ -148,8 +149,16 @@ ContainsFromClause(Query *query) {
 	return query->rtable;
 }
 
-static bool
-IsAllowedStatement(Query *query, bool throw_error = false) {
+namespace pgduckdb {
+
+bool
+IsCatalogTable(Relation rel) {
+	auto namespace_oid = RelationGetNamespace(rel);
+	return namespace_oid == PG_CATALOG_NAMESPACE || namespace_oid == PG_TOAST_NAMESPACE;
+}
+
+bool
+IsAllowedStatement(Query *query, bool throw_error) {
 	int elevel = throw_error ? ERROR : DEBUG4;
 	/* DuckDB does not support modifying CTEs INSERT/UPDATE/DELETE */
 	if (query->hasModifyingCTE) {
@@ -160,7 +169,7 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	/* We don't support modifying statements on Postgres tables yet */
 	if (query->commandType != CMD_SELECT) {
 		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
-		if (!IsDuckdbTable(resultRte->relid)) {
+		if (!::IsDuckdbTable(resultRte->relid)) {
 			elog(elevel, "DuckDB does not support modififying Postgres tables");
 			return false;
 		}
@@ -183,16 +192,17 @@ IsAllowedStatement(Query *query, bool throw_error = false) {
 	/* Anything else is hopefully fine... */
 	return true;
 }
+} // namespace pgduckdb
 
 static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (NeedsDuckdbExecution(parse)) {
 			pgduckdb::TriggerActivity();
-			IsAllowedStatement(parse, true);
+			pgduckdb::IsAllowedStatement(parse, true);
 
 			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
-		} else if (duckdb_force_execution && IsAllowedStatement(parse) && ContainsFromClause(parse)) {
+		} else if (duckdb_force_execution && pgduckdb::IsAllowedStatement(parse) && ContainsFromClause(parse)) {
 			pgduckdb::TriggerActivity();
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params, false);
 			if (duckdbPlan) {
@@ -215,11 +225,7 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 
 	pgduckdb::MarkStatementNotTopLevel();
 
-	if (prev_planner_hook) {
-		return prev_planner_hook(parse, query_string, cursor_options, bound_params);
-	} else {
-		return standard_planner(parse, query_string, cursor_options, bound_params);
-	}
+	return prev_planner_hook(parse, query_string, cursor_options, bound_params);
 }
 
 static PlannedStmt *
@@ -350,6 +356,10 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	 * standard_ExplainOneQuery).
 	 */
 	duckdb_explain_analyze = es->analyze;
+	if (es->format == EXPLAIN_FORMAT_JSON)
+		duckdb_explain_format = duckdb::ExplainFormat::JSON;
+	else
+		duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
 	duckdb_explain_ctas = into != NULL;
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }
@@ -418,7 +428,7 @@ DuckdbEmitLogHook(ErrorData *edata) {
 
 void
 DuckdbInitHooks(void) {
-	prev_planner_hook = planner_hook;
+	prev_planner_hook = planner_hook ? planner_hook : standard_planner;
 	planner_hook = DuckdbPlannerHook;
 
 	prev_executor_start_hook = ExecutorStart_hook ? ExecutorStart_hook : standard_ExecutorStart;
