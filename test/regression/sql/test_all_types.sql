@@ -14,8 +14,6 @@ SELECT * exclude(
     array_of_structs,
     map,
     "union",
-    fixed_int_array,
-    fixed_varchar_array,
     fixed_nested_int_array,
     fixed_nested_varchar_array,
     fixed_struct_array,

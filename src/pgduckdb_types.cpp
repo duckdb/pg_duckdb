@@ -709,11 +709,30 @@ using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
 using NumericArray = PODArray<PostgresOIDMapping<NUMERICOID>>;
 using ByteArray = PODArray<PostgresOIDMapping<BYTEAOID>>;
 
+static bool
+IsNestedType(const duckdb::LogicalTypeId type_id) {
+	/* TODO: Add more nested type*/
+	return type_id == duckdb::LogicalTypeId::LIST || type_id == duckdb::LogicalTypeId::ARRAY;
+}
+
+static const duckdb::LogicalType &
+GetChildType(const duckdb::LogicalType &type) {
+	/* TODO: Add more nested type*/
+	switch (type.id()) {
+	case duckdb::LogicalTypeId::LIST:
+		return duckdb::ListType::GetChildType(type);
+	case duckdb::LogicalTypeId::ARRAY:
+		return duckdb::ArrayType::GetChildType(type);
+	default:
+		throw std::runtime_error("Unsupported nested type");
+	}
+}
+
 static idx_t
-GetDuckDBListDimensionality(const duckdb::LogicalType &list_type, idx_t depth = 0) {
-	D_ASSERT(list_type.id() == duckdb::LogicalTypeId::LIST);
-	auto &child = duckdb::ListType::GetChildType(list_type);
-	if (child.id() == duckdb::LogicalTypeId::LIST) {
+GetDuckDBListDimensionality(const duckdb::LogicalType &nested_type, idx_t depth = 0) {
+	D_ASSERT(IsNestedType(nested_type.id()));
+	auto &child = pgduckdb::GetChildType(nested_type);
+	if (IsNestedType(child.id())) {
 		return GetDuckDBListDimensionality(child, depth + 1);
 	}
 	return depth + 1;
@@ -802,7 +821,7 @@ public:
 template <class OP>
 static void
 ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
-	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::LIST);
+	D_ASSERT(pgduckdb::IsNestedType(value.type().id()));
 	auto number_of_dimensions = GetDuckDBListDimensionality(value.type());
 
 	PostgresArrayAppendState<OP> append_state(number_of_dimensions);
@@ -1220,10 +1239,11 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return UUIDOID;
 	case duckdb::LogicalTypeId::VARINT:
 		return NUMERICOID;
-	case duckdb::LogicalTypeId::LIST: {
+	case duckdb::LogicalTypeId::LIST:
+	case duckdb::LogicalTypeId::ARRAY: {
 		const duckdb::LogicalType *duck_type = &type;
-		while (duck_type->id() == duckdb::LogicalTypeId::LIST) {
-			auto &child_type = duckdb::ListType::GetChildType(*duck_type);
+		while (IsNestedType(duck_type->id())) {
+			auto &child_type = pgduckdb::GetChildType(*duck_type);
 			duck_type = &child_type;
 		}
 		return GetPostgresArrayDuckDBType(*duck_type);
