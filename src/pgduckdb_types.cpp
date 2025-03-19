@@ -253,7 +253,11 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 
 inline Datum
 ConvertDuckRowDatum(const duckdb::Value &value) {
-	auto val = value.GetValue<duckdb::StructValue>();
+	auto children = duckdb::StructValue::GetChildren(value);
+	for(auto& child: children){
+		switch(child.type().id()){
+		}
+	}
 	return pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
 
@@ -882,11 +886,6 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		slot->tts_values[col] = ConvertTimestampDatum(value);
 		break;
 	}
-	/* case pgduckdb::DuckdbRowOid(): { */
-	/* 	elog(LOG, "ROW TYPEE!!!!!!!!"); */
-	/* 	slot->tts_values[col] = ConvertDuckRowDatum(value); */
-	/* 	break; */
-	/* } */
 	case TIMESTAMPTZOID: {
 		duckdb::timestamp_tz_t timestamp = value.GetValue<duckdb::timestamp_tz_t>();
 		slot->tts_values[col] = timestamp.value - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
@@ -991,8 +990,9 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default:{
+		// Since DuckdbRowOid is calculated at runtime, it is not possible to compile the
+		// code while placing it as a separate case in the switch-case clause above
 		if(oid == pgduckdb::DuckdbRowOid()){
-			elog(LOG, "ROW TYPEE!!!!!!!!");
 			slot->tts_values[col] = ConvertDuckRowDatum(value);
 			return true;
 		}
