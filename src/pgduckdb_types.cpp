@@ -1260,7 +1260,7 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLARRAYOID;
 	case duckdb::LogicalTypeId::TINYINT:
-		return CHARARRAYOID;
+		return INT2ARRAYOID;
 	case duckdb::LogicalTypeId::SMALLINT:
 		return INT2ARRAYOID;
 	case duckdb::LogicalTypeId::INTEGER:
@@ -1313,7 +1313,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
 	case duckdb::LogicalTypeId::TINYINT:
-		return CHAROID;
+		return INT2OID;
 	case duckdb::LogicalTypeId::SMALLINT:
 		return INT2OID;
 	case duckdb::LogicalTypeId::INTEGER:
@@ -1600,19 +1600,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		Append<bool>(result, DatumGetBool(value), offset);
 		break;
 	case duckdb::LogicalTypeId::TINYINT: {
-		auto aux_info = type.GetAuxInfoShrPtr();
-		if (aux_info && dynamic_cast<IsBpChar *>(aux_info.get())) {
-			auto bpchar_length = VARSIZE_ANY_EXHDR(value);
-			auto bpchar_data = VARDATA_ANY(value);
-
-			if (bpchar_length != 1) {
-				throw duckdb::InternalException(
-				    "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %llu", offset);
-			}
-			Append<int8_t>(result, bpchar_data[0], offset);
-		} else {
-			Append<int8_t>(result, DatumGetChar(value), offset);
-		}
+		Append<int16_t>(result, DatumGetInt16(value), offset);
 		break;
 	}
 	case duckdb::LogicalTypeId::SMALLINT:
