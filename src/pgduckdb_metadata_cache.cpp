@@ -13,6 +13,7 @@ extern "C" {
 #include "commands/dbcommands.h"
 #include "miscadmin.h"
 #include "nodes/bitmapset.h"
+#include "tcop/pquery.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -20,6 +21,7 @@ extern "C" {
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/snapmgr.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -198,13 +200,16 @@ IsExtensionRegistered() {
 	if (cache.valid) {
 		return cache.installed;
 	} else if (cache.initializing) {
-		return false; // TODO comment
+		return false; // cf. comment above
 	}
 
 	if (IsAbortedTransactionBlockState()) {
 		elog(WARNING, "pgduckdb: IsExtensionRegistered called in an aborted transaction");
 		/* We need to run `get_extension_oid` in a valid transaction */
 		return false;
+	} else if (!ActiveSnapshotSet() && ActivePortal == nullptr) {
+		/* We're not in a transaction block, so we can't populate the cache */
+		return get_extension_oid("pg_duckdb", true) != InvalidOid;
 	}
 
 	cache.initializing = true;

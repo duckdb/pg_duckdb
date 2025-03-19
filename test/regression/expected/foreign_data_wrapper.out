@@ -1,3 +1,8 @@
+-- Syntax errors should be handled properly
+SELECT 'foo' || :'bar' as baz;
+ERROR:  syntax error at or near ":"
+LINE 1: SELECT 'foo' || :'bar' as baz;
+                        ^
 SET duckdb.force_execution TO false;
 -- MD is not enabled
 SELECT * FROM duckdb.is_motherduck_enabled();

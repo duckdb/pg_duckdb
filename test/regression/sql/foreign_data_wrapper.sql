@@ -1,3 +1,6 @@
+-- Syntax errors should be handled properly
+SELECT 'foo' || :'bar' as baz;
+
 SET duckdb.force_execution TO false;
 
 -- MD is not enabled
