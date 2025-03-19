@@ -67,10 +67,7 @@ def md_cur(pg, ddb, request):
     test_db = request.node.name.removeprefix("test_")
 
     if not pg.md_setup:
-        pg.sql("CREATE SERVER md_fdw TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb")
-        pg.sql(
-            "CREATE USER MAPPING FOR CURRENT_USER SERVER md_fdw OPTIONS (token '::FROM_ENV::');"
-        )
+        pg.sql("SELECT duckdb.enable_motherduck()")
         pg.md_setup = True
 
     pg.search_path = f"ddb${test_db}, public"

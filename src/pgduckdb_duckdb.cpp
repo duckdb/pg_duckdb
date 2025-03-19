@@ -223,9 +223,9 @@ DuckDBManager::Initialize() {
 	if (pgduckdb::IsMotherDuckEnabled()) {
 		auto timeout = FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
 		if (timeout != nullptr) {
-			auto quoted_to = duckdb::KeywordHelper::WriteQuoted(timeout);
-			pgduckdb::DuckDBQueryOrThrow(context,
-			                             "SET motherduck_background_catalog_refresh_inactivity_timeout=" + quoted_to);
+			auto quoted_timeout = duckdb::KeywordHelper::WriteQuoted(timeout);
+			pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
+			                                          quoted_timeout);
 		}
 	}
 

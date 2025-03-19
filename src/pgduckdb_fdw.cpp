@@ -55,9 +55,6 @@ static const struct PGDuckDBFdwOption valid_options[] = {
     // a specific token to synchronize MD tables, by default the token of the user mapping which belongs creator/owner
     {"sync_token", MD, ForeignServerRelationId},
 
-    {"host", MD, ForeignServerRelationId},             // motherduck_host
-    {"port", MD, ForeignServerRelationId},             // motherduck_port
-    {"logging", MD, ForeignServerRelationId},          // motherduck_logging
     {"default_database", MD, ForeignServerRelationId}, // Name of the MotherDuck database to be synced (default "my_db")
 
     /* --- MD Mapping --- */

@@ -359,7 +359,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 }
 
 static void
-AssertOptionNotSet(List *options, const char *option_name) {
+ValidateOptionNotSet(List *options, const char *option_name) {
 	foreach_node(DefElem, def, options) {
 		if (strcmp(def->defname, option_name) == 0) {
 			elog(ERROR, "`%s` should not be set in the options", option_name);
@@ -375,7 +375,7 @@ DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
 		return; // Not our FDW, don't do anything
 	}
 
-	AssertOptionNotSet(stmt->options, "type");
+	ValidateOptionNotSet(stmt->options, "type");
 
 	if (stmt->servertype == NULL) {
 		return; // Don't do anything quite yet, let the validator raise an error
@@ -397,7 +397,7 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 	}
 
 	Assert(stmt->servername);
-	AssertOptionNotSet(stmt->options, "servername");
+	ValidateOptionNotSet(stmt->options, "servername");
 
 	// Wasn't set, add it.
 	stmt->options =

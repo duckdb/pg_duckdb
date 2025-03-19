@@ -207,9 +207,9 @@ OPTIONS (default_database '<your database>');
 CREATE USER MAPPING FOR CURRENT_USER SERVER md_server OPTIONS (token '<your token>')
 ```
 
-Note: if you used the `duckdb.enable_motherduck` convenience method above, you can simply do:
+Note: with the `duckdb.enable_motherduck` convenience method above, you can simply do:
 ```sql
-ALTER SERVER md_server OPTIONS (SET default_database '<your database>');
+SELECT duckdb.enable_motherduck('<token>', '<default database>');
 ```
 
 After doing this (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:

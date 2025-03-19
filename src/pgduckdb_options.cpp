@@ -308,6 +308,7 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 	}
 
 	auto token = pgduckdb::pg::GetArgString(fcinfo, 0);
+	auto default_database = pgduckdb::pg::GetArgString(fcinfo, 1);
 
 	// If no token provided, check that token exists in the environment
 	if (token == "::FROM_ENV::" && getenv("MOTHERDUCK_TOKEN") == nullptr && getenv("motherduck_token") == nullptr) {
@@ -317,11 +318,19 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 	SPI_connect();
 
 	if (pgduckdb::GetMotherduckForeignServerOid() == InvalidOid) {
-		auto query = "CREATE SERVER md_server TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb;";
-		auto ret = SPI_exec(query, 0);
+		std::string query = "CREATE SERVER md_server TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb";
+		if (default_database.empty()) {
+			query += ";";
+		} else {
+			query += " OPTIONS (default_database " + duckdb::KeywordHelper::WriteQuoted(default_database) + ");";
+		}
+		auto ret = SPI_exec(query.c_str(), 0);
 		if (ret != SPI_OK_UTILITY) {
 			elog(ERROR, "Could not create 'motherduck' SERVER: %s", SPI_result_code_string(ret));
 		}
+	} else if (!default_database.empty()) {
+		// TODO: check if it was set to the same value and update it or only error in that case
+		elog(ERROR, "Cannot provide a default_database: because the server already exists");
 	}
 
 	{

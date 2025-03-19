@@ -53,6 +53,7 @@ OPTIONS (token 'foo');
 SELECT * FROM duckdb.is_motherduck_enabled();
 
 -- Drop server
+SET client_min_messages=WARNING; -- suppress NOTICE that include username
 DROP SERVER valid_md_server1 CASCADE;
 
 -- Now MD is not enabled anymore

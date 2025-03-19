@@ -64,10 +64,8 @@ SELECT * FROM duckdb.is_motherduck_enabled();
 (1 row)
 
 -- Drop server
+SET client_min_messages=WARNING; -- suppress NOTICE that include username
 DROP SERVER valid_md_server1 CASCADE;
-NOTICE:  drop cascades to 2 other objects
-DETAIL:  drop cascades to user mapping for user1 on server valid_md_server1
-drop cascades to user mapping for runner on server valid_md_server1
 -- Now MD is not enabled anymore
 SELECT * FROM duckdb.is_motherduck_enabled();
  is_motherduck_enabled 

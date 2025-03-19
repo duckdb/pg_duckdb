@@ -509,7 +509,7 @@ CREATE FOREIGN DATA WRAPPER pg_duckdb
   HANDLER pgduckdb_fdw_handler
   VALIDATOR pgduckdb_fdw_validator;
 
-CREATE FUNCTION duckdb.enable_motherduck(TEXT DEFAULT '::FROM_ENV::')
+CREATE FUNCTION duckdb.enable_motherduck(TEXT DEFAULT '::FROM_ENV::', TEXT DEFAULT '')
 RETURNS bool
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_enable_motherduck';
