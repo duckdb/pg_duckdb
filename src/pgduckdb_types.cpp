@@ -282,10 +282,13 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 }
 
 inline Datum
-ConvertDuckRowDatum(const duckdb::Value &value) {
+ConvertDuckRowDatum(TupleTableSlot *slot, const duckdb::Value &value, idx_t col) {
 	auto children = duckdb::StructValue::GetChildren(value);
 	for(auto& child: children){
 		switch(child.type().id()){
+			case duckdb::LogicalTypeId::VARCHAR:
+				elog(LOG, "got varchar...");
+				break;
 		}
 	}
 	return pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
@@ -1106,7 +1109,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		// Since DuckdbRowOid is calculated at runtime, it is not possible to compile the
 		// code while placing it as a separate case in the switch-case clause above
 		if(oid == pgduckdb::DuckdbRowOid()){
-			slot->tts_values[col] = ConvertDuckRowDatum(value);
+			slot->tts_values[col] = ConvertDuckRowDatum(slot, value, col);
 			return true;
 		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);

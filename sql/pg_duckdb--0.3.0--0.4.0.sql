@@ -452,3 +452,15 @@ CREATE OPERATOR pg_catalog.!~~* (
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
+
+-- New Data type to handle duckdb struct
+CREATE TYPE duckdb.struct;
+CREATE FUNCTION duckdb.struct_in(cstring) RETURNS duckdb.struct AS 'MODULE_PATHNAME', 'duckdb.struct_in' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.struct_out(duckdb.struct) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb.struct_out' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.struct_subscript(internal) RETURNS internal AS 'MODULE_PATHNAME', 'duckdb.struct_subscript' LANGUAGE C IMMUTABLE STRICT;
+CREATE TYPE duckdb.struct (
+    INTERNALLENGTH = VARIABLE,
+    INPUT = duckdb.struct_in,
+    OUTPUT = duckdb.struct_out,
+    SUBSCRIPT = duckdb.struct_subscript
+);
