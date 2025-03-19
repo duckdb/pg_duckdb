@@ -54,6 +54,8 @@ struct {
 	Oid schema_oid;
 	/* The OID of the duckdb.row type */
 	Oid row_oid;
+	/* The OID of the duckdb.struct type  */
+	Oid struct_oid;
 	/* The OID of the duckdb.unresolved_type */
 	Oid unresolved_type_oid;
 	/* The OID of the duckdb.json */
@@ -222,6 +224,7 @@ IsExtensionRegistered() {
 
 		cache.schema_oid = get_namespace_oid("duckdb", false);
 		cache.row_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("row"), cache.schema_oid);
+		cache.struct_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("struct"), cache.schema_oid);
 		cache.unresolved_type_oid =
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("unresolved_type"), cache.schema_oid);
 
@@ -283,6 +286,12 @@ Oid
 DuckdbRowOid() {
 	Assert(cache.valid);
 	return cache.row_oid;
+}
+
+Oid
+DuckdbStructOid() {
+	Assert(cache.valid);
+	return cache.struct_oid;
 }
 
 Oid

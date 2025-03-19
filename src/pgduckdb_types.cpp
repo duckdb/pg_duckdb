@@ -282,7 +282,7 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 }
 
 inline Datum
-ConvertDuckRowDatum(TupleTableSlot *slot, const duckdb::Value &value, idx_t col) {
+ConvertDuckStructDatum(const duckdb::Value &value) {
 	auto children = duckdb::StructValue::GetChildren(value);
 	for(auto& child: children){
 		switch(child.type().id()){
@@ -1108,8 +1108,8 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	default:{
 		// Since DuckdbRowOid is calculated at runtime, it is not possible to compile the
 		// code while placing it as a separate case in the switch-case clause above
-		if(oid == pgduckdb::DuckdbRowOid()){
-			slot->tts_values[col] = ConvertDuckRowDatum(slot, value, col);
+		if(oid == pgduckdb::DuckdbStructOid()){
+			slot->tts_values[col] = ConvertDuckStructDatum(value);
 			return true;
 		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
@@ -1357,8 +1357,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::VARINT:
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::STRUCT:
-		elog(LOG, "hi returning the appropriate type");
-		return pgduckdb::DuckdbRowOid();
+		return pgduckdb::DuckdbStructOid();
 	case duckdb::LogicalTypeId::LIST:
 	case duckdb::LogicalTypeId::ARRAY: {
 		const duckdb::LogicalType *duck_type = &type;

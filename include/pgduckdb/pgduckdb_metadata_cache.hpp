@@ -9,6 +9,7 @@ uint64_t CacheVersion();
 Oid ExtensionOid();
 Oid SchemaOid();
 Oid DuckdbRowOid();
+Oid DuckdbStructOid();
 Oid DuckdbUnresolvedTypeOid();
 Oid DuckdbJsonOid();
 Oid DuckdbTableAmOid();
