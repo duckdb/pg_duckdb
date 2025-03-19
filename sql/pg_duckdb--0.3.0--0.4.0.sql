@@ -452,3 +452,12 @@ CREATE OPERATOR pg_catalog.!~~* (
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
+
+CREATE TYPE duckdb.union;
+CREATE FUNCTION duckdb.union_in(cstring) RETURNS duckdb.union AS 'MODULE_PATHNAME', 'duckdb_union_in' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.union_out(duckdb.union) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_union_out' LANGUAGE C IMMUTABLE STRICT;
+CREATE TYPE duckdb.union(
+    INTERNALLENGTH = VARIABLE,
+    INPUT = duckdb.union_in,
+    OUTPUT = duckdb.union_out
+);
