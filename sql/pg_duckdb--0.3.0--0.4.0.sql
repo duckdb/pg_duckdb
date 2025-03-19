@@ -505,7 +505,7 @@ RETURNS void
 AS 'MODULE_PATHNAME', 'pgduckdb_fdw_validator'
 LANGUAGE C STRICT PARALLEL SAFE;
 
-CREATE FOREIGN DATA WRAPPER pg_duckdb
+CREATE FOREIGN DATA WRAPPER duckdb
   HANDLER pgduckdb_fdw_handler
   VALIDATOR pgduckdb_fdw_validator;
 

@@ -12,17 +12,17 @@ SELECT * FROM duckdb.is_motherduck_enabled();
 (1 row)
 
 -- Must provide a TYPE clause
-CREATE SERVER invalid_server1 FOREIGN DATA WRAPPER pg_duckdb;
+CREATE SERVER invalid_server1 FOREIGN DATA WRAPPER duckdb;
 ERROR:  Missing required option: 'type'
 -- Must be a valid TYPE
 CREATE SERVER invalid_server2
 TYPE 'foo'
-FOREIGN DATA WRAPPER pg_duckdb;
+FOREIGN DATA WRAPPER duckdb;
 ERROR:  Unknown SERVER type: 'foo'
 -- Should succeed with no option
 CREATE SERVER valid_md_server1
 TYPE 'motherduck'
-FOREIGN DATA WRAPPER pg_duckdb;
+FOREIGN DATA WRAPPER duckdb;
 -- MD is still NOT enabled
 SELECT * FROM duckdb.is_motherduck_enabled();
  is_motherduck_enabled 

@@ -318,7 +318,7 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 	SPI_connect();
 
 	if (pgduckdb::GetMotherduckForeignServerOid() == InvalidOid) {
-		std::string query = "CREATE SERVER motherduck TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb";
+		std::string query = "CREATE SERVER motherduck TYPE 'motherduck' FOREIGN DATA WRAPPER duckdb";
 		if (default_database.empty()) {
 			query += ";";
 		} else {

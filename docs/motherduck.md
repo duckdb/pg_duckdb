@@ -60,7 +60,7 @@ If you want to specify which MotherDuck database is your default database, then 
 ```sql
 CREATE SERVER motherduck
 TYPE 'motherduck'
-FOREIGN DATA WRAPPER pg_duckdb
+FOREIGN DATA WRAPPER duckdb
 OPTIONS (default_database '<your database>');
 
 -- You may use `::FROM_ENV::` to have the token be read from the environment variable

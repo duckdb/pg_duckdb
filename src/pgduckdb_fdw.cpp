@@ -183,7 +183,7 @@ FindMotherDuckForeignServerOid() {
 		SELECT fs.oid
 		FROM pg_foreign_server fs
 		INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
-		WHERE fdw.fdwname = 'pg_duckdb' AND fs.srvtype = 'motherduck';
+		WHERE fdw.fdwname = 'duckdb' AND fs.srvtype = 'motherduck';
 	)");
 }
 
@@ -313,7 +313,7 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 	if (catalog == ForeignDataWrapperRelationId) {
 		// `CREATE FOREIGN DATA WRAPPER` statement
 		foreach_node(DefElem, def, options_list) {
-			elog(ERROR, "pg_duckdb FDW does not take any option, found '%s'", def->defname);
+			elog(ERROR, "'duckdb' FDW does not take any option, found '%s'", def->defname);
 		}
 
 		PG_RETURN_VOID(); // no additional validation needed

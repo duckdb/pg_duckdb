@@ -371,7 +371,7 @@ static void
 DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
 	// Propagate the "TYPE" to the server options, don't validate it here though
 	auto stmt = castNode(CreateForeignServerStmt, parsetree);
-	if (strcmp(stmt->fdwname, "pg_duckdb") != 0) {
+	if (strcmp(stmt->fdwname, "duckdb") != 0) {
 		return; // Not our FDW, don't do anything
 	}
 
@@ -392,7 +392,7 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 
 	auto server = GetForeignServerByName(stmt->servername, false);
 	auto fdw = GetForeignDataWrapper(server->fdwid);
-	if (strcmp(fdw->fdwname, "pg_duckdb") != 0) {
+	if (strcmp(fdw->fdwname, "duckdb") != 0) {
 		return; // Not our FDW, don't do anything
 	}
 

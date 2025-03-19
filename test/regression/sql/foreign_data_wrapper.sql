@@ -7,17 +7,17 @@ SET duckdb.force_execution TO false;
 SELECT * FROM duckdb.is_motherduck_enabled();
 
 -- Must provide a TYPE clause
-CREATE SERVER invalid_server1 FOREIGN DATA WRAPPER pg_duckdb;
+CREATE SERVER invalid_server1 FOREIGN DATA WRAPPER duckdb;
 
 -- Must be a valid TYPE
 CREATE SERVER invalid_server2
 TYPE 'foo'
-FOREIGN DATA WRAPPER pg_duckdb;
+FOREIGN DATA WRAPPER duckdb;
 
 -- Should succeed with no option
 CREATE SERVER valid_md_server1
 TYPE 'motherduck'
-FOREIGN DATA WRAPPER pg_duckdb;
+FOREIGN DATA WRAPPER duckdb;
 
 -- MD is still NOT enabled
 SELECT * FROM duckdb.is_motherduck_enabled();
