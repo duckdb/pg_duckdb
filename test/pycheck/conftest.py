@@ -16,7 +16,6 @@ def shared_pg(tmp_path_factory):
     pg.sql("CREATE ROLE duckdb_group")
     pg.sql("GRANT CREATE ON SCHEMA public TO duckdb_group")
     pg.sql("create extension pg_duckdb")
-    pg.md_setup = False
 
     yield pg
 
@@ -66,9 +65,7 @@ def md_cur(pg, ddb, request):
     _ = ddb  # silence warning, we only need ddb
     test_db = request.node.name.removeprefix("test_")
 
-    if not pg.md_setup:
-        pg.sql("SELECT duckdb.enable_motherduck()")
-        pg.md_setup = True
+    pg.sql("SELECT duckdb.enable_motherduck()")
 
     pg.search_path = f"ddb${test_db}, public"
     with pg.cur() as cur:
