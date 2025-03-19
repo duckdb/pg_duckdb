@@ -72,7 +72,7 @@ SELECT duckdb.enable_motherduck('foo');
 SELECT * FROM duckdb.is_motherduck_enabled();
 
 -- Drop user mapping
-DROP USER MAPPING FOR CURRENT_USER SERVER md_server;
+DROP USER MAPPING FOR CURRENT_USER SERVER motherduck;
 
 -- Now MD is not enabled anymore
 SELECT * FROM duckdb.is_motherduck_enabled();

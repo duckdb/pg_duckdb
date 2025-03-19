@@ -58,13 +58,13 @@ The default MotherDuck database will be easiest to use (see below for details), 
 If you want to specify which MotherDuck database is your default database, then you need to configure MotherDuck using a `SERVER` and a `USER MAPPING` as such:
 
 ```sql
-CREATE SERVER md_server
+CREATE SERVER motherduck
 TYPE 'motherduck'
 FOREIGN DATA WRAPPER pg_duckdb
 OPTIONS (default_database '<your database>');
 
 -- You may use `::FROM_ENV::` to have the token be read from the environment variable
-CREATE USER MAPPING FOR CURRENT_USER SERVER md_server OPTIONS (token '<your token>')
+CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token '<your token>')
 ```
 
 Note: with the `duckdb.enable_motherduck` convenience method above, you can simply do:

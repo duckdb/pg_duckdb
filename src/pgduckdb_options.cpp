@@ -318,7 +318,7 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 	SPI_connect();
 
 	if (pgduckdb::GetMotherduckForeignServerOid() == InvalidOid) {
-		std::string query = "CREATE SERVER md_server TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb";
+		std::string query = "CREATE SERVER motherduck TYPE 'motherduck' FOREIGN DATA WRAPPER pg_duckdb";
 		if (default_database.empty()) {
 			query += ";";
 		} else {
@@ -338,7 +338,7 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 		Datum token_datum = CStringGetTextDatum(token.c_str());
 		Oid types[] = {TEXTOID};
 		Datum values[] = {token_datum};
-		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER md_server OPTIONS (token " +
+		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token " +
 		             duckdb::KeywordHelper::WriteQuoted(token) + ");";
 		auto ret = SPI_execute_with_args(query.c_str(), 1, types, values, NULL, false, 0);
 		if (ret != SPI_OK_UTILITY) {
