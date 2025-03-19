@@ -76,8 +76,6 @@ And with MotherDuck, you only need a [a MotherDuck access token][md-access-token
 ```shell
 $ export MOTHERDUCK_TOKEN=<your personal MD token>
 $ docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:16-main
-
-# And then run `SELECT duckdb.enable_motherduck();` in psql (cf. below)
 ```
 
 Or you can use the docker compose in this repo:
