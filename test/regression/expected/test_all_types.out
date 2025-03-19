@@ -11,7 +11,6 @@ SELECT * exclude(
     struct_of_arrays,
     array_of_structs,
     map,
-    "union",
     fixed_nested_int_array,
     fixed_nested_varchar_array,
     fixed_struct_array,
@@ -58,6 +57,7 @@ date_array          | {}
 timestamp_array     | {}
 timestamptz_array   | {}
 varchar_array       | {}
+union               | Frank
 fixed_int_array     | {NULL,2,3}
 fixed_varchar_array | {a,NULL,c}
 -[ RECORD 2 ]-------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -91,6 +91,7 @@ date_array          | {01-01-1970,infinity,-infinity,NULL,05-12-2022}
 timestamp_array     | {"Thu Jan 01 00:00:00 1970",infinity,-infinity,NULL,"Thu May 12 16:23:45 2022"}
 timestamptz_array   | {"Wed Dec 31 16:00:00 1969 PST",infinity,-infinity,NULL,"Thu May 12 16:23:45 2022 PDT"}
 varchar_array       | {🦆🦆🦆🦆🦆🦆,goose,NULL,""}
+union               | 5
 fixed_int_array     | {4,5,6}
 fixed_varchar_array | {d,e,f}
 -[ RECORD 3 ]-------+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -124,6 +125,7 @@ date_array          |
 timestamp_array     | 
 timestamptz_array   | 
 varchar_array       | 
+union               | 
 fixed_int_array     | 
 fixed_varchar_array | 
 
