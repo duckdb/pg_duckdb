@@ -155,7 +155,9 @@ BuildDuckdbOnlyFunctions() {
 	                                "epoch_ms",
 	                                "epoch_us",
 	                                "epoch_ns",
-	                                "time_bucket"};
+	                                "time_bucket",
+	                                "union_extract",
+	                                "union_tag"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));

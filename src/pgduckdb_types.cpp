@@ -1370,6 +1370,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return BYTEAOID;
 	case duckdb::LogicalTypeId::UNION:
 		return pgduckdb::DuckdbUnionOid();
+	case duckdb::LogicalTypeId::ENUM:
+		return VARCHAROID;
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
 		     type.ToString().c_str());
