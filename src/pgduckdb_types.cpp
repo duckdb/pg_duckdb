@@ -1355,8 +1355,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::STRUCT:
 		elog(LOG, "hi returning the appropriate type");
-		return 17496;
-		/* return pgduckdb::DuckdbRowOid(); */
+		return pgduckdb::DuckdbRowOid();
 	case duckdb::LogicalTypeId::LIST:
 	case duckdb::LogicalTypeId::ARRAY: {
 		const duckdb::LogicalType *duck_type = &type;
