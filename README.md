@@ -75,7 +75,9 @@ docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:16-main
 And with MotherDuck, you only need a [a MotherDuck access token][md-access-token] and then it is as simple as:
 ```shell
 $ export MOTHERDUCK_TOKEN=<your personal MD token>
-$ docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:16-main -c duckdb.motherduck_enabled=true
+$ docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:16-main
+
+# And then run `SELECT duckdb.enable_motherduck();` in psql (cf. below)
 ```
 
 Or you can use the docker compose in this repo:
@@ -181,28 +183,33 @@ Note: writes to Azure are not yet supported, please see [the current discussion]
 
 ### Connect with MotherDuck
 
-pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token] and then add the following line to your `postgresql.conf` file:
+pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token]. Then you can enable MotherDuck by simply using:
 
-```ini
-duckdb.motherduck_token = 'your_access_token'
+```sql
+SELECT duckdb.enable_motherduck('your_access_token');
 ```
 
-NOTE: If you don't want to store the token in your `postgresql.conf`file can also store the token in the `motherduck_token` environment variable and then explicitly enable MotherDuck support in your `postgresql.conf` file:
+NOTE: If you don't want use the token in a query, you may also store the token in the `motherduck_token` environment variable and then explicitly enable MotherDuck support by omitting the token:
 
-```ini
-duckdb.motherduck_enabled = true
+```sql
+SELECT duckdb.enable_motherduck();
 ```
 
-If you installed `pg_duckdb` in a different Postgres database than the default one named `postgres`, then you also need to add the following line to your `postgresql.conf` file:
+The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`. If you want to specify which MotherDuck database is your default database, then you need to configure MotherDuck using a `SERVER` and a `USER MAPPING` as such:
 
-```ini
-duckdb.motherduck_postgres_database = 'your_database_name'
+```sql
+CREATE SERVER md_server
+TYPE 'motherduck'
+FOREIGN DATA WRAPPER pg_duckdb
+OPTIONS (default_database '<your database>');
+
+-- You may use `::FROM_ENV::` to have the token be read from the environment variable
+CREATE USER MAPPING FOR CURRENT_USER SERVER md_server OPTIONS (token '<your token>')
 ```
 
-The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`. If you want to specify which MotherDuck database is your default database, then you can also add the following line to your `postgresql.conf` file:
-
-```ini
-duckdb.motherduck_default_database = 'your_motherduck_database_name'
+Note: if you used the `duckdb.enable_motherduck` convenience method above, you can simply do:
+```sql
+ALTER SERVER md_server OPTIONS (SET default_database '<your database>');
 ```
 
 After doing this (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
