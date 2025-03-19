@@ -181,42 +181,26 @@ Note: writes to Azure are not yet supported, please see [the current discussion]
 
 ### Connect with MotherDuck
 
-pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token]. Then you can enable MotherDuck by simply using:
+`pg_duckdb` also integrates with [MotherDuck][md].
+To enable this support you first need to [generate an access token][md-access-token].
+Then you can enable it by simply using the `enable_motherduck` convenience method:
 
 ```sql
-SELECT duckdb.enable_motherduck('your_access_token');
+-- If not provided, the token will be read from the `motherduck_token` environment variable
+-- If not provided, the default MD database name is `my_db`
+SELECT duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
 ```
 
-NOTE: If you don't want use the token in a query, you may also store the token in the `motherduck_token` environment variable and then explicitly enable MotherDuck support by omitting the token:
+Read more [here][md-docs] about MotherDuck integration.
 
-```sql
-SELECT duckdb.enable_motherduck();
-```
-
-The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`. If you want to specify which MotherDuck database is your default database, then you need to configure MotherDuck using a `SERVER` and a `USER MAPPING` as such:
-
-```sql
-CREATE SERVER md_server
-TYPE 'motherduck'
-FOREIGN DATA WRAPPER pg_duckdb
-OPTIONS (default_database '<your database>');
-
--- You may use `::FROM_ENV::` to have the token be read from the environment variable
-CREATE USER MAPPING FOR CURRENT_USER SERVER md_server OPTIONS (token '<your token>')
-```
-
-Note: with the `duckdb.enable_motherduck` convenience method above, you can simply do:
-```sql
-SELECT duckdb.enable_motherduck('<token>', '<default database>');
-```
-
-After doing this (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
+You can now create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
 ```sql
 CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
 CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
 ```
 
 [tam]: https://www.postgresql.org/docs/current/tableam.html
+[md-docs]: docs/motherduck.md
 
 
 Any tables that you already had in MotherDuck are automatically available in Postgres. Since DuckDB and MotherDuck allow accessing multiple databases from a single connection and Postgres does not, we map database+schema in DuckDB to a schema name in Postgres.

@@ -2,17 +2,19 @@
 
 ## Connect with MotherDuck
 
-pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token]. Then you can enable MotherDuck by simply using:
+`pg_duckdb` integrates with [MotherDuck][md] natively.
+To enable this support you first need to [generate an access token][md-access-token].
+Then you can enable it by simply using the `enable_motherduck` convenience method:
 
 ```sql
-SELECT duckdb.enable_motherduck('your_access_token');
+-- If not provided, the token will be read from the `motherduck_token` environment variable
+-- If not provided, the default MD database name is `my_db`
+SELECT duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
 ```
 
-NOTE: If you don't want use the token in a query, you may also store the token in the `motherduck_token` environment variable and then explicitly enable MotherDuck support by omitting the token:
+This convenience method creates a `motherduck` `SERVER` using the `pg_duckdb` Foreign Data Wrapper, which hosts the options for this integration. It also provides an `USER MAPPING` for the current user, which stores the provided MotherDuck token (if any).
 
-```sql
-SELECT duckdb.enable_motherduck();
-```
+You can refer to the [section](advanced-motherduck-configuration) below for more on the `SERVER` and `USER MAPPING` configuration.
 
 ### Non-supersuer configuration
 
@@ -49,7 +51,11 @@ CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
 
 Any tables that you already had in MotherDuck are automatically available in Postgres. Since DuckDB and MotherDuck allow accessing multiple databases from a single connection and Postgres does not, we map database+schema in DuckDB to a schema name in Postgres.
 
-The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`. If you want to specify which MotherDuck database is your default database, then you need to configure MotherDuck using a `SERVER` and a `USER MAPPING` as such:
+The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`.
+
+## Advanced MotherDuck configuration
+
+If you want to specify which MotherDuck database is your default database, then you need to configure MotherDuck using a `SERVER` and a `USER MAPPING` as such:
 
 ```sql
 CREATE SERVER md_server
