@@ -5,6 +5,7 @@
 #include "duckdb/common/types/blob.hpp"
 
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/types.hpp"
@@ -485,6 +486,20 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 	}
 
 	return UUIDPGetDatum(postgres_uuid);
+}
+
+static Datum
+ConvertUnionDatum(const duckdb::Value &value) {
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::UNION);
+	// Copied Logic from ConvertVarcharDatum() ...
+	auto str = value.ToString();
+	auto varchar = str.c_str();
+	auto varchar_len = str.size();
+
+	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
+	SET_VARSIZE(result, varchar_len + VARHDRSZ);
+	memcpy(VARDATA(result), varchar, varchar_len);
+	return PointerGetDatum(result);
 }
 
 static duckdb::interval_t
@@ -1092,6 +1107,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default:
+		if (oid == pgduckdb::DuckdbUnionOid()) {
+			slot->tts_values[col] = ConvertUnionDatum(value);
+			return true;
+		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 		return false;
 	}
@@ -1189,6 +1208,9 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case BYTEAARRAYOID:
 		return duckdb::LogicalTypeId::BLOB;
 	default:
+		if (typoid == pgduckdb::DuckdbUnionOid()) {
+			return duckdb::LogicalTypeId::UNION;
+		}
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
 }
@@ -1346,6 +1368,10 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	}
 	case duckdb::LogicalTypeId::BLOB:
 		return BYTEAOID;
+	case duckdb::LogicalTypeId::UNION:
+		return pgduckdb::DuckdbUnionOid();
+	case duckdb::LogicalTypeId::ENUM:
+		return VARCHAROID;
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
 		     type.ToString().c_str());

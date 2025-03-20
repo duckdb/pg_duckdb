@@ -10,6 +10,7 @@ Oid ExtensionOid();
 Oid SchemaOid();
 Oid DuckdbRowOid();
 Oid DuckdbUnresolvedTypeOid();
+Oid DuckdbUnionOid();
 Oid DuckdbJsonOid();
 Oid DuckdbTableAmOid();
 bool IsMotherDuckEnabled();

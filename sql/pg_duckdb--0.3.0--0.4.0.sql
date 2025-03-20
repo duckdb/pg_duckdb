@@ -452,3 +452,36 @@ CREATE OPERATOR pg_catalog.!~~* (
     RIGHTARG = duckdb.unresolved_type,
     FUNCTION = duckdb_unresolved_type_operator
 );
+
+CREATE TYPE duckdb.union;
+CREATE FUNCTION duckdb.union_in(cstring) RETURNS duckdb.union AS 'MODULE_PATHNAME', 'duckdb_union_in' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.union_out(duckdb.union) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_union_out' LANGUAGE C IMMUTABLE STRICT;
+CREATE TYPE duckdb.union(
+    INTERNALLENGTH = VARIABLE,
+    INPUT = duckdb.union_in,
+    OUTPUT = duckdb.union_out
+);
+
+CREATE FUNCTION @extschema@.union_extract(union_col duckdb.unresolved_type, tag text)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.union_extract(union_col duckdb.union, tag text)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.union_tag(union_col duckdb.unresolved_type)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.union_tag(union_col duckdb.union)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;

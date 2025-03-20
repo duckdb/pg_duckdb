@@ -559,4 +559,12 @@ DECLARE_PG_FUNCTION(duckdb_only_function) {
 	elog(ERROR, "Function '%s' only works with DuckDB execution", function_name);
 }
 
+DECLARE_PG_FUNCTION(duckdb_union_in) {
+	elog(ERROR, "Creating the duckdb.union type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_union_out) {
+	return textout(fcinfo);
+}
+
 } // extern "C"

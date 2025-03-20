@@ -56,6 +56,8 @@ struct {
 	Oid row_oid;
 	/* The OID of the duckdb.unresolved_type */
 	Oid unresolved_type_oid;
+	/* The OID of the duckdb.union type */
+	Oid union_oid;
 	/* The OID of the duckdb.json */
 	Oid json_oid;
 	/* The OID of the duckdb Table Access Method */
@@ -153,7 +155,9 @@ BuildDuckdbOnlyFunctions() {
 	                                "epoch_ms",
 	                                "epoch_us",
 	                                "epoch_ns",
-	                                "time_bucket"};
+	                                "time_bucket",
+	                                "union_extract",
+	                                "union_tag"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
@@ -225,6 +229,8 @@ IsExtensionRegistered() {
 		cache.unresolved_type_oid =
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("unresolved_type"), cache.schema_oid);
 
+		cache.union_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("union"), cache.schema_oid);
+
 		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
 
 		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
@@ -289,6 +295,12 @@ Oid
 DuckdbUnresolvedTypeOid() {
 	Assert(cache.valid);
 	return cache.unresolved_type_oid;
+}
+
+Oid
+DuckdbUnionOid() {
+	Assert(cache.valid);
+	return cache.union_oid;
 }
 
 Oid
