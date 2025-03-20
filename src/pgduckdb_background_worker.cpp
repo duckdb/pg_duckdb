@@ -737,7 +737,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	/* -1 is for the NULL terminator */
 	if (strlen(postgres_schema_name) > NAMEDATALEN - 1) {
 		ereport(WARNING,
-		        (errmsg("Skipping sync of MotherDuck schema %s because its name is too long", postgres_schema_name),
+		        (errmsg("Skipping sync of MotherDuck schema '%s' because its name is too long", postgres_schema_name),
 		         errhint("The maximum length of a schema name is %d characters", NAMEDATALEN - 1)));
 		return false;
 	}
