@@ -564,7 +564,6 @@ DECLARE_PG_FUNCTION(duckdb_union_in) {
 }
 
 DECLARE_PG_FUNCTION(duckdb_union_out) {
-	// TODO : Is this correct??
 	return textout(fcinfo);
 }
 
