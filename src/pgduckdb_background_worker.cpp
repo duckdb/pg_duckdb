@@ -734,6 +734,14 @@ GrantAccessToSchema(const char *postgres_schema_name) {
 
 static bool
 CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
+	/* -1 is for the NULL terminator */
+	if (strlen(postgres_schema_name) > NAMEDATALEN - 1) {
+		ereport(WARNING,
+		        (errmsg("Skipping sync of MotherDuck schema %s because its name is too long", postgres_schema_name),
+		         errhint("The maximum length of a schema name is %d characters", NAMEDATALEN - 1)));
+		return false;
+	}
+
 	Oid schema_oid = get_namespace_oid(postgres_schema_name, true);
 	if (schema_oid != InvalidOid) {
 		/*
@@ -803,15 +811,18 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		return false;
 	}
 
-	/* Success, so we commit the subtransaction */
-	ReleaseCurrentSubTransaction();
-
 	if (!is_default_db) {
 		/*
 		 * For ddb$ schemas we need to record a dependency between the schema
 		 * and the extension, so that DROP EXTENSION also drops these schemas.
 		 */
-		schema_oid = get_namespace_oid(postgres_schema_name, false);
+		schema_oid = get_namespace_oid(postgres_schema_name, true);
+		if (schema_oid == InvalidOid) {
+			elog(WARNING, "Failed to create schema %s for unknown reason, skipping sync", postgres_schema_name);
+			RollbackAndReleaseCurrentSubTransaction();
+			return false;
+		}
+
 		ObjectAddress schema_address = {
 		    .classId = NamespaceRelationId,
 		    .objectId = schema_oid,
@@ -824,6 +835,9 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		};
 		recordDependencyOn(&schema_address, &extension_address, DEPENDENCY_NORMAL);
 	}
+
+	/* Success, so we commit the subtransaction */
+	ReleaseCurrentSubTransaction();
 
 	/* And then we also commit the actual transaction to release any locks that
 	 * were necessary to execute it. */
