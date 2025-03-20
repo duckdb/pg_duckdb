@@ -818,7 +818,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		 */
 		schema_oid = get_namespace_oid(postgres_schema_name, true);
 		if (schema_oid == InvalidOid) {
-			elog(WARNING, "Failed to create schema %s for unknown reason, skipping sync", postgres_schema_name);
+			elog(WARNING, "Failed to create schema '%s' for unknown reason, skipping sync", postgres_schema_name);
 			RollbackAndReleaseCurrentSubTransaction();
 			return false;
 		}
