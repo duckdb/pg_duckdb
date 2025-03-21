@@ -6,34 +6,107 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_table_am.hpp"
 
 extern "C" {
 #include "postgres.h"
+
 #include "access/xact.h"
+#include "access/table.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/params.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
 #include "optimizer/planmain.h"
+#include "parser/parse_coerce.h"
+#include "rewrite/rewriteHandler.h"
 #include "tcop/pquery.h"
+#include "utils/typcache.h"
+#include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/guc.h"
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
+#include "pgduckdb/pg/types.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
+bool
+IsAllowedPostgresInsert(Query *query, bool throw_error) {
+	int elevel = throw_error ? ERROR : DEBUG4;
+	if (query->commandType != CMD_INSERT) {
+		elog(elevel, "DuckDB only supports INSERT/SELECT on Postgres tables");
+		return false;
+	}
+
+	Assert(list_length(query->rtable) >= query->resultRelation);
+	RangeTblEntry *target_rel = (RangeTblEntry *)list_nth(query->rtable, query->resultRelation - 1);
+	if (pgduckdb::IsDuckdbTable(target_rel->relid)) {
+		return false;
+	}
+
+	/* Checking supported INSERT types */
+	RangeTblEntry *select_rte = NULL;
+	foreach_node(RangeTblEntry, rte, query->rtable) {
+		if (rte->rtekind == RTE_SUBQUERY) {
+			select_rte = rte;
+		}
+	}
+
+	if (!select_rte) {
+		elog(elevel, "DuckDB does not support INSERT without a subquery");
+		return false;
+	}
+	
+	/* TODO: Checking supported target column types */
+	Relation rel = RelationIdGetRelation(target_rel->relid);
+	TupleDesc target_desc = RelationGetDescr(rel);
+	bool ret = true;
+	for (int i = 0; i < target_desc->natts; i++) {
+		Form_pg_attribute attr = TupleDescAttr(target_desc, i);
+		if (attr->attisdropped) {
+			continue;
+		}
+
+		if (attr->atttypid == BYTEAOID || attr->atttypid == XMLOID || pgduckdb::pg::IsDomainType(attr->atttypid) ||
+		    pgduckdb::pg::IsArrayType(attr->atttypid)) {
+			elog(elevel, "DuckDB does not support INSERT/SELECT on BYTEA/ARRAY columns");
+			ret = false;
+			break;
+		}
+	}
+	RelationClose(rel);
+
+	return ret;
+}
+
 duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query, const char *explain_prefix) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
-	const char *query_string = pgduckdb_get_querydef(copied_query);
+	const char *query_string;
+	if (IsAllowedPostgresInsert(copied_query)) {
+		RangeTblEntry *select_rte = NULL;
+		foreach_node(RangeTblEntry, rte, copied_query->rtable) {
+			if (rte->rtekind == RTE_SUBQUERY) {
+				select_rte = rte;
+			}
+		}
+
+		/* A subquery must be present at this point; other cases should have been filtered out during the
+		 * pre-planning phase */
+		Assert(select_rte);
+		query_string = pgduckdb_get_querydef(select_rte->subquery);
+	} else {
+		query_string = pgduckdb_get_querydef(copied_query);
+	}
 
 	if (explain_prefix) {
 		query_string = psprintf("%s %s", explain_prefix, query_string);
@@ -43,6 +116,58 @@ DuckdbPrepare(const Query *query, const char *explain_prefix) {
 
 	auto con = pgduckdb::DuckDBManager::GetConnection();
 	return con->context->Prepare(query_string);
+}
+
+/*
+ * ReconstructTargetListForInsert - Aligns the target list with the table's columns
+ *
+ * When inserting data with a different column count or order than the target table,
+ * this function reconstructs the target list to ensure proper alignment between
+ * source and destination columns. It handles default values for unmatched columns.
+ */
+static List *
+ReconstructTargetListForInsert(TupleDesc pg_tupdesc, List *query_targetlist, List *duckdb_targetlist) {
+	List *target_list = NIL;
+	ListCell *duckdb_targetlist_cell = list_head(duckdb_targetlist);
+
+	for (int i = 0; i < pg_tupdesc->natts; i++) {
+		Form_pg_attribute attr = TupleDescAttr(pg_tupdesc, i);
+
+		/* Skip dropped columns */
+		if (attr->attisdropped)
+			continue;
+
+		/*
+		 * Locate the matching column in the query target list.
+		 * Use the existing TargetEntry if found, or create a NULL entry if not.
+		 */
+		TargetEntry *target_entry = NULL;
+		for (int j = 0; j < list_length(query_targetlist); j++) {
+			TargetEntry *query_target_entry = (TargetEntry *)list_nth(query_targetlist, j);
+			if (query_target_entry->resno == attr->attnum) {
+				if (pgduckdb_is_not_default_expr((Node *)query_target_entry, NULL)) {
+					target_entry = (TargetEntry *)lfirst(duckdb_targetlist_cell);
+					target_entry->resno = attr->attnum;
+					duckdb_targetlist_cell = lnext(duckdb_targetlist, duckdb_targetlist_cell);
+				} else {
+					target_entry = query_target_entry;
+				}
+				break;
+			}
+		}
+
+		if (target_entry) {
+			target_list = lappend(target_list, target_entry);
+			continue;
+		}
+
+		/* For column not found in the target list, create a NULL Expr for it */
+		target_entry = makeTargetEntry((Expr *)makeNullConst(attr->atttypid, attr->atttypmod, attr->attcollation),
+		                               attr->attnum, pstrdup(NameStr(attr->attname)), false);
+		target_list = lappend(target_list, target_entry);
+	}
+
+	return target_list;
 }
 
 static Plan *
@@ -106,6 +231,24 @@ CreatePlan(Query *query, bool throw_error) {
 		ReleaseSysCache(tp);
 	}
 
+	if (IsAllowedPostgresInsert(query)) {
+		RangeTblEntry *target_rel = (RangeTblEntry *)list_nth(query->rtable, query->resultRelation - 1);		
+		Relation rel = RelationIdGetRelation(target_rel->relid);
+		TupleDesc pg_tupdesc = RelationGetDescr(rel);
+
+		/*
+		 * When the target table's column count differs from the prepared result's column count (e.g., in an INSERT with
+		 * explicit column names), we must reconstruct the target list to ensure proper column alignment between the
+		 * source and destination.
+		 */
+		if (pg_tupdesc->natts != prepared_result_types.size()) {
+			duckdb_node->scan.plan.targetlist =
+			    ReconstructTargetListForInsert(pg_tupdesc, query->targetList, duckdb_node->scan.plan.targetlist);
+		}
+
+		RelationClose(rel);
+	}
+
 	duckdb_node->custom_private = list_make1(query);
 	duckdb_node->methods = &duckdb_scan_scan_methods;
 
@@ -130,6 +273,60 @@ DuckdbRangeTableEntry(CustomScan *custom_scan) {
 	rte->inFromCl = true;
 
 	return rte;
+}
+
+/*
+ * CoerceTargetList - Coerces the target list from DuckDB to match PostgreSQL types
+ *
+ * This function takes a target list from a DuckDB query and ensures that each column
+ * has the correct data type expected by PostgreSQL. It adds type coercions where
+ * necessary to make the types compatible.
+ *
+ * Parameters:
+ *   duckdb_targetlist - The target list from the DuckDB query
+ *   pg_tupdesc - PostgreSQL tuple descriptor containing the expected column types
+ *
+ * Returns:
+ *   A new target list with appropriate type coercions applied
+ */
+List *
+CoerceTargetList(List *duckdb_targetlist, TupleDesc pg_tupdesc) {
+	List *ret = NIL;
+
+	foreach_node(TargetEntry, source_te, duckdb_targetlist) {
+		AttrNumber attnum = source_te->resno;
+		if (attnum > pg_tupdesc->natts) {
+			elog(ERROR, "DuckDB query returns more columns than Postgres wants");
+		}
+
+		/* Get expected target type */
+		Form_pg_attribute attr = TupleDescAttr(pg_tupdesc, attnum - 1);
+		Oid targetTypeId = attr->atttypid;
+		int32 targetTypeMod = attr->atttypmod;
+
+		/* Get source expression and its type */
+		Expr *expr = source_te->expr;
+		Oid sourceTypeId = exprType((Node *)expr);
+		int32 sourceTypeMod = exprTypmod((Node *)expr);
+
+		/* Add coercion if needed */
+		if (sourceTypeId != targetTypeId || sourceTypeMod != targetTypeMod) {
+			expr = (Expr *)coerce_to_target_type(NULL, (Node *)expr, sourceTypeId, targetTypeId, targetTypeMod,
+			                                     COERCION_EXPLICIT, COERCE_IMPLICIT_CAST, -1);
+
+			if (expr == NULL)
+				elog(ERROR, "cannot coerce column %d from type %u to target type %u", attnum, sourceTypeId,
+				     targetTypeId);
+				     
+			/* Create a new target entry with coerced expression */
+			TargetEntry *new_te = makeTargetEntry(expr, attnum, source_te->resname, source_te->resjunk);
+			ret = lappend(ret, new_te);
+		} else {
+			ret = lappend(ret, source_te);
+		}
+	}
+
+	return ret;
 }
 
 PlannedStmt *
@@ -170,8 +367,14 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	 */
 	Query *copied_query = (Query *)copyObjectImpl(parse);
 	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
-
-	postgres_plan->planTree = duckdb_plan;
+	if (IsAllowedPostgresInsert(parse)) {
+		Assert(IsA(postgres_plan->planTree, ModifyTable));
+		TupleDesc target_desc = ExecTypeFromTL(outerPlan(postgres_plan->planTree)->targetlist);
+		duckdb_plan->targetlist = CoerceTargetList(duckdb_plan->targetlist, target_desc);
+		outerPlan(postgres_plan->planTree) = duckdb_plan;
+	} else {
+		postgres_plan->planTree = duckdb_plan;
+	}
 
 	/* Put a DuckdDB RTE at the end of the rtable */
 	RangeTblEntry *rte = DuckdbRangeTableEntry(custom_scan);
