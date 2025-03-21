@@ -1137,4 +1137,22 @@ pgduckdb_is_not_default_expr(Node *node, void *context) {
 	return expression_tree_walker(node, (bool (*)())((void *)pgduckdb_is_not_default_expr), context);
 #endif
 }
+
+bool
+is_system_sampling(const char *tsm_name, int num_args) {
+	return (pg_strcasecmp(tsm_name, "system") == 0) && (num_args == 1);
+}
+
+bool
+is_bernoulli_sampling(const char *tsm_name, int num_args) {
+	return (pg_strcasecmp(tsm_name, "bernoulli") == 0) && (num_args == 1);
+}
+
+void
+pgduckdb_add_tablesample_percent(const char *tsm_name, StringInfo buf, int num_args) {
+	if (!(is_system_sampling(tsm_name, num_args) || is_bernoulli_sampling(tsm_name, num_args))) {
+		return;
+	}
+	appendStringInfoChar(buf, '%');
+}
 }
