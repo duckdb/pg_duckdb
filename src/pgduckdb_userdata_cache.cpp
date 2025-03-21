@@ -2,10 +2,8 @@ extern "C" {
 #include "postgres.h"
 
 #include "miscadmin.h"
-#include "catalog/pg_user_mapping.h"
 #include "commands/extension.h"
 #include "foreign/foreign.h"
-#include "access/htup_details.h"
 #include "utils/inval.h"
 #include "utils/syscache.h"
 }
@@ -74,14 +72,7 @@ LoadMotherDuckCache() {
 
 	auto server = GetForeignServer(server_oid);
 	cache.motherduck_postgres_role_oid = server->owner; // TODO - make configurable
-
-	{
-		auto tp = SearchSysCache2(USERMAPPINGUSERSERVER, ObjectIdGetDatum(GetUserId()), ObjectIdGetDatum(server_oid));
-		if (HeapTupleIsValid(tp)) {
-			cache.motherduck_user_mapping_oid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
-			ReleaseSysCache(tp);
-		}
-	}
+	cache.motherduck_user_mapping_oid = pgduckdb::FindUserMappingForUser(GetUserId(), server_oid);
 }
 
 void

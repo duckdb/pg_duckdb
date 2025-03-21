@@ -1,10 +1,11 @@
 extern "C" {
 #include "postgres.h"
-#include "utils/acl.h"
+
+#include "access/htup_details.h"
 #include "access/reloptions.h"
+#include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_foreign_table.h"
-#include "catalog/pg_foreign_data_wrapper.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/defrem.h"
 #include "executor/executor.h"
@@ -16,8 +17,10 @@ extern "C" {
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "optimizer/pathnode.h"
+#include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/inval.h"
+#include "utils/syscache.h"
 
 #include "pgduckdb/vendor/pg_list.hpp"
 }
@@ -51,9 +54,6 @@ static const struct PGDuckDBFdwOption valid_options[] = {
     // the role bgw assigns to MD tables (by default server creator/owner)
     {"tables_owner_role", MD, ForeignServerRelationId},
     {"background_catalog_refresh_inactivity_timeout", MD, ForeignServerRelationId},
-
-    // a specific token to synchronize MD tables, by default the token of the user mapping which belongs creator/owner
-    {"sync_token", MD, ForeignServerRelationId},
 
     {"default_database", MD, ForeignServerRelationId}, // Name of the MotherDuck database to be synced (default "my_db")
 
@@ -212,12 +212,11 @@ FindMotherDuckBackgroundCatalogRefreshInactivityTimeout() {
 }
 
 // * if `pgduckdb::is_background_worker` then:
-//   > returns `sync_token` setting defined in the `motherduck` SERVER if it exists
-//   > returns `token` setting defined in the USER MAPPING of the tables_owner_role defined in the SERVER if it exists
+//   > returns `token` option defined in the USER MAPPING of the tables_owner_role defined in the SERVER if it exists
 //   > returns nullptr otherwise
 //
 // * otherwise:
-//   > returns `token` setting defined in the USER MAPPING of the current user if it exists
+//   > returns `token` option defined in the USER MAPPING of the current user if it exists
 //   > returns nullptr otherwise
 const char *
 FindMotherDuckToken() {
@@ -229,28 +228,36 @@ FindMotherDuckToken() {
 	auto userid = GetUserId();
 	if (pgduckdb::is_background_worker) {
 		auto server = GetForeignServer(server_oid);
-		auto sync_token = FindOption(server->options, "sync_token");
-		if (sync_token != nullptr) {
-			return sync_token;
-		}
-
-		auto tables_owner_role = FindOption(server->options, "tables_owner_role");
-		if (tables_owner_role == nullptr) {
-			return nullptr;
-		}
-
-		auto role_oid = get_role_oid(tables_owner_role, true);
-		if (userid != role_oid) {
-			return nullptr;
+		auto um_oid = FindUserMappingForUser(server->owner, server_oid);
+		if (um_oid == InvalidOid) {
+			// SERVER's owner has no UM, get token from SERVER's options:
+			return FindOption(server->options, "token");
+		} else {
+			// SERVER's owner has an UM, get token from its options:
+			auto user_mapping = GetUserMapping(server->owner, server_oid);
+			return FindOption(user_mapping->options, "token");
 		}
 	}
 
+	// Not a background worker, get token from current user's UM:
 	if (GetMotherDuckUserMappingOid() == InvalidOid) {
 		return nullptr;
 	}
 
 	auto user_mapping = GetUserMapping(userid, server_oid);
 	return FindOption(user_mapping->options, "token");
+}
+
+Oid
+FindUserMappingForUser(Oid user_oid, Oid server_oid) {
+	auto tp = SearchSysCache2(USERMAPPINGUSERSERVER, ObjectIdGetDatum(user_oid), ObjectIdGetDatum(server_oid));
+	auto oid = InvalidOid;
+	if (HeapTupleIsValid(tp)) {
+		oid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
+		ReleaseSysCache(tp);
+	}
+
+	return oid;
 }
 
 } // namespace pgduckdb
@@ -324,7 +331,8 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 
 		switch (type) {
 		case MD:
-			return validate_motherduck_server_fdw(options_list, catalog);
+			validate_motherduck_server_fdw(options_list, catalog);
+			break;
 		case S3:
 		case GCS:
 			elog(ERROR, "Not implemented.");
