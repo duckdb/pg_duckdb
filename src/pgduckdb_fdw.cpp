@@ -230,13 +230,13 @@ FindMotherDuckToken() {
 		auto server = GetForeignServer(server_oid);
 		auto um_oid = FindUserMappingForUser(server->owner, server_oid);
 		if (um_oid == InvalidOid) {
-			// SERVER's owner has no UM, get token from SERVER's options:
-			return FindOption(server->options, "token");
-		} else {
-			// SERVER's owner has an UM, get token from its options:
-			auto user_mapping = GetUserMapping(server->owner, server_oid);
-			return FindOption(user_mapping->options, "token");
+			elog(WARNING, "No USER MAPPING found for owner of server %s", server->servername);
+			return nullptr;
 		}
+
+		// SERVER's owner has an UM, get token from its options:
+		auto user_mapping = GetUserMapping(server->owner, server_oid);
+		return FindOption(user_mapping->options, "token");
 	}
 
 	// Not a background worker, get token from current user's UM:
