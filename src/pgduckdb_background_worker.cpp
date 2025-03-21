@@ -55,8 +55,10 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
+static duckdb::unique_ptr<duckdb::Connection> ddb_connection = nullptr;
 static uint64 initial_cache_version = 0;
 
 namespace pgduckdb {
@@ -117,22 +119,50 @@ BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count
 
 bool CanTakeBgwLockForDatabase(Oid database_oid);
 
+bool
+RunOneCheck(int64 &last_activity_count) {
+	// No need to run if MD is not enabled.
+	if (!pgduckdb::IsMotherDuckEnabled()) {
+		elog(LOG, "pg_duckdb background worker: MotherDuck is not enabled, will exit.");
+		return true; // should exit
+	}
+
+	if (!pgduckdb::IsExtensionRegistered()) {
+		return false; // XXX: shouldn't we exit actually?
+	}
+
+	if (!ddb_connection) {
+		try {
+			ddb_connection = pgduckdb::DuckDBManager::CreateConnection();
+		} catch (std::exception &ex) {
+			elog(LOG, "pg_duckdb background worker: failed to create connection: %s", ex.what());
+			return true; // should exit
+		}
+	}
+
+	InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
+	return false;
+}
+
 } // namespace pgduckdb
 
 extern "C" {
 
 PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum /* main_arg */) {
-	elog(LOG, "started pg_duckdb background worker");
+pgduckdb_background_worker_main(Datum main_arg) {
+	Oid database_oid = DatumGetObjectId(main_arg);
 	if (!pgduckdb::CanTakeBgwLockForDatabase(0)) {
-		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", 0);
+		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
 		return;
 	}
+
+	elog(LOG, "started pg_duckdb background worker for database %u", database_oid);
+
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
 	BackgroundWorkerUnblockSignals();
 
-	BackgroundWorkerInitializeConnection(duckdb_motherduck_postgres_database, NULL, 0);
+	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
 
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
 	pgduckdb::BgwShmemStruct->bgw_latch = MyLatch;
@@ -142,8 +172,6 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 	pgduckdb::doing_motherduck_sync = true;
 	pgduckdb::is_background_worker = true;
 
-	duckdb::unique_ptr<duckdb::Connection> connection = nullptr;
-
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
 		SetCurrentStatementStartTimestamp();
@@ -151,17 +179,17 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 		SPI_connect();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
-		if (pgduckdb::IsExtensionRegistered()) {
-			if (!connection) {
-				connection = InvokeCPPFunc(pgduckdb::DuckDBManager::CreateConnection);
-			}
-			InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, connection.get(), &last_activity_count);
-		}
+		const bool should_exit = pgduckdb::RunOneCheck(last_activity_count);
 
 		// Commit the transaction
 		PopActiveSnapshot();
 		SPI_finish();
 		CommitTransactionCommand();
+
+		if (should_exit) {
+			break;
+		}
+
 		pgstat_report_stat(false);
 		pgstat_report_activity(STATE_IDLE, NULL);
 
@@ -303,19 +331,17 @@ CanTakeBgwLockForDatabase(Oid database_oid) {
 
 	auto fd = open(lock_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 	if (fd < 0) {
-		auto err = strerror(errno);
-		elog(ERROR, "Could not open file '%s': %s", lock_file_name, err);
+		elog(ERROR, "Could not open file '%s': %m", lock_file_name);
 	}
 
 	// Take exclusive lock on the file
 	auto ret = flock(fd, LOCK_EX | LOCK_NB);
-	if (ret == EWOULDBLOCK || ret == EAGAIN) {
-		return false;
-	}
-
 	if (ret != 0) {
-		auto err = strerror(errno);
-		elog(ERROR, "Could not take lock on file '%s': %s", lock_file_name, err);
+		if (errno == EWOULDBLOCK || errno == EAGAIN) {
+			return false;
+		}
+
+		elog(ERROR, "Could not take lock on file '%s': %m", lock_file_name);
 	}
 
 	return true;
@@ -359,7 +385,7 @@ Will start the background worker if:
 */
 void
 StartBackgroundWorkerIfNeeded(void) {
-	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
+	if (!pgduckdb::IsMotherDuckEnabled()) {
 		elog(DEBUG3, "pg_duckdb background worker not started because MotherDuck is not enabled");
 		return;
 	}
@@ -378,7 +404,7 @@ StartBackgroundWorkerIfNeeded(void) {
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "pgduckdb_background_worker_main");
 	snprintf(worker.bgw_name, BGW_MAXLEN, PGDUCKDB_SYNC_WORKER_NAME);
 	worker.bgw_restart_time = 1;
-	worker.bgw_main_arg = (Datum)0;
+	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
 
 	// Register the worker
 	RegisterDynamicBackgroundWorker(&worker, NULL);
@@ -930,7 +956,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 			}
 
 			std::string postgres_schema_name = PgSchemaName(motherduck_db, schema.name, is_default_db);
-
 			if (!CreateSchemaIfNotExists(postgres_schema_name.c_str(), is_default_db)) {
 				/* We failed to create the schema, so we skip the tables in it */
 				continue;

@@ -13,6 +13,7 @@ extern "C" {
 #include "fmgr.h"
 #include "catalog/pg_authid_d.h"
 #include "catalog/namespace.h"
+#include "foreign/foreign.h"
 #include "funcapi.h"
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
@@ -38,6 +39,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
@@ -143,6 +145,9 @@ DropTablePreCheck(DropStmt *stmt) {
 		elog(ERROR, "Dropping both DuckDB and non-DuckDB tables in the same transaction is not supported");
 	}
 }
+
+static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
+static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
 
 static void
 DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
@@ -344,7 +349,59 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			pgduckdb::ClaimCurrentCommandId();
 		}
 		RelationClose(relation);
+	} else if (IsA(parsetree, CreateForeignServerStmt)) {
+		DuckdbHandleCreateForeignServerStmt(parsetree);
+		return;
+	} else if (IsA(parsetree, CreateUserMappingStmt)) {
+		DuckdbHandleCreateUserMappingStmt(parsetree);
+		return;
 	}
+}
+
+static void
+ValidateOptionNotSet(List *options, const char *option_name) {
+	foreach_node(DefElem, def, options) {
+		if (strcmp(def->defname, option_name) == 0) {
+			elog(ERROR, "`%s` should not be set in the options", option_name);
+		}
+	}
+}
+
+static void
+DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
+	// Propagate the "TYPE" to the server options, don't validate it here though
+	auto stmt = castNode(CreateForeignServerStmt, parsetree);
+	if (strcmp(stmt->fdwname, "duckdb") != 0) {
+		return; // Not our FDW, don't do anything
+	}
+
+	ValidateOptionNotSet(stmt->options, "type");
+
+	if (stmt->servertype == NULL) {
+		return; // Don't do anything quite yet, let the validator raise an error
+	}
+
+	// Wasn't set, add it.
+	stmt->options = lappend(stmt->options, makeDefElem(pstrdup("type"), (Node *)makeString(stmt->servertype), -1));
+}
+
+static void
+DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
+	// Propagate the "servername" to the user mapping options
+	auto stmt = castNode(CreateUserMappingStmt, parsetree);
+
+	auto server = GetForeignServerByName(stmt->servername, false);
+	auto fdw = GetForeignDataWrapper(server->fdwid);
+	if (strcmp(fdw->fdwname, "duckdb") != 0) {
+		return; // Not our FDW, don't do anything
+	}
+
+	Assert(stmt->servername);
+	ValidateOptionNotSet(stmt->options, "servername");
+
+	// Wasn't set, add it.
+	stmt->options =
+	    lappend(stmt->options, makeDefElem(pstrdup("servername"), (Node *)makeString(stmt->servername), -1));
 }
 
 static void
@@ -525,6 +582,10 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (is_temporary) {
 		pgduckdb::RegisterDuckdbTempTable(relid);
 	} else {
+		if (!pgduckdb::IsMotherDuckEnabled()) {
+			elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
+		}
+
 		Oid saved_userid;
 		int sec_context;
 		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
@@ -553,8 +614,9 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		/* Revert back to original privileges */
 		SetUserIdAndSecContext(saved_userid, sec_context);
 
-		if (ret != SPI_OK_INSERT)
+		if (ret != SPI_OK_INSERT) {
 			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+		}
 
 		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
 	}
