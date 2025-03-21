@@ -331,19 +331,17 @@ CanTakeBgwLockForDatabase(Oid database_oid) {
 
 	auto fd = open(lock_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
 	if (fd < 0) {
-		auto err = strerror(errno);
-		elog(ERROR, "Could not open file '%s': %s", lock_file_name, err);
+		elog(ERROR, "Could not open file '%s': %m", lock_file_name);
 	}
 
 	// Take exclusive lock on the file
 	auto ret = flock(fd, LOCK_EX | LOCK_NB);
-	if (ret == EWOULDBLOCK || ret == EAGAIN) {
-		return false;
-	}
-
 	if (ret != 0) {
-		auto err = strerror(errno);
-		elog(ERROR, "Could not take lock on file '%s': %d %s", lock_file_name, ret, err);
+		if (errno == EWOULDBLOCK || errno == EAGAIN) {
+			return false;
+		}
+
+		elog(ERROR, "Could not take lock on file '%s': %m", lock_file_name);
 	}
 
 	return true;
