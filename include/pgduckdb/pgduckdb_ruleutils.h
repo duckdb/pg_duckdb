@@ -30,5 +30,8 @@ int pgduckdb_show_type(Const *constval, int original_showtype);
 bool pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var, char *colname);
 SubscriptingRef *pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf);
 char *pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level);
+bool is_system_sampling(const char *tsm_name, int num_args);
+bool is_bernoulli_sampling(const char *tsm_name, int num_args);
+void pgduckdb_add_tablesample_percent(const char *tsm_name, StringInfo buf, int num_args);
 
 extern bool processed_targetlist;
