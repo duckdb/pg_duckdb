@@ -212,7 +212,7 @@ FindMotherDuckBackgroundCatalogRefreshInactivityTimeout() {
 }
 
 // * if `pgduckdb::is_background_worker` then:
-//   > returns `token` option defined in the USER MAPPING of the tables_owner_role defined in the SERVER if it exists
+//   > returns `token` option defined in the USER MAPPING of the SERVER's owner if it exists
 //   > returns nullptr otherwise
 //
 // * otherwise:
