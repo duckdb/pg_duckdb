@@ -39,3 +39,4 @@ test: json_functions_duckdb
 test: date
 test: timestamp_timestamptz
 test: union_functions
+test: heap_insert_select

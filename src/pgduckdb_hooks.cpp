@@ -9,6 +9,7 @@
 extern "C" {
 #include "postgres.h"
 
+#include "catalog/pg_am.h"
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
@@ -71,6 +72,18 @@ IsDuckdbTable(Oid relid) {
 
 	auto rel = RelationIdGetRelation(relid);
 	bool result = pgduckdb::IsDuckdbTableAm(rel->rd_tableam);
+	RelationClose(rel);
+	return result;
+}
+
+static bool
+IsHeapTable(Oid relid) {
+	if (relid == InvalidOid) {
+		return false;
+	}
+
+	auto rel = RelationIdGetRelation(relid);
+	bool result = rel->rd_rel->relam == HEAP_TABLE_AM_OID;
 	RelationClose(rel);
 	return result;
 }
@@ -169,10 +182,16 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	/* We don't support modifying statements on Postgres tables yet */
 	if (query->commandType != CMD_SELECT) {
 		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
-		if (!::IsDuckdbTable(resultRte->relid)) {
+		if (::IsHeapTable(resultRte->relid) && query->commandType == CMD_INSERT) {
+			if (query->onConflict || query->returningList) {
+				elog(elevel, "DuckDB does not support INSERT ON CONFLICT or RETURNING on Postgres tables");
+				return false;
+			}
+		} else if (!::IsDuckdbTable(resultRte->relid)) {
 			elog(elevel, "DuckDB does not support modififying Postgres tables");
 			return false;
 		}
+
 		if (pgduckdb::DidDisallowedMixedWrites()) {
 			elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 			return false;

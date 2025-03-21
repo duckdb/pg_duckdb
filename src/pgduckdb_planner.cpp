@@ -33,7 +33,23 @@ extern "C" {
 duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query, const char *explain_prefix) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
-	const char *query_string = pgduckdb_get_querydef(copied_query);
+	const char *query_string;
+	if (copied_query->commandType == CMD_INSERT) {
+		ListCell *l;
+		RangeTblEntry *select_rte = NULL;
+		foreach(l, copied_query->rtable) {
+			RangeTblEntry *rte = (RangeTblEntry *)lfirst(l);
+			if (rte->rtekind == RTE_SUBQUERY) {
+				select_rte = rte;
+			}
+		}
+		if (!select_rte) {
+			elog(ERROR, "DuckDB only supports INSERT with a SELECT");
+		}
+		query_string = pgduckdb_get_querydef(select_rte->subquery);
+	} else {
+		query_string = pgduckdb_get_querydef(copied_query);
+	}
 
 	if (explain_prefix) {
 		query_string = psprintf("%s %s", explain_prefix, query_string);
@@ -172,7 +188,14 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	Query *copied_query = (Query *)copyObjectImpl(parse);
 	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
 
-	postgres_plan->planTree = duckdb_plan;
+
+	if (postgres_plan->commandType == CMD_INSERT) {
+		Assert(IsA(postgres_plan->planTree, ModifyTable));
+		outerPlan(postgres_plan->planTree) = duckdb_plan;
+	}
+	else {
+		postgres_plan->planTree = duckdb_plan;
+	}
 
 	/* Put a DuckdDB RTE at the end of the rtable */
 	RangeTblEntry *rte = DuckdbRangeTableEntry(custom_scan);
