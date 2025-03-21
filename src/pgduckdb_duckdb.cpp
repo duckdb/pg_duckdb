@@ -10,6 +10,7 @@
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pg/guc.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
@@ -101,7 +102,7 @@ uri_escape(const char *str) {
 
 static const char *
 GetSessionHint() {
-	if (strcmp(duckdb_motherduck_session_hint, "") != 0) {
+	if (!IsEmptyString(duckdb_motherduck_session_hint)) {
 		return duckdb_motherduck_session_hint;
 	}
 	return PossiblyReuseBgwSessionHint();
@@ -188,14 +189,14 @@ DuckDBManager::Initialize() {
 
 		// Session hint
 		auto escaped_session_hint = uri_escape(GetSessionHint());
-		if (strcmp(escaped_session_hint, "") != 0) {
+		if (!IsEmptyString(escaped_session_hint)) {
 			appendStringInfo(&buf, "session_hint=%s&", escaped_session_hint);
 		}
 
 		// Token
 		auto token = FindMotherDuckToken();
-		if (token != nullptr && strcmp(token, "::FROM_ENV::") != 0) {
-			appendStringInfo(&buf, "motherduck_token=%s&", token);
+		if (token != nullptr && !AreStringEqual(token, "::FROM_ENV::")) {
+			setenv("motherduck_token", token, 1);
 		}
 
 		connection_string = buf.data;
