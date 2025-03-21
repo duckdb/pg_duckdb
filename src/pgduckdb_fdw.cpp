@@ -260,6 +260,13 @@ FindUserMappingForUser(Oid user_oid, Oid server_oid) {
 	return oid;
 }
 
+Oid
+GetMotherDuckPostgresRoleOid(Oid server_oid) {
+	auto server = GetForeignServer(server_oid);
+	auto role = FindOption(server->options, "tables_owner_role");
+	return role == nullptr ? server->owner : get_role_oid(role, true);
+}
+
 } // namespace pgduckdb
 
 void

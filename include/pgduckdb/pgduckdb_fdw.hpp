@@ -17,6 +17,12 @@ Oid FindMotherDuckForeignServerOid();
 */
 Oid FindUserMappingForUser(Oid user_oid, Oid server_oid);
 
+/*
+    Returns the Oid of the `tables_owner_role` option defined in the `motherduck` SERVER
+    if it exists, returns the SERVER's owner otherwise.
+*/
+Oid GetMotherDuckPostgresRoleOid(Oid server_oid);
+
 // Return the `default_database` setting defined in the `motherduck` SERVER
 // if it exists, returns nullptr otherwise.
 const char *FindMotherDuckDefaultDatabase();
