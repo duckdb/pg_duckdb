@@ -339,6 +339,11 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 		default: // unreachable
 			elog(ERROR, "Unknown type: %d", type);
 		}
+
+		// For now we chose to not register a callback for SERVER
+		// because PG has a hard limit of 64. So we're explicitely invalidating it here.
+		pgduckdb::InvalidateUserDataCache();
+
 		PG_RETURN_VOID();
 	} else if (catalog == UserMappingRelationId) {
 		auto servername = GetOption(options_list, "servername");
@@ -348,10 +353,6 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 
 		// PG only accepts at most one USER MAPPING for a given (user, server)
 		// So no need to check for duplicates.
-
-		// For now we chose to not register a callback for USER MAPPING
-		// because PG has a hard limit of 64. So we're explicitely invalidating it here.
-		pgduckdb::InvalidateUserDataCache();
 
 		PG_RETURN_VOID();
 	}
