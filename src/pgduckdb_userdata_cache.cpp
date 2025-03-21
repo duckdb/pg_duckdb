@@ -70,8 +70,12 @@ LoadMotherDuckCache() {
 		return;
 	}
 
+	ForeignServer *server = GetForeignServer(server_oid);
+
+	Oid user_mapping_user_oid = pgduckdb::is_background_worker ? server->owner : GetUserId();
+
 	cache.motherduck_postgres_role_oid = pgduckdb::GetMotherDuckPostgresRoleOid(server_oid);
-	cache.motherduck_user_mapping_oid = pgduckdb::FindUserMappingForUser(GetUserId(), server_oid);
+	cache.motherduck_user_mapping_oid = pgduckdb::FindUserMappingForUser(user_mapping_user_oid, server_oid);
 }
 
 void
