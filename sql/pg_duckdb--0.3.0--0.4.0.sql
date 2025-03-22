@@ -10,12 +10,12 @@ DROP TYPE duckdb.cache_info;
 CREATE TYPE duckdb.struct;
 CREATE FUNCTION duckdb.struct_in(cstring) RETURNS duckdb.struct AS 'MODULE_PATHNAME', 'duckdb_struct_in' LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION duckdb.struct_out(duckdb.struct) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_struct_out' LANGUAGE C IMMUTABLE STRICT;
--- CREATE FUNCTION duckdb.struct_subscript(internal) RETURNS internal AS 'MODULE_PATHNAME', 'duckdb.struct_subscript' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.struct_subscript(internal) RETURNS internal AS 'MODULE_PATHNAME', 'duckdb_struct_subscript' LANGUAGE C IMMUTABLE STRICT;
 CREATE TYPE duckdb.struct (
     INTERNALLENGTH = VARIABLE,
     INPUT = duckdb.struct_in,
     OUTPUT = duckdb.struct_out
-    -- SUBSCRIPT = duckdb.struct_subscript
+    SUBSCRIPT = duckdb.struct_subscript
 );
 
 DROP FUNCTION duckdb.install_extension(TEXT);
