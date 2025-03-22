@@ -9,6 +9,7 @@
 extern "C" {
 #include "postgres.h"
 
+#include "catalog/pg_am.h"
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
@@ -170,9 +171,17 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	if (query->commandType != CMD_SELECT) {
 		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
 		if (!::IsDuckdbTable(resultRte->relid)) {
-			elog(elevel, "DuckDB does not support modififying Postgres tables");
-			return false;
+			if (query->commandType != CMD_INSERT) {
+				elog(elevel, "DuckDB does not support %s on Postgres tables",
+				     query->commandType == CMD_UPDATE   ? "UPDATE"
+				     : query->commandType == CMD_DELETE ? "DELETE"
+				     : query->commandType == CMD_MERGE  ? "MERGE"
+				                                        : "MODIFY");
+				return false;
+			}
+			// TODO check if on conflict works
 		}
+
 		if (pgduckdb::DidDisallowedMixedWrites()) {
 			elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 			return false;
