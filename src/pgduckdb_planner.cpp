@@ -9,15 +9,21 @@
 
 extern "C" {
 #include "postgres.h"
+
 #include "access/xact.h"
+#include "access/table.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/params.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
 #include "optimizer/planmain.h"
+#include "parser/parse_coerce.h"
 #include "tcop/pquery.h"
+#include "utils/typcache.h"
+#include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/guc.h"
 
@@ -37,8 +43,7 @@ DuckdbPrepare(const Query *query, const char *explain_prefix) {
 	if (copied_query->commandType == CMD_INSERT) {
 		ListCell *l;
 		RangeTblEntry *select_rte = NULL;
-		foreach(l, copied_query->rtable) {
-			RangeTblEntry *rte = (RangeTblEntry *)lfirst(l);
+		foreach_node(RangeTblEntry, rte, copied_query->rtable) {
 			if (rte->rtekind == RTE_SUBQUERY) {
 				select_rte = rte;
 			}
@@ -188,12 +193,59 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	Query *copied_query = (Query *)copyObjectImpl(parse);
 	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
 
-
 	if (postgres_plan->commandType == CMD_INSERT) {
 		Assert(IsA(postgres_plan->planTree, ModifyTable));
-		outerPlan(postgres_plan->planTree) = duckdb_plan;
-	}
-	else {
+
+		ModifyTable *mt = (ModifyTable *)postgres_plan->planTree;
+		Plan *source_plan = duckdb_plan;
+
+		// Get the result relation info (INSERT target table)
+		RangeTblEntry *target_rte = (RangeTblEntry *)list_nth(postgres_plan->rtable, mt->rootRelation);
+		Relation target_rel = table_open(target_rte->relid, NoLock);
+		TupleDesc tupdesc = RelationGetDescr(target_rel);
+
+		// Create a new target list with appropriate coercions if needed
+		List *new_targetlist = NIL;
+
+		foreach_node(TargetEntry, source_te, source_plan->targetlist) {
+			AttrNumber attnum = source_te->resno;
+			if (attnum > tupdesc->natts)
+				elog(ERROR, "INSERT query returns more columns than target table has");
+
+			// Get expected target type
+			Form_pg_attribute attr = TupleDescAttr(tupdesc, attnum - 1);
+			Oid targetTypeId = attr->atttypid;
+			int32 targetTypeMod = attr->atttypmod;
+
+			// Get source expression and its type
+			Expr *expr = source_te->expr;
+			Oid sourceTypeId = exprType((Node *)expr);
+
+			// Add coercion if needed
+			if (sourceTypeId != targetTypeId) {
+				// Add coercion node
+				expr = (Expr *)coerce_to_target_type(NULL, (Node *)expr, sourceTypeId, targetTypeId, targetTypeMod,
+				                                     COERCION_EXPLICIT, COERCE_IMPLICIT_CAST, -1);
+
+				if (expr == NULL)
+					elog(ERROR, "cannot coerce column %d from type %u to target type %u", attnum, sourceTypeId,
+					     targetTypeId);
+			}
+
+			// Create a new target entry with possibly coerced expression
+			TargetEntry *new_te = makeTargetEntry(expr, attnum, source_te->resname, source_te->resjunk);
+
+			new_targetlist = lappend(new_targetlist, new_te);
+		}
+
+		// Update the targetlist in the source plan
+		source_plan->targetlist = new_targetlist;
+
+		table_close(target_rel, NoLock);
+
+		// Set the modified plan as the outer plan
+		outerPlan(postgres_plan->planTree) = source_plan;
+	} else {
 		postgres_plan->planTree = duckdb_plan;
 	}
 

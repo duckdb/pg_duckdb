@@ -77,18 +77,6 @@ IsDuckdbTable(Oid relid) {
 }
 
 static bool
-IsHeapTable(Oid relid) {
-	if (relid == InvalidOid) {
-		return false;
-	}
-
-	auto rel = RelationIdGetRelation(relid);
-	bool result = rel->rd_rel->relam == HEAP_TABLE_AM_OID;
-	RelationClose(rel);
-	return result;
-}
-
-static bool
 ContainsDuckdbTables(List *rte_list) {
 	foreach_node(RangeTblEntry, rte, rte_list) {
 		if (IsDuckdbTable(rte->relid)) {
@@ -182,14 +170,16 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	/* We don't support modifying statements on Postgres tables yet */
 	if (query->commandType != CMD_SELECT) {
 		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
-		if (::IsHeapTable(resultRte->relid) && query->commandType == CMD_INSERT) {
-			if (query->onConflict || query->returningList) {
-				elog(elevel, "DuckDB does not support INSERT ON CONFLICT or RETURNING on Postgres tables");
+		if (!::IsDuckdbTable(resultRte->relid)) {
+			if (query->commandType != CMD_INSERT) {
+				elog(elevel, "DuckDB does not support %s on Postgres tables",
+				     query->commandType == CMD_UPDATE   ? "UPDATE"
+				     : query->commandType == CMD_DELETE ? "DELETE"
+				     : query->commandType == CMD_MERGE  ? "MERGE"
+				                                        : "MODIFY");
 				return false;
 			}
-		} else if (!::IsDuckdbTable(resultRte->relid)) {
-			elog(elevel, "DuckDB does not support modififying Postgres tables");
-			return false;
+			// TODO check if on conflict works
 		}
 
 		if (pgduckdb::DidDisallowedMixedWrites()) {
