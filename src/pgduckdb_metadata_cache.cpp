@@ -13,6 +13,7 @@ extern "C" {
 #include "commands/dbcommands.h"
 #include "miscadmin.h"
 #include "nodes/bitmapset.h"
+#include "tcop/pquery.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/catcache.h"
@@ -20,11 +21,13 @@ extern "C" {
 #include "utils/memutils.h"
 #include "utils/rel.h"
 #include "utils/syscache.h"
+#include "utils/snapmgr.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
 
@@ -48,6 +51,15 @@ struct {
 	 * installed and we cached that information.
 	 */
 	bool installed;
+
+	/*
+	 * Because during metadata cache initialization we also trigger a user data
+	 * cache initialization, the latter will trigger a query, which will in turn
+	 * call `IsExtensionRegistered` recursively. So while the metadata cache is
+	 * being initialized we set this flag to true to prevent infinite recursion.
+	 */
+	bool initializing;
+
 	/* The Postgres OID of the pg_duckdb extension. */
 	Oid extension_oid;
 	/* The OID of the duckdb schema */
@@ -58,12 +70,12 @@ struct {
 	Oid struct_oid;
 	/* The OID of the duckdb.unresolved_type */
 	Oid unresolved_type_oid;
+	/* The OID of the duckdb.union type */
+	Oid union_oid;
 	/* The OID of the duckdb.json */
 	Oid json_oid;
 	/* The OID of the duckdb Table Access Method */
 	Oid table_am_oid;
-	/* The OID of the duckdb.motherduck_postgres_database */
-	Oid motherduck_postgres_database_oid;
 	/* The OID of the duckdb.postgres_role */
 	Oid postgres_role_oid;
 	/*
@@ -95,6 +107,7 @@ InvalidateCaches(Datum /*arg*/, int /*cache_id*/, uint32 hash_value) {
 		return;
 	}
 
+	cache.initializing = false;
 	cache.valid = false;
 	if (cache.installed) {
 		list_free(cache.duckdb_only_functions);
@@ -155,7 +168,9 @@ BuildDuckdbOnlyFunctions() {
 	                                "epoch_ms",
 	                                "epoch_us",
 	                                "epoch_ns",
-	                                "time_bucket"};
+	                                "time_bucket",
+	                                "union_extract",
+	                                "union_tag"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));
@@ -186,13 +201,20 @@ bool
 IsExtensionRegistered() {
 	if (cache.valid) {
 		return cache.installed;
+	} else if (cache.initializing) {
+		return false; // cf. comment above
 	}
 
 	if (IsAbortedTransactionBlockState()) {
 		elog(WARNING, "pgduckdb: IsExtensionRegistered called in an aborted transaction");
 		/* We need to run `get_extension_oid` in a valid transaction */
 		return false;
+	} else if (!ActiveSnapshotSet() && ActivePortal == nullptr) {
+		/* We're not in a transaction block, so we can't populate the cache */
+		return get_extension_oid("pg_duckdb", true) != InvalidOid;
 	}
+
+	cache.initializing = true;
 
 	if (!callback_is_configured) {
 		/*
@@ -214,11 +236,12 @@ IsExtensionRegistered() {
 	cache.extension_oid = get_extension_oid("pg_duckdb", true);
 	cache.installed = cache.extension_oid != InvalidOid;
 	cache.version++;
+
 	if (cache.installed) {
+		InitUserDataCache();
+
 		/* If the extension is installed we can build the rest of the cache */
 		BuildDuckdbOnlyFunctions();
-
-		StartBackgroundWorkerIfNeeded();
 
 		cache.table_am_oid = GetSysCacheOid1(AMNAME, Anum_pg_am_oid, CStringGetDatum("duckdb"));
 
@@ -228,9 +251,9 @@ IsExtensionRegistered() {
 		cache.unresolved_type_oid =
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("unresolved_type"), cache.schema_oid);
 
-		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
+		cache.union_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("union"), cache.schema_oid);
 
-		cache.motherduck_postgres_database_oid = get_database_oid(duckdb_motherduck_postgres_database, false);
+		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
 
 		if (duckdb_postgres_role[0] != '\0') {
 			cache.postgres_role_oid =
@@ -242,8 +265,12 @@ IsExtensionRegistered() {
 		} else {
 			cache.postgres_role_oid = BOOTSTRAP_SUPERUSERID;
 		}
+	} else {
+		elog(DEBUG1, "pgduckdb: extension is not registered in database '%s'", get_database_name(MyDatabaseId));
 	}
+
 	cache.valid = true;
+	cache.initializing = false;
 
 	return cache.installed;
 }
@@ -301,6 +328,12 @@ DuckdbUnresolvedTypeOid() {
 }
 
 Oid
+DuckdbUnionOid() {
+	Assert(cache.valid);
+	return cache.union_oid;
+}
+
+Oid
 DuckdbJsonOid() {
 	Assert(cache.valid);
 	return cache.json_oid;
@@ -334,32 +367,6 @@ Oid
 IsMotherDuckTable(Relation relation) {
 	Assert(cache.valid);
 	return IsMotherDuckTable(relation->rd_rel);
-}
-
-bool
-IsMotherDuckEnabled() {
-	return IsMotherDuckEnabledAnywhere() && IsMotherDuckPostgresDatabase();
-}
-
-bool
-IsMotherDuckEnabledAnywhere() {
-	if (duckdb_motherduck_enabled == MotherDuckEnabled::MOTHERDUCK_ON)
-		return true;
-	if (duckdb_motherduck_enabled == MotherDuckEnabled::MOTHERDUCK_AUTO)
-		return duckdb_motherduck_token[0] != '\0';
-	return false;
-}
-
-bool
-IsMotherDuckPostgresDatabase() {
-	Assert(cache.valid);
-	return MyDatabaseId == cache.motherduck_postgres_database_oid;
-}
-
-Oid
-MotherDuckPostgresUser() {
-	Assert(cache.valid);
-	return cache.postgres_role_oid;
 }
 
 Oid

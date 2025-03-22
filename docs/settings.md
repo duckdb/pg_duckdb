@@ -10,45 +10,6 @@ Default: `false`
 
 Access: General
 
-## MotherDuck
-
-MotherDuck support is optional, and can be enabled an configured using these settings. Check out our [MotherDuck documentation](motherduck.md) for more information.
-
-### `duckdb.motherduck_enabled`
-
-If MotherDuck support should be enabled. `auto` means enabled if the `duckdb.motherduck_token` is set.
-
-Default: `MotherDuckEnabled::MOTHERDUCK_AUTO`
-
-Access: Needs to be in the `postgresql.conf` file and requires a restart
-
-### `duckdb.motherduck_token`
-
-The token to use for MotherDuck
-
-Default: `""`
-
-Access: Needs to be in the `postgresql.conf` file and requires a restart
-
-### `duckdb.motherduck_postgres_database`
-
-Which database to enable MotherDuck support in
-
-Default: `"postgres"`
-
-Access: Needs to be in the `postgresql.conf` file and requires a restart
-
-### `duckdb.motherduck_default_database`
-
-Which MotherDuck database to use as the default database, i.e. the one that
-gets merged with Postgres schemas instead of getting dedicated `ddb$` prefixed
-schemas. The empty string means that pg_duckdb should use the default database
-set by MotherDuck, which is currently always `my_db`.
-
-Default: `""`
-
-Access: Needs to be in the `postgresql.conf` file and requires a restart
-
 ## Security
 
 ### `duckdb.postgres_role`

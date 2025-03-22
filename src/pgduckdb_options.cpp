@@ -38,6 +38,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 namespace pgduckdb {
@@ -294,6 +295,60 @@ DECLARE_PG_FUNCTION(pgduckdb_raw_query) {
 	auto result = pgduckdb::DuckDBQueryOrThrow(query);
 	elog(NOTICE, "result: %s", result->ToString().c_str());
 	PG_RETURN_BOOL(true);
+}
+
+DECLARE_PG_FUNCTION(pgduckdb_is_motherduck_enabled) {
+	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
+}
+
+DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		elog(NOTICE, "MotherDuck is already enabled");
+		PG_RETURN_BOOL(false);
+	}
+
+	auto token = pgduckdb::pg::GetArgString(fcinfo, 0);
+	auto default_database = pgduckdb::pg::GetArgString(fcinfo, 1);
+
+	// If no token provided, check that token exists in the environment
+	if (token == "::FROM_ENV::" && getenv("MOTHERDUCK_TOKEN") == nullptr && getenv("motherduck_token") == nullptr) {
+		elog(ERROR, "No token was provided and `motherduck_token` environment variable was not set");
+	}
+
+	SPI_connect();
+
+	if (pgduckdb::GetMotherduckForeignServerOid() == InvalidOid) {
+		std::string query = "CREATE SERVER motherduck TYPE 'motherduck' FOREIGN DATA WRAPPER duckdb";
+		if (default_database.empty()) {
+			query += ";";
+		} else {
+			query += " OPTIONS (default_database " + duckdb::KeywordHelper::WriteQuoted(default_database) + ");";
+		}
+		auto ret = SPI_exec(query.c_str(), 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create 'motherduck' SERVER: %s", SPI_result_code_string(ret));
+		}
+	} else if (!default_database.empty()) {
+		// TODO: check if it was set to the same value and update it or only error in that case
+		elog(ERROR, "Cannot provide a default_database: because the server already exists");
+	}
+
+	{
+		// Create mapping for current user
+		Datum token_datum = CStringGetTextDatum(token.c_str());
+		Oid types[] = {TEXTOID};
+		Datum values[] = {token_datum};
+		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token " +
+		             duckdb::KeywordHelper::WriteQuoted(token) + ");";
+		auto ret = SPI_execute_with_args(query.c_str(), 1, types, values, NULL, false, 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create USER MAPPING for current user: %s", SPI_result_code_string(ret));
+		}
+	}
+
+	SPI_finish();
+
+	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
 }
 
 /*
@@ -565,6 +620,14 @@ DECLARE_PG_FUNCTION(duckdb_unresolved_type_operator) {
 DECLARE_PG_FUNCTION(duckdb_only_function) {
 	char *function_name = DatumGetCString(DirectFunctionCall1(regprocout, fcinfo->flinfo->fn_oid));
 	elog(ERROR, "Function '%s' only works with DuckDB execution", function_name);
+}
+
+DECLARE_PG_FUNCTION(duckdb_union_in) {
+	elog(ERROR, "Creating the duckdb.union type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_union_out) {
+	return textout(fcinfo);
 }
 
 } // extern "C"

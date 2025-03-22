@@ -33,7 +33,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: [REL_14_STABLE, REL_15_STABLE, REL_16_STABLE, REL_17_STABLE]
+        include:
+        - version: REL_14_STABLE
+          type: Release
+        - version: REL_15_STABLE
+          type: Release
+        - version: REL_16_STABLE
+          type: Release
+        # For PG17 we build DuckDB as a static library. There's nothing special
+        # about the static library, nor PG17. This is only done so that we have
+        # CI coverage for our logic to build a static library version.
+        - version: REL_17_STABLE
+          type: ReleaseStatic
+        - version: REL_17_STABLE
+          type: Debug
+
+        # Not enabled for now (waiting for April 2025 code freeze)
+        # - version: master
+        #   type: Release
+
     runs-on: ubuntu-24.04
 
     steps:
@@ -88,9 +106,8 @@ jobs:
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
+        working-directory: postgres
         run: |
-          pushd postgres
-          git branch
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml --with-lz4
           make -j8 install
 
@@ -111,35 +128,22 @@ jobs:
       - name: Build pg_duckdb extension
         id: build
         working-directory: duckdb
-        # For PG17 we build DuckDB as a static library. There's nothing special
-        # about the static library, nor PG17. This is only done so that we have
-        # CI coverage for our logic to build a static library version.
-        run: |
-          if [ '${{ matrix.version }}' = REL_17_STABLE ]; then
-            ERROR_ON_WARNING=1 make -j8 install DUCKDB_BUILD=ReleaseStatic
-          else
-            ERROR_ON_WARNING=1 make -j8 install
-          fi
-
+        run: ERROR_ON_WARNING=1 make -j8 install DUCKDB_BUILD=${{ matrix.type }}
 
       - name: Run make installcheck
         id: installcheck
-        run: |
-          pushd duckdb
-          make installcheck
+        working-directory: duckdb
+        run: make installcheck DUCKDB_BUILD=${{ matrix.type }}
 
       - name: Run make pycheck
         id: pycheck
-        run: |
-          pushd duckdb
-          make pycheck
+        working-directory: duckdb
+        run: make pycheck
 
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.installcheck.outcome == 'failure'
-        run: |
-          cat duckdb/test/regression/regression.diffs
+        run: cat duckdb/test/regression/regression.diffs
 
       - name: Print postmaster.log if regression tests failed
         if: failure() && steps.installcheck.outcome == 'failure'
-        run: |
-          cat duckdb/test/regression/log/postmaster.log
+        run: cat duckdb/test/regression/log/postmaster.log

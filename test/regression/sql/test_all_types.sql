@@ -3,7 +3,6 @@ SET bytea_output = 'escape';
 SELECT * FROM duckdb.query($$
 FROM test_all_types()
 SELECT * exclude(
-    tinyint, -- PG14 outputs this differently currently
     bit,
     small_enum,
     medium_enum,
@@ -12,7 +11,6 @@ SELECT * exclude(
     struct_of_arrays,
     array_of_structs,
     map,
-    "union",
     fixed_nested_int_array,
     fixed_nested_varchar_array,
     fixed_struct_array,

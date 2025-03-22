@@ -62,10 +62,11 @@ def conn(pg):
 @pytest.fixture
 def md_cur(pg, ddb, request):
     """A cursor to a MotherDuck enabled pg_duckdb"""
-    _ = ddb  # silence warning, we only need ddb the ddb
+    _ = ddb  # silence warning, we only need ddb
     test_db = request.node.name.removeprefix("test_")
-    pg.configure("duckdb.motherduck_enabled = true")
-    pg.restart()
+
+    pg.sql("SELECT duckdb.enable_motherduck()")
+
     pg.search_path = f"ddb${test_db}, public"
     with pg.cur() as cur:
         yield cur

@@ -38,3 +38,5 @@ test: unresolved_type
 test: json_functions_duckdb
 test: date
 test: timestamp_timestamptz
+test: union_functions
+test: foreign_data_wrapper

@@ -5,6 +5,7 @@
 #include "duckdb/common/types/blob.hpp"
 
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
@@ -499,6 +500,20 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 	}
 
 	return UUIDPGetDatum(postgres_uuid);
+}
+
+static Datum
+ConvertUnionDatum(const duckdb::Value &value) {
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::UNION);
+	// Copied Logic from ConvertVarcharDatum() ...
+	auto str = value.ToString();
+	auto varchar = str.c_str();
+	auto varchar_len = str.size();
+
+	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
+	SET_VARSIZE(result, varchar_len + VARHDRSZ);
+	memcpy(VARDATA(result), varchar, varchar_len);
+	return PointerGetDatum(result);
 }
 
 static duckdb::interval_t
@@ -1111,6 +1126,9 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		if(oid == pgduckdb::DuckdbStructOid()){
 			slot->tts_values[col] = ConvertDuckStructDatum(value);
 			return true;
+		} else if (oid == pgduckdb::DuckdbUnionOid()) {
+			slot->tts_values[col] = ConvertUnionDatum(value);
+			return true;
 		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 		return false;
@@ -1210,6 +1228,9 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case BYTEAARRAYOID:
 		return duckdb::LogicalTypeId::BLOB;
 	default:
+		if (typoid == pgduckdb::DuckdbUnionOid()) {
+			return duckdb::LogicalTypeId::UNION;
+		}
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
 }
@@ -1259,7 +1280,7 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLARRAYOID;
 	case duckdb::LogicalTypeId::TINYINT:
-		return CHARARRAYOID;
+		return INT2ARRAYOID;
 	case duckdb::LogicalTypeId::SMALLINT:
 		return INT2ARRAYOID;
 	case duckdb::LogicalTypeId::INTEGER:
@@ -1312,7 +1333,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
 	case duckdb::LogicalTypeId::TINYINT:
-		return CHAROID;
+		return INT2OID;
 	case duckdb::LogicalTypeId::SMALLINT:
 		return INT2OID;
 	case duckdb::LogicalTypeId::INTEGER:
@@ -1369,6 +1390,10 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	}
 	case duckdb::LogicalTypeId::BLOB:
 		return BYTEAOID;
+	case duckdb::LogicalTypeId::UNION:
+		return pgduckdb::DuckdbUnionOid();
+	case duckdb::LogicalTypeId::ENUM:
+		return VARCHAROID;
 	default: {
 		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
 		     type.ToString().c_str());
@@ -1599,19 +1624,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		Append<bool>(result, DatumGetBool(value), offset);
 		break;
 	case duckdb::LogicalTypeId::TINYINT: {
-		auto aux_info = type.GetAuxInfoShrPtr();
-		if (aux_info && dynamic_cast<IsBpChar *>(aux_info.get())) {
-			auto bpchar_length = VARSIZE_ANY_EXHDR(value);
-			auto bpchar_data = VARDATA_ANY(value);
-
-			if (bpchar_length != 1) {
-				throw duckdb::InternalException(
-				    "Expected 1 length BPCHAR for TINYINT marked with IsBpChar at offset %llu", offset);
-			}
-			Append<int8_t>(result, bpchar_data[0], offset);
-		} else {
-			Append<int8_t>(result, DatumGetChar(value), offset);
-		}
+		Append<int16_t>(result, DatumGetInt16(value), offset);
 		break;
 	}
 	case duckdb::LogicalTypeId::SMALLINT:
