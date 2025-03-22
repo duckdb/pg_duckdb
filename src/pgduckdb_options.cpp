@@ -542,6 +542,14 @@ DECLARE_PG_FUNCTION(duckdb_row_out) {
 	elog(ERROR, "Converting a duckdb.row to a string is not supported");
 }
 
+DECLARE_PG_FUNCTION(duckdb_struct_in) {
+	elog(ERROR, "Creating the duckdb.struct type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_struct_out) {
+	elog(ERROR, "Converting a duckdb.struct to a string is not supported");
+}
+
 DECLARE_PG_FUNCTION(duckdb_unresolved_type_in) {
 	return textin(fcinfo);
 }
