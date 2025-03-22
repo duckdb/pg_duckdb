@@ -485,3 +485,31 @@ RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
+
+CREATE FUNCTION duckdb.is_motherduck_enabled()
+RETURNS bool
+SET search_path = pg_catalog, pg_temp
+LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_is_motherduck_enabled';
+REVOKE ALL ON FUNCTION duckdb.is_motherduck_enabled() FROM PUBLIC;
+
+CREATE FUNCTION pgduckdb_fdw_handler()
+RETURNS fdw_handler
+AS 'MODULE_PATHNAME', 'pgduckdb_fdw_handler'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION pgduckdb_fdw_validator(
+    options text[],
+    catalog oid
+)
+RETURNS void
+AS 'MODULE_PATHNAME', 'pgduckdb_fdw_validator'
+LANGUAGE C STRICT PARALLEL SAFE;
+
+CREATE FOREIGN DATA WRAPPER duckdb
+  HANDLER pgduckdb_fdw_handler
+  VALIDATOR pgduckdb_fdw_validator;
+
+CREATE FUNCTION duckdb.enable_motherduck(TEXT DEFAULT '::FROM_ENV::', TEXT DEFAULT '')
+RETURNS bool
+SET search_path = pg_catalog, pg_temp
+LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_enable_motherduck';

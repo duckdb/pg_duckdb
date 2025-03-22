@@ -10,6 +10,7 @@
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pg/guc.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
@@ -26,6 +27,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -99,7 +102,7 @@ uri_escape(const char *str) {
 
 static const char *
 GetSessionHint() {
-	if (strcmp(duckdb_motherduck_session_hint, "") != 0) {
+	if (!IsEmptyString(duckdb_motherduck_session_hint)) {
 		return duckdb_motherduck_session_hint;
 	}
 	return PossiblyReuseBgwSessionHint();
@@ -175,19 +178,27 @@ DuckDBManager::Initialize() {
 		 * is not trivial, so for now we simply disable the web login.
 		 */
 		setenv("motherduck_disable_web_login", "1", 1);
-		const char *escaped_default_database = uri_escape(duckdb_motherduck_default_database);
-		const char *escaped_session_hint = uri_escape(GetSessionHint());
 
 		StringInfoData buf;
 		initStringInfo(&buf);
-		appendStringInfo(&buf, "md:%s?", escaped_default_database);
 
-		if (strcmp(escaped_session_hint, "") != 0) {
+		// Default database
+		auto default_database = FindMotherDuckDefaultDatabase();
+		auto escaped_default_db = default_database ? uri_escape(default_database) : "";
+		appendStringInfo(&buf, "md:%s?", escaped_default_db);
+
+		// Session hint
+		auto escaped_session_hint = uri_escape(GetSessionHint());
+		if (!IsEmptyString(escaped_session_hint)) {
 			appendStringInfo(&buf, "session_hint=%s&", escaped_session_hint);
 		}
-		if (duckdb_motherduck_token[0] != '\0') {
-			appendStringInfo(&buf, "motherduck_token=%s&", duckdb_motherduck_token);
+
+		// Token
+		auto token = FindMotherDuckToken();
+		if (token != nullptr && !AreStringEqual(token, "::FROM_ENV::")) {
+			setenv("motherduck_token", token, 1);
 		}
+
 		connection_string = buf.data;
 	}
 
@@ -210,11 +221,13 @@ DuckDBManager::Initialize() {
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
-	if (pgduckdb::IsMotherDuckEnabled() &&
-	    strlen(duckdb_motherduck_background_catalog_refresh_inactivity_timeout) > 0) {
-		pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
-		                                          duckdb::KeywordHelper::WriteQuoted(
-		                                              duckdb_motherduck_background_catalog_refresh_inactivity_timeout));
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		auto timeout = FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
+		if (timeout != nullptr) {
+			auto quoted_timeout = duckdb::KeywordHelper::WriteQuoted(timeout);
+			pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
+			                                          quoted_timeout);
+		}
 	}
 
 	LoadFunctions(context);
