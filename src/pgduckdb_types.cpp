@@ -7,6 +7,7 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/types.hpp"
 
@@ -279,6 +280,19 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 	// 18000, while pg stores zone = -18000.
 	result->zone = -tz_offset;
 	return TimeTzADTPGetDatum(result);
+}
+
+inline Datum
+ConvertDuckStructDatum(const duckdb::Value &value) {
+	auto children = duckdb::StructValue::GetChildren(value);
+	for(auto& child: children){
+		switch(child.type().id()){
+			case duckdb::LogicalTypeId::VARCHAR:
+				elog(LOG, "got varchar...");
+				break;
+		}
+	}
+	return pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
 }
 
 inline Datum
@@ -1106,13 +1120,19 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<ByteArray>(slot, value, col);
 		break;
 	}
-	default:
-		if (oid == pgduckdb::DuckdbUnionOid()) {
+	default:{
+		// Since DuckdbRowOid is calculated at runtime, it is not possible to compile the
+		// code while placing it as a separate case in the switch-case clause above
+		if(oid == pgduckdb::DuckdbStructOid()){
+			slot->tts_values[col] = ConvertDuckStructDatum(value);
+			return true;
+		} else if (oid == pgduckdb::DuckdbUnionOid()) {
 			slot->tts_values[col] = ConvertUnionDatum(value);
 			return true;
 		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 		return false;
+	}
 	}
 	return true;
 }
@@ -1357,6 +1377,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return UUIDOID;
 	case duckdb::LogicalTypeId::VARINT:
 		return NUMERICOID;
+	case duckdb::LogicalTypeId::STRUCT:
+		return pgduckdb::DuckdbStructOid();
 	case duckdb::LogicalTypeId::LIST:
 	case duckdb::LogicalTypeId::ARRAY: {
 		const duckdb::LogicalType *duck_type = &type;
@@ -1709,6 +1731,11 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		const duckdb::string_t s(bytea_data, bytea_length);
 		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
 		data[offset] = duckdb::StringVector::AddStringOrBlob(result, s);
+		break;
+	}
+	case duckdb::LogicalTypeId::STRUCT: {
+		elog(LOG, "Hi in Struct type");
+
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
