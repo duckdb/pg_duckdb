@@ -502,6 +502,20 @@ ConvertUnionDatum(const duckdb::Value &value) {
 	return PointerGetDatum(result);
 }
 
+static Datum
+ConvertMapDatum(const duckdb::Value &value) {
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::MAP);
+	// Copied Logic from ConvertVarcharDatum() ...
+	auto str = value.ToString();
+	auto varchar = str.c_str();
+	auto varchar_len = str.size();
+
+	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
+	SET_VARSIZE(result, varchar_len + VARHDRSZ);
+	memcpy(VARDATA(result), varchar, varchar_len);
+	return PointerGetDatum(result);
+}
+
 static duckdb::interval_t
 DatumGetInterval(Datum value) {
 	Interval *pg_interval = DatumGetIntervalP(value);
@@ -1110,6 +1124,9 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		if (oid == pgduckdb::DuckdbUnionOid()) {
 			slot->tts_values[col] = ConvertUnionDatum(value);
 			return true;
+		} else if (oid == pgduckdb::DuckdbMapOid()) {
+			slot->tts_values[col] = ConvertMapDatum(value);
+			return true;
 		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 		return false;
@@ -1370,6 +1387,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return BYTEAOID;
 	case duckdb::LogicalTypeId::UNION:
 		return pgduckdb::DuckdbUnionOid();
+	case duckdb::LogicalTypeId::MAP:
+		return pgduckdb::DuckdbMapOid();
 	case duckdb::LogicalTypeId::ENUM:
 		return VARCHAROID;
 	default: {
