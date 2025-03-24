@@ -6,6 +6,7 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_table_am.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -31,26 +32,77 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
+#include "pgduckdb/pg/types.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 
+bool
+IsAllowedPostgresInsert(Query *query, bool throw_error) {
+	int elevel = throw_error ? ERROR : DEBUG4;
+	if (query->commandType != CMD_INSERT) {
+		elog(elevel, "DuckDB only supports INSERT/SELECT on Postgres tables");
+		return false;
+	}
+
+	Assert(list_length(query->rtable) >= query->resultRelation);
+	RangeTblEntry *target_rel = (RangeTblEntry *)list_nth(query->rtable, query->resultRelation - 1);
+	if (pgduckdb::IsDuckdbTable(target_rel->relid)) {
+		return false;
+	}
+
+	/* Checking supported INSERT types */
+	RangeTblEntry *select_rte = NULL;
+	foreach_node(RangeTblEntry, rte, query->rtable) {
+		if (rte->rtekind == RTE_SUBQUERY) {
+			select_rte = rte;
+		}
+	}
+
+	if (!select_rte) {
+		elog(elevel, "DuckDB does not support INSERT without a subquery");
+		return false;
+	}
+	
+	/* TODO: Checking supported target column types */
+	Relation rel = RelationIdGetRelation(target_rel->relid);
+	TupleDesc target_desc = RelationGetDescr(rel);
+	bool ret = true;
+	for (int i = 0; i < target_desc->natts; i++) {
+		Form_pg_attribute attr = TupleDescAttr(target_desc, i);
+		if (attr->attisdropped) {
+			continue;
+		}
+
+		if (attr->atttypid == BYTEAOID || attr->atttypid == XMLOID || pgduckdb::pg::IsDomainType(attr->atttypid) ||
+		    pgduckdb::pg::IsArrayType(attr->atttypid)) {
+			elog(elevel, "DuckDB does not support INSERT/SELECT on BYTEA/ARRAY columns");
+			ret = false;
+			break;
+		}
+	}
+	RelationClose(rel);
+
+	return ret;
+}
+
 duckdb::unique_ptr<duckdb::PreparedStatement>
 DuckdbPrepare(const Query *query, const char *explain_prefix) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
 	const char *query_string;
-	if (copied_query->commandType == CMD_INSERT) {
+	if (IsAllowedPostgresInsert(copied_query)) {
 		RangeTblEntry *select_rte = NULL;
 		foreach_node(RangeTblEntry, rte, copied_query->rtable) {
 			if (rte->rtekind == RTE_SUBQUERY) {
 				select_rte = rte;
 			}
 		}
-		if (!select_rte) {
-			elog(ERROR, "DuckDB only supports INSERT with a SELECT");
-		}
+
+		/* A subquery must be present at this point; other cases should have been filtered out during the
+		 * pre-planning phase */
+		Assert(select_rte);
 		query_string = pgduckdb_get_querydef(select_rte->subquery);
 	} else {
 		query_string = pgduckdb_get_querydef(copied_query);
@@ -180,22 +232,22 @@ CreatePlan(Query *query, bool throw_error) {
 		ReleaseSysCache(tp);
 	}
 
-	if (query->commandType == CMD_INSERT) {
-		RangeTblEntry *target_rel = (RangeTblEntry *)list_nth(query->rtable, query->resultRelation - 1);
-		Relation rel = table_open(target_rel->relid, NoLock);
+	if (IsAllowedPostgresInsert(query)) {
+		RangeTblEntry *target_rel = (RangeTblEntry *)list_nth(query->rtable, query->resultRelation - 1);		
+		Relation rel = RelationIdGetRelation(target_rel->relid);
 		TupleDesc pg_tupdesc = RelationGetDescr(rel);
 
 		/*
-		 * When the target table's column count differs from the prepared result's column count
-		 * (e.g., in an INSERT with explicit column names), we must reconstruct the target list
-		 * to ensure proper column alignment between the source and destination.
+		 * When the target table's column count differs from the prepared result's column count (e.g., in an INSERT with
+		 * explicit column names), we must reconstruct the target list to ensure proper column alignment between the
+		 * source and destination.
 		 */
 		if (pg_tupdesc->natts != prepared_result_types.size()) {
 			duckdb_node->scan.plan.targetlist =
 			    ReconstructTargetListForInsert(pg_tupdesc, query->targetList, duckdb_node->scan.plan.targetlist);
 		}
 
-		table_close(rel, NoLock);
+		RelationClose(rel);
 	}
 
 	duckdb_node->custom_private = list_make1(query);
@@ -256,9 +308,10 @@ CoerceTargetList(List *duckdb_targetlist, TupleDesc pg_tupdesc) {
 		/* Get source expression and its type */
 		Expr *expr = source_te->expr;
 		Oid sourceTypeId = exprType((Node *)expr);
+		int32 sourceTypeMod = exprTypmod((Node *)expr);
 
 		/* Add coercion if needed */
-		if (sourceTypeId != targetTypeId) {
+		if (sourceTypeId != targetTypeId || sourceTypeMod != targetTypeMod) {
 			expr = (Expr *)coerce_to_target_type(NULL, (Node *)expr, sourceTypeId, targetTypeId, targetTypeMod,
 			                                     COERCION_EXPLICIT, COERCE_IMPLICIT_CAST, -1);
 
@@ -270,7 +323,6 @@ CoerceTargetList(List *duckdb_targetlist, TupleDesc pg_tupdesc) {
 			TargetEntry *new_te = makeTargetEntry(expr, attnum, source_te->resname, source_te->resjunk);
 			ret = lappend(ret, new_te);
 		} else {
-			/* If types match, reuse the original target entry */
 			ret = lappend(ret, source_te);
 		}
 	}
@@ -316,7 +368,7 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	 */
 	Query *copied_query = (Query *)copyObjectImpl(parse);
 	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
-	if (postgres_plan->commandType == CMD_INSERT) {
+	if (IsAllowedPostgresInsert(parse)) {
 		Assert(IsA(postgres_plan->planTree, ModifyTable));
 		TupleDesc target_desc = ExecTypeFromTL(outerPlan(postgres_plan->planTree)->targetlist);
 		duckdb_plan->targetlist = CoerceTargetList(duckdb_plan->targetlist, target_desc);
