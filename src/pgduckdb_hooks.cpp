@@ -8,8 +8,6 @@
 
 extern "C" {
 #include "postgres.h"
-
-#include "catalog/pg_am.h"
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
