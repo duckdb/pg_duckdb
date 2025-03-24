@@ -171,15 +171,30 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	if (query->commandType != CMD_SELECT) {
 		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
 		if (!::IsDuckdbTable(resultRte->relid)) {
+			/*
+			 * For Postgres tables, we only support INSERT operations.
+			 * Other operations like UPDATE, DELETE, etc. are not supported.
+			 */
 			if (query->commandType != CMD_INSERT) {
-				elog(elevel, "DuckDB does not support %s on Postgres tables",
-				     query->commandType == CMD_UPDATE   ? "UPDATE"
-				     : query->commandType == CMD_DELETE ? "DELETE"
-				     : query->commandType == CMD_MERGE  ? "MERGE"
-				                                        : "MODIFY");
+				elog(elevel, "DuckDB only supports INSERT/SELECT on Postgres tables");
 				return false;
 			}
-			// TODO check if on conflict works
+
+			/*
+			 * For INSERT operations, we need to have a subquery as the source.
+			 * Find if there's a subquery in the range table entries.
+			 */
+			RangeTblEntry *select_rte = NULL;
+			foreach_node(RangeTblEntry, rte, query->rtable) {
+				if (rte->rtekind == RTE_SUBQUERY) {
+					select_rte = rte;
+				}
+			}
+
+			if (!select_rte) {
+				elog(elevel, "DuckDB does not support INSERT without a subquery");
+				return false;
+			}
 		}
 
 		if (pgduckdb::DidDisallowedMixedWrites()) {
