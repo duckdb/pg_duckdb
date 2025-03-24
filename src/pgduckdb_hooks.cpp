@@ -8,6 +8,7 @@
 
 extern "C" {
 #include "postgres.h"
+
 #include "catalog/pg_namespace.h"
 #include "commands/extension.h"
 #include "nodes/nodes.h"
@@ -159,7 +160,6 @@ IsAllowedStatement(Query *query, bool throw_error) {
 		if (!pgduckdb::IsDuckdbTable(resultRte->relid) && !IsAllowedPostgresInsert(query, throw_error)) {
 			return false;
 		}
-
 		if (pgduckdb::DidDisallowedMixedWrites()) {
 			elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 			return false;
