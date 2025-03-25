@@ -282,18 +282,7 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 	return TimeTzADTPGetDatum(result);
 }
 
-inline Datum
-ConvertDuckStructDatum(const duckdb::Value &value) {
-	auto children = duckdb::StructValue::GetChildren(value);
-	for(auto& child: children){
-		switch(child.type().id()){
-			case duckdb::LogicalTypeId::VARCHAR:
-				elog(LOG, "got varchar...");
-				break;
-		}
-	}
-	return pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
-}
+
 
 inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
@@ -500,6 +489,19 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 	}
 
 	return UUIDPGetDatum(postgres_uuid);
+}
+
+inline Datum
+ConvertDuckStructDatum(const duckdb::Value &value) {
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::STRUCT);
+	auto str = value.ToString();
+	auto varchar = str.c_str();
+	auto varchar_len = str.size();
+
+	text *result = (text*)palloc0(varchar_len + VARHDRSZ);
+	SET_VARSIZE(result, varchar_len + VARHDRSZ);
+	memcpy(VARDATA(result), varchar, varchar_len);
+	return PointerGetDatum(result);
 }
 
 static Datum

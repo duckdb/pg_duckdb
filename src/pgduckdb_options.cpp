@@ -702,7 +702,7 @@ DECLARE_PG_FUNCTION(duckdb_struct_in) {
 }
 
 DECLARE_PG_FUNCTION(duckdb_struct_out) {
-	elog(ERROR, "Converting a duckdb.struct to a string is not supported");
+	return textout(fcinfo);
 }
 
 DECLARE_PG_FUNCTION(duckdb_unresolved_type_in) {
