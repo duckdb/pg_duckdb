@@ -14,7 +14,7 @@ CREATE FUNCTION duckdb.struct_subscript(internal) RETURNS internal AS 'MODULE_PA
 CREATE TYPE duckdb.struct (
     INTERNALLENGTH = VARIABLE,
     INPUT = duckdb.struct_in,
-    OUTPUT = duckdb.struct_out
+    OUTPUT = duckdb.struct_out,
     SUBSCRIPT = duckdb.struct_subscript
 );
 
