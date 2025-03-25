@@ -493,6 +493,7 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 
 inline Datum
 ConvertDuckStructDatum(const duckdb::Value &value) {
+	// similar to varchar and union
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::STRUCT);
 	auto str = value.ToString();
 	auto varchar = str.c_str();
@@ -1232,6 +1233,8 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	default:
 		if (typoid == pgduckdb::DuckdbUnionOid()) {
 			return duckdb::LogicalTypeId::UNION;
+		}else if(typoid == pgduckdb::DuckdbStructOid()) {
+			return duckdb::LogicalTypeId::STRUCT;
 		}
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
@@ -1733,11 +1736,6 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		const duckdb::string_t s(bytea_data, bytea_length);
 		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
 		data[offset] = duckdb::StringVector::AddStringOrBlob(result, s);
-		break;
-	}
-	case duckdb::LogicalTypeId::STRUCT: {
-		elog(LOG, "Hi in Struct type");
-
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
