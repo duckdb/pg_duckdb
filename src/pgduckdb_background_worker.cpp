@@ -90,8 +90,6 @@ static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientC
 static void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *context);
 
 typedef struct BackgoundWorkerShmemStruct {
-	Latch *bgw_latch; /* The latch of the background worker */
-
 	slock_t lock; /* protects all the fields below */
 
 	int64 activity_count; /* the number of times activity was triggered by other backends */
@@ -166,7 +164,7 @@ pgduckdb_background_worker_main(Datum main_arg) {
 	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
 
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
-	pgduckdb::BgwShmemStruct->bgw_latch = MyLatch;
+	Assert(MyLatch == &MyProc->procLatch);
 	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count - 1; // force a check on the first iteration
 	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
 
@@ -281,7 +279,6 @@ ShmemStartup(void) {
 		 */
 		MemSet(BgwShmemStruct, 0, size);
 		SpinLockInit(&BgwShmemStruct->lock);
-		BgwShmemStruct->bgw_latch = nullptr;
 		BgwShmemStruct->activity_count = 0;
 		BgwShmemStruct->bgw_session_hint_is_reused = false;
 	}
@@ -419,10 +416,24 @@ TriggerActivity(void) {
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
 	BgwShmemStruct->activity_count++;
-	/* Force wake up the background worker */
-	if (BgwShmemStruct->bgw_latch) {
-		SetLatch(BgwShmemStruct->bgw_latch);
+	/* Iterate over all background workers and notify them */
+	const uint32_t numProcs = ProcGlobal->allProcCount;
+	for (uint32_t i = 0; i < numProcs; i++) {
+		PGPROC *proc = &ProcGlobal->allProcs[i];
+		if (!proc->isBackgroundWorker || proc->databaseId == InvalidOid) {
+			continue;
+		}
+
+		// GetBackgroundWorkerTypeByPid will iterate over all BGW but
+		// it doesn't seem like we can get the type of worker otherwise.
+		const auto type = GetBackgroundWorkerTypeByPid(proc->pid);
+		if (type == nullptr || strcmp(type, PGDUCKDB_SYNC_WORKER_NAME) != 0) {
+			continue;
+		}
+
+		SetLatch(&proc->procLatch);
 	}
+
 	SpinLockRelease(&BgwShmemStruct->lock);
 }
 
