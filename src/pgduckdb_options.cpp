@@ -561,7 +561,6 @@ static SubscriptRoutines duckdb_row_subscript_routines = {
     .store_leakproof = true,
 };
 
-
 DECLARE_PG_FUNCTION(duckdb_row_subscript) {
 	PG_RETURN_POINTER(&duckdb_row_subscript_routines);
 }
@@ -569,7 +568,7 @@ DECLARE_PG_FUNCTION(duckdb_row_subscript) {
 // Copied implementation from duckdb.row for duckdb.struct
 void
 DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                            bool isAssignment) {
+                               bool isAssignment) {
 	/*
 	 * We need to populate our cache for some of the code below. Normally this
 	 * cache is populated at the start of our planner hook, but this function
@@ -613,7 +612,7 @@ DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struc
 
 void
 DuckdbStructSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
-                            SubscriptExecSteps * /*exprstate*/) {
+                               SubscriptExecSteps * /*exprstate*/) {
 	elog(ERROR, "Subscripting duckdb.struct is not supported in the Postgres Executor");
 }
 

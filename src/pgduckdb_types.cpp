@@ -282,8 +282,6 @@ ConvertTimeTzDatum(const duckdb::Value &value) {
 	return TimeTzADTPGetDatum(result);
 }
 
-
-
 inline Datum
 ConvertTimestampDatum(const duckdb::Value &value) {
 	// Extract raw int64_t value of timestamp
@@ -499,7 +497,7 @@ ConvertDuckStructDatum(const duckdb::Value &value) {
 	auto varchar = str.c_str();
 	auto varchar_len = str.size();
 
-	text *result = (text*)palloc0(varchar_len + VARHDRSZ);
+	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
 	SET_VARSIZE(result, varchar_len + VARHDRSZ);
 	memcpy(VARDATA(result), varchar, varchar_len);
 	return PointerGetDatum(result);
@@ -1123,10 +1121,10 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<ByteArray>(slot, value, col);
 		break;
 	}
-	default:{
+	default: {
 		// Since DuckdbRowOid is calculated at runtime, it is not possible to compile the
 		// code while placing it as a separate case in the switch-case clause above
-		if(oid == pgduckdb::DuckdbStructOid()){
+		if (oid == pgduckdb::DuckdbStructOid()) {
 			slot->tts_values[col] = ConvertDuckStructDatum(value);
 			return true;
 		} else if (oid == pgduckdb::DuckdbUnionOid()) {
@@ -1233,7 +1231,7 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	default:
 		if (typoid == pgduckdb::DuckdbUnionOid()) {
 			return duckdb::LogicalTypeId::UNION;
-		}else if(typoid == pgduckdb::DuckdbStructOid()) {
+		} else if (typoid == pgduckdb::DuckdbStructOid()) {
 			return duckdb::LogicalTypeId::STRUCT;
 		}
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
