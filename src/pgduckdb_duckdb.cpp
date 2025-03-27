@@ -163,7 +163,7 @@ DuckDBManager::Initialize() {
 		SET_DUCKDB_OPTION(maximum_threads);
 	}
 
-	const char *connection_string = nullptr;
+	std::string connection_string;
 
 	/*
 	 * If MotherDuck is enabled, use it to connect to DuckDB. That way DuckDB
@@ -179,27 +179,30 @@ DuckDBManager::Initialize() {
 		 */
 		setenv("motherduck_disable_web_login", "1", 1);
 
-		StringInfoData buf;
-		initStringInfo(&buf);
+		std::ostringstream oss;
+		oss << "md:";
 
 		// Default database
 		auto default_database = FindMotherDuckDefaultDatabase();
-		auto escaped_default_db = default_database ? uri_escape(default_database) : "";
-		appendStringInfo(&buf, "md:%s?", escaped_default_db);
+		if (default_database != nullptr) {
+			oss << uri_escape(default_database);
+		}
+
+		oss << "?";
 
 		// Session hint
 		auto escaped_session_hint = uri_escape(GetSessionHint());
 		if (!IsEmptyString(escaped_session_hint)) {
-			appendStringInfo(&buf, "session_hint=%s&", escaped_session_hint);
+			oss << "session_hint=" << escaped_session_hint << "&";
 		}
+
+		connection_string = oss.str();
 
 		// Token
 		auto token = FindMotherDuckToken();
 		if (token != nullptr && !AreStringEqual(token, "::FROM_ENV::")) {
 			setenv("motherduck_token", token, 1);
 		}
-
-		connection_string = buf.data;
 	}
 
 	std::string pg_time_zone(pg::GetConfigOption("TimeZone"));
