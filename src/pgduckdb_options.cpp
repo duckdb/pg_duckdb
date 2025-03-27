@@ -335,12 +335,9 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 
 	{
 		// Create mapping for current user
-		Datum token_datum = CStringGetTextDatum(token.c_str());
-		Oid types[] = {TEXTOID};
-		Datum values[] = {token_datum};
 		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token " +
 		             duckdb::KeywordHelper::WriteQuoted(token) + ");";
-		auto ret = SPI_execute_with_args(query.c_str(), 1, types, values, NULL, false, 0);
+		auto ret = SPI_exec(query.c_str(), 0);
 		if (ret != SPI_OK_UTILITY) {
 			elog(ERROR, "Could not create USER MAPPING for current user: %s", SPI_result_code_string(ret));
 		}
