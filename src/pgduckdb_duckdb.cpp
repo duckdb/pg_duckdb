@@ -293,11 +293,9 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
-		if (!extension.enabled) {
-			continue;
+		if (extension.enabled) {
+			DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 		}
-
-		DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 	}
 }
 
