@@ -34,6 +34,8 @@ typedef FormData_pg_class *Form_pg_class;
 struct HeapTupleData;
 typedef HeapTupleData *HeapTuple;
 
+struct List;
+
 struct Node;
 
 typedef uint16_t OffsetNumber;

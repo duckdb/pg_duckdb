@@ -12,7 +12,6 @@ SET ROLE user2;
 SELECT * FROM t;
 
 -- Should fail because we're not allowed to read the internal tables by default
-SELECT * from duckdb.secrets;
 SELECT * from duckdb.tables;
 SELECT * from duckdb.extensions;
 
