@@ -17,7 +17,7 @@ Note: we cannot use PG's `GetUserMapping` because:
 - it throws an error if no mapping is not found
 
 */
-Oid FindUserMappingForUser(Oid user_oid, Oid server_oid);
+Oid FindUserMappingOid(Oid user_oid, Oid server_oid);
 
 /*
 

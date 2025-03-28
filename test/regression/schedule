@@ -25,7 +25,7 @@ test: temporary_tables
 test: altered_tables
 test: transactions
 test: transaction_errors
-test: secrets
+test: duckdb_secrets
 test: prepare
 test: gucs
 test: function

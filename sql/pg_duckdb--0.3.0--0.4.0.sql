@@ -513,3 +513,14 @@ CREATE FUNCTION duckdb.enable_motherduck(TEXT DEFAULT '::FROM_ENV::', TEXT DEFAU
 RETURNS bool
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_enable_motherduck';
+
+-- Drop legacy secret objects
+DROP SEQUENCE duckdb.secrets_table_seq;
+
+-- CASCADE will drop the following triggers:
+-- DROP TRIGGER duckdb_secret_r2_tr;
+-- DROP TRIGGER secrets_table_seq_tr;
+DROP TABLE duckdb.secrets CASCADE;
+
+DROP FUNCTION duckdb.duckdb_secret_r2_check();
+DROP FUNCTION duckdb.duckdb_update_secrets_table_seq();
