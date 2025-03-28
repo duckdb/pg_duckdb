@@ -156,7 +156,7 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	/*
 	 * We let postgres generate a basic plan, but then completely overwrite the
 	 * actual plan with our CustomScan node. This is useful to get the correct
-	 * values for all the other many fields of the PLannedStmt.
+	 * values for all the other many fields of the PlannedStmt.
 	 *
 	 * XXX: The primary reason we did this in the past is so that Postgres
 	 * filled in permInfos and rtable correctly. Those are needed for postgres
