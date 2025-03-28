@@ -5,44 +5,6 @@
 
 namespace pgduckdb {
 
-/* constants for duckdb.secrets */
-#define Natts_duckdb_secret                  12
-#define Anum_duckdb_secret_name              1
-#define Anum_duckdb_secret_type              2
-#define Anum_duckdb_secret_key_id            3
-#define Anum_duckdb_secret_secret            4
-#define Anum_duckdb_secret_region            5
-#define Anum_duckdb_secret_session_token     6
-#define Anum_duckdb_secret_endpoint          7
-#define Anum_duckdb_secret_r2_account_id     8
-#define Anum_duckdb_secret_use_ssl           9
-#define Anum_duckdb_secret_scope             10
-#define Anum_duckdb_secret_connection_string 11
-#define Anum_duckdb_secret_url_style         12
-
-enum SecretType { S3, R2, GCS, AZURE };
-enum UrlStyle { PATH, VIRTUAL_HOST, UNDEFINED };
-
-typedef struct DuckdbSecret {
-	std::string name;
-	SecretType type;
-	std::string key_id;
-	std::string secret;
-	std::string region;
-	std::string session_token;
-	std::string endpoint;
-	std::string r2_account_id;
-	bool use_ssl;
-	std::string scope;
-	std::string connection_string; // Used for Azure
-	UrlStyle url_style;
-} DuckdbSecret;
-
-std::string SecretTypeToString(SecretType type);
-std::string UrlStyleToString(UrlStyle style);
-
-extern std::vector<DuckdbSecret> ReadDuckdbSecrets();
-
 /* constants for duckdb.extensions */
 #define Natts_duckdb_extension       2
 #define Anum_duckdb_extension_name   1

@@ -49,11 +49,6 @@ GetDuckdbNamespace(void) {
 }
 
 static Oid
-SecretsTableRelationId(void) {
-	return get_relname_relid("secrets", GetDuckdbNamespace());
-}
-
-static Oid
 ExtensionsTableRelationId(void) {
 	return get_relname_relid("extensions", GetDuckdbNamespace());
 }
@@ -61,134 +56,6 @@ ExtensionsTableRelationId(void) {
 static std::string
 DatumToString(Datum datum) {
 	return std::string(text_to_cstring(DatumGetTextPP(datum)));
-}
-
-bool
-DoesSecretRequiresKeyIdOrSecret(const SecretType type) {
-	return type == SecretType::S3 || type == SecretType::GCS || type == SecretType::R2;
-}
-
-SecretType
-StringToSecretType(const std::string &type) {
-	auto uc_type = duckdb::StringUtil::Upper(type);
-	if (uc_type == "S3") {
-		return SecretType::S3;
-	} else if (uc_type == "R2") {
-		return SecretType::R2;
-	} else if (uc_type == "GCS") {
-		return SecretType::GCS;
-	} else if (uc_type == "AZURE") {
-		return SecretType::AZURE;
-	} else {
-		throw std::runtime_error("Invalid secret type: '" + type + "'");
-	}
-}
-
-std::string
-SecretTypeToString(SecretType type) {
-	switch (type) {
-	case SecretType::S3:
-		return "S3";
-	case SecretType::R2:
-		return "R2";
-	case SecretType::GCS:
-		return "GCS";
-	case SecretType::AZURE:
-		return "AZURE";
-	default:
-		throw std::runtime_error("Invalid secret type: '" + std::to_string(type) + "'");
-	}
-}
-
-UrlStyle
-StringToUrlStyle(const std::string &style) {
-	auto uc_style = duckdb::StringUtil::Upper(style);
-	if (uc_style == "PATH") {
-		return UrlStyle::PATH;
-	} else if (uc_style == "VHOST") {
-		return UrlStyle::VIRTUAL_HOST;
-	} else {
-		throw std::runtime_error("Invalid URL style: '" + style + "'");
-	}
-}
-
-std::string
-UrlStyleToString(UrlStyle style) {
-	switch (style) {
-	case UrlStyle::PATH:
-		return "path";
-	case UrlStyle::VIRTUAL_HOST:
-		return "vhost";
-	default:
-		throw std::runtime_error("Invalid URL style: '" + std::to_string(style) + "'");
-	}
-}
-
-std::vector<DuckdbSecret>
-ReadDuckdbSecrets() {
-	HeapTuple tuple = NULL;
-	Oid duckdb_secret_table_relation_id = SecretsTableRelationId();
-	Relation duckdb_secret_relation = table_open(duckdb_secret_table_relation_id, AccessShareLock);
-	SysScanDescData *scan = systable_beginscan(duckdb_secret_relation, InvalidOid, false, GetActiveSnapshot(), 0, NULL);
-	std::vector<DuckdbSecret> duckdb_secrets;
-
-	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
-		Datum datum_array[Natts_duckdb_secret];
-		bool is_null_array[Natts_duckdb_secret];
-
-		heap_deform_tuple(tuple, RelationGetDescr(duckdb_secret_relation), datum_array, is_null_array);
-		DuckdbSecret secret;
-
-		auto type_str = DatumToString(datum_array[Anum_duckdb_secret_type - 1]);
-		secret.type = StringToSecretType(type_str);
-		if (!is_null_array[Anum_duckdb_secret_key_id - 1])
-			secret.key_id = DatumToString(datum_array[Anum_duckdb_secret_key_id - 1]);
-		else if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
-			elog(WARNING, "Invalid '%s' secret: key id is required.", type_str.c_str());
-			continue;
-		}
-
-		if (!is_null_array[Anum_duckdb_secret_secret - 1])
-			secret.secret = DatumToString(datum_array[Anum_duckdb_secret_secret - 1]);
-		else if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
-			elog(WARNING, "Invalid '%s' secret: secret is required.", type_str.c_str());
-			continue;
-		}
-
-		if (!is_null_array[Anum_duckdb_secret_region - 1])
-			secret.region = DatumToString(datum_array[Anum_duckdb_secret_region - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_session_token - 1])
-			secret.session_token = DatumToString(datum_array[Anum_duckdb_secret_session_token - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_endpoint - 1])
-			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_endpoint - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_r2_account_id - 1])
-			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_r2_account_id - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_use_ssl - 1])
-			secret.use_ssl = DatumGetBool(DatumGetBool(datum_array[Anum_duckdb_secret_use_ssl - 1]));
-		else
-			secret.use_ssl = true;
-
-		if (!is_null_array[Anum_duckdb_secret_scope - 1])
-			secret.scope = DatumToString(datum_array[Anum_duckdb_secret_scope - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_connection_string - 1])
-			secret.connection_string = DatumToString(datum_array[Anum_duckdb_secret_connection_string - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_url_style - 1])
-			secret.url_style = StringToUrlStyle(DatumToString(datum_array[Anum_duckdb_secret_url_style - 1]));
-		else
-			secret.url_style = UrlStyle::UNDEFINED;
-
-		duckdb_secrets.push_back(secret);
-	}
-
-	systable_endscan(scan);
-	table_close(duckdb_secret_relation, NoLock);
-	return duckdb_secrets;
 }
 
 std::vector<DuckdbExtension>
@@ -201,8 +68,8 @@ ReadDuckdbExtensions() {
 	std::vector<DuckdbExtension> duckdb_extensions;
 
 	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
-		Datum datum_array[Natts_duckdb_secret];
-		bool is_null_array[Natts_duckdb_secret];
+		Datum datum_array[Natts_duckdb_extension];
+		bool is_null_array[Natts_duckdb_extension];
 
 		heap_deform_tuple(tuple, RelationGetDescr(duckdb_extension_relation), datum_array, is_null_array);
 		DuckdbExtension secret;
