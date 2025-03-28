@@ -13,15 +13,18 @@
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pg/guc.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 extern "C" {
 #include "postgres.h"
+
 #include "catalog/namespace.h"
-#include "lib/stringinfo.h"
-#include "utils/lsyscache.h"  // get_relname_relid
-#include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "common/file_perm.h"
+#include "lib/stringinfo.h"
 #include "miscadmin.h" // superuser
+#include "nodes/value.h"      // strVal
+#include "utils/fmgrprotos.h" // pg_sequence_last_value
+#include "utils/lsyscache.h"  // get_relname_relid
 }
 
 #include "pgduckdb/pgduckdb_options.hpp"
@@ -29,6 +32,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_fdw.hpp"
+#include "pgduckdb/pgduckdb_secrets_helper.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -129,9 +133,6 @@ DidWrites(duckdb::ClientContext &context) {
 } // namespace ddb
 
 DuckDBManager DuckDBManager::manager_instance;
-
-DuckDBManager::DuckDBManager() {
-}
 
 #define SET_DUCKDB_OPTION(ddb_option_name)                                                                             \
 	config.options.ddb_option_name = duckdb_##ddb_option_name;                                                         \
@@ -240,8 +241,7 @@ DuckDBManager::Initialize() {
 void
 DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	context.transaction.BeginTransaction();
-	auto &instance = *database->instance;
-	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
+	duckdb::ExtensionUtil::RegisterType(*database->instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	context.transaction.Commit();
 }
 
@@ -261,64 +261,24 @@ GetSeqLastValue(const char *seq_name) {
 }
 
 void
-WriteSecretQueryForS3R2OrGCP(const DuckdbSecret &secret, std::ostringstream &query) {
-	bool is_r2_cloud_secret = secret.type == SecretType::R2;
-	query << "KEY_ID '" << secret.key_id << "', SECRET '" << secret.secret << "'";
-	if (secret.region.length() && !is_r2_cloud_secret) {
-		query << ", REGION '" << secret.region << "'";
-	}
-	if (secret.session_token.length() && !is_r2_cloud_secret) {
-		query << ", SESSION_TOKEN '" << secret.session_token << "'";
-	}
-	if (secret.endpoint.length() && !is_r2_cloud_secret) {
-		query << ", ENDPOINT '" << secret.endpoint << "'";
-	}
-	if (is_r2_cloud_secret) {
-		query << ", ACCOUNT_ID '" << secret.endpoint << "'";
-	}
-	if (!secret.use_ssl) {
-		query << ", USE_SSL 'FALSE'";
-	}
-	if (secret.scope.length()) {
-		query << ", SCOPE '" << secret.scope << "'";
-	}
-	if (secret.url_style != UrlStyle::UNDEFINED) {
-		query << ", URL_STYLE '" << UrlStyleToString(secret.url_style) << "'";
-	}
-}
-
-void
 DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
-	auto duckdb_secrets = ReadDuckdbSecrets();
-
-	int secret_id = 0;
-	for (auto &secret : duckdb_secrets) {
-		std::ostringstream query;
-		query << "CREATE SECRET pgduckb_secret_" << secret_id << " ";
-		query << "(TYPE " << SecretTypeToString(secret.type) << ", ";
-
-		if (secret.type == SecretType::AZURE) {
-			query << "CONNECTION_STRING '" << secret.connection_string << "'";
-		} else {
-			WriteSecretQueryForS3R2OrGCP(secret, query);
-		}
-
-		query << ");";
-
-		DuckDBQueryOrThrow(context, query.str());
-		secret_id++;
-		secret_table_num_rows = secret_id;
+	auto queries = InvokeCPPFunc(pg::ListDuckDBCreateSecretQueries);
+	ListCell *l = nullptr;
+	foreach (l, queries) {
+		DuckDBQueryOrThrow(context, strVal(lfirst(l)));
 	}
 }
 
 void
 DuckDBManager::DropSecrets(duckdb::ClientContext &context) {
-	for (auto secret_id = 0; secret_id < secret_table_num_rows; ++secret_id) {
-		auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET pgduckb_secret_%d;", secret_id);
-		pgduckdb::DuckDBQueryOrThrow(context, drop_secret_cmd);
+	auto secrets =
+	    pgduckdb::DuckDBQueryOrThrow(context, "SELECT name FROM duckdb_secrets() WHERE name LIKE 'pgduckdb_secret_%';");
+	while (auto chunk = secrets->Fetch()) {
+		for (size_t i = 0, s = chunk->size(); i < s; ++i) {
+			auto drop_secret_cmd = duckdb::StringUtil::Format("DROP SECRET %s;", chunk->GetValue(0, i).ToString());
+			pgduckdb::DuckDBQueryOrThrow(context, drop_secret_cmd);
+		}
 	}
-
-	secret_table_num_rows = 0;
 }
 
 void
@@ -340,11 +300,10 @@ DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 		UpdateExtensionsSeq(extensions_table_last_seq);
 	}
 
-	const auto secret_table_last_seq = GetSeqLastValue("secrets_table_seq");
-	if (IsSecretSeqLessThan(secret_table_last_seq)) {
+	if (!secrets_valid) {
 		DropSecrets(context);
 		LoadSecrets(context);
-		UpdateSecretSeq(secret_table_last_seq);
+		secrets_valid = true;
 	}
 
 	if (duckdb_disabled_filesystems != NULL && !superuser()) {

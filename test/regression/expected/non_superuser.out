@@ -16,8 +16,6 @@ SET ROLE user2;
 SELECT * FROM t;
 ERROR:  permission denied for table t
 -- Should fail because we're not allowed to read the internal tables by default
-SELECT * from duckdb.secrets;
-ERROR:  permission denied for table secrets
 SELECT * from duckdb.tables;
 ERROR:  permission denied for table tables
 SELECT * from duckdb.extensions;

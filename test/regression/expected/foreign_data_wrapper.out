@@ -18,7 +18,7 @@ ERROR:  Missing required option: 'type'
 CREATE SERVER invalid_server2
 TYPE 'foo'
 FOREIGN DATA WRAPPER duckdb;
-ERROR:  Unknown SERVER type: 'foo'
+ERROR:  Secret type 'foo' not found
 -- Should succeed with no option
 CREATE SERVER valid_md_server1
 TYPE 'motherduck'
