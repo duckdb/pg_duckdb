@@ -22,6 +22,7 @@ bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_postgres_role = strdup("");
+char *duckdb_max_temp_directory_size = strdup("");
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
@@ -117,6 +118,10 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.allow_unsigned_extensions",
 	                     "Allow DuckDB to load extensions with invalid or missing signatures",
 	                     &duckdb_allow_unsigned_extensions, PGC_SUSET);
+
+	DefineCustomVariable("duckdb.max_temp_directory_size",
+	                     "The maximum size DuckDB's temporary directory can grow to (e.g. '10GB', '90%')",
+	                     &duckdb_max_temp_directory_size, PGC_SUSET);
 
 	DefineCustomVariable(
 	    "duckdb.autoinstall_known_extensions",

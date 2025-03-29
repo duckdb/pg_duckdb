@@ -159,6 +159,11 @@ DuckDBManager::Initialize() {
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
 	}
 
+	if (duckdb_max_temp_directory_size != NULL && strlen(duckdb_max_temp_directory_size) != 0) {
+		config.SetOption("max_temp_directory_size", duckdb_max_temp_directory_size);
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'max_temp_directory_size'=%s", duckdb_max_temp_directory_size);
+	}
+
 	if (duckdb_maximum_threads > -1) {
 		SET_DUCKDB_OPTION(maximum_threads);
 	}
