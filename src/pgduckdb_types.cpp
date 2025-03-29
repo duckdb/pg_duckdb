@@ -175,6 +175,18 @@ ValidTimestampOrTimestampTz(int64_t timestamp) {
 	return timestamp >= pgduckdb::PGDUCKDB_MIN_TIMESTAMP_VALUE && timestamp < pgduckdb::PGDUCKDB_MAX_TIMESTAMP_VALUE;
 }
 
+static Datum
+ConvertToStringDatum(const duckdb::Value &value) {
+	auto str = value.ToString();
+	auto varchar = str.c_str();
+	auto varchar_len = str.size();
+
+	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
+	SET_VARSIZE(result, varchar_len + VARHDRSZ);
+	memcpy(VARDATA(result), varchar, varchar_len);
+	return PointerGetDatum(result);
+}
+
 static inline Datum
 ConvertBoolDatum(const duckdb::Value &value) {
 	return value.GetValue<bool>();
@@ -211,14 +223,7 @@ ConvertInt8Datum(const duckdb::Value &value) {
 
 static Datum
 ConvertVarCharDatum(const duckdb::Value &value) {
-	auto str = value.GetValue<duckdb::string>();
-	auto varchar = str.c_str();
-	auto varchar_len = str.size();
-
-	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
-	SET_VARSIZE(result, varchar_len + VARHDRSZ);
-	memcpy(VARDATA(result), varchar, varchar_len);
-	return PointerGetDatum(result);
+	return ConvertToStringDatum(value);
 }
 
 static Datum
@@ -491,29 +496,13 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 static Datum
 ConvertUnionDatum(const duckdb::Value &value) {
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::UNION);
-	// Copied Logic from ConvertVarcharDatum() ...
-	auto str = value.ToString();
-	auto varchar = str.c_str();
-	auto varchar_len = str.size();
-
-	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
-	SET_VARSIZE(result, varchar_len + VARHDRSZ);
-	memcpy(VARDATA(result), varchar, varchar_len);
-	return PointerGetDatum(result);
+	return ConvertToStringDatum(value);
 }
 
 static Datum
 ConvertMapDatum(const duckdb::Value &value) {
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::MAP);
-	// Copied Logic from ConvertVarcharDatum() ...
-	auto str = value.ToString();
-	auto varchar = str.c_str();
-	auto varchar_len = str.size();
-
-	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
-	SET_VARSIZE(result, varchar_len + VARHDRSZ);
-	memcpy(VARDATA(result), varchar, varchar_len);
-	return PointerGetDatum(result);
+	return ConvertToStringDatum(value);
 }
 
 static duckdb::interval_t
