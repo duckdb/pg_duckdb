@@ -10,7 +10,6 @@ SELECT * exclude(
     struct,
     struct_of_arrays,
     array_of_structs,
-    map,
     fixed_nested_int_array,
     fixed_nested_varchar_array,
     fixed_struct_array,

@@ -622,4 +622,12 @@ DECLARE_PG_FUNCTION(duckdb_union_out) {
 	return textout(fcinfo);
 }
 
+DECLARE_PG_FUNCTION(duckdb_map_in) {
+	elog(ERROR, "Creating the duckdb.map type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_map_out) {
+	return textout(fcinfo);
+}
+
 } // extern "C"
