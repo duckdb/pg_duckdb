@@ -53,6 +53,15 @@ INSERT INTO interval_tbl SELECT CAST(a AS INTERVAL) FROM (VALUES ('2 years 5 mon
 SELECT * FROM interval_tbl;
 SELECT * FROM interval_tbl WHERE a = '5 day 5 hours'::INTERVAL;
 
+-- VARBIT
+CREATE TABLE varbit_tbl(a VARBIT);
+-- Insert a few kinds of bitstrings: (1) less than 8 bits; (2) equal to 8 bits; (3) larger than 8 bits.
+INSERT INTO varbit_tbl SELECT CAST(a AS VARBIT) FROM (VALUES (B'1010'::VARBIT), (B'10100011'::VARBIT), (B'1010001011'::VARBIT), (NULL)) t(a);
+SELECT * FROM varbit_tbl;
+SELECT * FROM varbit_tbl WHERE a = B'1010'::VARBIT;
+SELECT * FROM varbit_tbl WHERE a = B'10100011'::VARBIT;
+SELECT * FROM varbit_tbl WHERE a = B'1010001011'::VARBIT;
+
 -- TIME
 CREATE TABLE time_tbl(a TIME);
 INSERT INTO time_tbl SELECT CAST(a AS TIME) FROM (VALUES ('13:45:30'::TIME), ('08:15:00'::TIME), (NULL)) t(a);

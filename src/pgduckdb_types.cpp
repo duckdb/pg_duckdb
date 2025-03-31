@@ -1,13 +1,16 @@
 #include "duckdb.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/extra_type_info.hpp"
-#include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/uuid.hpp"
 
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/types.hpp"
+
+#include <fstream>
 
 extern "C" {
 
@@ -28,6 +31,7 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/timestamp.h"
 #include "utils/uuid.h"
+#include "utils/varbit.h"
 }
 
 #include "pgduckdb/pgduckdb_detoast.hpp"
@@ -156,9 +160,17 @@ struct DecimalConversionDouble {
 	}
 };
 
+// Util function to convert duckdb `BIT` value to postgres bitstring type.
+// There're two possible corresponding types `BITOID` and `VARBITOID`, here we convert to `VARBITOID` for generality.
 static Datum
 ConvertVarbitDatum(const duckdb::Value &value) {
 	const std::string value_str = value.ToString();
+	{
+		std::fstream f{"/tmp/debug_bitstring.log", std::ios::out | std::ios::app};
+		f << "convert duckdb to datum value string = " << value_str;
+		f.flush();
+		f.close();
+	}
 	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
 	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
 	Datum pg_varbit = pgduckdb::pg::StringToBitString(value_str.c_str());
@@ -429,6 +441,39 @@ DatumGetInterval(Datum value) {
 	return duck_interval;
 }
 
+// Convert bitstring (which consists of character '0' and '1') to duckdb bitstring.
+duckdb::string ConvertBitStringToDuckdbBitString(const duckdb::string& padded_string, size_t padding_size) {
+	{
+		std::fstream f{"/tmp/debug-bittype.log", std::ios::app | std::ios::out};
+		f << "padded string = " << padded_string << ". pad size = " << padding_size << std::endl;
+		f.flush();
+		f.close();
+	}
+
+	D_ASSERT(padded_string.length() % 8 == 0);
+
+    std::string result;
+	result.reserve(padded_string.length() / 8 + 1);
+	result += static_cast<char>(static_cast<uint8_t>(padding_size));
+    for (size_t idx = 0; idx < padded_string.length(); idx += 8) {
+        std::bitset<8> bits(padded_string.substr(idx, 8));
+        result += static_cast<char>(bits.to_ulong());
+    }
+    return result;
+}
+
+static duckdb::string
+DatumGetBitString(Datum value) {
+	const char *varbit_char_array = DatumGetCString(DirectFunctionCall1(varbit_out, value));
+	const duckdb::string varbit_string = varbit_char_array;
+	const size_t varbit_len = varbit_string.length();
+	const size_t aligned_varbit_len = (varbit_len + 7) / 8 * 8;
+	const size_t padding_size = aligned_varbit_len - varbit_len;
+	duckdb::string padded_string = duckdb::string(padding_size, '1'); // duckdb prefix padding with 1
+	padded_string += varbit_string;
+	return ConvertBitStringToDuckdbBitString(padded_string, padding_size);
+}
+
 static duckdb::dtime_t
 DatumGetTime(Datum value) {
 	const TimeADT pg_time = DatumGetTimeADT(value);
@@ -557,6 +602,19 @@ struct PostgresTypeTraits<INTERVALOID> {
 	}
 };
 
+// BIT type
+template <>
+struct PostgresTypeTraits<VARBITOID> {
+	static constexpr int16_t typlen = -1;
+	static constexpr bool typbyval = false;
+	static constexpr char typalign = 'i';
+
+	static inline Datum
+	ToDatum(const duckdb::Value &val) {
+		return ConvertVarbitDatum(val);
+	}
+};
+
 // TIME type
 template <>
 struct PostgresTypeTraits<TIMEOID> {
@@ -673,6 +731,7 @@ using Float8Array = PODArray<PostgresOIDMapping<FLOAT8OID>>;
 using DateArray = PODArray<PostgresOIDMapping<DATEOID>>;
 using TimestampArray = PODArray<PostgresOIDMapping<TIMESTAMPOID>>;
 using IntervalArray = PODArray<PostgresOIDMapping<INTERVALOID>>;
+using BitArray = PODArray<PostgresOIDMapping<VARBITOID>>;
 using TimeArray = PODArray<PostgresOIDMapping<TIMEOID>>;
 using UUIDArray = PODArray<PostgresOIDMapping<UUIDOID>>;
 using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
@@ -812,6 +871,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
 
 	switch (oid) {
+	case BITOID:
 	case VARBITOID: {
 		slot->tts_values[col] = ConvertVarbitDatum(value);
 		break;
@@ -921,6 +981,11 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<IntervalArray>(slot, value, col);
 		break;
 	}
+	case BITARRAYOID:
+	case VARBITARRAYOID: {
+		ConvertDuckToPostgresArray<BitArray>(slot, value, col);
+		break;
+	}
 	case TIMEARRAYOID: {
 		ConvertDuckToPostgresArray<TimeArray>(slot, value, col);
 		break;
@@ -1004,6 +1069,11 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case INTERVALOID:
 	case INTERVALARRAYOID:
 		return duckdb::LogicalTypeId::INTERVAL;
+	case BITOID:
+	case BITARRAYOID:
+	case VARBITOID:
+	case VARBITARRAYOID:
+		return duckdb::LogicalTypeId::BIT;
 	case TIMEOID:
 	case TIMEARRAYOID:
 		return duckdb::LogicalTypeId::TIME;
@@ -1112,6 +1182,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 		return TIMESTAMPARRAYOID;
 	case duckdb::LogicalTypeId::INTERVAL:
 		return INTERVALARRAYOID;
+	case duckdb::LogicalTypeId::BIT:
+		return VARBITARRAYOID;
 	case duckdb::LogicalTypeId::TIME:
 		return TIMEARRAYOID;
 	case duckdb::LogicalTypeId::FLOAT:
@@ -1135,8 +1207,6 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 Oid
 GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 	switch (type.id()) {
-	case duckdb::LogicalTypeId::BIT:
-		return VARBITOID;
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
 	case duckdb::LogicalTypeId::TINYINT:
@@ -1170,6 +1240,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return TIMESTAMPTZOID;
 	case duckdb::LogicalTypeId::INTERVAL:
 		return INTERVALOID;
+	case duckdb::LogicalTypeId::BIT:
+		return VARBITOID;
 	case duckdb::LogicalTypeId::TIME:
 		return TIMEOID;
 	case duckdb::LogicalTypeId::FLOAT:
@@ -1337,6 +1409,11 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		    duckdb::timestamp_tz_t(DatumGetTimestampTz(value) + PGDUCKDB_DUCK_TIMESTAMP_OFFSET));
 	case INTERVALOID:
 		return duckdb::Value::INTERVAL(DatumGetInterval(value));
+	case BITOID:
+	case VARBITOID: {
+		const duckdb::string bitstring = DatumGetBitString(value);
+		return duckdb::Value::BIT(bitstring);
+	}
 	case TIMEOID:
 		return duckdb::Value::TIME(DatumGetTime(value));
 	case FLOAT4OID:
@@ -1410,6 +1487,9 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		break;
 	case duckdb::LogicalTypeId::INTERVAL:
 		Append<duckdb::interval_t>(result, DatumGetInterval(value), offset);
+		break;
+	case duckdb::LogicalTypeId::BIT:
+		Append<duckdb::bitstring_t>(result, duckdb::string_t{DatumGetBitString(value)}, offset);
 		break;
 	case duckdb::LogicalTypeId::TIME:
 		Append<duckdb::dtime_t>(result, DatumGetTime(value), offset);
