@@ -8,19 +8,19 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 
 static void DuckdbInitGUC(void);
 
 bool duckdb_force_execution = false;
+bool duckdb_unsafe_allow_mixed_transactions = false;
+bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
-int duckdb_motherduck_enabled = MotherDuckEnabled::MOTHERDUCK_AUTO;
-char *duckdb_motherduck_token = strdup("");
-char *duckdb_motherduck_postgres_database = strdup("postgres");
-char *duckdb_motherduck_default_database = strdup("");
-char *duckdb_motherduck_background_catalog_refresh_inactivity_timeout = strdup("");
+char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
@@ -45,7 +45,7 @@ _PG_init(void) {
 	DuckdbInitGUC();
 	DuckdbInitHooks();
 	DuckdbInitNode();
-	pgduckdb::InitBackgroundWorker();
+	pgduckdb::InitBackgroundWorkersShmem();
 	pgduckdb::RegisterDuckdbXactCallback();
 }
 } // extern "C"
@@ -64,14 +64,6 @@ DefineCustomVariable(const char *name, const char *short_desc, char **var, GucCo
                      GucShowHook show_hook = NULL) {
 	DefineCustomStringVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, check_hook, assign_hook,
 	                           show_hook);
-}
-
-static void
-DefineCustomVariable(const char *name, const char *short_desc, int *var, const struct config_enum_entry *options,
-                     GucContext context = PGC_USERSET, int flags = 0, GucEnumCheckHook check_hook = NULL,
-                     GucEnumAssignHook assign_hook = NULL, GucShowHook show_hook = NULL) {
-	DefineCustomEnumVariable(name, gettext_noop(short_desc), NULL, var, *var, options, context, flags, check_hook,
-	                         assign_hook, show_hook);
 }
 
 template <typename T>
@@ -105,29 +97,16 @@ DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T 
 	func(name, gettext_noop(short_desc), NULL, var, *var, min, max, context, flags, check_hook, assign_hook, show_hook);
 }
 
-/*
- * Although only "true", "false", and "auto" are documented, we
- * accept all the likely variants of "true" and "false" that Postgres users are
- * used to.
- */
-/* clang-format off */
-static const struct config_enum_entry motherduck_enabled_options[] = {
-    {"auto", MOTHERDUCK_AUTO, false},
-    {"on", MOTHERDUCK_ON, true},
-    {"off", MOTHERDUCK_OFF, true},
-    {"true", MOTHERDUCK_ON, false},
-    {"false", MOTHERDUCK_OFF, false},
-    {"yes", MOTHERDUCK_ON, true},
-    {"no", MOTHERDUCK_OFF, true},
-    {"1", MOTHERDUCK_ON, true},
-    {"0", MOTHERDUCK_OFF, true},
-    {NULL, 0, false}
-};
-/* clang-format on */
-
 static void
 DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
+
+	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
+	                     "Allow mixed transactions between DuckDB and Postgres",
+	                     &duckdb_unsafe_allow_mixed_transactions);
+
+	DefineCustomVariable("duckdb.log_pg_explain", "Logs the EXPLAIN plan of a Postgres scan at the NOTICE log level",
+	                     &duckdb_log_pg_explain);
 
 	DefineCustomVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
 	                     &duckdb_enable_external_access, PGC_SUSET);
@@ -174,22 +153,6 @@ DuckdbInitGUC(void) {
 	                     "MotherDuck tables. Defaults to superusers only",
 	                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
 
-	DefineCustomVariable("duckdb.motherduck_enabled",
-	                     "If motherduck support should enabled. 'auto' means enabled if motherduck_token is set",
-	                     &duckdb_motherduck_enabled, motherduck_enabled_options, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
-
-	DefineCustomVariable("duckdb.motherduck_token", "The token to use for MotherDuck", &duckdb_motherduck_token,
-	                     PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
-
-	DefineCustomVariable("duckdb.motherduck_postgres_database", "Which database to enable MotherDuck support in",
-	                     &duckdb_motherduck_postgres_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
-
-	DefineCustomVariable("duckdb.motherduck_default_database",
-	                     "Which database in MotherDuck to designate as default (in place of my_db)",
-	                     &duckdb_motherduck_default_database, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
-
-	DefineCustomVariable("duckdb.motherduck_background_catalog_refresh_inactivity_timeout",
-	                     "When to stop syncing of the motherduck catalog when no activity has taken place",
-	                     &duckdb_motherduck_background_catalog_refresh_inactivity_timeout, PGC_POSTMASTER,
-	                     GUC_SUPERUSER_ONLY);
+	DefineCustomVariable("duckdb.motherduck_session_hint", "The session hint to use for MotherDuck connections",
+	                     &duckdb_motherduck_session_hint);
 }

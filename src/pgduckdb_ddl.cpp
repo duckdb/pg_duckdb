@@ -1,14 +1,19 @@
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/pgduckdb_guc.h"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "access/tableam.h"
+#include "access/relation.h"
 #include "catalog/pg_type.h"
 #include "commands/event_trigger.h"
 #include "fmgr.h"
 #include "catalog/pg_authid_d.h"
 #include "catalog/namespace.h"
+#include "foreign/foreign.h"
 #include "funcapi.h"
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
@@ -20,6 +25,7 @@ extern "C" {
 #include "utils/syscache.h"
 #include "utils/lsyscache.h"
 #include "commands/event_trigger.h"
+#include "commands/tablecmds.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
 #include "rewrite/rewriteHandler.h"
@@ -28,13 +34,19 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
+#include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include <inttypes.h>
+
+namespace pgduckdb {
+DDLType top_level_duckdb_ddl_type = DDLType::NONE;
+} // namespace pgduckdb
 
 /*
  * ctas_skip_data stores the original value of the skipData field of the
@@ -43,7 +55,6 @@ extern "C" {
  */
 static bool ctas_skip_data = false;
 
-static bool top_level_ddl = true;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
 /*
@@ -98,6 +109,46 @@ WrapQueryInDuckdbQueryCall(Query *query, List *target_list) {
 #endif
 }
 
+/*
+ * This is a DROP pre-check to check if a DROP TABLE command tries to drop both
+ * DuckDB and Postgres tables. Doing so is not allowed within an explicit
+ * transaction. It also claims the command ID
+ */
+static void
+DropTablePreCheck(DropStmt *stmt) {
+	Assert(stmt->removeType == OBJECT_TABLE);
+	bool dropping_duckdb_tables = false;
+	bool dropping_postgres_tables = false;
+	foreach_node(List, obj, stmt->objects) {
+		/* check if table is duckdb table */
+		RangeVar *rel = makeRangeVarFromNameList(obj);
+		Oid relid = RangeVarGetRelid(rel, AccessShareLock, true);
+		if (!OidIsValid(relid)) {
+			/* Let postgres deal with this. It's possible that this is fine in
+			 * case of DROP ... IF EXISTS */
+			continue;
+		}
+
+		Relation relation = relation_open(relid, AccessShareLock);
+		if (pgduckdb::IsDuckdbTable(relation)) {
+			if (!dropping_duckdb_tables) {
+				pgduckdb::ClaimCurrentCommandId();
+				dropping_duckdb_tables = true;
+			}
+		} else {
+			dropping_postgres_tables = true;
+		}
+		relation_close(relation, NoLock);
+	}
+
+	if (!pgduckdb::MixedWritesAllowed() && dropping_duckdb_tables && dropping_postgres_tables) {
+		elog(ERROR, "Dropping both DuckDB and non-DuckDB tables in the same transaction is not supported");
+	}
+}
+
+static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
+static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
+
 static void
 DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
 	if (!pgduckdb::IsExtensionRegistered()) {
@@ -107,11 +158,72 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 
 	Node *parsetree = pstmt->utilityStmt;
 
-	if (IsA(parsetree, CreateTableAsStmt)) {
+	if (IsA(parsetree, TransactionStmt)) {
+		/*
+		 * Don't do anything for transaction statements, we have the
+		 * transaction XactCallback functions to handle those in
+		 * pgduckdb_xact.cpp
+		 */
+		return;
+	}
+
+	/*
+	 * Time to check for disallowed mixed writes here. The handling for some of
+	 * the DuckDB DDL, marks some some specific mixed writes as allowed. If we
+	 * don't check now, we might accidentally also mark disallowed mixed writes
+	 * from before as allowed.
+	 */
+
+	if (IsA(parsetree, CreateStmt)) {
+		auto stmt = castNode(CreateStmt, parsetree);
+
+		/* Default to duckdb AM for ddb$ schemas and disallow other AMs */
+		Oid schema_oid = RangeVarGetCreationNamespace(stmt->relation);
+		char *schema_name = get_namespace_name(schema_oid);
+		if (strncmp("ddb$", schema_name, 4) == 0) {
+			if (!stmt->accessMethod) {
+				stmt->accessMethod = pstrdup("duckdb");
+			} else if (strcmp(stmt->accessMethod, "duckdb") != 0) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Creating a non-DuckDB table in a ddb$ schema is not supported")));
+			}
+		}
+
+		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
+		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
+		if (is_duckdb_table) {
+			if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Only one DuckDB table can be created in a single statement")));
+			}
+			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::CREATE_TABLE;
+			pgduckdb::ClaimCurrentCommandId();
+		}
+
+		return;
+	} else if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
+
+		/* Default to duckdb AM for ddb$ schemas and disallow other AMs */
+		Oid schema_oid = RangeVarGetCreationNamespace(stmt->into->rel);
+		char *schema_name = get_namespace_name(schema_oid);
+		if (strncmp("ddb$", schema_name, 4) == 0) {
+			if (!stmt->into->accessMethod) {
+				stmt->into->accessMethod = pstrdup("duckdb");
+			} else if (strcmp(stmt->into->accessMethod, "duckdb") != 0) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Creating a non-DuckDB table in a ddb$ schema is not supported")));
+			}
+		}
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
+			if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+				                errmsg("Only one DuckDB table can be created in a single statement")));
+			}
+			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::CREATE_TABLE;
+			pgduckdb::ClaimCurrentCommandId();
 			/*
 			 * Force skipData to false for duckdb tables, so that Postgres does
 			 * not execute the query, and save the original value in ctas_skip_data
@@ -211,7 +323,85 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
 		}
 		return;
+	} else if (IsA(parsetree, DropStmt)) {
+		auto stmt = castNode(DropStmt, parsetree);
+		switch (stmt->removeType) {
+		case OBJECT_TABLE:
+			DropTablePreCheck(stmt);
+			break;
+		default:
+			/* ignore anything else */
+			break;
+		}
+		return;
+	} else if (IsA(parsetree, AlterTableStmt)) {
+		auto stmt = castNode(AlterTableStmt, parsetree);
+		Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
+		Relation relation = RelationIdGetRelation(relation_oid);
+		/*
+		 * Certain CREATE TABLE commands also trigger an ALTER TABLE command,
+		 * specifically if you use REFERENCES it will alter the table
+		 * afterwards. We currently only do this to get a better error message,
+		 * because we don't support REFERENCES anyway.
+		 */
+		if (pgduckdb::IsDuckdbTable(relation) && pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::NONE) {
+			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::ALTER_TABLE;
+			pgduckdb::ClaimCurrentCommandId();
+		}
+		RelationClose(relation);
+	} else if (IsA(parsetree, CreateForeignServerStmt)) {
+		DuckdbHandleCreateForeignServerStmt(parsetree);
+		return;
+	} else if (IsA(parsetree, CreateUserMappingStmt)) {
+		DuckdbHandleCreateUserMappingStmt(parsetree);
+		return;
 	}
+}
+
+static void
+ValidateOptionNotSet(List *options, const char *option_name) {
+	foreach_node(DefElem, def, options) {
+		if (strcmp(def->defname, option_name) == 0) {
+			elog(ERROR, "`%s` should not be set in the options", option_name);
+		}
+	}
+}
+
+static void
+DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
+	// Propagate the "TYPE" to the server options, don't validate it here though
+	auto stmt = castNode(CreateForeignServerStmt, parsetree);
+	if (strcmp(stmt->fdwname, "duckdb") != 0) {
+		return; // Not our FDW, don't do anything
+	}
+
+	ValidateOptionNotSet(stmt->options, "type");
+
+	if (stmt->servertype == NULL) {
+		return; // Don't do anything quite yet, let the validator raise an error
+	}
+
+	// Wasn't set, add it.
+	stmt->options = lappend(stmt->options, makeDefElem(pstrdup("type"), (Node *)makeString(stmt->servertype), -1));
+}
+
+static void
+DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
+	// Propagate the "servername" to the user mapping options
+	auto stmt = castNode(CreateUserMappingStmt, parsetree);
+
+	auto server = GetForeignServerByName(stmt->servername, false);
+	auto fdw = GetForeignDataWrapper(server->fdwid);
+	if (strcmp(fdw->fdwname, "duckdb") != 0) {
+		return; // Not our FDW, don't do anything
+	}
+
+	Assert(stmt->servername);
+	ValidateOptionNotSet(stmt->options, "servername");
+
+	// Wasn't set, add it.
+	stmt->options =
+	    lappend(stmt->options, makeDefElem(pstrdup("servername"), (Node *)makeString(stmt->servername), -1));
 }
 
 static void
@@ -233,22 +423,22 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	}
 
 	/*
-	 * We need this prev_top_level_ddl variable because top_level_ddl because
-	 * its possible that the first DDL command then triggers a second DDL
-	 * command. The first of which is at the top level, but the second of which
-	 * is not. So this way we make sure that the global top_level_ddl
-	 * variable matches whichever level we're currently executing.
+	 * We need this prev_top_level_ddl variable because its possible that the
+	 * first DDL command then triggers a second DDL command. The first of which
+	 * is at the top level, but the second of which is not. So this way we make
+	 * sure that the our top level state is the correct one for the current
+	 * command.
 	 *
 	 * NOTE: We don't care about resetting the global variable in case of an
 	 * error, because we'll set it correctly for the next command anyway.
 	 */
-	bool prev_top_level_ddl = top_level_ddl;
-	top_level_ddl = context == PROCESS_UTILITY_TOPLEVEL;
+	bool prev_top_level_ddl = pgduckdb::IsStatementTopLevel();
+	pgduckdb::SetStatementTopLevel(context == PROCESS_UTILITY_TOPLEVEL);
 
 	DuckdbHandleDDL(pstmt, query_string, params);
 	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 
-	top_level_ddl = prev_top_level_ddl;
+	pgduckdb::SetStatementTopLevel(prev_top_level_ddl);
 }
 
 static void
@@ -302,19 +492,6 @@ CheckOnCommitSupport(OnCommitAction on_commit) {
 
 extern "C" {
 
-/*
- * Stores the oids of temporary DuckDB tables for this backend. We cannot store
- * these Oids in the duckdb.tables table. This is because these tables are
- * automatically dropped when the backend terminates, but for this type of drop
- * no event trigger is fired. So if we would store these Oids in the
- * duckdb.tables table, then the oids of temporary tables would stay in there
- * after the backend terminates (which would be bad, because the table doesn't
- * exist anymore). To solve this, we store the oids in this in-memory set
- * instead, because that memory will automatically be cleared when the current
- * backend terminates.
- */
-static std::unordered_set<Oid> temporary_duckdb_tables;
-
 DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (!CALLED_AS_EVENT_TRIGGER(fcinfo)) /* internal error */
 		elog(ERROR, "not fired by event trigger manager");
@@ -326,6 +503,15 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		 */
 		PG_RETURN_NULL();
 	}
+
+	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::CREATE_TABLE &&
+	    pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Cannot create a DuckDB table this way, use CREATE TABLE or CREATE TABLE ... AS")));
+		PG_RETURN_NULL();
+	}
+	/* Reset it back to NONE, for the remainder of the event trigger */
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
 	Node *parsetree = trigger_data->parsetree;
@@ -394,15 +580,17 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	 * temporary_duckdb_tables for more details.
 	 */
 	if (is_temporary) {
-		temporary_duckdb_tables.insert(relid);
+		pgduckdb::RegisterDuckdbTempTable(relid);
 	} else {
+		if (!pgduckdb::IsMotherDuckEnabled()) {
+			elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
+		}
+
 		Oid saved_userid;
 		int sec_context;
 		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
 		const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
 		auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
-		GetUserIdAndSecContext(&saved_userid, &sec_context);
-		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 
 		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
 		Datum values[] = {relid_datum, CStringGetTextDatum(duckdb_db), 0, CStringGetTextDatum(default_db.c_str())};
@@ -412,17 +600,25 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 			values[2] = CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version);
 			nulls[2] = ' ';
 		}
+
+		GetUserIdAndSecContext(&saved_userid, &sec_context);
+		SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
+		pgduckdb::pg::SetForceAllowWrites(true);
 		ret = SPI_execute_with_args(R"(
 			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version, default_database)
 			VALUES ($1, $2, $3, $4)
 			)",
 		                            lengthof(arg_types), arg_types, values, nulls, false, 0);
+		pgduckdb::pg::SetForceAllowWrites(false);
 
 		/* Revert back to original privileges */
 		SetUserIdAndSecContext(saved_userid, sec_context);
 
-		if (ret != SPI_OK_INSERT)
+		if (ret != SPI_OK_INSERT) {
 			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+		}
+
+		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
 	}
 
 	AtEOXact_GUC(false, save_nestlevel);
@@ -436,11 +632,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		PG_RETURN_NULL();
 	}
 
-	/*
-	 * For now, we don't support DuckDB DDL queries in transactions,
-	 * because they write to both the Postgres and the DuckDB database.
-	 */
-	PreventInTransactionBlock(top_level_ddl, "DuckDB DDL statements");
+	pgduckdb::ClaimCurrentCommandId(true);
 
 	if (IsA(parsetree, CreateStmt)) {
 		auto stmt = castNode(CreateStmt, parsetree);
@@ -507,6 +699,12 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		PG_RETURN_NULL();
 	}
 
+	/*
+	 * Save the current top level state, because our next SPI commands will
+	 * cause it to always become true.
+	 */
+	bool is_top_level = pgduckdb::IsStatementTopLevel();
+
 	SPI_connect();
 
 	/*
@@ -539,6 +737,72 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		}
 	}
 
+	/*
+	 * We don't want to allow DROPs that involve PG objects and DuckDB tables
+	 * in the same transaction. This is not easy to disallow though, because
+	 * when dropping a DuckDB table there are also many other objects that get dropped:
+	 * 1. Each table owns two types:
+	 *	 a. the composite type matching its columns
+	 *	 b. the array of that composite type
+	 * 2. There can also be many implicitely connected things to a table, like sequences/constraints/etc
+	 *
+	 * So here we try to count all the objects that are not connected to a
+	 * table. Sadly at this stage the objects are already deleted, so there's
+	 * no way to know for sure if they were. So we use the fairly crude
+	 * approach simply not counting all the object types that are often
+	 * connected to tables. We might have missed a few, so we can start to
+	 * ignore more if we get bug reports. We also might want to change how wo
+	 * do this completely, but for now this seems to work well enough.
+	 *
+	 * One thing that we at least want to disallow (for now) is removing a
+	 * non-"ddb$" schema and all its DuckDB tables. That way if there are also
+	 * other objects in this schema, we automatically fail the drop. This is
+	 * also up for debate in the future, but it's much easier to decide that we
+	 * want to start allowing this than it is to start disallowing it.
+	 */
+	int ret = SPI_exec(R"(
+		SELECT count(*)::bigint, (count(*) FILTER (WHERE object_type = 'table'))::bigint
+		FROM pg_catalog.pg_event_trigger_dropped_objects()
+		WHERE object_type NOT IN ('type', 'sequence', 'table constraint', 'index', 'default value', 'trigger', 'toast table')
+	)",
+	                   0);
+	if (ret != SPI_OK_SELECT) {
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	}
+
+	if (SPI_processed != 1) {
+		elog(ERROR, "expected a single row to be returned, but found %" PRIu64, static_cast<uint64_t>(SPI_processed));
+	}
+
+	int64 total_deleted;
+	int64 deleted_tables;
+
+	{
+		HeapTuple tuple = SPI_tuptable->vals[0];
+		bool isnull;
+		Datum total_deleted_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull);
+		if (isnull) {
+			elog(ERROR, "Expected number of deleted objects but found NULL");
+		}
+		total_deleted = DatumGetInt64(total_deleted_datum);
+
+		Datum deleted_tables_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
+		if (isnull) {
+			elog(ERROR, "Expected number of deleted tables but found NULL");
+		}
+		deleted_tables = DatumGetInt64(deleted_tables_datum);
+	}
+
+	if (deleted_tables == 0) {
+		/*
+		 * No tables were deleted at all, thus also no duckdb tables. So no
+		 * need to do anything.
+		 */
+		AtEOXact_GUC(false, save_nestlevel);
+		SPI_finish();
+		PG_RETURN_NULL();
+	}
+
 	Oid saved_userid;
 	int sec_context;
 	GetUserIdAndSecContext(&saved_userid, &sec_context);
@@ -554,7 +818,8 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * Here we first handle the non-temporary tables.
 	 */
 
-	int ret = SPI_exec(R"(
+	pgduckdb::pg::SetForceAllowWrites(true);
+	ret = SPI_exec(R"(
 		DELETE FROM duckdb.tables
 		USING (
 			SELECT objid, schema_name, object_name
@@ -564,7 +829,8 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		WHERE relid = objid
 		RETURNING objs.schema_name, objs.object_name
 		)",
-	                   0);
+	               0);
+	pgduckdb::pg::SetForceAllowWrites(false);
 
 	/* Revert back to original privileges */
 	SetUserIdAndSecContext(saved_userid, sec_context);
@@ -579,6 +845,8 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * regular heap tables in transactions anymore.
 	 */
 	duckdb::Connection *connection = nullptr;
+
+	int64 deleted_duckdb_tables = 0;
 
 	/*
 	 * Now forward the DROP to DuckDB... but only if MotherDuck is actually
@@ -598,12 +866,6 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	if (pgduckdb::IsMotherDuckEnabled() && !pgduckdb::doing_motherduck_sync) {
 		for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
 			if (!connection) {
-				/*
-				 * For now, we don't support DuckDB DDL queries in
-				 * transactions, because they write to both the Postgres and
-				 * the DuckDB database.
-				 */
-				PreventInTransactionBlock(top_level_ddl, "DuckDB DDL statements");
 				/* We're going to run multiple queries in DuckDB, so we need to
 				 * start a transaction to ensure ACID guarantees hold. */
 				connection = pgduckdb::DuckDBManager::GetConnection(true);
@@ -615,6 +877,8 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 			char *drop_query = psprintf("DROP TABLE %s.%s", pgduckdb_db_and_schema_string(postgres_schema_name, true),
 			                            quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
+
+			deleted_duckdb_tables++;
 		}
 	}
 
@@ -642,16 +906,12 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 			elog(ERROR, "Expected relid to be returned, but found NULL");
 		}
 		Oid relid = DatumGetObjectId(relid_datum);
-		if (temporary_duckdb_tables.count(relid) == 0) {
+		if (!pgduckdb::IsDuckdbTempTable(relid)) {
 			/* It was a regular temporary table, so this DROP is allowed */
 			continue;
 		}
+
 		if (!connection) {
-			/*
-			 * For now, we don't support DuckDB DDL queries in transactions,
-			 * because they write to both the Postgres and the DuckDB database.
-			 */
-			PreventInTransactionBlock(top_level_ddl, "DuckDB DDL statements");
 			/* We're going to run multiple queries in DuckDB, so we need to
 			 * start a transaction to ensure ACID guarantees hold. */
 			connection = pgduckdb::DuckDBManager::GetConnection(true);
@@ -659,7 +919,28 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
 		pgduckdb::DuckDBQueryOrThrow(*connection,
 		                             std::string("DROP TABLE pg_temp.main.") + quote_identifier(table_name));
-		temporary_duckdb_tables.erase(relid);
+		pgduckdb::UnregisterDuckdbTempTable(relid);
+		deleted_duckdb_tables++;
+	}
+
+	/*
+	 * Restore "top level" state, because by running SPI commands it's now
+	 * always set to false.
+	 */
+	pgduckdb::SetStatementTopLevel(is_top_level);
+
+	if (!pgduckdb::MixedWritesAllowed() && deleted_duckdb_tables > 0) {
+		if (deleted_duckdb_tables < deleted_tables) {
+			elog(ERROR, "Dropping both DuckDB and non-DuckDB tables in the same transaction is not supported");
+		}
+
+		if (deleted_duckdb_tables < total_deleted) {
+			elog(ERROR, "Dropping both DuckDB tables and non-DuckDB objects in the same transaction is not supported");
+		}
+	}
+
+	if (deleted_duckdb_tables > 0) {
+		pgduckdb::ClaimCurrentCommandId(true);
 	}
 
 	AtEOXact_GUC(false, save_nestlevel);
@@ -679,6 +960,16 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		 */
 		PG_RETURN_NULL();
 	}
+
+	/* Reset since we don't need it anymore */
+	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::ALTER_TABLE &&
+	    pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Cannot ALTER a DuckDB table this way, please use ALTER TABLE")));
+		PG_RETURN_NULL();
+	}
+	/* Reset it back to NONE, for the remainder of the event trigger */
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	SPI_connect();
 
@@ -710,20 +1001,20 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		AND pg_class.relam = (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		UNION ALL
 		SELECT objid as relid, false AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN duckdb.tables AS ddbtables
 		ON cmds.objid = ddbtables.relid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		UNION ALL
 		SELECT objid as relid, true AS needs_to_check_temporary_set
 		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
 		JOIN pg_catalog.pg_class
 		ON cmds.objid = pg_class.oid
-		WHERE cmds.object_type = 'table'
+		WHERE cmds.object_type in ('table', 'table column')
 		AND pg_class.relam != (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		AND pg_class.relpersistence = 't'
 		)",
@@ -761,13 +1052,35 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 	SPI_finish();
 
 	if (needs_to_check_temporary_set) {
-		if (temporary_duckdb_tables.count(relid) == 0) {
+		if (!pgduckdb::IsDuckdbTempTable(relid)) {
 			/* It was a regular temporary table, so this ALTER is allowed */
 			PG_RETURN_NULL();
 		}
 	}
 
-	elog(ERROR, "DuckDB does not support ALTER TABLE yet");
+	/* Forcibly allow whatever writes Postgres did for this command */
+	pgduckdb::ClaimCurrentCommandId(true);
+
+	/* We're going to run multiple queries in DuckDB, so we need to start a
+	 * transaction to ensure ACID guarantees hold. */
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+
+	EventTriggerData *trigdata = (EventTriggerData *)fcinfo->context;
+	char *alter_table_stmt_string;
+	if (IsA(trigdata->parsetree, AlterTableStmt)) {
+		AlterTableStmt *alter_table_stmt = (AlterTableStmt *)trigdata->parsetree;
+		alter_table_stmt_string = pgduckdb_get_alter_tabledef(relid, alter_table_stmt);
+	} else if (IsA(trigdata->parsetree, RenameStmt)) {
+		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
+		alter_table_stmt_string = pgduckdb_get_rename_tabledef(relid, rename_stmt);
+	} else {
+		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
+	}
+
+	elog(DEBUG1, "Executing: %s", alter_table_stmt_string);
+	auto res = pgduckdb::DuckDBQueryOrThrow(*connection, alter_table_stmt_string);
+
+	PG_RETURN_NULL();
 }
 
 /*

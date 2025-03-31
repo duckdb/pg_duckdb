@@ -27,8 +27,16 @@ test: transactions
 test: transaction_errors
 test: secrets
 test: prepare
+test: gucs
 test: function
+test: issue_410
 test: timestamp_with_interval
 test: approx_count_distinct
+test: time_bucket
 test: scan_postgres_tables
+test: unresolved_type
 test: json_functions_duckdb
+test: date
+test: timestamp_timestamptz
+test: union_functions
+test: foreign_data_wrapper

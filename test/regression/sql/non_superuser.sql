@@ -32,8 +32,6 @@ SELECT * FROM t;
 -- actually open a duckdb connection.
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
-SELECT * FROM duckdb.cache_info();
-SELECT * FROM duckdb.cache_delete('some file');
 CALL duckdb.recycle_ddb();
 SET duckdb.force_execution = true;
 
@@ -73,7 +71,7 @@ SET duckdb.force_execution = true;
 -- It should be possible to install extensions as non-superuser after the
 -- following grants.
 RESET ROLE;
-GRANT ALL ON FUNCTION duckdb.install_extension(TEXT) TO user1;
+GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO user1;
 GRANT ALL ON TABLE duckdb.extensions TO user1;
 GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO user1;
 

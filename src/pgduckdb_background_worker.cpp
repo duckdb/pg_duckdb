@@ -17,6 +17,8 @@
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include <string>
 #include <unordered_map>
+#include <sys/file.h>
+#include <fcntl.h>
 
 extern "C" {
 #include "postgres.h"
@@ -25,6 +27,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "executor/spi.h"
+#include "common/file_utils.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
 #include "storage/ipc.h"
@@ -52,13 +55,35 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
+static duckdb::unique_ptr<duckdb::Connection> ddb_connection = nullptr;
 static uint64 initial_cache_version = 0;
 
 namespace pgduckdb {
 
 bool is_background_worker = false;
+/*
+ * This stores a UUIDv4 that's generated on Postgres statrup. This cannot be a
+ * hardcoded token otherwise you could get contention on the matching
+ * MotherDuck read-instance if multiple pg_duckdb instances connect to the same
+ * MotherDuck account.
+ *
+ * The length is 37, because a UUID has 36 characters and we need to add a NULL
+ * byte.
+ */
+static char bgw_session_hint[37];
+
+/* Did this backend reuse the session hint of the background worker? */
+static bool reused_bgw_session_hint = false;
+/*
+ * For some reason we cannot configure the before_shmem_exit hook in _PG_init,
+ * nor in shmem_startup_hook. So instead we configure it lazily for a backend
+ * whenever it is needed. We need to make sure we only do that at most once for
+ * each backend though. So this boolean keeps track of that.
+ */
+static bool set_up_unclaim_session_hint_hook = false;
 
 static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
 static void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *context);
@@ -69,6 +94,7 @@ typedef struct BackgoundWorkerShmemStruct {
 	slock_t lock; /* protects all the fields below */
 
 	int64 activity_count; /* the number of times activity was triggered by other backends */
+	bool bgw_session_hint_is_reused;
 } BackgoundWorkerShmemStruct;
 
 static BackgoundWorkerShmemStruct *BgwShmemStruct;
@@ -91,26 +117,60 @@ BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count
 	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
 }
 
+bool CanTakeBgwLockForDatabase(Oid database_oid);
+
+bool
+RunOneCheck(int64 &last_activity_count) {
+	// No need to run if MD is not enabled.
+	if (!pgduckdb::IsMotherDuckEnabled()) {
+		elog(LOG, "pg_duckdb background worker: MotherDuck is not enabled, will exit.");
+		return true; // should exit
+	}
+
+	if (!pgduckdb::IsExtensionRegistered()) {
+		return false; // XXX: shouldn't we exit actually?
+	}
+
+	if (!ddb_connection) {
+		try {
+			ddb_connection = pgduckdb::DuckDBManager::CreateConnection();
+		} catch (std::exception &ex) {
+			elog(LOG, "pg_duckdb background worker: failed to create connection: %s", ex.what());
+			return true; // should exit
+		}
+	}
+
+	InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
+	return false;
+}
+
 } // namespace pgduckdb
 
 extern "C" {
+
 PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum /* main_arg */) {
-	elog(LOG, "started pg_duckdb background worker");
+pgduckdb_background_worker_main(Datum main_arg) {
+	Oid database_oid = DatumGetObjectId(main_arg);
+	if (!pgduckdb::CanTakeBgwLockForDatabase(0)) {
+		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
+		return;
+	}
+
+	elog(LOG, "started pg_duckdb background worker for database %u", database_oid);
+
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
 	BackgroundWorkerUnblockSignals();
 
-	BackgroundWorkerInitializeConnection(duckdb_motherduck_postgres_database, NULL, 0);
+	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
+
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
 	pgduckdb::BgwShmemStruct->bgw_latch = MyLatch;
-	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count;
+	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count - 1; // force a check on the first iteration
 	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
 
 	pgduckdb::doing_motherduck_sync = true;
 	pgduckdb::is_background_worker = true;
-
-	duckdb::unique_ptr<duckdb::Connection> connection = nullptr;
 
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
@@ -119,17 +179,17 @@ pgduckdb_background_worker_main(Datum /* main_arg */) {
 		SPI_connect();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
-		if (pgduckdb::IsExtensionRegistered()) {
-			if (!connection) {
-				connection = InvokeCPPFunc(pgduckdb::DuckDBManager::CreateConnection);
-			}
-			InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, connection.get(), &last_activity_count);
-		}
+		const bool should_exit = pgduckdb::RunOneCheck(last_activity_count);
 
 		// Commit the transaction
 		PopActiveSnapshot();
 		SPI_finish();
 		CommitTransactionCommand();
+
+		if (should_exit) {
+			break;
+		}
+
 		pgstat_report_stat(false);
 		pgstat_report_activity(STATE_IDLE, NULL);
 
@@ -220,14 +280,118 @@ ShmemStartup(void) {
 		 */
 		MemSet(BgwShmemStruct, 0, size);
 		SpinLockInit(&BgwShmemStruct->lock);
+		BgwShmemStruct->bgw_latch = nullptr;
+		BgwShmemStruct->activity_count = 0;
+		BgwShmemStruct->bgw_session_hint_is_reused = false;
 	}
 
 	LWLockRelease(AddinShmemInitLock);
 }
 
+constexpr const char *PGDUCKDB_SYNC_WORKER_NAME = "pg_duckdb sync worker";
+
+bool
+HasBgwRunningForMyDatabase() {
+	const auto num_backends = pgstat_fetch_stat_numbackends();
+	for (int backend_idx = 1; backend_idx <= num_backends; ++backend_idx) {
+#if PG_VERSION_NUM >= 140000 && PG_VERSION_NUM < 160000
+		PgBackendStatus *beentry = pgstat_fetch_stat_beentry(backend_idx);
+#else
+		LocalPgBackendStatus *local_beentry = pgstat_get_local_beentry_by_index(backend_idx);
+		PgBackendStatus *beentry = &local_beentry->backendStatus;
+#endif
+		if (beentry->st_databaseid == InvalidOid) {
+			continue; // backend is not connected to a database
+		}
+
+		auto datid = ObjectIdGetDatum(beentry->st_databaseid);
+		if (datid != MyDatabaseId) {
+			continue; // backend is connected to a different database
+		}
+
+		auto backend_type = GetBackgroundWorkerTypeByPid(beentry->st_procpid);
+		if (!backend_type || strcmp(backend_type, PGDUCKDB_SYNC_WORKER_NAME) != 0) {
+			continue; // backend is not a pg_duckdb sync worker
+		}
+
+		return true;
+	}
+
+	return false;
+}
+
+/*
+Attempts to take a lock on a file named 'pgduckdb_worker_<database_oid>.lock'
+If the lock is taken, the function returns true. If the lock is not taken, the function returns false.
+*/
+bool
+CanTakeBgwLockForDatabase(Oid database_oid) {
+	char lock_file_name[MAXPGPATH];
+	snprintf(lock_file_name, MAXPGPATH, "%s/%s.pgduckdb_worker.%d", DataDir, PG_TEMP_FILE_PREFIX, database_oid);
+
+	auto fd = open(lock_file_name, O_RDWR | O_CREAT, S_IRUSR | S_IWUSR);
+	if (fd < 0) {
+		elog(ERROR, "Could not open file '%s': %m", lock_file_name);
+	}
+
+	// Take exclusive lock on the file
+	auto ret = flock(fd, LOCK_EX | LOCK_NB);
+	if (ret != 0) {
+		if (errno == EWOULDBLOCK || errno == EAGAIN) {
+			return false;
+		}
+
+		elog(ERROR, "Could not take lock on file '%s': %m", lock_file_name);
+	}
+
+	return true;
+}
+
 void
-InitBackgroundWorker(void) {
-	if (!pgduckdb::IsMotherDuckEnabledAnywhere()) {
+UnclaimBgwSessionHint(int /*code*/, Datum /*arg*/) {
+	if (!reused_bgw_session_hint) {
+		return;
+	}
+
+	SpinLockAcquire(&BgwShmemStruct->lock);
+	BgwShmemStruct->bgw_session_hint_is_reused = false;
+	SpinLockRelease(&BgwShmemStruct->lock);
+	reused_bgw_session_hint = false;
+}
+
+void
+InitBackgroundWorkersShmem(void) {
+	/* Set up the shared memory hooks */
+#if PG_VERSION_NUM >= 150000
+	prev_shmem_request_hook = shmem_request_hook;
+	shmem_request_hook = ShmemRequest;
+#else
+	ShmemRequest();
+#endif
+
+	prev_shmem_startup_hook = shmem_startup_hook;
+	shmem_startup_hook = ShmemStartup;
+
+	Datum random_uuid = DirectFunctionCall1(gen_random_uuid, 0);
+	Datum uuid_datum = DirectFunctionCall1(uuid_out, random_uuid);
+	char *uuid_cstr = DatumGetCString(uuid_datum);
+	strcpy(bgw_session_hint, uuid_cstr);
+}
+
+/*
+Will start the background worker if:
+- MotherDuck is enabled (TODO: should be database-specific)
+- it is not already running for the current PG database
+*/
+void
+StartBackgroundWorkerIfNeeded(void) {
+	if (!pgduckdb::IsMotherDuckEnabled()) {
+		elog(DEBUG3, "pg_duckdb background worker not started because MotherDuck is not enabled");
+		return;
+	}
+
+	if (HasBgwRunningForMyDatabase()) {
+		elog(DEBUG3, "pg_duckdb background worker already running for database %u", MyDatabaseId);
 		return;
 	}
 
@@ -238,22 +402,12 @@ InitBackgroundWorker(void) {
 	worker.bgw_start_time = BgWorkerStart_RecoveryFinished;
 	snprintf(worker.bgw_library_name, BGW_MAXLEN, "pg_duckdb");
 	snprintf(worker.bgw_function_name, BGW_MAXLEN, "pgduckdb_background_worker_main");
-	snprintf(worker.bgw_name, BGW_MAXLEN, "pg_duckdb sync worker");
+	snprintf(worker.bgw_name, BGW_MAXLEN, PGDUCKDB_SYNC_WORKER_NAME);
 	worker.bgw_restart_time = 1;
-	worker.bgw_main_arg = (Datum)0;
+	worker.bgw_main_arg = ObjectIdGetDatum(MyDatabaseId);
 
 	// Register the worker
-	RegisterBackgroundWorker(&worker);
-
-	/* Set up the shared memory hooks */
-#if PG_VERSION_NUM >= 150000
-	prev_shmem_request_hook = shmem_request_hook;
-	shmem_request_hook = ShmemRequest;
-#else
-	ShmemRequest();
-#endif
-	prev_shmem_startup_hook = shmem_startup_hook;
-	shmem_startup_hook = ShmemStartup;
+	RegisterDynamicBackgroundWorker(&worker, NULL);
 }
 
 void
@@ -265,8 +419,42 @@ TriggerActivity(void) {
 	SpinLockAcquire(&BgwShmemStruct->lock);
 	BgwShmemStruct->activity_count++;
 	/* Force wake up the background worker */
-	SetLatch(BgwShmemStruct->bgw_latch);
+	if (BgwShmemStruct->bgw_latch) {
+		SetLatch(BgwShmemStruct->bgw_latch);
+	}
 	SpinLockRelease(&BgwShmemStruct->lock);
+}
+
+/*
+ * When motherduck read scaling is used we don't want to have the background
+ * worker use a dedicated read-scaling instance. Instead we want to have it
+ * share an instance with the backend that's doing the actual query. We do this
+ * having a single normal backend use the same session_hint as the background
+ * worker. This function decides if that's necessary and returns the
+ * session_hint that the background uses.
+ *
+ * If it's not necessary this returns the empty string.
+ */
+const char *
+PossiblyReuseBgwSessionHint(void) {
+	if (is_background_worker || reused_bgw_session_hint) {
+		return bgw_session_hint;
+	}
+
+	const char *result = "";
+	SpinLockAcquire(&BgwShmemStruct->lock);
+	if (!BgwShmemStruct->bgw_session_hint_is_reused) {
+		result = bgw_session_hint;
+		BgwShmemStruct->bgw_session_hint_is_reused = true;
+		reused_bgw_session_hint = true;
+	}
+	SpinLockRelease(&BgwShmemStruct->lock);
+
+	if (reused_bgw_session_hint && !set_up_unclaim_session_hint_hook) {
+		before_shmem_exit(UnclaimBgwSessionHint, 0);
+	}
+
+	return result;
 }
 
 /* Global variables that are used to communicate with our event triggers so
@@ -559,8 +747,8 @@ GrantAccessToSchema(const char *postgres_schema_name) {
 	}
 
 	/* Grant access to the schema to the current user */
-	const char *grant_query =
-	    psprintf("GRANT ALL ON SCHEMA %s TO %s", postgres_schema_name, quote_identifier(duckdb_postgres_role));
+	const char *grant_query = psprintf("GRANT ALL ON SCHEMA %s TO %s", quote_identifier(postgres_schema_name),
+	                                   quote_identifier(duckdb_postgres_role));
 	if (!SPI_run_utility_command(grant_query)) {
 		ereport(WARNING,
 		        (errmsg("Failed to grant access to MotherDuck schema %s", postgres_schema_name),
@@ -572,6 +760,14 @@ GrantAccessToSchema(const char *postgres_schema_name) {
 
 static bool
 CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
+	/* -1 is for the NULL terminator */
+	if (strlen(postgres_schema_name) > NAMEDATALEN - 1) {
+		ereport(WARNING,
+		        (errmsg("Skipping sync of MotherDuck schema '%s' because its name is too long", postgres_schema_name),
+		         errhint("The maximum length of a schema name is %d characters", NAMEDATALEN - 1)));
+		return false;
+	}
+
 	Oid schema_oid = get_namespace_oid(postgres_schema_name, true);
 	if (schema_oid != InvalidOid) {
 		/*
@@ -641,15 +837,18 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		return false;
 	}
 
-	/* Success, so we commit the subtransaction */
-	ReleaseCurrentSubTransaction();
-
 	if (!is_default_db) {
 		/*
 		 * For ddb$ schemas we need to record a dependency between the schema
 		 * and the extension, so that DROP EXTENSION also drops these schemas.
 		 */
-		schema_oid = get_namespace_oid(postgres_schema_name, false);
+		schema_oid = get_namespace_oid(postgres_schema_name, true);
+		if (schema_oid == InvalidOid) {
+			elog(WARNING, "Failed to create schema '%s' for unknown reason, skipping sync", postgres_schema_name);
+			RollbackAndReleaseCurrentSubTransaction();
+			return false;
+		}
+
 		ObjectAddress schema_address = {
 		    .classId = NamespaceRelationId,
 		    .objectId = schema_oid,
@@ -662,6 +861,9 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		};
 		recordDependencyOn(&schema_address, &extension_address, DEPENDENCY_NORMAL);
 	}
+
+	/* Success, so we commit the subtransaction */
+	ReleaseCurrentSubTransaction();
 
 	/* And then we also commit the actual transaction to release any locks that
 	 * were necessary to execute it. */
@@ -721,6 +923,7 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 		if (current_motherduck_catalog_version) {
 			pfree(current_motherduck_catalog_version);
 		}
+
 		current_motherduck_catalog_version = pstrdup(catalog_version.c_str());
 		MemoryContextSwitchTo(old_context);
 
@@ -753,7 +956,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 			}
 
 			std::string postgres_schema_name = PgSchemaName(motherduck_db, schema.name, is_default_db);
-
 			if (!CreateSchemaIfNotExists(postgres_schema_name.c_str(), is_default_db)) {
 				/* We failed to create the schema, so we skip the tables in it */
 				continue;

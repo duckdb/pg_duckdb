@@ -74,6 +74,12 @@ INSERT INTO time_tbl SELECT CAST(a AS TIME) FROM (VALUES ('13:45:30'::TIME), ('0
 SELECT * FROM time_tbl;
 SELECT * FROM time_tbl WHERE a = '08:15:00'::TIME;
 
+-- TIMETZ
+CREATE TABLE timetz_tbl(a TIMETZ);
+INSERT INTO timetz_tbl SELECT CAST(a AS TIMETZ) FROM (VALUES ('13:45:30+01'::TIMETZ), ('08:15:00-05'::TIMETZ), (NULL)) t(a);
+SELECT * FROM timetz_tbl;
+SELECT * FROM timetz_tbl WHERE a = '08:15:00-05'::TIMETZ;
+
 -- TIMESTAMP
 CREATE TABLE timestamp_tbl(a TIMESTAMP);
 INSERT INTO timestamp_tbl SELECT CAST(a AS TIMESTAMP) FROM (VALUES
@@ -232,6 +238,7 @@ DROP TABLE varbit_tbl;
 DROP TABLE fixed_var_tbl;
 DROP TABLE varying_var_tbl;
 DROP TABLE time_tbl;
+DROP TABLE timetz_tbl;
 DROP TABLE timestamp_tbl;
 DROP TABLE timestamptz_tbl;
 DROP TABLE float4_tbl;

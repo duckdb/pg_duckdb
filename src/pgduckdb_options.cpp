@@ -38,6 +38,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 namespace pgduckdb {
@@ -59,11 +60,7 @@ ExtensionsTableRelationId(void) {
 
 static std::string
 DatumToString(Datum datum) {
-	std::string column_value;
-	text *datum_text = DatumGetTextPP(datum);
-	column_value = VARDATA_ANY(datum_text);
-	column_value.resize(VARSIZE_ANY_EXHDR(datum_text));
-	return column_value;
+	return std::string(text_to_cstring(DatumGetTextPP(datum)));
 }
 
 bool
@@ -220,11 +217,15 @@ ReadDuckdbExtensions() {
 	return duckdb_extensions;
 }
 
-static bool
-DuckdbInstallExtension(Datum name_datum) {
-	auto extension_name = DatumToString(name_datum);
-
-	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name);
+static void
+DuckdbInstallExtension(const std::string &extension_name, const std::string &repository) {
+	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name) + " FROM ";
+	if (repository == "core" || repository == "core_nightly" || repository == "community" ||
+	    repository == "local_build_debug" || repository == "local_build_release") {
+		install_extension_command += repository;
+	} else {
+		install_extension_command += duckdb::KeywordHelper::WriteQuoted(repository);
+	}
 
 	/*
 	 * Temporily allow all filesystems for this query, because INSTALL needs
@@ -245,9 +246,10 @@ DuckdbInstallExtension(Datum name_datum) {
 	SetConfigOption("duckdb.disabled_filesystems", "", PGC_SUSET, PGC_S_SESSION);
 	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
 	AtEOXact_GUC(false, save_nestlevel);
+	Datum extension_name_datum = CStringGetTextDatum(extension_name.c_str());
 
 	Oid arg_types[] = {TEXTOID};
-	Datum values[] = {name_datum};
+	Datum values[] = {extension_name_datum};
 
 	SPI_connect();
 	auto ret = SPI_execute_with_args(R"(
@@ -259,99 +261,33 @@ DuckdbInstallExtension(Datum name_datum) {
 	if (ret != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 	SPI_finish();
-
-	return true;
 }
 
-static bool
-CanCacheRemoteObject(std::string remote_object) {
-	return (remote_object.rfind("https://", 0) == 0) || (remote_object.rfind("http://", 0) == 0) ||
-	       (remote_object.rfind("s3://", 0) == 0) || (remote_object.rfind("s3a://", 0) == 0) ||
-	       (remote_object.rfind("s3n://", 0) == 0) || (remote_object.rfind("gcs://", 0) == 0) ||
-	       (remote_object.rfind("gs://", 0) == 0) || (remote_object.rfind("r2://", 0) == 0);
-}
+namespace pg {
 
-static bool
-DuckdbCacheObject(Datum object, Datum type) {
-	auto object_path = DatumToString(object);
-	if (!CanCacheRemoteObject(object_path)) {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Object path '%s' can't be cached.", object_path.c_str());
-		return false;
+std::string
+GetArgString(PG_FUNCTION_ARGS, int argno) {
+	if (PG_NARGS() <= argno) {
+		throw duckdb::InvalidInputException("argument %d is required", argno);
 	}
 
-	auto object_type = DatumToString(type);
-	if (object_type != "parquet" && object_type != "csv") {
-		elog(WARNING, "(PGDuckDB/DuckdbCacheObject) Cache object type should be 'parquet' or 'csv'.");
-		return false;
+	if (PG_ARGISNULL(argno)) {
+		throw duckdb::InvalidInputException("argument %d cannot be NULL", argno);
 	}
 
-	/* Use a separate connection to cache the objects, so we are sure not to
-	 * leak the value change of enable_http_file_cache in case of an error */
-	auto con = DuckDBManager::CreateConnection();
-	auto &context = *con->context;
-
-	DuckDBQueryOrThrow(context, "SET enable_http_file_cache TO true;");
-
-	auto object_type_fun = object_type == "parquet" ? "read_parquet" : "read_csv";
-	auto cache_object_query =
-	    duckdb::StringUtil::Format("SELECT 1 FROM %s('%s');", object_type_fun, object_path.c_str());
-	DuckDBQueryOrThrow(context, cache_object_query);
-
-	return true;
+	return DatumToString(PG_GETARG_DATUM(argno));
 }
 
-typedef struct CacheFileInfo {
-	std::string cache_key;
-	std::string remote_path;
-	int64_t file_size;
-	Timestamp file_timestamp;
-} CacheFileInfo;
-
-static std::vector<CacheFileInfo>
-DuckdbGetCachedFilesInfos() {
-	std::string ext(".meta");
-	std::vector<CacheFileInfo> cache_info;
-	for (auto &p : std::filesystem::recursive_directory_iterator(CreateOrGetDirectoryPath("duckdb_cache"))) {
-		if (p.path().extension() == ext) {
-			std::ifstream cache_file_metadata(p.path());
-			std::string metadata;
-			std::vector<std::string> metadata_tokens;
-			while (std::getline(cache_file_metadata, metadata, ',')) {
-				metadata_tokens.push_back(metadata);
-			}
-			if (metadata_tokens.size() != 4) {
-				elog(WARNING, "(PGDuckDB/DuckdbGetCachedFilesInfos) Invalid '%s' cache metadata file",
-				     p.path().c_str());
-				break;
-			}
-			cache_info.push_back(CacheFileInfo {metadata_tokens[0], metadata_tokens[1], std::stoll(metadata_tokens[2]),
-			                                    std::stoll(metadata_tokens[3])});
-		}
-	}
-	return cache_info;
-}
-
-static bool
-DuckdbCacheDelete(Datum cache_key_datum) {
-	auto cache_key = DatumToString(cache_key_datum);
-	if (!cache_key.size()) {
-		elog(WARNING, "(PGDuckDB/DuckdbGetCachedFilesInfos) Empty cache key");
-		return false;
-	}
-	auto cache_filename = CreateOrGetDirectoryPath("duckdb_cache") + "/" + cache_key;
-	bool removed = !std::remove(cache_filename.c_str());
-	std::remove(std::string(cache_filename + ".meta").c_str());
-	return removed;
-}
-
+} // namespace pg
 } // namespace pgduckdb
 
 extern "C" {
 
 DECLARE_PG_FUNCTION(install_extension) {
-	Datum extension_name = PG_GETARG_DATUM(0);
-	bool result = pgduckdb::DuckdbInstallExtension(extension_name);
-	PG_RETURN_BOOL(result);
+	std::string extension_name = pgduckdb::pg::GetArgString(fcinfo, 0);
+	std::string repository = pgduckdb::pg::GetArgString(fcinfo, 1);
+	pgduckdb::DuckdbInstallExtension(extension_name, repository);
+	PG_RETURN_VOID();
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_raw_query) {
@@ -361,59 +297,77 @@ DECLARE_PG_FUNCTION(pgduckdb_raw_query) {
 	PG_RETURN_BOOL(true);
 }
 
+DECLARE_PG_FUNCTION(pgduckdb_is_motherduck_enabled) {
+	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
+}
+
+DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		elog(NOTICE, "MotherDuck is already enabled");
+		PG_RETURN_BOOL(false);
+	}
+
+	auto token = pgduckdb::pg::GetArgString(fcinfo, 0);
+	auto default_database = pgduckdb::pg::GetArgString(fcinfo, 1);
+
+	// If no token provided, check that token exists in the environment
+	if (token == "::FROM_ENV::" && getenv("MOTHERDUCK_TOKEN") == nullptr && getenv("motherduck_token") == nullptr) {
+		elog(ERROR, "No token was provided and `motherduck_token` environment variable was not set");
+	}
+
+	SPI_connect();
+
+	if (pgduckdb::GetMotherduckForeignServerOid() == InvalidOid) {
+		std::string query = "CREATE SERVER motherduck TYPE 'motherduck' FOREIGN DATA WRAPPER duckdb";
+		if (default_database.empty()) {
+			query += ";";
+		} else {
+			query += " OPTIONS (default_database " + duckdb::KeywordHelper::WriteQuoted(default_database) + ");";
+		}
+		auto ret = SPI_exec(query.c_str(), 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create 'motherduck' SERVER: %s", SPI_result_code_string(ret));
+		}
+	} else if (!default_database.empty()) {
+		// TODO: check if it was set to the same value and update it or only error in that case
+		elog(ERROR, "Cannot provide a default_database: because the server already exists");
+	}
+
+	{
+		// Create mapping for current user
+		Datum token_datum = CStringGetTextDatum(token.c_str());
+		Oid types[] = {TEXTOID};
+		Datum values[] = {token_datum};
+		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token " +
+		             duckdb::KeywordHelper::WriteQuoted(token) + ");";
+		auto ret = SPI_execute_with_args(query.c_str(), 1, types, values, NULL, false, 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create USER MAPPING for current user: %s", SPI_result_code_string(ret));
+		}
+	}
+
+	SPI_finish();
+
+	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
+}
+
+/*
+ * We need these dummy cache functions so that people are able to load the
+ * new pg_duckdb.so file with an old SQL version (where these functions still
+ * exist). People should then upgrade the SQL part of the extension using the
+ * command described in the error message. Once we believe no-one is on these old
+ * version anymore we can remove these dummy functions.
+ */
 DECLARE_PG_FUNCTION(cache) {
-	Datum object = PG_GETARG_DATUM(0);
-	Datum type = PG_GETARG_DATUM(1);
-	bool result = pgduckdb::DuckdbCacheObject(object, type);
-	PG_RETURN_BOOL(result);
+	elog(ERROR, "duckdb.cache is not supported anymore, please run 'ALTER EXTENSION pg_duckdb UPDATE'");
 }
 
 DECLARE_PG_FUNCTION(cache_info) {
-	pgduckdb::RequireDuckdbExecution();
-	ReturnSetInfo *rsinfo = (ReturnSetInfo *)fcinfo->resultinfo;
-	Tuplestorestate *tuple_store;
-	TupleDesc cache_info_tuple_desc;
-
-	auto result = pgduckdb::DuckdbGetCachedFilesInfos();
-
-	cache_info_tuple_desc = CreateTemplateTupleDesc(4);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)1, "remote_path", TEXTOID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)2, "cache_file_name", TEXTOID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)3, "cache_file_size", INT8OID, -1, 0);
-	TupleDescInitEntry(cache_info_tuple_desc, (AttrNumber)4, "cache_file_timestamp", TIMESTAMPTZOID, -1, 0);
-
-	// We need to switch to long running memory context
-	MemoryContext oldcontext = MemoryContextSwitchTo(rsinfo->econtext->ecxt_per_query_memory);
-	tuple_store = tuplestore_begin_heap(rsinfo->allowedModes & SFRM_Materialize_Random, false, work_mem);
-	MemoryContextSwitchTo(oldcontext);
-
-	for (auto &cache_info : result) {
-		Datum values[4] = {0};
-		bool nulls[4] = {0};
-
-		values[0] = CStringGetTextDatum(cache_info.remote_path.c_str());
-		values[1] = CStringGetTextDatum(cache_info.cache_key.c_str());
-		values[2] = cache_info.file_size;
-		/* We have stored timestamp in *seconds* from epoch. We need to convert this to PG timestamptz. */
-		values[3] = (cache_info.file_timestamp * 1000000) - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET;
-
-		HeapTuple tuple = heap_form_tuple(cache_info_tuple_desc, values, nulls);
-		tuplestore_puttuple(tuple_store, tuple);
-		heap_freetuple(tuple);
-	}
-
-	rsinfo->returnMode = SFRM_Materialize;
-	rsinfo->setResult = tuple_store;
-	rsinfo->setDesc = cache_info_tuple_desc;
-
-	return (Datum)0;
+	elog(ERROR, "duckdb.cache_info is not supported anymore, please run 'ALTER EXTENSION pg_duckdb UPDATE'");
 }
 
 DECLARE_PG_FUNCTION(cache_delete) {
-	pgduckdb::RequireDuckdbExecution();
-	Datum cache_key = PG_GETARG_DATUM(0);
-	bool result = pgduckdb::DuckdbCacheDelete(cache_key);
-	PG_RETURN_BOOL(result);
+	elog(ERROR, "duckdb.cache_delete is not supported anymore, please run 'ALTER EXTENSION pg_duckdb UPDATE'");
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
@@ -658,6 +612,14 @@ DECLARE_PG_FUNCTION(duckdb_unresolved_type_operator) {
 DECLARE_PG_FUNCTION(duckdb_only_function) {
 	char *function_name = DatumGetCString(DirectFunctionCall1(regprocout, fcinfo->flinfo->fn_oid));
 	elog(ERROR, "Function '%s' only works with DuckDB execution", function_name);
+}
+
+DECLARE_PG_FUNCTION(duckdb_union_in) {
+	elog(ERROR, "Creating the duckdb.union type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_union_out) {
+	return textout(fcinfo);
 }
 
 } // extern "C"

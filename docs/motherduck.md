@@ -2,23 +2,19 @@
 
 ## Connect with MotherDuck
 
-pg_duckdb also integrates with [MotherDuck][md]. To enable this support you first need to [generate an access token][md-access-token] and then add the following line to your `postgresql.conf` file:
+`pg_duckdb` integrates with [MotherDuck][md] natively.
+To enable this support you first need to [generate an access token][md-access-token].
+Then you can enable it by simply using the `enable_motherduck` convenience method:
 
-```ini
-duckdb.motherduck_token = 'your_access_token'
+```sql
+-- If not provided, the token will be read from the `motherduck_token` environment variable
+-- If not provided, the default MD database name is `my_db`
+SELECT duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
 ```
 
-NOTE: If you don't want to store the token in your `postgresql.conf`file can also store the token in the `motherduck_token` environment variable and then explicitly enable MotherDuck support in your `postgresql.conf` file:
+This convenience method creates a `motherduck` `SERVER` using the `pg_duckdb` Foreign Data Wrapper, which hosts the options for this integration. It also provides an `USER MAPPING` for the current user, which stores the provided MotherDuck token (if any).
 
-```ini
-duckdb.motherduck_enabled = true
-```
-
-If you installed `pg_duckdb` in a different Postgres database than the default one named `postgres`, then you also need to add the following line to your `postgresql.conf` file:
-
-```ini
-duckdb.motherduck_postgres_database = 'your_database_name'
-```
+You can refer to the [section](advanced-motherduck-configuration) below for more on the `SERVER` and `USER MAPPING` configuration.
 
 ### Non-supersuer configuration
 
@@ -55,10 +51,25 @@ CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
 
 Any tables that you already had in MotherDuck are automatically available in Postgres. Since DuckDB and MotherDuck allow accessing multiple databases from a single connection and Postgres does not, we map database+schema in DuckDB to a schema name in Postgres.
 
-The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`. If you want to specify which MotherDuck database is your default database, then you can also add the following line to your `postgresql.conf` file:
+The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`.
 
-```ini
-duckdb.motherduck_default_database = 'your_motherduck_database_name'
+## Advanced MotherDuck configuration
+
+If you want to specify which MotherDuck database is your default database, then you need to configure MotherDuck using a `SERVER` and a `USER MAPPING` as such:
+
+```sql
+CREATE SERVER motherduck
+TYPE 'motherduck'
+FOREIGN DATA WRAPPER duckdb
+OPTIONS (default_database '<your database>');
+
+-- You may use `::FROM_ENV::` to have the token be read from the environment variable
+CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token '<your token>')
+```
+
+Note: with the `duckdb.enable_motherduck` convenience method above, you can simply do:
+```sql
+SELECT duckdb.enable_motherduck('<token>', '<default database>');
 ```
 
 The mapping of database+schema to schema name is then done in the following way:

@@ -6,6 +6,6 @@ INSERT INTO int_as_varchar SELECT * from (
 SELECT a::INTEGER FROM int_as_varchar;
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Conversion Error: Could not convert string 'abc' to INT32
 
-LINE 1: SELECT (a)::integer AS a FROM pgduckdb.public.int_as_varchar
-                  ^
+LINE 1:  SELECT (a)::integer AS a FROM pgduckdb.public.int_as_varchar
+                   ^
 DROP TABLE int_as_varchar;

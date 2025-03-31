@@ -10,6 +10,8 @@
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pg/string_utils.hpp"
+#include "pgduckdb/pg/guc.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 
 extern "C" {
@@ -25,6 +27,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -96,6 +100,14 @@ uri_escape(const char *str) {
 	return buf.data;
 }
 
+static const char *
+GetSessionHint() {
+	if (!IsEmptyString(duckdb_motherduck_session_hint)) {
+		return duckdb_motherduck_session_hint;
+	}
+	return PossiblyReuseBgwSessionHint();
+}
+
 namespace ddb {
 bool
 DidWrites() {
@@ -142,7 +154,7 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
 
-	if (duckdb_maximum_memory != NULL && strlen(duckdb_maximum_memory) == 0) {
+	if (duckdb_maximum_memory != NULL && strlen(duckdb_maximum_memory) != 0) {
 		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
 	}
@@ -166,14 +178,31 @@ DuckDBManager::Initialize() {
 		 * is not trivial, so for now we simply disable the web login.
 		 */
 		setenv("motherduck_disable_web_login", "1", 1);
-		duckdb_motherduck_default_database = uri_escape(duckdb_motherduck_default_database);
-		if (duckdb_motherduck_token[0] == '\0') {
-			connection_string = psprintf("md:%s", duckdb_motherduck_default_database);
-		} else {
-			connection_string =
-			    psprintf("md:%s?motherduck_token=%s", duckdb_motherduck_default_database, duckdb_motherduck_token);
+
+		StringInfoData buf;
+		initStringInfo(&buf);
+
+		// Default database
+		auto default_database = FindMotherDuckDefaultDatabase();
+		auto escaped_default_db = default_database ? uri_escape(default_database) : "";
+		appendStringInfo(&buf, "md:%s?", escaped_default_db);
+
+		// Session hint
+		auto escaped_session_hint = uri_escape(GetSessionHint());
+		if (!IsEmptyString(escaped_session_hint)) {
+			appendStringInfo(&buf, "session_hint=%s&", escaped_session_hint);
 		}
+
+		// Token
+		auto token = FindMotherDuckToken();
+		if (token != nullptr && !AreStringEqual(token, "::FROM_ENV::")) {
+			setenv("motherduck_token", token, 1);
+		}
+
+		connection_string = buf.data;
 	}
+
+	std::string pg_time_zone(pg::GetConfigOption("TimeZone"));
 
 	database = new duckdb::DuckDB(connection_string, &config);
 
@@ -188,14 +217,17 @@ DuckDBManager::Initialize() {
 
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	default_dbname = db_manager.GetDefaultDatabase(context);
+	pgduckdb::DuckDBQueryOrThrow(context, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(pg_time_zone));
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
-	if (pgduckdb::IsMotherDuckEnabled() &&
-	    strlen(duckdb_motherduck_background_catalog_refresh_inactivity_timeout) > 0) {
-		pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
-		                                          duckdb::KeywordHelper::WriteQuoted(
-		                                              duckdb_motherduck_background_catalog_refresh_inactivity_timeout));
+	if (pgduckdb::IsMotherDuckEnabled()) {
+		auto timeout = FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
+		if (timeout != nullptr) {
+			auto quoted_timeout = duckdb::KeywordHelper::WriteQuoted(timeout);
+			pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
+			                                          quoted_timeout);
+		}
 	}
 
 	LoadFunctions(context);
@@ -208,6 +240,14 @@ DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 	auto &instance = *database->instance;
 	duckdb::ExtensionUtil::RegisterType(instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
 	context.transaction.Commit();
+}
+
+void
+DuckDBManager::Reset() {
+	connection = nullptr;
+	delete database;
+	database = nullptr;
+	UnclaimBgwSessionHint();
 }
 
 int64
@@ -287,19 +327,6 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 			continue;
 		}
 
-		/*
-		 * Skip the httpfs extension. It conflicts with our cached_httpfs
-		 * extension which is loaded by default, but people might still try to
-		 * install it manually. We could also throw an error by doing so, but
-		 * it seems nicer to just skip it, because it is clear what they meant
-		 * to do and this way we don't need to educate people about the
-		 * existence of our cached_httpfs extension (which might be removed in
-		 * the near future anyway).
-		 */
-		if (extension.name == "httpfs") {
-			continue;
-		}
-
 		DuckDBQueryOrThrow(context, "LOAD " + extension.name);
 	}
 }
@@ -318,10 +345,6 @@ DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 		LoadSecrets(context);
 		UpdateSecretSeq(secret_table_last_seq);
 	}
-
-	auto http_file_cache_set_dir_query =
-	    duckdb::StringUtil::Format("SET http_file_cache_dir TO '%s';", CreateOrGetDirectoryPath("duckdb_cache"));
-	DuckDBQueryOrThrow(context, http_file_cache_set_dir_query);
 
 	if (duckdb_disabled_filesystems != NULL && !superuser()) {
 		/*

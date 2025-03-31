@@ -1,5 +1,7 @@
 #pragma once
 
+#include <duckdb/common/error_data.hpp>
+
 extern "C" {
 #include "postgres.h"
 }
