@@ -6,6 +6,7 @@ Able to read many [data types](https://www.postgresql.org/docs/current/datatype.
 - Floating point types (`real`, `double precision`)
 - `numeric` (might get converted to `double precision` internally see known limitations below for details)
 - `text`/`varchar`/`bpchar`
+- `bit` related types, including both fixed and varied sized bit array 
 - `bytea`/`blob`
 - `timestamp`/`timstampz`/`date`/`interval`/`timestamp_ns`/`timestamp_ms`/`timestamp_s`
 - `boolean`
