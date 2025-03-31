@@ -134,6 +134,38 @@ SELECT * FROM interval_tbl WHERE a = '5 day 5 hours'::INTERVAL;
  @ 5 days 5 hours
 (1 row)
 
+-- VARBIT
+CREATE TABLE varbit_tbl(a VARBIT);
+-- Insert a few kinds of bitstrings: (1) less than 8 bits; (2) equal to 8 bits; (3) larger than 8 bits.
+INSERT INTO varbit_tbl SELECT CAST(a AS VARBIT) FROM (VALUES (B'1010'::VARBIT), (B'10100011'::VARBIT), (B'1010001011'::VARBIT), (NULL)) t(a);
+SELECT * FROM varbit_tbl;
+     a      
+------------
+ 1010
+ 10100011
+ 1010001011
+ 
+(4 rows)
+
+-- BIT ARRAY
+CREATE TABLE fixed_var_tbl(a VARBIT);
+INSERT INTO fixed_var_tbl SELECT CAST(a AS BIT(4)) FROM (VALUES (B'101'), (NULL)) t(a);
+SELECT * FROM fixed_var_tbl;
+  a   
+------
+ 1010
+ 
+(2 rows)
+
+CREATE TABLE varying_var_tbl(a BIT VARYING(5));
+INSERT INTO varying_var_tbl SELECT CAST(a AS BIT VARYING(5)) FROM (VALUES (B'101'), (NULL)) t(a);
+SELECT * FROM varying_var_tbl;
+  a  
+-----
+ 101
+ 
+(2 rows)
+
 -- TIME
 CREATE TABLE time_tbl(a TIME);
 INSERT INTO time_tbl SELECT CAST(a AS TIME) FROM (VALUES ('13:45:30'::TIME), ('08:15:00'::TIME), (NULL)) t(a);
@@ -429,6 +461,9 @@ DROP TABLE varchar_tbl;
 DROP TABLE text_tbl;
 DROP TABLE date_tbl;
 DROP TABLE interval_tbl;
+DROP TABLE varbit_tbl;
+DROP TABLE fixed_var_tbl;
+DROP TABLE varying_var_tbl;
 DROP TABLE time_tbl;
 DROP TABLE timestamp_tbl;
 DROP TABLE timestamptz_tbl;
