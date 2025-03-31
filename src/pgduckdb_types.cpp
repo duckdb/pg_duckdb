@@ -11,7 +11,9 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/types.hpp"
 
-#include <fstream>
+#include <bitset>
+#include <climits>
+#include <cstdlib>
 
 extern "C" {
 
@@ -528,23 +530,18 @@ DatumGetInterval(Datum value) {
 	return duck_interval;
 }
 
-// Convert bitstring (which consists of character '0' and '1') to duckdb bitstring.
+// Convert padded bitstring (which consists of character '0's and '1's, and with padded '1's prefilled) to duckdb
+// bitstring.
 duckdb::string
 ConvertBitStringToDuckdbBitString(const duckdb::string &padded_string, size_t padding_size) {
-	{
-		std::fstream f {"/tmp/debug-bittype.log", std::ios::app | std::ios::out};
-		f << "padded string = " << padded_string << ". pad size = " << padding_size << std::endl;
-		f.flush();
-		f.close();
-	}
-
-	D_ASSERT(padded_string.length() % 8 == 0);
+	D_ASSERT(padded_string.length() % CHAR_BIT == 0);
 
 	std::string result;
-	result.reserve(padded_string.length() / 8 + 1);
+	// Duckdb bitstring consists of three parts: padding size, prefilled padding bits ('1's), and the real bitstring.
+	result.reserve(padded_string.length() / CHAR_BIT + 1);
 	result += static_cast<char>(static_cast<uint8_t>(padding_size));
-	for (size_t idx = 0; idx < padded_string.length(); idx += 8) {
-		std::bitset<8> bits(padded_string.substr(idx, 8));
+	for (size_t idx = 0; idx < padded_string.length(); idx += CHAR_BIT) {
+		std::bitset<CHAR_BIT> bits(padded_string.substr(idx, CHAR_BIT));
 		result += static_cast<char>(bits.to_ulong());
 	}
 	return result;
@@ -557,9 +554,9 @@ DatumGetBitString(Datum value) {
 	const char *varbit_char_array = pgduckdb::pg::BitStringToString(value);
 	const duckdb::string varbit_string = varbit_char_array;
 	const size_t varbit_len = varbit_string.length();
-	const size_t aligned_varbit_len = (varbit_len + 7) / 8 * 8;
+	const size_t aligned_varbit_len = (varbit_len + CHAR_BIT - 1) / CHAR_BIT * CHAR_BIT;
 	const size_t padding_size = aligned_varbit_len - varbit_len;
-	duckdb::string padded_string = duckdb::string(padding_size, '1'); // duckdb prefix padding with 1
+	duckdb::string padded_string = duckdb::string(padding_size, '1'); // duckdb prefix padding with '1'
 	padded_string += varbit_string;
 	return ConvertBitStringToDuckdbBitString(padded_string, padding_size);
 }
@@ -1667,10 +1664,8 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	case INTERVALOID:
 		return duckdb::Value::INTERVAL(DatumGetInterval(value));
 	case BITOID:
-	case VARBITOID: {
-		const duckdb::string bitstring = DatumGetBitString(value);
-		return duckdb::Value::BIT(bitstring);
-	}
+	case VARBITOID:
+		return duckdb::Value::BIT(DatumGetBitString(value));
 	case TIMEOID:
 		return duckdb::Value::TIME(DatumGetTime(value));
 	case TIMETZOID:
