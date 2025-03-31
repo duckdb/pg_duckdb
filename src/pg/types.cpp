@@ -79,4 +79,14 @@ StringToBitString(const char *str) {
 	return PostgresFunctionGuard(StringToBitString_C, str);
 }
 
+static const char *
+BitStringToString_C(Datum pg_bitstring) {
+	return DatumGetCString(DirectFunctionCall1(varbit_out, pg_bitstring));
+}
+
+const char *
+BitStringToString(Datum pg_bitstring) {
+	return PostgresFunctionGuard(BitStringToString_C, pg_bitstring);
+}
+
 } // namespace pgduckdb::pg

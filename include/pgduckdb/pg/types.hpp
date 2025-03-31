@@ -9,4 +9,5 @@ bool IsArrayDomainType(Oid type_oid);
 Oid GetBaseDuckColumnType(Oid attribute_type_oid);
 Datum StringToNumeric(const char *str);
 Datum StringToBitString(const char *str);
+const char *BitStringToString(Datum pg_bitstring);
 } // namespace pgduckdb::pg

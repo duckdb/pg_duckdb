@@ -165,12 +165,7 @@ struct DecimalConversionDouble {
 static Datum
 ConvertVarbitDatum(const duckdb::Value &value) {
 	const std::string value_str = value.ToString();
-	{
-		std::fstream f{"/tmp/debug_bitstring.log", std::ios::out | std::ios::app};
-		f << "convert duckdb to datum value string = " << value_str;
-		f.flush();
-		f.close();
-	}
+
 	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
 	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
 	Datum pg_varbit = pgduckdb::pg::StringToBitString(value_str.c_str());
@@ -442,9 +437,10 @@ DatumGetInterval(Datum value) {
 }
 
 // Convert bitstring (which consists of character '0' and '1') to duckdb bitstring.
-duckdb::string ConvertBitStringToDuckdbBitString(const duckdb::string& padded_string, size_t padding_size) {
+duckdb::string
+ConvertBitStringToDuckdbBitString(const duckdb::string &padded_string, size_t padding_size) {
 	{
-		std::fstream f{"/tmp/debug-bittype.log", std::ios::app | std::ios::out};
+		std::fstream f {"/tmp/debug-bittype.log", std::ios::app | std::ios::out};
 		f << "padded string = " << padded_string << ". pad size = " << padding_size << std::endl;
 		f.flush();
 		f.close();
@@ -452,19 +448,21 @@ duckdb::string ConvertBitStringToDuckdbBitString(const duckdb::string& padded_st
 
 	D_ASSERT(padded_string.length() % 8 == 0);
 
-    std::string result;
+	std::string result;
 	result.reserve(padded_string.length() / 8 + 1);
 	result += static_cast<char>(static_cast<uint8_t>(padding_size));
-    for (size_t idx = 0; idx < padded_string.length(); idx += 8) {
-        std::bitset<8> bits(padded_string.substr(idx, 8));
-        result += static_cast<char>(bits.to_ulong());
-    }
-    return result;
+	for (size_t idx = 0; idx < padded_string.length(); idx += 8) {
+		std::bitset<8> bits(padded_string.substr(idx, 8));
+		result += static_cast<char>(bits.to_ulong());
+	}
+	return result;
 }
 
 static duckdb::string
 DatumGetBitString(Datum value) {
-	const char *varbit_char_array = DatumGetCString(DirectFunctionCall1(varbit_out, value));
+	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
+	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
+	const char *varbit_char_array = pgduckdb::pg::BitStringToString(value);
 	const duckdb::string varbit_string = varbit_char_array;
 	const size_t varbit_len = varbit_string.length();
 	const size_t aligned_varbit_len = (varbit_len + 7) / 8 * 8;
@@ -1489,7 +1487,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		Append<duckdb::interval_t>(result, DatumGetInterval(value), offset);
 		break;
 	case duckdb::LogicalTypeId::BIT:
-		Append<duckdb::bitstring_t>(result, duckdb::string_t{DatumGetBitString(value)}, offset);
+		Append<duckdb::bitstring_t>(result, duckdb::string_t {DatumGetBitString(value)}, offset);
 		break;
 	case duckdb::LogicalTypeId::TIME:
 		Append<duckdb::dtime_t>(result, DatumGetTime(value), offset);
