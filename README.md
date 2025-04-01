@@ -147,10 +147,13 @@ Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done
 1. Add a credential to enable DuckDB's httpfs support.
 
 	```sql
-	-- Session Token is Optional
-	INSERT INTO duckdb.secrets
-	(type, key_id, secret, session_token, region)
-	VALUES ('S3', 'access_key_id', 'secret_access_key', 'session_token', 'us-east-1');
+	SELECT duckdb.create_simple_secret(
+		'S3',                -- Type (S3, GCS, R2)
+		'access_key_id',     -- Key Id
+		'secret_access_key', -- Secret
+		'session_token',     -- Session Token (optional)
+		'us-east-1'          -- region (optional)
+	)
 	```
 
 2. Copy data directly to your bucket - no ETL pipeline!
@@ -170,11 +173,9 @@ Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done
 	LIMIT 100;
 	```
 
-Note, for Azure, you may store a secret using the `connection_string` parameter as such:
+Note, for Azure, we provide a dedicated function:
 ```sql
-INSERT INTO duckdb.secrets
-(type, connection_string)
-VALUES ('Azure', '<your connection string>');
+SELECT duckdb.create_azure_secret('< connection string >');
 ```
 
 Note: writes to Azure are not yet supported, please see [the current discussion](duckdb/duckdb_azure#44) for more information.
