@@ -97,9 +97,7 @@ SELECT * FROM duckdb.query($$
         secrets.key_id,
         secrets.secret
     FROM (
-        SELECT
-            name,
-            map_from_entries(list_transform(list_transform(regexp_split_to_array(secret_string, ';'),x -> regexp_split_to_array(x, '=')),x -> struct_pack(k := x[1], v := x[2]))) as secrets
+        SELECT *, map_from_entries(list_transform(list_transform(regexp_split_to_array(secret_string, ';'),x -> regexp_split_to_array(x, '=')),x -> struct_pack(k := x[1], v := x[2]))) as secrets
         FROM duckdb_secrets()
     );
 $$);
@@ -109,3 +107,51 @@ DROP SERVER valid_s3_server CASCADE;
 
 -- Nothing
 SELECT * FROM duckdb.query($$ SELECT name, type FROM duckdb_secrets(); $$);
+
+-- User helpers --
+
+-- 1. Simple secrets
+
+-- S3
+SELECT duckdb.create_simple_secret('S3', 'my first key', 'my secret', 'my session token', 'my-region-42');
+SELECT duckdb.create_simple_secret('S3', 'my other key', 'my secret', '', 'my-region-42'); -- No session token
+SELECT duckdb.create_simple_secret('S3', 'my third key', 'my secret'); -- No session token, default region
+
+-- R2
+SELECT duckdb.create_simple_secret('R2', 'my r2 key1', 'my secret', 'my session token', 'my-region-42');
+SELECT duckdb.create_simple_secret('R2', 'my r2 key2', 'my secret');
+
+-- GCS
+SELECT duckdb.create_simple_secret('GCS', 'my first key', 'my secret', 'my session token', 'my-region-42');
+SELECT duckdb.create_simple_secret('GCS', 'my other key', 'my secret', '', 'my-region-42'); -- No session token
+SELECT duckdb.create_simple_secret('GCS', 'my third key', 'my secret'); -- No session token, default region
+
+-- Invalid
+SELECT duckdb.create_simple_secret('BadType', '-', '-');
+
+-- 2. Azure
+
+SELECT duckdb.create_azure_secret('hello world');
+
+-- Now check everything.
+
+SELECT fs.srvname, fs.srvtype, fs.srvoptions, um.umoptions
+FROM pg_foreign_server fs
+INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
+LEFT JOIN pg_user_mapping um ON um.umserver = fs.oid
+WHERE fdw.fdwname = 'duckdb' AND fs.srvtype != 'motherduck';
+
+SELECT * FROM duckdb.query($$
+    SELECT
+        name,
+        type,
+        secrets.key_id,
+        secrets.region,
+        secrets.session_token,
+        secrets.secret,
+        secrets.connection_string
+    FROM (
+        SELECT *, map_from_entries(list_transform(list_transform(regexp_split_to_array(secret_string, ';'),x -> regexp_split_to_array(x, '=')),x -> struct_pack(k := x[1], v := x[2]))) as secrets
+        FROM duckdb_secrets()
+    );
+$$);
