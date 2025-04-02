@@ -16,6 +16,16 @@ extern "C" {
 
 static void DuckdbInitGUC(void);
 
+namespace {
+char *
+MakeDirName(const char *name) {
+	StringInfoData buf;
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "%s/pg_duckdb/%s", DataDir, name);
+	return buf.data;
+}
+} // namespace
+
 bool duckdb_force_execution = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
 bool duckdb_log_pg_explain = false;
@@ -31,6 +41,9 @@ bool duckdb_allow_community_extensions = false;
 bool duckdb_allow_unsigned_extensions = false;
 bool duckdb_autoinstall_known_extensions = true;
 bool duckdb_autoload_known_extensions = true;
+char *duckdb_temporary_directory = MakeDirName("temp");
+char *duckdb_extension_directory = MakeDirName("extensions");
+char *duckdb_max_temp_directory_size = strdup("");
 
 extern "C" {
 PG_MODULE_MAGIC;
@@ -133,6 +146,19 @@ DuckdbInitGUC(void) {
 	DefineCustomVariable("duckdb.memory_limit",
 	                     "The maximum memory DuckDB can use (e.g., 1GB), alias for duckdb.max_memory",
 	                     &duckdb_maximum_memory, PGC_SUSET);
+
+	DefineCustomVariable("duckdb.temporary_directory",
+	                     "Set the directory to which DuckDB write temp files, alias for duckdb.temporary_directory",
+	                     &duckdb_temporary_directory, PGC_SUSET);
+
+	DefineCustomVariable("duckdb.max_temp_directory_size",
+	                     "The maximum amount of data stored inside DuckDB's 'temp_directory' (when set) (e.g., 1GB), "
+	                     "alias for duckdb.max_temp_directory_size",
+	                     &duckdb_max_temp_directory_size, PGC_SUSET);
+
+	DefineCustomVariable("duckdb.extension_directory",
+	                     "Set the directory to where DuckDB stores extensions in, alias for duckdb.extension_directory",
+	                     &duckdb_extension_directory, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.disabled_filesystems",
 	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",

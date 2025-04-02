@@ -88,6 +88,4 @@ private:
 	bool secrets_valid;
 };
 
-std::string CreateOrGetDirectoryPath(const char *directory_name);
-
 } // namespace pgduckdb
