@@ -1,18 +1,27 @@
 #include "pgduckdb/pgduckdb_duckdb.hpp"
+
+#include <filesystem>
+
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
-#include "pgduckdb/pgduckdb_guc.h"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
-#include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
-#include "pgduckdb/scan/postgres_scan.hpp"
-#include "pgduckdb/pg/transactions.hpp"
-#include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pg/guc.hpp"
+#include "pgduckdb/pg/string_utils.hpp"
+#include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
+#include "pgduckdb/pgduckdb_guc.h"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_options.hpp"
+#include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
+
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -24,64 +33,7 @@ extern "C" {
 #include "miscadmin.h" // superuser
 }
 
-#include "pgduckdb/pgduckdb_options.hpp"
-#include "pgduckdb/pgduckdb_xact.hpp"
-#include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/pgduckdb_userdata_cache.hpp"
-#include "pgduckdb/pgduckdb_fdw.hpp"
-
-#include <sys/stat.h>
-#include <unistd.h>
-
-// FIXME - this file should not depend on PG, rather DataDir should be provided
-extern char *DataDir;
-
 namespace pgduckdb {
-
-static bool
-CheckDirectory(const std::string &directory) {
-	struct stat info;
-
-	if (lstat(directory.c_str(), &info) != 0) {
-		if (errno == ENOENT) {
-			elog(DEBUG2, "Directory `%s` doesn't exists.", directory.c_str());
-			return false;
-		} else if (errno == EACCES) {
-			throw std::runtime_error("Can't access `" + directory + "` directory.");
-		} else {
-			throw std::runtime_error("Other error when reading `" + directory + "`.");
-		}
-	}
-
-	if (!S_ISDIR(info.st_mode)) {
-		elog(WARNING, "`%s` is not directory.", directory.c_str());
-	}
-
-	if (access(directory.c_str(), R_OK | W_OK)) {
-		throw std::runtime_error("Directory `" + std::string(directory) + "` permission problem.");
-	}
-
-	return true;
-}
-
-std::string
-CreateOrGetDirectoryPath(const char *directory_name) {
-	std::ostringstream oss;
-	oss << DataDir << "/" << directory_name;
-	const auto duckdb_data_directory = oss.str();
-
-	if (!CheckDirectory(duckdb_data_directory)) {
-		if (mkdir(duckdb_data_directory.c_str(), pg_dir_create_mode) == -1) {
-			throw std::runtime_error("Creating data directory '" + duckdb_data_directory + "' failed: `" +
-			                         strerror(errno) + "`");
-		}
-
-		elog(DEBUG2, "Created %s directory", duckdb_data_directory.c_str());
-	};
-
-	return duckdb_data_directory;
-}
-
 static char *
 uri_escape(const char *str) {
 	StringInfoData buf;
@@ -130,33 +82,48 @@ DidWrites(duckdb::ClientContext &context) {
 
 DuckDBManager DuckDBManager::manager_instance;
 
-DuckDBManager::DuckDBManager() {
+template <typename T>
+std::string
+ToString(T value) {
+	return std::to_string(value);
+}
+
+template <>
+std::string
+ToString(char *value) {
+	return std::string(value);
 }
 
 #define SET_DUCKDB_OPTION(ddb_option_name)                                                                             \
 	config.options.ddb_option_name = duckdb_##ddb_option_name;                                                         \
-	elog(DEBUG2,                                                                                                       \
-	     "[PGDuckDB] Set DuckDB option: '" #ddb_option_name "'="                                                       \
-	     "%s",                                                                                                         \
-	     std::to_string(duckdb_##ddb_option_name).c_str());
+	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: '" #ddb_option_name "'=%s", ToString(duckdb_##ddb_option_name).c_str());
 
 void
 DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
+	// Make sure directories provided in config exists
+	std::filesystem::create_directories(duckdb_temporary_directory);
+	std::filesystem::create_directories(duckdb_extension_directory);
+
 	duckdb::DBConfig config;
 	config.SetOptionByName("custom_user_agent", "pg_duckdb");
-	config.SetOptionByName("extension_directory", CreateOrGetDirectoryPath("duckdb_extensions"));
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
 	SET_DUCKDB_OPTION(enable_external_access);
 	SET_DUCKDB_OPTION(allow_community_extensions);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
+	SET_DUCKDB_OPTION(temporary_directory);
+	SET_DUCKDB_OPTION(extension_directory);
 
 	if (duckdb_maximum_memory != NULL && strlen(duckdb_maximum_memory) != 0) {
 		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
+	}
+	if (duckdb_max_temp_directory_size != NULL && strlen(duckdb_max_temp_directory_size) != 0) {
+		config.SetOptionByName("max_temp_directory_size", duckdb_max_temp_directory_size);
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'max_temp_directory_size'=%s", duckdb_max_temp_directory_size);
 	}
 
 	if (duckdb_maximum_threads > -1) {

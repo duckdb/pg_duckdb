@@ -36,7 +36,6 @@ public:
 	void Reset();
 
 private:
-	DuckDBManager();
 	static DuckDBManager manager_instance;
 
 	void Initialize();
@@ -87,7 +86,5 @@ private:
 	duckdb::unique_ptr<duckdb::Connection> connection;
 	std::string default_dbname;
 };
-
-std::string CreateOrGetDirectoryPath(const char *directory_name);
 
 } // namespace pgduckdb
