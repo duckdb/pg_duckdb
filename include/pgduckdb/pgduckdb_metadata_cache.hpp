@@ -12,6 +12,7 @@ Oid DuckdbRowOid();
 Oid DuckdbStructOid();
 Oid DuckdbUnresolvedTypeOid();
 Oid DuckdbUnionOid();
+Oid DuckdbMapOid();
 Oid DuckdbJsonOid();
 Oid DuckdbTableAmOid();
 Oid IsDuckdbTable(Form_pg_class relation);

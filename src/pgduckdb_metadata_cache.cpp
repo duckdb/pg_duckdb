@@ -72,6 +72,8 @@ struct {
 	Oid unresolved_type_oid;
 	/* The OID of the duckdb.union type */
 	Oid union_oid;
+	/* The OID of the duckdb.map type */
+	Oid map_oid;
 	/* The OID of the duckdb.json */
 	Oid json_oid;
 	/* The OID of the duckdb Table Access Method */
@@ -253,6 +255,8 @@ IsExtensionRegistered() {
 
 		cache.union_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("union"), cache.schema_oid);
 
+		cache.map_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("map"), cache.schema_oid);
+
 		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
 
 		if (duckdb_postgres_role[0] != '\0') {
@@ -331,6 +335,12 @@ Oid
 DuckdbUnionOid() {
 	Assert(cache.valid);
 	return cache.union_oid;
+}
+
+Oid
+DuckdbMapOid() {
+	Assert(cache.valid);
+	return cache.map_oid;
 }
 
 Oid

@@ -525,3 +525,12 @@ CREATE FUNCTION duckdb.enable_motherduck(TEXT DEFAULT '::FROM_ENV::', TEXT DEFAU
 RETURNS bool
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_enable_motherduck';
+
+CREATE TYPE duckdb.map;
+CREATE FUNCTION duckdb.map_in(cstring) RETURNS duckdb.map AS 'MODULE_PATHNAME', 'duckdb_map_in' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.map_out(duckdb.map) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_map_out' LANGUAGE C IMMUTABLE STRICT;
+CREATE TYPE duckdb.map(
+    INTERNALLENGTH = VARIABLE,
+    INPUT = duckdb.map_in,
+    OUTPUT = duckdb.map_out
+);
