@@ -70,11 +70,6 @@ pgduckdb_is_duckdb_row(Oid type_oid) {
 	return type_oid == pgduckdb::DuckdbRowOid();
 }
 
-bool
-pgduckdb_is_duckdb_struct(Oid type_oid) {
-	return type_oid == pgduckdb::DuckdbStructOid();
-}
-
 /*
  * We never want to show some of our unresolved types in the DuckDB query.
  * These types only exist to make the Postgres parser and its type resolution
@@ -104,14 +99,6 @@ pgduckdb_var_is_duckdb_row(Var *var) {
 		return false;
 	}
 	return pgduckdb_is_duckdb_row(var->vartype);
-}
-
-bool
-pgduckdb_var_is_duckdb_struct(Var *var) {
-	if (!var) {
-		return false;
-	}
-	return pgduckdb_is_duckdb_struct(var->vartype);
 }
 
 bool
