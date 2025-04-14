@@ -259,8 +259,8 @@ DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 
 	auto key = pgduckdb::pg::GetArgString(fcinfo, 1);
 	auto secret = pgduckdb::pg::GetArgString(fcinfo, 2);
-	auto session_token = pgduckdb::pg::GetArgString(fcinfo, 3);
-	auto region = pgduckdb::pg::GetArgString(fcinfo, 4);
+	auto region = pgduckdb::pg::GetArgString(fcinfo, 3);
+	auto session_token = pgduckdb::pg::GetArgString(fcinfo, 4);
 	auto secret_name = "simple_" + lc_type + "_secret";
 	SPI_connect();
 	auto server_name = pgduckdb::FindServerName(secret_name.c_str());

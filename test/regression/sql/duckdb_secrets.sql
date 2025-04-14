@@ -104,6 +104,7 @@ $$);
 
 SET client_min_messages=WARNING; -- suppress NOTICE that include username
 DROP SERVER valid_s3_server CASCADE;
+RESET client_min_messages;
 
 -- Nothing
 SELECT * FROM duckdb.query($$ SELECT name, type FROM duckdb_secrets(); $$);
@@ -113,8 +114,8 @@ SELECT * FROM duckdb.query($$ SELECT name, type FROM duckdb_secrets(); $$);
 -- 1. Simple secrets
 
 -- S3
-SELECT duckdb.create_simple_secret('S3', 'my first key', 'my secret', 'my session token', 'my-region-42');
-SELECT duckdb.create_simple_secret('S3', 'my other key', 'my secret', '', 'my-region-42'); -- No session token
+SELECT duckdb.create_simple_secret('S3', 'my first key', 'my secret', 'my-region-42', 'my session token');
+SELECT duckdb.create_simple_secret('S3', 'my other key', 'my secret', 'my-region-42'); -- No session token
 SELECT duckdb.create_simple_secret('S3', 'my third key', 'my secret'); -- No session token, default region
 
 -- R2
@@ -122,8 +123,8 @@ SELECT duckdb.create_simple_secret('R2', 'my r2 key1', 'my secret', 'my session 
 SELECT duckdb.create_simple_secret('R2', 'my r2 key2', 'my secret');
 
 -- GCS
-SELECT duckdb.create_simple_secret('GCS', 'my first key', 'my secret', 'my session token', 'my-region-42');
-SELECT duckdb.create_simple_secret('GCS', 'my other key', 'my secret', '', 'my-region-42'); -- No session token
+SELECT duckdb.create_simple_secret('GCS', 'my first key', 'my secret', 'my-region-42', 'my session token');
+SELECT duckdb.create_simple_secret('GCS', 'my other key', 'my secret', 'my-region-42'); -- No session token
 SELECT duckdb.create_simple_secret('GCS', 'my third key', 'my secret'); -- No session token, default region
 
 -- Invalid

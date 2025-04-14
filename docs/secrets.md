@@ -4,7 +4,6 @@ DuckDB secrets can be configured either using utility functions or with a Foreig
 
 ## Simple secrets
 
-
 For example with utility functions:
 
 ```sql

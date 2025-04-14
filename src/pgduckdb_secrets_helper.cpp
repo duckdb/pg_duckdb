@@ -71,7 +71,7 @@ appendOptions(StringInfoData &buf, List *options) {
 		if (first) {
 			first = false;
 		} else {
-			appendStringInfoChar(&buf, ',');
+			appendStringInfoString(&buf, ", ");
 		}
 
 		// No need to sanitize option's name since it went through PG's validation
@@ -100,7 +100,7 @@ MakeDuckDBCreateSecretQuery(const char *secret_name, List *server_options, List 
 	bool appended_options = appendOptions(buf, server_options);
 	if (mapping_options) {
 		if (appended_options) {
-			appendStringInfoChar(&buf, ',');
+			appendStringInfoString(&buf, ", ");
 		}
 		appendOptions(buf, mapping_options);
 	}
@@ -143,11 +143,10 @@ ListDuckDBCreateSecretQueries() {
 
 	bool is_serveroid_null = false;
 	bool is_umoid_null = false;
-	Datum server_oid_datum, um_user_oid_datum;
 	for (uint64_t i = 0; i < SPI_processed; ++i) {
 		HeapTuple tuple = SPI_tuptable->vals[i];
-		server_oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &is_serveroid_null);
-		um_user_oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &is_umoid_null);
+		Datum server_oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &is_serveroid_null);
+		Datum um_user_oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &is_umoid_null);
 
 		if (is_serveroid_null) {
 			elog(ERROR, "FATAL: Expected server oid to be returned, but found NULL");

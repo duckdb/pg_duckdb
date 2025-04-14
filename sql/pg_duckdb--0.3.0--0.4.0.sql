@@ -596,7 +596,7 @@ CREATE FUNCTION duckdb.create_simple_secret(
     TEXT,              -- Key Id
     TEXT,              -- Secret
     TEXT DEFAULT '',   -- Session Token
-    TEXT DEFAULT 'us-east-1'
+    TEXT DEFAULT ''    -- Region
 )
 RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
