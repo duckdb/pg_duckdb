@@ -35,7 +35,7 @@ SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
 CALL duckdb.recycle_ddb();
 SET duckdb.force_execution = true;
 
--- Should work with regular posgres execution though, because this user is
+-- Should work with regular postgres execution though, because this user is
 -- allowed to read the table.
 SET duckdb.force_execution = false;
 SELECT * FROM t;

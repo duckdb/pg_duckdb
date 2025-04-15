@@ -43,7 +43,7 @@ ERROR:  DuckDB execution is not allowed because you have not been granted the du
 CALL duckdb.recycle_ddb();
 ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
 SET duckdb.force_execution = true;
--- Should work with regular posgres execution though, because this user is
+-- Should work with regular postgres execution though, because this user is
 -- allowed to read the table.
 SET duckdb.force_execution = false;
 SELECT * FROM t;
