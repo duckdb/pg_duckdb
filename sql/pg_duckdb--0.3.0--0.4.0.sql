@@ -578,3 +578,33 @@ CREATE TYPE duckdb.map(
     INPUT = duckdb.map_in,
     OUTPUT = duckdb.map_out
 );
+
+-- Drop legacy secret objects
+DROP SEQUENCE duckdb.secrets_table_seq;
+
+-- CASCADE will drop the following triggers:
+-- DROP TRIGGER duckdb_secret_r2_tr;
+-- DROP TRIGGER secrets_table_seq_tr;
+DROP TABLE duckdb.secrets CASCADE;
+
+DROP FUNCTION duckdb.duckdb_secret_r2_check();
+DROP FUNCTION duckdb.duckdb_update_secrets_table_seq();
+
+-- Secrets helpers
+CREATE FUNCTION duckdb.create_simple_secret(
+    TEXT,              -- Type (S3, GCS, R2)
+    TEXT,              -- Key Id
+    TEXT,              -- Secret
+    TEXT DEFAULT '',   -- Session Token
+    TEXT DEFAULT ''    -- Region
+)
+RETURNS TEXT
+SET search_path = pg_catalog, pg_temp
+LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_simple_secret';
+
+CREATE FUNCTION duckdb.create_azure_secret(TEXT) -- connection string
+RETURNS TEXT
+SET search_path = pg_catalog, pg_temp
+LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_azure_secret';
+
+

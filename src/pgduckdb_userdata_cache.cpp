@@ -1,3 +1,5 @@
+#include "pgduckdb/pgduckdb_duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 
@@ -42,6 +44,7 @@ bool callback_is_configured = false;
 void
 InvalidateCache(Datum, int, uint32) {
 	InvalidateUserDataCache();
+	pgduckdb::DuckDBManager::Get().InvalidateDuckDBSecrets();
 }
 
 } // namespace
@@ -75,7 +78,7 @@ LoadMotherDuckCache() {
 	Oid user_mapping_user_oid = pgduckdb::is_background_worker ? server->owner : GetUserId();
 
 	cache.motherduck_postgres_role_oid = pgduckdb::GetMotherDuckPostgresRoleOid(server_oid);
-	cache.motherduck_user_mapping_oid = pgduckdb::FindUserMappingForUser(user_mapping_user_oid, server_oid);
+	cache.motherduck_user_mapping_oid = pgduckdb::FindUserMappingOid(user_mapping_user_oid, server_oid);
 }
 
 void
@@ -87,6 +90,7 @@ InitUserDataCache() {
 	if (!callback_is_configured) {
 		callback_is_configured = true;
 		CacheRegisterSyscacheCallback(USERMAPPINGOID, InvalidateCache, (Datum)0);
+		CacheRegisterSyscacheCallback(FOREIGNSERVEROID, InvalidateCache, (Datum)0);
 	}
 
 	LoadMotherDuckCache();

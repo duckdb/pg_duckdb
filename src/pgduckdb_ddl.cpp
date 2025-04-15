@@ -38,6 +38,7 @@ extern "C" {
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/utility/copy.hpp"
@@ -359,34 +360,24 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 }
 
 static void
-ValidateOptionNotSet(List *options, const char *option_name) {
-	foreach_node(DefElem, def, options) {
-		if (strcmp(def->defname, option_name) == 0) {
-			elog(ERROR, "`%s` should not be set in the options", option_name);
-		}
-	}
-}
-
-static void
 DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
+	pgduckdb::CurrentServerType = nullptr;
 	// Propagate the "TYPE" to the server options, don't validate it here though
 	auto stmt = castNode(CreateForeignServerStmt, parsetree);
 	if (strcmp(stmt->fdwname, "duckdb") != 0) {
 		return; // Not our FDW, don't do anything
 	}
 
-	ValidateOptionNotSet(stmt->options, "type");
-
 	if (stmt->servertype == NULL) {
 		return; // Don't do anything quite yet, let the validator raise an error
 	}
 
-	// Wasn't set, add it.
-	stmt->options = lappend(stmt->options, makeDefElem(pstrdup("type"), (Node *)makeString(stmt->servertype), -1));
+	pgduckdb::CurrentServerType = pstrdup(stmt->servertype);
 }
 
 static void
 DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
+	pgduckdb::CurrentServerOid = InvalidOid;
 	// Propagate the "servername" to the user mapping options
 	auto stmt = castNode(CreateUserMappingStmt, parsetree);
 
@@ -396,12 +387,7 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 		return; // Not our FDW, don't do anything
 	}
 
-	Assert(stmt->servername);
-	ValidateOptionNotSet(stmt->options, "servername");
-
-	// Wasn't set, add it.
-	stmt->options =
-	    lappend(stmt->options, makeDefElem(pstrdup("servername"), (Node *)makeString(stmt->servername), -1));
+	pgduckdb::CurrentServerOid = server->serverid;
 }
 
 static void

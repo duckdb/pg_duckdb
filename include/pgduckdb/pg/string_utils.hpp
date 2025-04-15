@@ -4,7 +4,7 @@
 
 inline bool
 AreStringEqual(const char *str1, const char *str2) {
-	return strcmp(str1, str2) == 0;
+	return str1 == nullptr ? str1 == str2 : strcmp(str1, str2) == 0;
 }
 
 inline bool

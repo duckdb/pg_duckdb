@@ -14,19 +14,19 @@ extern "C" {
 #include "foreign/fdwapi.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
 #include "optimizer/pathnode.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"
-#include "utils/inval.h"
-#include "utils/syscache.h"
 
 #include "pgduckdb/vendor/pg_list.hpp"
 }
 
-#include "pgduckdb/pgduckdb_fdw.hpp"
+#include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
+#include "pgduckdb/pgduckdb_secrets_helper.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 extern "C" {
@@ -35,7 +35,6 @@ typedef enum { ANY, MD, S3, GCS, SENTINEL } FdwType;
 
 struct PGDuckDBFdwOption {
 	const char *optname;
-	FdwType type; /* Type of FDW in which this option is relevant */
 	Oid context;  /* Oid of catalog in which option may appear */
 	bool required = false;
 };
@@ -43,27 +42,15 @@ struct PGDuckDBFdwOption {
 /*
  * Valid options for a pgduckdb_fdw that has a `motherduck` type.
  */
-static const struct PGDuckDBFdwOption valid_options[] = {
-    /* --- ANY Server --- */
-    {"type", ANY, ForeignServerRelationId, true},
-
-    /* --- ANY Mapping --- */
-    {"servername", ANY, UserMappingRelationId},
-
+static const struct PGDuckDBFdwOption valid_md_options[] = {
     /* --- MD Server --- */
-    // the role bgw assigns to MD tables (by default server creator/owner)
-    {"tables_owner_role", MD, ForeignServerRelationId},
-    {"background_catalog_refresh_inactivity_timeout", MD, ForeignServerRelationId},
-
-    {"default_database", MD, ForeignServerRelationId}, // Name of the MotherDuck database to be synced (default "my_db")
+    {"tables_owner_role",
+     ForeignServerRelationId}, // the role bgw assigns to MD tables (by default server creator/owner)
+    {"background_catalog_refresh_inactivity_timeout", ForeignServerRelationId},
+    {"default_database", ForeignServerRelationId}, // Name of the MotherDuck database to be synced (default "my_db")
 
     /* --- MD Mapping --- */
-    {"token", MD, UserMappingRelationId, true}, // token to authenticate with MotherDuck
-
-    /* --- S3 Server --- */
-    // TODO
-    /* --- S3 Mapping --- */
-    // TODO
+    {"token", UserMappingRelationId, true}, // token to authenticate with MotherDuck
 
     /* Sentinel */
     {NULL, SENTINEL, InvalidOid}};
@@ -74,48 +61,10 @@ pgduckdb_fdw_handler(PG_FUNCTION_ARGS __attribute__((unused))) {
 	PG_RETURN_POINTER(nullptr);
 }
 
-static const char *
-FindOption(List *options_list, const char *name) {
-	foreach_node(DefElem, def, options_list) {
-		if (strcmp(def->defname, name) == 0) {
-			return defGetString(def);
-		}
-	}
-	return NULL;
-}
-
-static const char *
-GetOption(List *options_list, const char *name) {
-	auto val = FindOption(options_list, name);
-	if (val == NULL) {
-		elog(ERROR, "Missing required option: '%s'", name);
-	}
-	return val;
-}
-
-FdwType
-get_fdw_type(const char *type_str) {
-	if (strcmp(type_str, "motherduck") == 0) {
-		return MD;
-	} else if (strcmp(type_str, "s3") == 0) {
-		return S3;
-	} else if (strcmp(type_str, "gcs") == 0) {
-		return GCS;
-	} else {
-		elog(ERROR, "Unknown SERVER type: '%s'", type_str);
-		return SENTINEL; // unreachable
-	}
-}
-
 bool
-option_match_type(const struct PGDuckDBFdwOption *opt, FdwType type) {
-	return opt->type == ANY || opt->type == type;
-}
-
-bool
-is_valid_option(const char *optname, FdwType type, Oid context) {
-	for (const struct PGDuckDBFdwOption *opt = valid_options; opt->optname != NULL; ++opt) {
-		if (option_match_type(opt, type) && opt->context == context && strcmp(optname, opt->optname) == 0) {
+IsValidMdOption(const char *optname, Oid context) {
+	for (const struct PGDuckDBFdwOption *opt = valid_md_options; opt->optname != NULL; ++opt) {
+		if (opt->context == context && strcmp(optname, opt->optname) == 0) {
 			return true;
 		}
 	}
@@ -123,9 +72,9 @@ is_valid_option(const char *optname, FdwType type, Oid context) {
 }
 
 void
-validate_has_required_options(List *options_list, FdwType type, Oid context) {
-	for (const struct PGDuckDBFdwOption *opt = valid_options; opt->optname != NULL; ++opt) {
-		if (!opt->required || opt->context != context || !option_match_type(opt, type)) {
+ValidateHasRequiredMdOptions(List *options_list, Oid context) {
+	for (const struct PGDuckDBFdwOption *opt = valid_md_options; opt->optname != NULL; ++opt) {
+		if (!opt->required || opt->context != context) {
 			continue;
 		}
 
@@ -143,6 +92,7 @@ validate_has_required_options(List *options_list, FdwType type, Oid context) {
 }
 
 namespace pgduckdb {
+namespace pg {
 
 namespace {
 Oid
@@ -228,14 +178,16 @@ FindMotherDuckToken() {
 	auto userid = GetUserId();
 	if (pgduckdb::is_background_worker) {
 		auto server = GetForeignServer(server_oid);
-		auto um_oid = FindUserMappingForUser(server->owner, server_oid);
-		if (um_oid == InvalidOid) {
+		auto user_mapping = FindUserMapping(server->owner, server_oid, true);
+		if (user_mapping == nullptr) {
 			elog(WARNING, "No USER MAPPING found for owner of server %s", server->servername);
+			return nullptr;
+		} else if (user_mapping->options == nullptr) {
+			elog(WARNING, "No token found in owner's USER MAPPING of server %s", server->servername);
 			return nullptr;
 		}
 
 		// SERVER's owner has an UM, get token from its options:
-		auto user_mapping = GetUserMapping(server->owner, server_oid);
 		return FindOption(user_mapping->options, "token");
 	}
 
@@ -244,20 +196,14 @@ FindMotherDuckToken() {
 		return nullptr;
 	}
 
-	auto user_mapping = GetUserMapping(userid, server_oid);
-	return FindOption(user_mapping->options, "token");
+	auto user_mapping = FindUserMapping(userid, server_oid, true);
+	return user_mapping && user_mapping->options ? FindOption(user_mapping->options, "token") : nullptr;
 }
 
 Oid
-FindUserMappingForUser(Oid user_oid, Oid server_oid) {
-	auto tp = SearchSysCache2(USERMAPPINGUSERSERVER, ObjectIdGetDatum(user_oid), ObjectIdGetDatum(server_oid));
-	auto oid = InvalidOid;
-	if (HeapTupleIsValid(tp)) {
-		oid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
-		ReleaseSysCache(tp);
-	}
-
-	return oid;
+FindUserMappingOid(Oid user_oid, Oid server_oid) {
+	auto user_mapping = FindUserMapping(user_oid, server_oid);
+	return user_mapping ? user_mapping->umid : InvalidOid;
 }
 
 Oid
@@ -267,39 +213,36 @@ GetMotherDuckPostgresRoleOid(Oid server_oid) {
 	return role == nullptr ? server->owner : get_role_oid(role, true);
 }
 
-} // namespace pgduckdb
-
 void
-validate_has_no_motherduck_foreign_server() {
-	auto oid = pgduckdb::FindMotherDuckForeignServerOid();
+ValidateHasNoMotherduckForeignServer() {
+	auto oid = FindMotherDuckForeignServerOid();
 	if (oid != InvalidOid) {
-		auto name = GetForeignServer(oid)->servername;
-		elog(ERROR, "MotherDuck FDW already exists ('%s')", name);
+		elog(ERROR, "MotherDuck FDW already exists ('%s')", GetForeignServer(oid)->servername);
 	}
 }
 
 void
-validate_options(List *options_list, FdwType type, Oid context) {
+ValidateMdOptions(List *options_list, Oid context) {
 	// Make sure all options are valid
 	foreach_node(DefElem, def, options_list) {
-		if (!is_valid_option(def->defname, type, context)) {
+		if (!IsValidMdOption(def->defname, context)) {
 			elog(ERROR, "Unknown option: '%s'", def->defname);
 		}
 	}
 
 	// Make sure we have all required options
-	validate_has_required_options(options_list, type, context);
+	ValidateHasRequiredMdOptions(options_list, context);
 }
 
 Datum
-validate_motherduck_server_fdw(List *options_list, Oid context) {
+ValidateMotherduckServerFdw(List *options_list, Oid context) {
 	// For now only accept one MotherDuck FDW globally
 	// can be relaxed eventually with https://github.com/duckdb/pg_duckdb/pull/545
 
 	// TODO: take a global lock to make this check
-	validate_has_no_motherduck_foreign_server();
+	ValidateHasNoMotherduckForeignServer();
 
-	validate_options(options_list, MD, context);
+	ValidateMdOptions(options_list, context);
 
 	// Validate tables_owner_role
 	// TODO - can we add a "link" to the role here? (so there's an error when dropping the role)
@@ -314,9 +257,17 @@ validate_motherduck_server_fdw(List *options_list, Oid context) {
 	PG_RETURN_VOID();
 }
 
+} // namespace pg
+
+const char *CurrentServerType = nullptr;
+Oid CurrentServerOid = InvalidOid;
+
+} // namespace pgduckdb
+
 PG_FUNCTION_INFO_V1(pgduckdb_fdw_validator);
 Datum
 pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
+	using namespace pgduckdb::pg;
 	Oid catalog = PG_GETARG_OID(1);
 
 	if (catalog == ForeignTableRelationId || catalog == ForeignTableRelidIndexId) {
@@ -332,31 +283,23 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 
 		PG_RETURN_VOID(); // no additional validation needed
 	} else if (catalog == ForeignServerRelationId) {
-		auto type_str = GetOption(options_list, "type");
-		auto type = get_fdw_type(type_str);
-		// TODO? remove the "type" from the server "options" somehow?
-
-		switch (type) {
-		case MD:
-			validate_motherduck_server_fdw(options_list, catalog);
-			break;
-		case S3:
-		case GCS:
-			elog(ERROR, "Not implemented.");
-		default: // unreachable
-			elog(ERROR, "Unknown type: %d", type);
+		auto server_type = pgduckdb::CurrentServerType;
+		pgduckdb::CurrentServerType = nullptr;
+		if (AreStringEqual(server_type, "motherduck")) {
+			ValidateMotherduckServerFdw(options_list, catalog);
+		} else {
+			ValidateDuckDBSecret(server_type, options_list);
 		}
-
-		// For now we chose to not register a callback for SERVER
-		// because PG has a hard limit of 64. So we're explicitely invalidating it here.
-		pgduckdb::InvalidateUserDataCache();
 
 		PG_RETURN_VOID();
 	} else if (catalog == UserMappingRelationId) {
-		auto servername = GetOption(options_list, "servername");
-		auto server = GetForeignServerByName(servername, false);
-		auto server_type = get_fdw_type(server->servertype);
-		validate_options(options_list, server_type, catalog);
+		auto server = GetForeignServer(pgduckdb::CurrentServerOid);
+		pgduckdb::CurrentServerOid = InvalidOid;
+		if (AreStringEqual(server->servertype, "motherduck")) {
+			ValidateMdOptions(options_list, catalog);
+		} else {
+			ValidateDuckDBSecret(server->servertype, server->options, options_list);
+		}
 
 		// PG only accepts at most one USER MAPPING for a given (user, server)
 		// So no need to check for duplicates.

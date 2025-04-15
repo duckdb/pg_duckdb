@@ -33,9 +33,21 @@ public:
 		return default_dbname;
 	}
 
+	inline void
+	InvalidateDuckDBSecrets() {
+		secrets_valid = false;
+	}
+
+	inline duckdb::DuckDB &
+	GetDatabase() {
+		return *database;
+	}
+
 	void Reset();
 
 private:
+	DuckDBManager() = default;
+
 	static DuckDBManager manager_instance;
 
 	void Initialize();
@@ -49,18 +61,8 @@ private:
 	void RefreshConnectionState(duckdb::ClientContext &);
 
 	inline bool
-	IsSecretSeqLessThan(int64_t seq) const {
-		return secret_table_current_seq < seq;
-	}
-
-	inline bool
 	IsExtensionsSeqLessThan(int64_t seq) const {
 		return extensions_table_current_seq < seq;
-	}
-
-	inline void
-	UpdateSecretSeq(int64_t seq) {
-		secret_table_current_seq = seq;
 	}
 
 	inline void
@@ -68,8 +70,6 @@ private:
 		extensions_table_current_seq = seq;
 	}
 
-	int secret_table_num_rows;
-	int64_t secret_table_current_seq;
 	int64_t extensions_table_current_seq;
 	/*
 	 * FIXME: Use a unique_ptr instead of a raw pointer. For now this is not
@@ -85,6 +85,7 @@ private:
 	duckdb::DuckDB *database;
 	duckdb::unique_ptr<duckdb::Connection> connection;
 	std::string default_dbname;
+	bool secrets_valid;
 };
 
 } // namespace pgduckdb

@@ -5,6 +5,14 @@
 extern "C" {
 namespace pgduckdb {
 
+// The FDW validator doesn't provide the server type
+// when validating `CREATE SERVER`, nor the server oid
+// when validating `CREATE USER MAPPING`.
+// So we need to store them here to be able to validate
+// the options.
+extern const char *CurrentServerType;
+extern Oid CurrentServerOid;
+
 Oid FindMotherDuckForeignServerOid();
 
 /*
@@ -17,7 +25,7 @@ Note: we cannot use PG's `GetUserMapping` because:
 - it throws an error if no mapping is not found
 
 */
-Oid FindUserMappingForUser(Oid user_oid, Oid server_oid);
+Oid FindUserMappingOid(Oid user_oid, Oid server_oid);
 
 /*
 

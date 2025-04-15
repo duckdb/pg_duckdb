@@ -16,6 +16,7 @@ extern "C" {
 #include "access/table.h"
 #include "access/xact.h"
 #include "executor/spi.h"
+#include "foreign/foreign.h"
 #include "catalog/indexing.h"
 #include "parser/parse_coerce.h"
 #include "parser/parse_node.h"
@@ -49,11 +50,6 @@ GetDuckdbNamespace(void) {
 }
 
 static Oid
-SecretsTableRelationId(void) {
-	return get_relname_relid("secrets", GetDuckdbNamespace());
-}
-
-static Oid
 ExtensionsTableRelationId(void) {
 	return get_relname_relid("extensions", GetDuckdbNamespace());
 }
@@ -61,134 +57,6 @@ ExtensionsTableRelationId(void) {
 static std::string
 DatumToString(Datum datum) {
 	return std::string(text_to_cstring(DatumGetTextPP(datum)));
-}
-
-bool
-DoesSecretRequiresKeyIdOrSecret(const SecretType type) {
-	return type == SecretType::S3 || type == SecretType::GCS || type == SecretType::R2;
-}
-
-SecretType
-StringToSecretType(const std::string &type) {
-	auto uc_type = duckdb::StringUtil::Upper(type);
-	if (uc_type == "S3") {
-		return SecretType::S3;
-	} else if (uc_type == "R2") {
-		return SecretType::R2;
-	} else if (uc_type == "GCS") {
-		return SecretType::GCS;
-	} else if (uc_type == "AZURE") {
-		return SecretType::AZURE;
-	} else {
-		throw std::runtime_error("Invalid secret type: '" + type + "'");
-	}
-}
-
-std::string
-SecretTypeToString(SecretType type) {
-	switch (type) {
-	case SecretType::S3:
-		return "S3";
-	case SecretType::R2:
-		return "R2";
-	case SecretType::GCS:
-		return "GCS";
-	case SecretType::AZURE:
-		return "AZURE";
-	default:
-		throw std::runtime_error("Invalid secret type: '" + std::to_string(type) + "'");
-	}
-}
-
-UrlStyle
-StringToUrlStyle(const std::string &style) {
-	auto uc_style = duckdb::StringUtil::Upper(style);
-	if (uc_style == "PATH") {
-		return UrlStyle::PATH;
-	} else if (uc_style == "VHOST") {
-		return UrlStyle::VIRTUAL_HOST;
-	} else {
-		throw std::runtime_error("Invalid URL style: '" + style + "'");
-	}
-}
-
-std::string
-UrlStyleToString(UrlStyle style) {
-	switch (style) {
-	case UrlStyle::PATH:
-		return "path";
-	case UrlStyle::VIRTUAL_HOST:
-		return "vhost";
-	default:
-		throw std::runtime_error("Invalid URL style: '" + std::to_string(style) + "'");
-	}
-}
-
-std::vector<DuckdbSecret>
-ReadDuckdbSecrets() {
-	HeapTuple tuple = NULL;
-	Oid duckdb_secret_table_relation_id = SecretsTableRelationId();
-	Relation duckdb_secret_relation = table_open(duckdb_secret_table_relation_id, AccessShareLock);
-	SysScanDescData *scan = systable_beginscan(duckdb_secret_relation, InvalidOid, false, GetActiveSnapshot(), 0, NULL);
-	std::vector<DuckdbSecret> duckdb_secrets;
-
-	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
-		Datum datum_array[Natts_duckdb_secret];
-		bool is_null_array[Natts_duckdb_secret];
-
-		heap_deform_tuple(tuple, RelationGetDescr(duckdb_secret_relation), datum_array, is_null_array);
-		DuckdbSecret secret;
-
-		auto type_str = DatumToString(datum_array[Anum_duckdb_secret_type - 1]);
-		secret.type = StringToSecretType(type_str);
-		if (!is_null_array[Anum_duckdb_secret_key_id - 1])
-			secret.key_id = DatumToString(datum_array[Anum_duckdb_secret_key_id - 1]);
-		else if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
-			elog(WARNING, "Invalid '%s' secret: key id is required.", type_str.c_str());
-			continue;
-		}
-
-		if (!is_null_array[Anum_duckdb_secret_secret - 1])
-			secret.secret = DatumToString(datum_array[Anum_duckdb_secret_secret - 1]);
-		else if (DoesSecretRequiresKeyIdOrSecret(secret.type)) {
-			elog(WARNING, "Invalid '%s' secret: secret is required.", type_str.c_str());
-			continue;
-		}
-
-		if (!is_null_array[Anum_duckdb_secret_region - 1])
-			secret.region = DatumToString(datum_array[Anum_duckdb_secret_region - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_session_token - 1])
-			secret.session_token = DatumToString(datum_array[Anum_duckdb_secret_session_token - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_endpoint - 1])
-			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_endpoint - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_r2_account_id - 1])
-			secret.endpoint = DatumToString(datum_array[Anum_duckdb_secret_r2_account_id - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_use_ssl - 1])
-			secret.use_ssl = DatumGetBool(DatumGetBool(datum_array[Anum_duckdb_secret_use_ssl - 1]));
-		else
-			secret.use_ssl = true;
-
-		if (!is_null_array[Anum_duckdb_secret_scope - 1])
-			secret.scope = DatumToString(datum_array[Anum_duckdb_secret_scope - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_connection_string - 1])
-			secret.connection_string = DatumToString(datum_array[Anum_duckdb_secret_connection_string - 1]);
-
-		if (!is_null_array[Anum_duckdb_secret_url_style - 1])
-			secret.url_style = StringToUrlStyle(DatumToString(datum_array[Anum_duckdb_secret_url_style - 1]));
-		else
-			secret.url_style = UrlStyle::UNDEFINED;
-
-		duckdb_secrets.push_back(secret);
-	}
-
-	systable_endscan(scan);
-	table_close(duckdb_secret_relation, NoLock);
-	return duckdb_secrets;
 }
 
 std::vector<DuckdbExtension>
@@ -201,8 +69,8 @@ ReadDuckdbExtensions() {
 	std::vector<DuckdbExtension> duckdb_extensions;
 
 	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
-		Datum datum_array[Natts_duckdb_secret];
-		bool is_null_array[Natts_duckdb_secret];
+		Datum datum_array[Natts_duckdb_extension];
+		bool is_null_array[Natts_duckdb_extension];
 
 		heap_deform_tuple(tuple, RelationGetDescr(duckdb_extension_relation), datum_array, is_null_array);
 		DuckdbExtension secret;
@@ -261,6 +129,36 @@ DuckdbInstallExtension(const std::string &extension_name, const std::string &rep
 	if (ret != SPI_OK_INSERT)
 		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 	SPI_finish();
+}
+
+// Find a unique name for the server, based on the given prefix.
+// The name is generated by appending an incrementing number to the prefix
+// until a unique name is found. For example, if the prefix is "my_server",
+// the function will try "my_server_1", "my_server_2", etc. until it finds
+// a name that does not exist in the database.
+//
+// Technically we should do this under a lock to make sure no other connection
+// process is creating the same server, though this is unlikely to happen.
+std::string
+FindServerName(const char *server_prefix) {
+	auto oid = get_foreign_server_oid(server_prefix, true);
+	if (oid == InvalidOid) {
+		return server_prefix;
+	}
+
+	uint32_t i = 0;
+	std::ostringstream oss;
+	oss << server_prefix << "_";
+	const auto len = oss.str().length();
+	while (true) {
+		oss.seekp(len);
+		oss << ++i;
+
+		auto server_name = oss.str();
+		if (get_foreign_server_oid(server_name.c_str(), true) == InvalidOid) {
+			return server_name;
+		}
+	}
 }
 
 namespace pg {
@@ -335,12 +233,9 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 
 	{
 		// Create mapping for current user
-		Datum token_datum = CStringGetTextDatum(token.c_str());
-		Oid types[] = {TEXTOID};
-		Datum values[] = {token_datum};
 		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token " +
 		             duckdb::KeywordHelper::WriteQuoted(token) + ");";
-		auto ret = SPI_execute_with_args(query.c_str(), 1, types, values, NULL, false, 0);
+		auto ret = SPI_exec(query.c_str(), 0);
 		if (ret != SPI_OK_UTILITY) {
 			elog(ERROR, "Could not create USER MAPPING for current user: %s", SPI_result_code_string(ret));
 		}
@@ -349,6 +244,85 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 	SPI_finish();
 
 	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
+}
+
+DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
+	auto type = pgduckdb::pg::GetArgString(fcinfo, 0);
+	auto lc_type = duckdb::StringUtil::Lower(type);
+	const bool is_r2 = lc_type == "r2";
+	if (!is_r2 && lc_type != "s3" && lc_type != "gcs") {
+		elog(ERROR,
+		     "Invalid type '%s': this helper only supports 's3', 'gcs' or 'r2'. Please refer to the documentation to "
+		     "create advanced secrets.",
+		     type.c_str());
+	}
+
+	auto key = pgduckdb::pg::GetArgString(fcinfo, 1);
+	auto secret = pgduckdb::pg::GetArgString(fcinfo, 2);
+	auto region = pgduckdb::pg::GetArgString(fcinfo, 3);
+	auto session_token = pgduckdb::pg::GetArgString(fcinfo, 4);
+	auto secret_name = "simple_" + lc_type + "_secret";
+	SPI_connect();
+	auto server_name = pgduckdb::FindServerName(secret_name.c_str());
+	{
+		std::ostringstream create_server_query;
+		create_server_query << "CREATE SERVER " << server_name << " TYPE '" << type << "' FOREIGN DATA WRAPPER duckdb";
+		if (!region.empty() && !is_r2) {
+			create_server_query << " OPTIONS (region " << duckdb::KeywordHelper::WriteQuoted(region) << ")";
+		}
+
+		auto ret = SPI_exec(create_server_query.str().c_str(), 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create '%s' SERVER: %s", type.c_str(), SPI_result_code_string(ret));
+		}
+	}
+
+	{
+		std::ostringstream create_mapping_query;
+		create_mapping_query << "CREATE USER MAPPING FOR CURRENT_USER SERVER " << server_name << " OPTIONS (KEY_ID "
+		                     << duckdb::KeywordHelper::WriteQuoted(key) << ", SECRET "
+		                     << duckdb::KeywordHelper::WriteQuoted(secret);
+
+		if (!session_token.empty() && !is_r2) {
+			create_mapping_query << ", session_token " << duckdb::KeywordHelper::WriteQuoted(session_token);
+		}
+
+		create_mapping_query << ");";
+		auto ret = SPI_exec(create_mapping_query.str().c_str(), 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create '%s' USER MAPPING: %s", type.c_str(), SPI_result_code_string(ret));
+		}
+	}
+
+	SPI_finish();
+
+	auto result = cstring_to_text(server_name.c_str());
+	PG_RETURN_TEXT_P(result);
+}
+
+DECLARE_PG_FUNCTION(pgduckdb_create_azure_secret) {
+	// XXX: Should this install `azure` if not already installed? Or fail if not?
+	auto connection_string = pgduckdb::pg::GetArgString(fcinfo, 0);
+	SPI_connect();
+	auto server_name = pgduckdb::FindServerName("azure_secret");
+	{
+		auto create_server_query = "CREATE SERVER " + server_name + " TYPE 'azure' FOREIGN DATA WRAPPER duckdb";
+		auto ret = SPI_exec(create_server_query.c_str(), 0);
+		if (ret != SPI_OK_UTILITY) {
+			elog(ERROR, "Could not create 'azure' SERVER: %s", SPI_result_code_string(ret));
+		}
+	}
+
+	auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER " + server_name + " OPTIONS (connection_string " +
+	             duckdb::KeywordHelper::WriteQuoted(connection_string) + ");";
+	auto ret = SPI_exec(query.c_str(), 0);
+	if (ret != SPI_OK_UTILITY) {
+		elog(ERROR, "Could not create 'azure' USER MAPPING: %s", SPI_result_code_string(ret));
+	}
+
+	SPI_finish();
+	auto result = cstring_to_text(server_name.c_str());
+	PG_RETURN_TEXT_P(result);
 }
 
 /*
