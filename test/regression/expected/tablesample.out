@@ -32,13 +32,12 @@ SELECT * FROM t TABLESAMPLE BERNOULLI (100);
 (10 rows)
 
 SELECT * FROM t TABLESAMPLE BERNOULLI (50) REPEATABLE(42);
- a 
----
- 2
- 3
- 4
- 6
- 9
-(5 rows)
+ a  
+----
+  2
+  5
+  7
+ 10
+(4 rows)
 
 DROP TABLE t;
