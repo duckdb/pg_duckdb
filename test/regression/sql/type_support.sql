@@ -59,14 +59,15 @@ CREATE TABLE varbit_tbl(a VARBIT);
 INSERT INTO varbit_tbl SELECT CAST(a AS VARBIT) FROM (VALUES (B'1010'::VARBIT), (B'10100011'::VARBIT), (B'1010001011'::VARBIT), (NULL)) t(a);
 SELECT * FROM varbit_tbl;
 
--- BIT ARRAY
-CREATE TABLE fixed_var_tbl(a VARBIT);
-INSERT INTO fixed_var_tbl SELECT CAST(a AS BIT(4)) FROM (VALUES (B'101'), (NULL)) t(a);
-SELECT * FROM fixed_var_tbl;
+CREATE TABLE varbit20_tbl(a BIT VARYING(20));
+-- Insert a few kinds of bitstrings: (1) less than 8 bits; (2) equal to 8 bits; (3) larger than 8 bits.
+INSERT INTO varbit_tbl SELECT CAST(a AS VARBIT) FROM (VALUES (B'1010'::VARBIT), (B'10100011'::VARBIT), (B'1010001011'::VARBIT), (NULL)) t(a);
+SELECT * FROM varbit_tbl;
 
-CREATE TABLE varying_var_tbl(a BIT VARYING(5));
-INSERT INTO varying_var_tbl SELECT CAST(a AS BIT VARYING(5)) FROM (VALUES (B'101'), (NULL)) t(a);
-SELECT * FROM varying_var_tbl;
+-- BIT
+CREATE TABLE bit_tbl(a BIT(4));
+INSERT INTO bit_tbl VALUES (B'1010'), (B'0101'), (NULL);
+SELECT * FROM bit_tbl;
 
 -- TIME
 CREATE TABLE time_tbl(a TIME);
@@ -235,8 +236,8 @@ DROP TABLE text_tbl;
 DROP TABLE date_tbl;
 DROP TABLE interval_tbl;
 DROP TABLE varbit_tbl;
-DROP TABLE fixed_var_tbl;
-DROP TABLE varying_var_tbl;
+DROP TABLE varbit20_tbl;
+DROP TABLE bit_tbl;
 DROP TABLE time_tbl;
 DROP TABLE timetz_tbl;
 DROP TABLE timestamp_tbl;
