@@ -67,23 +67,12 @@ appendOptions(StringInfoData &buf, List *options) {
 	return !first;
 }
 
-const char *
-MakeSecretName(const char *server_name, Oid um_user_oid) {
-	StringInfoData buf;
-	initStringInfo(&buf);
-	appendStringInfo(&buf, "pgduckdb_secret_%s", server_name);
-	if (um_user_oid != InvalidOid) {
-		appendStringInfo(&buf, "_%u", um_user_oid);
-	}
-	return buf.data;
-}
-
 char *
-MakeDuckDBCreateSecretQuery(const char *secret_name, const char *type, List *server_options,
+MakeDuckDBCreateSecretQuery(const char *server_name, const char *type, List *server_options,
                             List *mapping_options = nullptr) {
 	StringInfoData buf;
 	initStringInfo(&buf);
-	appendStringInfo(&buf, "CREATE SECRET %s (", secret_name);
+	appendStringInfo(&buf, "CREATE SECRET pgduckdb_secret_%s (", server_name);
 
 	bool appended_options = appendOptions(buf, server_options);
 	if (list_length(mapping_options) > 0) {
@@ -97,9 +86,7 @@ MakeDuckDBCreateSecretQuery(const char *secret_name, const char *type, List *ser
 		appendStringInfoString(&buf, ", ");
 	}
 
-	appendStringInfo(&buf, "TYPE %s", type);
-
-	appendStringInfo(&buf, ")");
+	appendStringInfo(&buf, "TYPE %s)", type);
 	return buf.data;
 }
 
@@ -173,11 +160,11 @@ ListDuckDBCreateSecretQueries() {
 			elog(ERROR, "FATAL: could not find FOREIGN SERVER with oid %u", server_oid);
 		}
 
-		auto secret_name = MakeSecretName(server->servername, um_user_oid);
 		{
 			// Enter memory context preceding the SPI call so that it survives `SPI_finish`
 			MemoryContext spi_mem_ctx = MemoryContextSwitchTo(entry_ctx);
-			auto secret_query = MakeDuckDBCreateSecretQuery(secret_name, type, server->options, user_mapping_options);
+			auto name = server->servername;
+			auto secret_query = MakeDuckDBCreateSecretQuery(name, type, server->options, user_mapping_options);
 			results = lappend(results, makeString(secret_query));
 			MemoryContextSwitchTo(spi_mem_ctx);
 		}
@@ -223,7 +210,7 @@ FindUserMapping(Oid userid, Oid serverid, bool with_options) {
 }
 
 const char *
-GetQueryError(const char *query, List* server_options) {
+GetQueryError(const char *query, List *server_options) {
 	// Create a new connection on the DB so we don't refresh secrets or anything
 	auto &db = pgduckdb::DuckDBManager::Get().GetDatabase();
 	duckdb::Connection con(db);
@@ -235,23 +222,23 @@ GetQueryError(const char *query, List* server_options) {
 		return pstrdup(res->GetErrorObject().RawMessage().c_str());
 	}
 
-	auto& secret_manager = duckdb::SecretManager::Get(*con.context);
+	auto &secret_manager = duckdb::SecretManager::Get(*con.context);
 	auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(*con.context);
-	auto secret_entry = secret_manager.GetSecretByName(transaction, "new_pgduckdb_secret");
+	auto secret_entry = secret_manager.GetSecretByName(transaction, "pgduckdb_secret_validation");
 	if (!secret_entry) {
 		return "FATAL: Failed to get secret";
 	} else if (!secret_entry->secret) {
 		return "FATAL: No secret attached to the entry";
 	}
 
-	auto kv_secret = dynamic_cast<const duckdb::KeyValueSecret*>(secret_entry->secret.get());
+	auto kv_secret = dynamic_cast<const duckdb::KeyValueSecret *>(secret_entry->secret.get());
 	if (!kv_secret) {
 		return "FATAL: Secret is not a duckdb::KeyValueSecret";
 	}
 
 	// Make sure we're not using restricted options in the server
 	std::vector<std::string> restricted;
-	for (const auto& k : kv_secret->redact_keys) {
+	for (const auto &k : kv_secret->redact_keys) {
 		if (FindOption(server_options, k.c_str()) != NULL) {
 			restricted.push_back(k);
 		}
@@ -281,7 +268,7 @@ ValidateDuckDBSecret(const char *type, List *server_options, List *mapping_optio
 		elog(ERROR, "Missing required option: 'type'");
 	}
 
-	auto query = MakeDuckDBCreateSecretQuery("new_pgduckdb_secret", type, server_options, mapping_options);
+	auto query = MakeDuckDBCreateSecretQuery("validation", type, server_options, mapping_options);
 	auto err = InvokeCPPFunc(GetQueryError, query, server_options);
 	if (err != nullptr) {
 		elog(ERROR, "%s", err);
