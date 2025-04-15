@@ -11448,6 +11448,10 @@ get_tablesample_def(TableSampleClause *tablesample, deparse_context *context)
 		if (nargs++ > 0)
 			appendStringInfoString(buf, ", ");
 		get_rule_expr((Node *) lfirst(l), context, false);
+		const char *tsm_name = generate_function_name(tablesample->tsmhandler, 1,
+											NIL, argtypes,
+											false, NULL, EXPR_KIND_NONE);
+		pgduckdb_add_tablesample_percent(tsm_name, buf, list_length(tablesample->args));
 	}
 	appendStringInfoChar(buf, ')');
 
