@@ -8,6 +8,7 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/types.hpp"
 
@@ -509,6 +510,12 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 	}
 
 	return UUIDPGetDatum(postgres_uuid);
+}
+
+inline Datum
+ConvertDuckStructDatum(const duckdb::Value &value) {
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::STRUCT);
+	return ConvertToStringDatum(value);
 }
 
 static Datum
@@ -1162,8 +1169,14 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		ConvertDuckToPostgresArray<ByteArray>(slot, value, col);
 		break;
 	}
-	default:
-		if (oid == pgduckdb::DuckdbUnionOid()) {
+	default: {
+		// Since oids of the following types calculated at runtime, it is not
+		// possible to compile the code while placing it as a separate case
+		// in the switch-case clause above.
+		if (oid == pgduckdb::DuckdbStructOid()) {
+			slot->tts_values[col] = ConvertDuckStructDatum(value);
+			return true;
+		} else if (oid == pgduckdb::DuckdbUnionOid()) {
 			slot->tts_values[col] = ConvertUnionDatum(value);
 			return true;
 		} else if (oid == pgduckdb::DuckdbMapOid()) {
@@ -1172,6 +1185,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
 		return false;
+	}
 	}
 	return true;
 }
@@ -1274,6 +1288,8 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	default:
 		if (typoid == pgduckdb::DuckdbUnionOid()) {
 			return duckdb::LogicalTypeId::UNION;
+		} else if (typoid == pgduckdb::DuckdbStructOid()) {
+			return duckdb::LogicalTypeId::STRUCT;
 		}
 		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
 	}
@@ -1425,6 +1441,8 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return UUIDOID;
 	case duckdb::LogicalTypeId::VARINT:
 		return NUMERICOID;
+	case duckdb::LogicalTypeId::STRUCT:
+		return pgduckdb::DuckdbStructOid();
 	case duckdb::LogicalTypeId::LIST:
 	case duckdb::LogicalTypeId::ARRAY: {
 		const duckdb::LogicalType *duck_type = &type;
