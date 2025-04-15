@@ -498,14 +498,7 @@ inline Datum
 ConvertDuckStructDatum(const duckdb::Value &value) {
 	// similar to varchar and union
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::STRUCT);
-	auto str = value.ToString();
-	auto varchar = str.c_str();
-	auto varchar_len = str.size();
-
-	text *result = (text *)palloc0(varchar_len + VARHDRSZ);
-	SET_VARSIZE(result, varchar_len + VARHDRSZ);
-	memcpy(VARDATA(result), varchar, varchar_len);
-	return PointerGetDatum(result);
+	return ConvertToStringDatum(value);
 }
 
 static Datum
@@ -1125,8 +1118,9 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	default: {
-		// Since DuckdbRowOid is calculated at runtime, it is not possible to compile the
-		// code while placing it as a separate case in the switch-case clause above
+		// Since oids of the following types calculated at runtime, it is not
+		// possible to compile the code while placing it as a separate case
+		// in the switch-case clause above.
 		if (oid == pgduckdb::DuckdbStructOid()) {
 			slot->tts_values[col] = ConvertDuckStructDatum(value);
 			return true;

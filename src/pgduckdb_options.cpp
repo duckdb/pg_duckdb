@@ -383,9 +383,9 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 }
 
 Node *
-CoerceRowSubscriptToText(struct ParseState *pstate, A_Indices *subscript) {
+CoerceSubscriptToText(struct ParseState *pstate, A_Indices *subscript, const char *type_name) {
 	if (!subscript->uidx) {
-		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+		elog(ERROR, "Creating a slice out of %s is not supported", type_name);
 	}
 
 	Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
@@ -393,64 +393,39 @@ CoerceRowSubscriptToText(struct ParseState *pstate, A_Indices *subscript) {
 	Oid subscript_expr_type = exprType(subscript_expr);
 
 	if (subscript->lidx) {
-		elog(ERROR, "Creating a slice out of duckdb.row is not supported");
+		elog(ERROR, "Creating a slice out of %s is not supported", type_name);
 	}
 
 	Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
 	                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
 	if (!coerced_expr) {
-		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must have text type"),
+		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("%s subscript must have text type", type_name),
 		                parser_errposition(pstate, expr_location)));
 	}
 
 	if (!IsA(subscript_expr, Const)) {
-		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.row subscript must be a constant"),
+		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("%s subscript must be a constant", type_name),
 		                parser_errposition(pstate, expr_location)));
 	}
 
 	Const *subscript_const = castNode(Const, subscript_expr);
 	if (subscript_const->constisnull) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("duckdb.row subscript cannot be NULL"),
+		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("%s subscript cannot be NULL", type_name),
 		                parser_errposition(pstate, expr_location)));
 	}
 
 	return coerced_expr;
 }
 
+Node *
+CoerceRowSubscriptToText(struct ParseState *pstate, A_Indices *subscript) {
+	return CoerceSubscriptToText(pstate, subscript, "duckdb.row");
+}
+
 // Cloned implementation from CoerceRowSubscriptToText
 Node *
 CoerceStructSubscriptToText(struct ParseState *pstate, A_Indices *subscript) {
-	if (!subscript->uidx) {
-		elog(ERROR, "Creating a slice out of duckdb.struct is not supported");
-	}
-
-	Node *subscript_expr = transformExpr(pstate, subscript->uidx, pstate->p_expr_kind);
-	int expr_location = exprLocation(subscript->uidx);
-	Oid subscript_expr_type = exprType(subscript_expr);
-
-	if (subscript->lidx) {
-		elog(ERROR, "Creating a slice out of duckdb.struct is not supported");
-	}
-
-	Node *coerced_expr = coerce_to_target_type(pstate, subscript_expr, subscript_expr_type, TEXTOID, -1,
-	                                           COERCION_IMPLICIT, COERCE_IMPLICIT_CAST, expr_location);
-	if (!coerced_expr) {
-		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.struct subscript must have text type"),
-		                parser_errposition(pstate, expr_location)));
-	}
-
-	if (!IsA(subscript_expr, Const)) {
-		ereport(ERROR, (errcode(ERRCODE_DATATYPE_MISMATCH), errmsg("duckdb.struct subscript must be a constant"),
-		                parser_errposition(pstate, expr_location)));
-	}
-
-	Const *subscript_const = castNode(Const, subscript_expr);
-	if (subscript_const->constisnull) {
-		ereport(ERROR, (errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), errmsg("duckdb.struct subscript cannot be NULL"),
-		                parser_errposition(pstate, expr_location)));
-	}
-
-	return coerced_expr;
+	return CoerceSubscriptToText(pstate, subscript, "duckdb.struct");
 }
 
 /*
@@ -492,29 +467,29 @@ AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_In
 }
 
 /*
- * DuckdbRowSubscriptTransform is called by the parser when a subscripting
+ * DuckdbSubscriptTransform is called by the parser when a subscripting
  * operation is performed on a duckdb.row. It has two main puprposes:
  * 1. Ensure that the row is being indexed using a string literal
  * 2. Ensure that the return type of this index operation is duckdb.unresolved_type
  */
 void
-DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                            bool isAssignment) {
+DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
+                         bool isAssignment, const char *type_name) {
 	/*
 	 * We need to populate our cache for some of the code below. Normally this
 	 * cache is populated at the start of our planner hook, but this function
 	 * is being called from the parser.
 	 */
 	if (!pgduckdb::IsExtensionRegistered()) {
-		elog(ERROR, "BUG: Using duckdb.row but the pg_duckdb extension is not installed");
+		elog(ERROR, "BUG: Using %s but the pg_duckdb extension is not installed", type_name);
 	}
 
 	if (isAssignment) {
-		elog(ERROR, "Assignment to duckdb.row is not supported");
+		elog(ERROR, "Assignment to %s is not supported", type_name);
 	}
 
 	if (indirection == NIL) {
-		elog(ERROR, "Subscripting duckdb.row with an empty subscript is not supported");
+		elog(ERROR, "Subscripting %s with an empty subscript is not supported", type_name);
 	}
 
 	bool first = true;
@@ -541,6 +516,18 @@ DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct P
 	sbsref->reftypmod = -1;
 }
 
+void
+DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
+                            bool isAssignment) {
+	DuckdbSubscriptTransform(sbsref, indirection, pstate, isSlice, isAssignment, "duckdb.row");
+}
+
+void
+DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
+                               bool isAssignment) {
+	DuckdbSubscriptTransform(sbsref, indirection, pstate, isSlice, isAssignment, "duckdb.struct");
+}
+
 /*
  * DuckdbRowSubscriptExecSetup is called by the executor when a subscripting
  * operation is performed on a duckdb.row. This should never happen, because
@@ -563,51 +550,6 @@ static SubscriptRoutines duckdb_row_subscript_routines = {
 
 DECLARE_PG_FUNCTION(duckdb_row_subscript) {
 	PG_RETURN_POINTER(&duckdb_row_subscript_routines);
-}
-
-// Copied implementation from duckdb.row for duckdb.struct
-void
-DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                               bool isAssignment) {
-	/*
-	 * We need to populate our cache for some of the code below. Normally this
-	 * cache is populated at the start of our planner hook, but this function
-	 * is being called from the parser.
-	 */
-	if (!pgduckdb::IsExtensionRegistered()) {
-		elog(ERROR, "BUG: Using duckdb.struct but the pg_duckdb extension is not installed");
-	}
-
-	if (isAssignment) {
-		elog(ERROR, "Assignment to duckdb.struct is not supported");
-	}
-
-	if (indirection == NIL) {
-		elog(ERROR, "Subscripting duckdb.struct with an empty subscript is not supported");
-	}
-
-	bool first = true;
-
-	// Transform each subscript expression
-	foreach_node(A_Indices, subscript, indirection) {
-		/* The first subscript needs to be a TEXT constant, since it should be
-		 * a column reference. But the subscripts after that can be anything,
-		 * DuckDB should interpret those. */
-		if (first) {
-			sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, CoerceStructSubscriptToText(pstate, subscript));
-			if (isSlice) {
-				sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, NULL);
-			}
-			first = false;
-			continue;
-		}
-
-		AddSubscriptExpressions(sbsref, pstate, subscript, isSlice);
-	}
-
-	// Set the result type of the subscripting operation
-	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
-	sbsref->reftypmod = -1;
 }
 
 void

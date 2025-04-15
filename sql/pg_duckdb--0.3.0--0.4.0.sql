@@ -18,6 +18,41 @@ CREATE TYPE duckdb.struct (
     SUBSCRIPT = duckdb.struct_subscript
 );
 
+-- Update JSON functions that return STRUCT to actually return the struct type.
+-- To do so we need to drop + create them.
+DROP FUNCTION @extschema@.json_transform("json" duckdb.json, structure duckdb.json);
+DROP FUNCTION @extschema@.from_json("json" duckdb.json, structure duckdb.json);
+DROP FUNCTION @extschema@.json_transform_strict("json" duckdb.json, structure duckdb.json);
+DROP FUNCTION @extschema@.from_json_strict("json" duckdb.json, structure duckdb.json);
+
+-- json_transform
+CREATE FUNCTION @extschema@.json_transform("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.struct
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+-- from_json
+CREATE FUNCTION @extschema@.from_json("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.struct
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+-- json_transform_strict
+CREATE FUNCTION @extschema@.json_transform_strict("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.struct
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+-- from_json_strict
+CREATE FUNCTION @extschema@.from_json_strict("json" duckdb.json, structure duckdb.json)
+RETURNS duckdb.struct
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
 DROP FUNCTION duckdb.install_extension(TEXT);
 CREATE FUNCTION duckdb.install_extension(extension_name TEXT, source TEXT DEFAULT 'core') RETURNS void
     SET search_path = pg_catalog, pg_temp
