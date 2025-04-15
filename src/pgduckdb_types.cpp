@@ -1830,9 +1830,9 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 			auto previous_dimension = dim ? dims[dim - 1] : 1;
 			auto dimension = dims[dim];
 			if (vec->GetType().id() != duckdb::LogicalTypeId::LIST) {
-				throw duckdb::InvalidInputException("Dimensionality of the schema and the data does not match, "
-				                                    "data contains more dimensions than the "
-				                                    "amount of dimensions specified by the schema");
+				throw duckdb::InvalidInputException(
+				    "Dimensionality of the schema and the data does not match, data contains more dimensions than the "
+				    "amount of dimensions specified by the schema");
 			}
 			auto child_offset = duckdb::ListVector::GetListSize(*vec);
 			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
