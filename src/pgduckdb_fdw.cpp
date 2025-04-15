@@ -14,6 +14,7 @@ extern "C" {
 #include "foreign/fdwapi.h"
 #include "foreign/foreign.h"
 #include "miscadmin.h"
+#include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
 #include "nodes/pg_list.h"
 #include "optimizer/pathnode.h"
@@ -44,7 +45,6 @@ struct PGDuckDBFdwOption {
  */
 static const struct PGDuckDBFdwOption valid_md_options[] = {
     /* --- MD Server --- */
-    {"type", ForeignServerRelationId, true},
     {"tables_owner_role",
      ForeignServerRelationId}, // the role bgw assigns to MD tables (by default server creator/owner)
     {"background_catalog_refresh_inactivity_timeout", ForeignServerRelationId},
@@ -52,7 +52,6 @@ static const struct PGDuckDBFdwOption valid_md_options[] = {
 
     /* --- MD Mapping --- */
     {"token", UserMappingRelationId, true}, // token to authenticate with MotherDuck
-    {"servername", UserMappingRelationId},
 
     /* Sentinel */
     {NULL, SENTINEL, InvalidOid}};
@@ -261,6 +260,9 @@ ValidateMotherduckServerFdw(List *options_list, Oid context) {
 
 } // namespace pg
 
+const char *CurrentServerType = nullptr;
+Oid CurrentServerOid = InvalidOid;
+
 } // namespace pgduckdb
 
 PG_FUNCTION_INFO_V1(pgduckdb_fdw_validator);
@@ -282,22 +284,22 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 
 		PG_RETURN_VOID(); // no additional validation needed
 	} else if (catalog == ForeignServerRelationId) {
-		// TODO? remove the "type" from the server "options" somehow?
-		auto type_str = GetOption(options_list, "type");
-		if (AreStringEqual(type_str, "motherduck")) {
+		auto server_type = pgduckdb::CurrentServerType;
+		pgduckdb::CurrentServerType = nullptr;
+		if (AreStringEqual(server_type, "motherduck")) {
 			ValidateMotherduckServerFdw(options_list, catalog);
 		} else {
-			ValidateDuckDBSecret(options_list);
+			ValidateDuckDBSecret(server_type, options_list);
 		}
 
 		PG_RETURN_VOID();
 	} else if (catalog == UserMappingRelationId) {
-		auto servername = GetOption(options_list, "servername");
-		auto server = GetForeignServerByName(servername, false);
+		auto server = GetForeignServer(pgduckdb::CurrentServerOid);
+		pgduckdb::CurrentServerOid = InvalidOid;
 		if (AreStringEqual(server->servertype, "motherduck")) {
 			ValidateMdOptions(options_list, catalog);
 		} else {
-			ValidateDuckDBSecret(server->options, options_list);
+			ValidateDuckDBSecret(server->servertype, server->options, options_list);
 		}
 
 		// PG only accepts at most one USER MAPPING for a given (user, server)

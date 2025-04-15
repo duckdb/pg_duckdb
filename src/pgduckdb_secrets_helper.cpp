@@ -65,9 +65,6 @@ bool
 appendOptions(StringInfoData &buf, List *options) {
 	bool first = true;
 	foreach_node(DefElem, def, options) {
-		if (AreStringEqual(def->defname, "servername")) {
-			continue; // internal option
-		}
 		if (first) {
 			first = false;
 		} else {
@@ -93,17 +90,25 @@ MakeSecretName(const char *server_name, Oid um_user_oid) {
 }
 
 char *
-MakeDuckDBCreateSecretQuery(const char *secret_name, List *server_options, List *mapping_options = nullptr) {
+MakeDuckDBCreateSecretQuery(const char *secret_name, const char *type, List *server_options,
+                            List *mapping_options = nullptr) {
 	StringInfoData buf;
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "CREATE SECRET %s (", secret_name);
+
 	bool appended_options = appendOptions(buf, server_options);
-	if (mapping_options) {
+	if (list_length(mapping_options) > 0) {
 		if (appended_options) {
 			appendStringInfoString(&buf, ", ");
 		}
-		appendOptions(buf, mapping_options);
+		appended_options = appendOptions(buf, mapping_options);
 	}
+
+	if (appended_options) {
+		appendStringInfoString(&buf, ", ");
+	}
+
+	appendStringInfo(&buf, "TYPE %s", type);
 
 	appendStringInfo(&buf, ")");
 	return buf.data;
@@ -118,6 +123,7 @@ ListDuckDBCreateSecretQueries() {
 	auto query = R"(
 		SELECT
 			fs.oid as server_oid,
+			fs.srvtype as server_type,
 			um.umuser as um_user_oid
 		FROM pg_foreign_server fs
 		INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
@@ -141,19 +147,24 @@ ListDuckDBCreateSecretQueries() {
 
 	List *results = NIL;
 
-	bool is_serveroid_null = false;
-	bool is_umoid_null = false;
 	for (uint64_t i = 0; i < SPI_processed; ++i) {
 		HeapTuple tuple = SPI_tuptable->vals[i];
+		bool is_serveroid_null = false;
+		bool is_umoid_null = false;
+		bool is_servertype_null = false;
 		Datum server_oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &is_serveroid_null);
-		Datum um_user_oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &is_umoid_null);
+		Datum server_type_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &is_servertype_null);
+		Datum um_user_oid_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 3, &is_umoid_null);
 
 		if (is_serveroid_null) {
 			elog(ERROR, "FATAL: Expected server oid to be returned, but found NULL");
+		} else if (is_servertype_null) {
+			elog(ERROR, "FATAL: Expected server type to be returned, but found NULL");
 		}
 
 		// Get USER MAPPING if it exists
 		const Oid server_oid = DatumGetObjectId(server_oid_datum);
+		const char *type = TextDatumGetCString(server_type_datum);
 		Oid um_user_oid = InvalidOid;
 		List *user_mapping_options = nullptr;
 		if (!is_umoid_null) {
@@ -177,7 +188,7 @@ ListDuckDBCreateSecretQueries() {
 		{
 			// Enter memory context preceding the SPI call so that it survives `SPI_finish`
 			MemoryContext spi_mem_ctx = MemoryContextSwitchTo(entry_ctx);
-			auto secret_query = MakeDuckDBCreateSecretQuery(secret_name, server->options, user_mapping_options);
+			auto secret_query = MakeDuckDBCreateSecretQuery(secret_name, type, server->options, user_mapping_options);
 			results = lappend(results, makeString(secret_query));
 			MemoryContextSwitchTo(spi_mem_ctx);
 		}
@@ -234,11 +245,15 @@ GetQueryError(const char *query) {
 }
 
 void
-ValidateDuckDBSecret(List *server_options, List *mapping_options) {
+ValidateDuckDBSecret(const char *type, List *server_options, List *mapping_options) {
+	if (type == nullptr) {
+		elog(ERROR, "Missing required option: 'type'");
+	}
+
 	// Make sure we're not using restricted options
 	validateServerOptions(server_options);
 
-	auto query = MakeDuckDBCreateSecretQuery("new_pgduckdb_secret", server_options, mapping_options);
+	auto query = MakeDuckDBCreateSecretQuery("new_pgduckdb_secret", type, server_options, mapping_options);
 	auto err = InvokeCPPFunc(GetQueryError, query);
 	if (err != nullptr) {
 		elog(ERROR, "%s", err);

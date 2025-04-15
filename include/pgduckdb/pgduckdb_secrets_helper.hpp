@@ -14,7 +14,7 @@ Validate a SECRET defined by: 1. a SERVER (TYPE and OPTIONS) and optionally 2. a
 We validate by creating the query to create the SECRET in DuckDB and then executing it.
 This function throws a PG error if the secret is invalid.
 */
-void ValidateDuckDBSecret(List *server_options, List *mapping_options = nullptr);
+void ValidateDuckDBSecret(const char *type, List *server_options, List *mapping_options = nullptr);
 
 /* Utility functions */
 UserMapping *FindUserMapping(Oid userid, Oid serverid, bool with_options = false);
