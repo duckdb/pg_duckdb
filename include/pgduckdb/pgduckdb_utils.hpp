@@ -79,20 +79,20 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 	std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
 	MemoryContext ctx = CurrentMemoryContext;
 
-	{ // PG_TRY();
+	{ // PG_TRY
 		PgExceptionGuard g;
 		sigjmp_buf _local_sigjmp_buf;
 		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
 			PG_exception_stack = &_local_sigjmp_buf;
 			return func(std::forward<FuncArgs>(args)...);
 		}
-	} // PG_END_TRY();
+	}
 
 	CurrentMemoryContext = ctx;
 
-	// Extract the error message (edata) within a PG_TRY block.
 	ErrorData *edata = nullptr;
-	{ // PG_TRY
+	{ // PG_CATCH
+		// Extract the error message (edata) within a PG_TRY block.
 		PgExceptionGuard g;
 		sigjmp_buf _local_sigjmp_buf;
 		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
@@ -104,7 +104,7 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 			// This is a pretty bad situation - we failed to extract the error message.
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Failed to extract Postgres error message");
 		}
-	} // PG_END_TRY();
+	} // PG_END_TRY
 
 	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, pg::GetErrorDataMessage(edata));
 	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
