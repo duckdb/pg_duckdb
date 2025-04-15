@@ -338,11 +338,19 @@ SELECT public.json_group_structure(j) FROM example2;
 --     ('{"family": "canidae", "species": ["labrador", "bulldog"], "hair": true}');
 -- -- <JSON_TRANSFORM>
 SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') FROM example2;
-WARNING:  (PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: STRUCT("family" VARCHAR, coolness DOUBLE) to Postgres type
-ERROR:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
+             json_transform              
+-----------------------------------------
+ {'family': anatidae, 'coolness': 42.42}
+ {'family': canidae, 'coolness': NULL}
+(2 rows)
+
 SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 2)"}') FROM example2;
-WARNING:  (PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: STRUCT("family" TINYINT, coolness DECIMAL(4,2)) to Postgres type
-ERROR:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
+           json_transform            
+-------------------------------------
+ {'family': NULL, 'coolness': 42.42}
+ {'family': NULL, 'coolness': NULL}
+(2 rows)
+
 SELECT res['family'] family, res['coolness'] coolness FROM (
     SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') res FROM example2
 ) q;
@@ -373,8 +381,7 @@ SELECT res['family'] family, res['coolness'] coolness FROM (
 -- -- </JSON_TRANSFORM>
 -- -- <JSON_TRANSFORM_STRICT>
 SELECT public.json_transform_strict(j, '{"family": "TINYINT", "coolness": "DOUBLE"}') FROM example2;
-WARNING:  (PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: STRUCT("family" TINYINT, coolness DOUBLE) to Postgres type
-ERROR:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Invalid Input Error: Failed to cast value to numerical: "canidae"
 SELECT res['family'] family FROM (
     SELECT public.json_transform_strict(j, '{"family": "VARCHAR"}') res FROM example2
 ) q;
