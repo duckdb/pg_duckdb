@@ -61,8 +61,8 @@ SELECT * FROM varbit_tbl;
 
 CREATE TABLE varbit20_tbl(a BIT VARYING(20));
 -- Insert a few kinds of bitstrings: (1) less than 8 bits; (2) equal to 8 bits; (3) larger than 8 bits.
-INSERT INTO varbit_tbl SELECT CAST(a AS VARBIT) FROM (VALUES (B'1010'::VARBIT), (B'10100011'::VARBIT), (B'1010001011'::VARBIT), (NULL)) t(a);
-SELECT * FROM varbit_tbl;
+INSERT INTO varbit20_tbl SELECT CAST(a AS VARBIT) FROM (VALUES (B'1010'::VARBIT), (B'10100011'::VARBIT), (B'1010001011'::VARBIT), (NULL)) t(a);
+SELECT * FROM varbit20_tbl;
 
 -- BIT
 CREATE TABLE bit_tbl(a BIT(4));
