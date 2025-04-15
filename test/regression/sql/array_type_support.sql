@@ -94,6 +94,26 @@ INSERT INTO varchar_array_1d SELECT CAST(a as VARCHAR[]) FROM (VALUES
 ) t(a);
 SELECT * FROM varchar_array_1d;
 
+-- VARBIT (single dimension)
+CREATE TABLE varbit_array_1d(a VARBIT[]);
+INSERT INTO varbit_array_1d SELECT CAST(a as VARBIT[]) FROM (VALUES
+    ('{B1010, B10100011}'),
+    (NULL),
+    ('{B1010001011, NULL, B10101010101}'),
+    ('{}')
+) t(a);
+SELECT * FROM varbit_array_1d;
+
+-- BIT (single dimension)
+CREATE TABLE bit_array_1d(a BIT(4)[]);
+INSERT INTO bit_array_1d SELECT CAST(a as BIT(4)[]) FROM (VALUES
+    ('{B1010, B0101}'),
+    (NULL),
+    ('{B1010, NULL, B0111}'),
+    ('{}')
+) t(a);
+SELECT * FROM bit_array_1d;
+
 -- INTERVAL (single dimension)
 CREATE TABLE interval_array_1d(a INTERVAL[]);
 INSERT INTO interval_array_1d (a) VALUES (ARRAY['2 years 5 months 1 day 3 hours 30 minutes 5 seconds', '5 days 5 hours']::INTERVAL[]);
@@ -230,6 +250,26 @@ INSERT INTO varchar_array_2d VALUES
     ('{{"some","strings"},{NULL,"last"}}');
 SELECT * FROM varchar_array_2d;
 
+-- VARBIT (two dimensions)
+CREATE TABLE varbit_array_2d(a VARBIT[][]);
+INSERT INTO varbit_array_2d VALUES
+    ('{{B1010,B10100011},{B1010101,B101010101}}'),
+    ('{{B101010101,B10101010101,B1010101010101},{B101010101010101,B10101010101010101,B1010101010101010101}}'),
+    (NULL),
+    ('{}'),
+    ('{{B101010101,B10101010101},{NULL,B1010101010101}}');
+SELECT * FROM varbit_array_2d;
+
+CREATE TABLE bit_array_2d(a BIT(4)[][]);
+INSERT INTO bit_array_2d SELECT CAST(a as BIT(4)[][]) FROM (VALUES
+    ('{{B1010, B0101},{B0000, B0111}}'),
+    ('{{B1010, B0101, B1111},{B1010, B0101, B0000}}'),
+    (NULL),
+    ('{}'),
+    ('{{B1010, NULL},{B0111, B0000}}')
+) t(a);
+SELECT * FROM bit_array_2d;
+
 -- BYTEA (single dimension)
 CREATE TABLE bytea_array_1d (a bytea[]);
 
@@ -328,6 +368,8 @@ DROP TABLE bool_array_1d;
 DROP TABLE char_array_1d;
 DROP TABLE smallint_array_1d;
 DROP TABLE varchar_array_1d;
+DROP TABLE varbit_array_1d;
+DROP TABLE bit_array_1d;
 DROP TABLE interval_array_1d;
 DROP TABLE time_array_1d;
 DROP TABLE timetz_array_1d;
@@ -342,6 +384,8 @@ DROP TABLE regclass_array_1d;
 DROP TABLE char_array_2d;
 DROP TABLE smallint_array_2d;
 DROP TABLE varchar_array_2d;
+DROP TABLE varbit_array_2d;
+DROP TABLE bit_array_2d;
 DROP TABLE interval_array_2d;
 DROP TABLE time_array_2d;
 DROP TABLE timetz_array_2d;

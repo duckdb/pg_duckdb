@@ -3,7 +3,6 @@ SET bytea_output = 'escape';
 SELECT * FROM duckdb.query($$
 FROM test_all_types()
 SELECT * exclude(
-    bit,
     small_enum,
     medium_enum,
     large_enum,
