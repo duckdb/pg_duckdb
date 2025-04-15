@@ -75,7 +75,7 @@ StringToBitString_C(const char *str) {
 }
 
 Datum
-StringToBitString(const char *str) {
+StringToVarbit(const char *str) {
 	return PostgresFunctionGuard(StringToBitString_C, str);
 }
 
@@ -85,7 +85,7 @@ BitStringToString_C(Datum pg_bitstring) {
 }
 
 const char *
-BitStringToString(Datum pg_bitstring) {
+VarbitToString(Datum pg_bitstring) {
 	return PostgresFunctionGuard(BitStringToString_C, pg_bitstring);
 }
 

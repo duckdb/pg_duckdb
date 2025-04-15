@@ -171,7 +171,7 @@ ConvertVarbitDatum(const duckdb::Value &value) {
 
 	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
 	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
-	Datum pg_varbit = pgduckdb::pg::StringToBitString(value_str.c_str());
+	Datum pg_varbit = pgduckdb::pg::StringToVarbit(value_str.c_str());
 	return pg_varbit;
 }
 
@@ -533,35 +533,15 @@ DatumGetInterval(Datum value) {
 	return duck_interval;
 }
 
-// Convert padded bitstring (which consists of character '0's and '1's, and with padded '1's prefilled) to duckdb
-// bitstring.
-duckdb::string
-ConvertBitStringToDuckdbBitString(const duckdb::string &padded_string, size_t padding_size) {
-	D_ASSERT(padded_string.length() % CHAR_BIT == 0);
-
-	std::string result;
-	// Duckdb bitstring consists of three parts: padding size, prefilled padding bits ('1's), and the real bitstring.
-	result.reserve(padded_string.length() / CHAR_BIT + 1);
-	result += static_cast<char>(static_cast<uint8_t>(padding_size));
-	for (size_t idx = 0; idx < padded_string.length(); idx += CHAR_BIT) {
-		std::bitset<CHAR_BIT> bits(padded_string.substr(idx, CHAR_BIT));
-		result += static_cast<char>(bits.to_ulong());
-	}
-	return result;
-}
-
-static duckdb::string
+static std::string
 DatumGetBitString(Datum value) {
-	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
-	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
-	const char *varbit_char_array = pgduckdb::pg::BitStringToString(value);
-	const duckdb::string varbit_string = varbit_char_array;
-	const size_t varbit_len = varbit_string.length();
-	const size_t aligned_varbit_len = (varbit_len + CHAR_BIT - 1) / CHAR_BIT * CHAR_BIT;
-	const size_t padding_size = aligned_varbit_len - varbit_len;
-	duckdb::string padded_string = duckdb::string(padding_size, '1'); // duckdb prefix padding with '1'
-	padded_string += varbit_string;
-	return ConvertBitStringToDuckdbBitString(padded_string, padding_size);
+	// Here we rely on postgres conversion function, instead of manual parsing,
+	// because BIT string type involves padding and duckdb/postgres handle it
+	// differently, it's non-trivial to memcpy the bits.
+	//
+	// NOTE: We use VarbitToString here, because BIT and VARBIT are both stored
+	// internally as a VARBIT in postgres.
+	return std::string(pgduckdb::pg::VarbitToString(value));
 }
 
 static duckdb::dtime_t
@@ -1737,7 +1717,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		Append<duckdb::interval_t>(result, DatumGetInterval(value), offset);
 		break;
 	case duckdb::LogicalTypeId::BIT:
-		Append<duckdb::bitstring_t>(result, duckdb::string_t {DatumGetBitString(value)}, offset);
+		Append<duckdb::bitstring_t>(result, duckdb::Bit::ToBit(DatumGetBitString(value)), offset);
 		break;
 	case duckdb::LogicalTypeId::TIME:
 		Append<duckdb::dtime_t>(result, DatumGetTime(value), offset);
@@ -1836,9 +1816,9 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 			auto previous_dimension = dim ? dims[dim - 1] : 1;
 			auto dimension = dims[dim];
 			if (vec->GetType().id() != duckdb::LogicalTypeId::LIST) {
-				throw duckdb::InvalidInputException(
-				    "Dimensionality of the schema and the data does not match, data contains more dimensions than the "
-				    "amount of dimensions specified by the schema");
+				throw duckdb::InvalidInputException("Dimensionality of the schema and the data does not match, "
+				                                    "data contains more dimensions than the "
+				                                    "amount of dimensions specified by the schema");
 			}
 			auto child_offset = duckdb::ListVector::GetListSize(*vec);
 			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
