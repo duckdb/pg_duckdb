@@ -1,3 +1,12 @@
+-- Ensure UTF8 encoding
+DO $$
+BEGIN
+    IF current_setting('server_encoding') != 'UTF8' THEN
+        RAISE EXCEPTION 'pg_duckdb can only be installed in a Postgres database with UTF8 encoding, this one is encoded using %.', current_setting('server_encoding');
+    END IF;
+END
+$$;
+
 -- Add "url_style" column to "secrets" table
 ALTER TABLE duckdb.secrets ADD COLUMN url_style TEXT;
 
