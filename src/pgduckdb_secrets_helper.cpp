@@ -1,6 +1,7 @@
 #include "pgduckdb/pgduckdb_secrets_helper.hpp"
 
 #include "duckdb.hpp"
+#include "duckdb/main/secret/secret_manager.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -48,18 +49,6 @@ GetOption(List *options_list, const char *name) {
 }
 
 namespace {
-
-// Options are lowercased by PG
-const char *restricted_server_options[] = {"connection_string", "token", "secret", "session_token"};
-
-void
-validateServerOptions(List *server_options) {
-	for (const auto &opt : restricted_server_options) {
-		if (FindOption(server_options, opt) != NULL) {
-			elog(ERROR, "Option '%s' cannot be used in the SERVER's OPTIONS, please move it to the USER MAPPING", opt);
-		}
-	}
-}
 
 bool
 appendOptions(StringInfoData &buf, List *options) {
@@ -234,14 +223,56 @@ FindUserMapping(Oid userid, Oid serverid, bool with_options) {
 }
 
 const char *
-GetQueryError(const char *query) {
+GetQueryError(const char *query, List* server_options) {
 	// Create a new connection on the DB so we don't refresh secrets or anything
 	auto &db = pgduckdb::DuckDBManager::Get().GetDatabase();
 	duckdb::Connection con(db);
 
-	auto tx_query = duckdb::StringUtil::Format("BEGIN; %s; ROLLBACK;", query);
+	auto tx_query = duckdb::StringUtil::Format("BEGIN; %s", query);
 	auto res = con.Query(tx_query);
-	return res->HasError() ? pstrdup(res->GetErrorObject().RawMessage().c_str()) : nullptr;
+	if (res->HasError()) {
+		con.Query("ROLLBACK;");
+		return pstrdup(res->GetErrorObject().RawMessage().c_str());
+	}
+
+	auto& secret_manager = duckdb::SecretManager::Get(*con.context);
+	auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(*con.context);
+	auto secret_entry = secret_manager.GetSecretByName(transaction, "new_pgduckdb_secret");
+	if (!secret_entry) {
+		return "FATAL: Failed to get secret";
+	} else if (!secret_entry->secret) {
+		return "FATAL: No secret attached to the entry";
+	}
+
+	auto kv_secret = dynamic_cast<const duckdb::KeyValueSecret*>(secret_entry->secret.get());
+	if (!kv_secret) {
+		return "FATAL: Secret is not a duckdb::KeyValueSecret";
+	}
+
+	// Make sure we're not using restricted options in the server
+	std::vector<std::string> restricted;
+	for (const auto& k : kv_secret->redact_keys) {
+		if (FindOption(server_options, k.c_str()) != NULL) {
+			restricted.push_back(k);
+		}
+	}
+
+	if (restricted.size() == 0) {
+		return nullptr;
+	}
+
+	std::ostringstream oss;
+	oss << (restricted.size() == 1 ? "Option " : "Options ");
+	for (size_t i = 0; i < restricted.size(); ++i) {
+		oss << "'" << restricted[i] << "'";
+		if (i != restricted.size() - 1) {
+			oss << ", ";
+		}
+	}
+	oss << " cannot be used in the SERVER's OPTIONS, please move it to the USER MAPPING";
+
+	con.Query("ROLLBACK;");
+	return pstrdup(oss.str().c_str());
 }
 
 void
@@ -250,11 +281,8 @@ ValidateDuckDBSecret(const char *type, List *server_options, List *mapping_optio
 		elog(ERROR, "Missing required option: 'type'");
 	}
 
-	// Make sure we're not using restricted options
-	validateServerOptions(server_options);
-
 	auto query = MakeDuckDBCreateSecretQuery("new_pgduckdb_secret", type, server_options, mapping_options);
-	auto err = InvokeCPPFunc(GetQueryError, query);
+	auto err = InvokeCPPFunc(GetQueryError, query, server_options);
 	if (err != nullptr) {
 		elog(ERROR, "%s", err);
 	}

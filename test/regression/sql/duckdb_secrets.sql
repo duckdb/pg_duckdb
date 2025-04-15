@@ -5,19 +5,14 @@ FOREIGN DATA WRAPPER duckdb;
 
 -- Invalid use of restricted option (with various casing)
 CREATE SERVER invalid_duckdb_server
-TYPE 's3'
+TYPE 'http'
 FOREIGN DATA WRAPPER duckdb
-OPTIONS (tOkeN 'very secret');
+OPTIONS (hTtP_pRoXy_PaSsWoRd 'very secret');
 
 CREATE SERVER invalid_duckdb_server
 TYPE 's3'
 FOREIGN DATA WRAPPER duckdb
-OPTIONS (SECRET 'dont leak me');
-
-CREATE SERVER invalid_duckdb_server
-TYPE 's3'
-FOREIGN DATA WRAPPER duckdb
-OPTIONS (session_TOKEN 'shhhhh');
+OPTIONS (SECRET 'dont leak me', session_TOKEN 'shhhhh');
 
 CREATE SERVER invalid_duckdb_server
 TYPE 'azure'
