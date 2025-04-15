@@ -6,7 +6,7 @@ extern "C" {
 namespace pgduckdb {
 
 // The FDW validator doesn't provide the server type
-// when validating `CREATE SERVER`, nor the server name
+// when validating `CREATE SERVER`, nor the server oid
 // when validating `CREATE USER MAPPING`.
 // So we need to store them here to be able to validate
 // the options.

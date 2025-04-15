@@ -16,7 +16,6 @@ extern "C" {
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
 #include "optimizer/pathnode.h"
 #include "utils/acl.h"
 #include "utils/builtins.h"

@@ -23,6 +23,7 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 
 #include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/vendor/pg_list.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -232,9 +233,8 @@ GetSeqLastValue(const char *seq_name) {
 void
 DuckDBManager::LoadSecrets(duckdb::ClientContext &context) {
 	auto queries = InvokeCPPFunc(pg::ListDuckDBCreateSecretQueries);
-	ListCell *l = nullptr;
-	foreach (l, queries) {
-		DuckDBQueryOrThrow(context, strVal(lfirst(l)));
+	foreach_ptr(char, query, queries) {
+		DuckDBQueryOrThrow(context, query);
 	}
 }
 

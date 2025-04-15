@@ -18,7 +18,6 @@ extern "C" {
 #include "miscadmin.h"
 #include "nodes/makefuncs.h"
 #include "nodes/parsenodes.h"
-#include "nodes/pg_list.h"
 #include "utils/builtins.h"
 #include "utils/inval.h"
 #include "utils/syscache.h"
@@ -137,7 +136,7 @@ ListDuckDBCreateSecretQueries() {
 			MemoryContext spi_mem_ctx = MemoryContextSwitchTo(entry_ctx);
 			auto secret_query = MakeDuckDBCreateSecretQuery(server->servername, server->servertype, server->options,
 			                                                user_mapping_options);
-			results = lappend(results, makeString(secret_query));
+			results = lappend(results, secret_query);
 			MemoryContextSwitchTo(spi_mem_ctx);
 		}
 	}
@@ -187,19 +186,19 @@ FindUserMapping(Oid userid, Oid serverid, bool with_options) {
 
 const char *
 GetQueryError(const char *query, List *server_options) {
-	// Create a new connection on the DB so we don't refresh secrets or anything
-	auto &db = pgduckdb::DuckDBManager::Get().GetDatabase();
-	duckdb::Connection con(db);
+	// Create a new connection on the DB so we can create the secret and rollback without modifying the transaction
+	// state of the main connection.
+	auto con = pgduckdb::DuckDBManager::CreateConnection();
 
 	auto tx_query = duckdb::StringUtil::Format("BEGIN; %s", query);
-	auto res = con.Query(tx_query);
+	auto res = con->Query(tx_query);
 	if (res->HasError()) {
-		con.Query("ROLLBACK;");
+		con->Query("ROLLBACK;");
 		return pstrdup(res->GetErrorObject().RawMessage().c_str());
 	}
 
-	auto &secret_manager = duckdb::SecretManager::Get(*con.context);
-	auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(*con.context);
+	auto &secret_manager = duckdb::SecretManager::Get(*con->context);
+	auto transaction = duckdb::CatalogTransaction::GetSystemCatalogTransaction(*con->context);
 	auto secret_entry = secret_manager.GetSecretByName(transaction, "pgduckdb_secret_validation");
 	if (!secret_entry) {
 		return "FATAL: Failed to get secret";
@@ -213,28 +212,28 @@ GetQueryError(const char *query, List *server_options) {
 	}
 
 	// Make sure we're not using restricted options in the server
-	std::vector<std::string> restricted;
+	std::vector<std::string> restricted_options_in_server;
 	for (const auto &k : kv_secret->redact_keys) {
 		if (FindOption(server_options, k.c_str()) != NULL) {
-			restricted.push_back(k);
+			restricted_options_in_server.push_back(k);
 		}
 	}
 
-	if (restricted.size() == 0) {
+	if (restricted_options_in_server.size() == 0) {
 		return nullptr;
 	}
 
 	std::ostringstream oss;
-	oss << (restricted.size() == 1 ? "Option " : "Options ");
-	for (size_t i = 0; i < restricted.size(); ++i) {
-		oss << "'" << restricted[i] << "'";
-		if (i != restricted.size() - 1) {
+	oss << (restricted_options_in_server.size() == 1 ? "Option " : "Options ");
+	for (size_t i = 0; i < restricted_options_in_server.size(); ++i) {
+		oss << "'" << restricted_options_in_server[i] << "'";
+		if (i != restricted_options_in_server.size() - 1) {
 			oss << ", ";
 		}
 	}
 	oss << " cannot be used in the SERVER's OPTIONS, please move it to the USER MAPPING";
 
-	con.Query("ROLLBACK;");
+	con->Query("ROLLBACK;");
 	return pstrdup(oss.str().c_str());
 }
 
