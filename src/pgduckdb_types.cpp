@@ -496,7 +496,6 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 
 inline Datum
 ConvertDuckStructDatum(const duckdb::Value &value) {
-	// similar to varchar and union
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::STRUCT);
 	return ConvertToStringDatum(value);
 }
