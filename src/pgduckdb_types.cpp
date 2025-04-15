@@ -12,10 +12,6 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/types.hpp"
 
-#include <bitset>
-#include <climits>
-#include <cstdlib>
-
 extern "C" {
 
 #include "pgduckdb/vendor/pg_numeric_c.hpp"
