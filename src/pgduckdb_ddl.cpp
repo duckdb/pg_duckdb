@@ -307,13 +307,15 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		Query *rewritten_query_copy = (Query *)copyObjectImpl(query);
 
 		/*
-		 * We temporarily set the force_execution GUC to true, so that we can
-		 * plan the query in DuckDB. This is needed for a CTAS into a DuckDB
-		 * table, where the query itself does not require DuckDB execution.
-		 * If we don't set force_execution to true, the query will be planned
-		 * using Postgres, but then later executed using DuckDB when we
-		 * actually write into the DuckDB table.
+		 * We call into our DuckDB planning logic directly here, to ensure that
+		 * this query is planned using DuckDB. This is needed for a CTAS into a
+		 * DuckDB table, where the query itself does not require DuckDB
+		 * execution. If we don't set force_execution to true, the query will
+		 * be planned using Postgres, but then later executed using DuckDB when
+		 * we actually write into the DuckDB table (possibly resulting in
+		 * different column types).
 		 */
+		pgduckdb::IsAllowedStatement(query, true);
 		PlannedStmt *plan = DuckdbPlanNode(query, query_string, CURSOR_OPT_PARALLEL_OK, params, true);
 
 		/* This is where our custom code starts again */
