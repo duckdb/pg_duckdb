@@ -175,6 +175,41 @@ SetBackgroundWorkerState(Oid database_oid) {
 	state->bgw_session_hint_is_reused = false;
 }
 
+void
+BgwMainLoop() {
+	doing_motherduck_sync = true;
+	is_background_worker = true;
+
+	int64 last_activity_count = -1; // force a check on the first iteration
+
+	while (true) {
+		// Initialize SPI (Server Programming Interface) and connect to the database
+		SetCurrentStatementStartTimestamp();
+		StartTransactionCommand();
+		SPI_connect();
+		PushActiveSnapshot(GetTransactionSnapshot());
+
+		const bool should_exit = RunOneCheck(last_activity_count);
+
+		// Commit the transaction
+		PopActiveSnapshot();
+		SPI_finish();
+		CommitTransactionCommand();
+
+		if (should_exit) {
+			break;
+		}
+
+		pgstat_report_stat(false);
+		pgstat_report_activity(STATE_IDLE, NULL);
+
+		// Wait for a second or until the latch is set
+		WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000L, PG_WAIT_EXTENSION);
+		CHECK_FOR_INTERRUPTS();
+		ResetLatch(MyLatch);
+	}
+}
+
 } // namespace pgduckdb
 
 extern "C" {
@@ -197,43 +232,20 @@ pgduckdb_background_worker_main(Datum main_arg) {
 
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
 	pgduckdb::SetBackgroundWorkerState(database_oid);
-	int64 last_activity_count = pgduckdb::GetState()->activity_count - 1; // force a check on the first iteration
 	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
 
-	pgduckdb::doing_motherduck_sync = true;
-	pgduckdb::is_background_worker = true;
-
-	while (true) {
-		// Initialize SPI (Server Programming Interface) and connect to the database
-		SetCurrentStatementStartTimestamp();
-		StartTransactionCommand();
-		SPI_connect();
-		PushActiveSnapshot(GetTransactionSnapshot());
-
-		const bool should_exit = pgduckdb::RunOneCheck(last_activity_count);
-
-		// Commit the transaction
-		PopActiveSnapshot();
-		SPI_finish();
-		CommitTransactionCommand();
-
-		if (should_exit) {
-			break;
-		}
-
-		pgstat_report_stat(false);
-		pgstat_report_activity(STATE_IDLE, NULL);
-
-		// Wait for a second or until the latch is set
-		WaitLatch(MyLatch, WL_LATCH_SET | WL_TIMEOUT | WL_EXIT_ON_PM_DEATH, 1000L, PG_WAIT_EXTENSION);
-		CHECK_FOR_INTERRUPTS();
-		ResetLatch(MyLatch);
+	PG_TRY();
+	{
+		pgduckdb::BgwMainLoop();
 	}
-
-	// Remove state entry.
-	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
-	hash_search(pgduckdb::BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_REMOVE, NULL);
-	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+	PG_FINALLY();
+	{
+		// Remove state entry.
+		SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
+		hash_search(pgduckdb::BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_REMOVE, NULL);
+		SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+	}
+	PG_END_TRY();
 }
 
 PG_FUNCTION_INFO_V1(force_motherduck_sync);
@@ -319,7 +331,7 @@ ShmemStartup(void) {
 		HASHCTL info;
 		info.keysize = sizeof(Oid);
 		info.entrysize = sizeof(BgwStatePerDB);
-		auto max_entries = max_worker_processes > 16 ? max_worker_processes : 16;
+		auto max_entries = Max(max_worker_processes, 16);
 		BgwShmemStruct->statePerDB = ShmemInitHash("ProcBgwStatePerDB", 1, max_entries, &info, HASH_ELEM | HASH_BLOBS);
 	}
 
