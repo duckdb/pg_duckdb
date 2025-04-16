@@ -230,7 +230,10 @@ pgduckdb_background_worker_main(Datum main_arg) {
 		ResetLatch(MyLatch);
 	}
 
-	// Unreachable
+	// Remove state entry.
+	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
+	hash_search(pgduckdb::BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_REMOVE, NULL);
+	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
 }
 
 PG_FUNCTION_INFO_V1(force_motherduck_sync);
@@ -316,7 +319,8 @@ ShmemStartup(void) {
 		HASHCTL info;
 		info.keysize = sizeof(Oid);
 		info.entrysize = sizeof(BgwStatePerDB);
-		BgwShmemStruct->statePerDB = ShmemInitHash("ProcBgwStatePerDB", 16, 2048, &info, HASH_ELEM | HASH_BLOBS);
+		auto max_entries = max_worker_processes > 16 ? max_worker_processes : 16;
+		BgwShmemStruct->statePerDB = ShmemInitHash("ProcBgwStatePerDB", 1, max_entries, &info, HASH_ELEM | HASH_BLOBS);
 	}
 
 	LWLockRelease(AddinShmemInitLock);
