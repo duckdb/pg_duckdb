@@ -13,4 +13,19 @@ select count(*) from webpages;
     60
 (1 row)
 
+CREATE TEMP TABLE t_jsonb(data jsonb);
+INSERT INTO t_jsonb VALUES ('{"a": 1, "b": 2}');
+CREATE TEMP TABLE t_json AS SELECT * FROM t_jsonb WITH NO DATA;
+SELECT * FROM t_json;
+ data 
+------
+(0 rows)
+
+-- DuckDB table should have
+SELECT atttypid::regtype FROM pg_attribute WHERE attrelid = 't_json'::regclass AND attname = 'data';
+ atttypid 
+----------
+ json
+(1 row)
+
 DROP TABLE webpages;

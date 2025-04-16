@@ -245,11 +245,29 @@ SELECT * FROM t_heap3;
  1
 (1 row)
 
+CREATE TEMP TABLE t_jsonb_heap(data jsonb) USING heap;
+INSERT INTO t_jsonb_heap VALUES ('{"a": 1, "b": 2}');
+-- CTAS from postgres table with type that has a different name in DuckDB
+CREATE TEMP TABLE t_json AS SELECT * FROM t_jsonb_heap;
+SELECT * FROM t_json;
+       data       
+------------------
+ {"a": 1, "b": 2}
+(1 row)
+
+-- DuckDB table should have
+SELECT atttypid::regtype FROM pg_attribute WHERE attrelid = 't_json'::regclass AND attname = 'data';
+ atttypid 
+----------
+ json
+(1 row)
+
 SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_tables() $$);
 NOTICE:  result: database_name	schema_name	sql	
 VARCHAR	VARCHAR	VARCHAR	
-[ Rows: 2]
+[ Rows: 3]
 pg_temp	main	CREATE TABLE t(b INTEGER);
+pg_temp	main	CREATE TABLE t_json("data" JSON);
 pg_temp	main	CREATE TABLE webpages(column00 BIGINT, column01 VARCHAR, column02 DATE);
 
 

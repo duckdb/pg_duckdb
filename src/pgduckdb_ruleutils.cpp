@@ -116,21 +116,6 @@ pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc) {
 	return pgduckdb_is_duckdb_row(func_expr->funcresulttype);
 }
 
-bool
-pgduckdb_target_list_contains_unresolved_type_or_row(List *target_list) {
-	foreach_node(TargetEntry, tle, target_list) {
-		Oid type = exprType((Node *)tle->expr);
-		if (pgduckdb_is_unresolved_type(type)) {
-			return true;
-		}
-
-		if (pgduckdb_is_duckdb_row(type)) {
-			return true;
-		}
-	}
-	return false;
-}
-
 /*
  * Returns NULL if the expression is not a subscript on a duckdb row. Returns
  * the Var of the duckdb row if it is.

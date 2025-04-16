@@ -3,6 +3,8 @@
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_ddl.hpp"
+#include "pgduckdb/pgduckdb_hooks.hpp"
+#include "pgduckdb/pgduckdb_planner.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -47,6 +49,7 @@ extern "C" {
 
 namespace pgduckdb {
 DDLType top_level_duckdb_ddl_type = DDLType::NONE;
+bool refreshing_materialized_view = false;
 } // namespace pgduckdb
 
 /*
@@ -246,20 +249,41 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 
 		Query *original_query = castNode(Query, stmt->query);
 
-		// For cases where Postgres does not usually plan the query, we need
-		// to do hacky things if the targetlist contains duckdb.unresolved_type
-		// or duckdb.row columns. In those cases we want to run the query
-		// through duckdb to get the actual result types for these queries,
-		// which won't happen automatically if the query is not planned by
-		// Postgres. So we will manually do it here.
+		// For cases where Postgres does not usually plan the query, sometimes
+		// we still need to. Specifically for these cases:
+		// 1. If we're creating a DuckDB table, we need to plan the query
+		//    because the types that Postgres inferred might be different than
+		//    the ones that DuckDB execution inferred, e.g. when reading a
+		//    JSONB column from a Postgres table it will result in a JSONB
+		//    column according to Postgres, but DuckDB execution will actually
+		//    return a JSON column.
+		// 2. Similarly, if the query will use DuckDB execution (either because
+		//    it's required or because duckdb.force_execution is set to true),
+		//    we need to plan the query so that we can get the correct types
+		//    for the target list. This is because DuckDB execution will not be
+		//    able to infer the types from the target list, and will instead
+		//    use the types that Postgres inferred.
 		//
-		// If we're doing that anyway we might as well slightly change the
-		// query so that it always returns the types that are expected by
-		// Postgres. This is especially useful for materialized views, since
-		// the query for is likely to be run many times.
-		if (!pgduckdb_target_list_contains_unresolved_type_or_row(original_query->targetList)) {
-			// ... but if the target list doesn't contain duckdb.row or
-			// duckdb.unresolved_type, there's no need to do any of that.
+		// One final important thing to consider is that for materialized views
+		// it's really bad if a future REFRESH MATERIALIZED VIEW command
+		// returns different column types than the types that were returned by
+		// the query during creation. That can easily result in data
+		// corruption. To make sure this doesn't happen we do a few things:
+		// - Wrap the resulting duckdb query in a duckdb.query() call, this
+		//   means that even if the query did not require motherduck, it will
+		//   still use duckdb execution in any future refresh calls.
+		// - For the reverse problem, we make sure that REFRESH MATARIALIZED
+		//   VIEW ignores duckdb.force_execution (see the code comments in
+		//   ShouldTryToUseDuckdbExecution for details)
+		// - Explicity select all the arguments from the target list, from the
+		//   duckdb.query() call and cast them to the expected type. This way,
+		//   a "SELECT * FROM read_csv(...)" will always return the same
+		//   columns and column types, even if the CSV is changed.
+		bool needs_planning = is_duckdb_table || pgduckdb::NeedsDuckdbExecution(original_query) ||
+		                      pgduckdb::ShouldTryToUseDuckdbExecution(original_query);
+
+		if (!needs_planning) {
+			// If we don't need planning let's not do anything though.
 			return;
 		}
 
@@ -282,7 +306,17 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 
 		Query *rewritten_query_copy = (Query *)copyObjectImpl(query);
 
-		PlannedStmt *plan = pg_plan_query(query, query_string, CURSOR_OPT_PARALLEL_OK, params);
+		/*
+		 * We call into our DuckDB planning logic directly here, to ensure that
+		 * this query is planned using DuckDB. This is needed for a CTAS into a
+		 * DuckDB table, where the query itself does not require DuckDB
+		 * execution. If we don't set force_execution to true, the query will
+		 * be planned using Postgres, but then later executed using DuckDB when
+		 * we actually write into the DuckDB table (possibly resulting in
+		 * different column types).
+		 */
+		pgduckdb::IsAllowedStatement(query, true);
+		PlannedStmt *plan = DuckdbPlanNode(query, query_string, CURSOR_OPT_PARALLEL_OK, params, true);
 
 		/* This is where our custom code starts again */
 		List *target_list = plan->planTree->targetlist;
@@ -298,7 +332,12 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			 */
 			stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
 		}
-
+	} else if (IsA(parsetree, RefreshMatViewStmt)) {
+		/* We need to set the top level DDL type to REFRESH_MATERIALIZED_VIEW
+		 * here, because want ignore the value of duckdb.force_execution for
+		 * the duration of this REFRESH. See the code comment in
+		 * ShouldTryToUseDuckdbExecution for details. */
+		pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::REFRESH_MATERIALIZED_VIEW;
 	} else if (IsA(parsetree, CreateSchemaStmt) && !pgduckdb::doing_motherduck_sync) {
 		auto stmt = castNode(CreateSchemaStmt, parsetree);
 		if (stmt->schemaname) {

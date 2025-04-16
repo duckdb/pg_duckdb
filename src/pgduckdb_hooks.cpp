@@ -123,11 +123,6 @@ ContainsDuckdbItems(Node *node, void *context) {
 #endif
 }
 
-static bool
-NeedsDuckdbExecution(Query *query) {
-	return ContainsDuckdbItems((Node *)query, NULL);
-}
-
 /*
  * We only check ContainsFromClause if duckdb.force_execution is set to true.
  *
@@ -150,6 +145,29 @@ ContainsFromClause(Query *query) {
 }
 
 namespace pgduckdb {
+
+bool
+ShouldTryToUseDuckdbExecution(Query *query) {
+	if (top_level_duckdb_ddl_type == DDLType::REFRESH_MATERIALIZED_VIEW) {
+		/* When refreshing materialized views, we only want to use DuckDB
+		 * execution when needed by the query, not when duckdb.force_execution
+		 * is set to true. This is because DuckDB execution and Postgres
+		 * execution might return different types for the same query and when
+		 * that happens for a materialized view refresh it results in data
+		 * corruption. So we avoid this by ignoring duckdb.force_execution
+		 * during a REFRESH, so that the refresh results in the same types as
+		 * when the materialized view was created.
+		 */
+		return false;
+	}
+
+	return duckdb_force_execution && pgduckdb::IsAllowedStatement(query) && ContainsFromClause(query);
+}
+
+bool
+NeedsDuckdbExecution(Query *query) {
+	return ContainsDuckdbItems((Node *)query, NULL);
+}
 
 bool
 IsCatalogTable(Relation rel) {
@@ -197,12 +215,12 @@ IsAllowedStatement(Query *query, bool throw_error) {
 static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
-		if (NeedsDuckdbExecution(parse)) {
+		if (pgduckdb::NeedsDuckdbExecution(parse)) {
 			pgduckdb::TriggerActivity();
 			pgduckdb::IsAllowedStatement(parse, true);
 
 			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
-		} else if (duckdb_force_execution && pgduckdb::IsAllowedStatement(parse) && ContainsFromClause(parse)) {
+		} else if (pgduckdb::ShouldTryToUseDuckdbExecution(parse)) {
 			pgduckdb::TriggerActivity();
 			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params, false);
 			if (duckdbPlan) {

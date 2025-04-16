@@ -4,4 +4,11 @@ CREATE TABLE webpages AS SELECT r['column00'], r['column01'], r['column02'] FROM
 select * from webpages order by column00 limit 2;
 select count(*) from webpages;
 
+CREATE TEMP TABLE t_jsonb(data jsonb);
+INSERT INTO t_jsonb VALUES ('{"a": 1, "b": 2}');
+CREATE TEMP TABLE t_json AS SELECT * FROM t_jsonb WITH NO DATA;
+SELECT * FROM t_json;
+-- DuckDB table should have
+SELECT atttypid::regtype FROM pg_attribute WHERE attrelid = 't_json'::regclass AND attname = 'data';
+
 DROP TABLE webpages;
