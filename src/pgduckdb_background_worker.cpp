@@ -109,7 +109,7 @@ static BackgoundWorkerShmemStruct *BgwShmemStruct;
 
 /*
 MUST be called under a lock
-Get the background worker for the current database (MyDatabaseId)
+Get the BGW state for the current database (MyDatabaseId)
 */
 BgwStatePerDB *
 GetState() {
@@ -331,8 +331,8 @@ ShmemStartup(void) {
 		HASHCTL info;
 		info.keysize = sizeof(Oid);
 		info.entrysize = sizeof(BgwStatePerDB);
-		auto max_entries = Max(max_worker_processes, 16);
-		BgwShmemStruct->statePerDB = ShmemInitHash("ProcBgwStatePerDB", 1, max_entries, &info, HASH_ELEM | HASH_BLOBS);
+		BgwShmemStruct->statePerDB =
+		    ShmemInitHash("ProcBgwStatePerDB", 1, max_worker_processes, &info, HASH_ELEM | HASH_BLOBS);
 	}
 
 	LWLockRelease(AddinShmemInitLock);
