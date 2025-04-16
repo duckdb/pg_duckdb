@@ -4,6 +4,7 @@
 #include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_hooks.hpp"
+#include "pgduckdb/pgduckdb_planner.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -313,10 +314,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		 * using Postgres, but then later executed using DuckDB when we
 		 * actually write into the DuckDB table.
 		 */
-		auto save_nestlevel = NewGUCNestLevel();
-		SetConfigOption("duckdb.force_execution", "true", PGC_USERSET, PGC_S_SESSION);
-		PlannedStmt *plan = pg_plan_query(query, query_string, CURSOR_OPT_PARALLEL_OK, params);
-		AtEOXact_GUC(false, save_nestlevel);
+		PlannedStmt *plan = DuckdbPlanNode(query, query_string, CURSOR_OPT_PARALLEL_OK, params, true);
 
 		/* This is where our custom code starts again */
 		List *target_list = plan->planTree->targetlist;
