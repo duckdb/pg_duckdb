@@ -168,8 +168,7 @@ ConvertVarbitDatum(const duckdb::Value &value) {
 
 	// Here we rely on postgres conversion function, instead of manual parsing, because BIT string type involves padding
 	// and duckdb/postgres handle it differently, it's non-trivial to memcpy the bits.
-	Datum pg_varbit = pgduckdb::pg::StringToVarbit(value_str.c_str());
-	return pg_varbit;
+	return pgduckdb::pg::StringToVarbit(value_str.c_str());
 }
 
 static inline bool

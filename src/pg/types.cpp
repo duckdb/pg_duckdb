@@ -57,9 +57,8 @@ GetBaseDuckColumnType(Oid attribute_type_oid) {
 
 static Datum
 StringToNumeric_C(const char *str) {
-	Datum pg_numeric = DirectFunctionCall3(numeric_in, CStringGetDatum(str), /*typelen=*/ObjectIdGetDatum(InvalidOid),
-	                                       /*typmod=*/Int32GetDatum(-1));
-	return pg_numeric;
+	return DirectFunctionCall3(numeric_in, CStringGetDatum(str), /*typelen=*/ObjectIdGetDatum(InvalidOid),
+	                           /*typmod=*/Int32GetDatum(-1));
 }
 
 Datum
@@ -69,9 +68,8 @@ StringToNumeric(const char *str) {
 
 static Datum
 StringToVarbit_C(const char *str) {
-	Datum pg_varbit = DirectFunctionCall3(varbit_in, CStringGetDatum(str), /*typelen=*/ObjectIdGetDatum(VARBITOID),
-	                                      /*typmod=*/Int32GetDatum(-1));
-	return pg_varbit;
+	return DirectFunctionCall3(varbit_in, CStringGetDatum(str), /*typelen=*/ObjectIdGetDatum(VARBITOID),
+	                           /*typmod=*/Int32GetDatum(-1));
 }
 
 Datum
