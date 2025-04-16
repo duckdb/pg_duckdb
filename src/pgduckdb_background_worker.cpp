@@ -89,31 +89,55 @@ static bool set_up_unclaim_session_hint_hook = false;
 static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
 static void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *context);
 
+typedef struct BgwStatePerDB {
+	Oid database_oid;
+
+	int64 activity_count; /* the number of times activity was triggered by other backends */
+
+	bool bgw_session_hint_is_reused;
+
+	Latch *latch;
+} BgwStatePerDB;
+
 typedef struct BackgoundWorkerShmemStruct {
 	slock_t lock; /* protects all the fields below */
 
-	int64 activity_count; /* the number of times activity was triggered by other backends */
-	bool bgw_session_hint_is_reused;
+	HTAB *statePerDB; /* Map of Database Oid -> {Latch, activity count, etc.} */
 } BackgoundWorkerShmemStruct;
 
 static BackgoundWorkerShmemStruct *BgwShmemStruct;
 
+/*
+MUST be called under a lock
+Get the background worker for the current database (MyDatabaseId)
+*/
+BgwStatePerDB *
+GetState() {
+	bool found = false;
+	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_FIND, &found);
+	if (!found || !state) {
+		elog(ERROR, "pg_duckdb background worker: could not find state for database %u", MyDatabaseId);
+	}
+	return state;
+}
+
 static void
 BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count) {
-	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
-	int64 new_activity_count = pgduckdb::BgwShmemStruct->activity_count;
-	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+	SpinLockAcquire(&BgwShmemStruct->lock);
+	int64 new_activity_count = GetState()->activity_count;
+	SpinLockRelease(&BgwShmemStruct->lock);
 	if (*last_activity_count != new_activity_count) {
 		*last_activity_count = new_activity_count;
 		/* Trigger some activity to restart the syncing */
-		pgduckdb::DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
+		DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
 	}
+
 	/*
 	 * If the extension is not registerid this loop is a no-op, which
 	 * means we essentially keep polling until the extension is
 	 * installed
 	 */
-	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
+	SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
 }
 
 bool CanTakeBgwLockForDatabase(Oid database_oid);
@@ -121,26 +145,34 @@ bool CanTakeBgwLockForDatabase(Oid database_oid);
 bool
 RunOneCheck(int64 &last_activity_count) {
 	// No need to run if MD is not enabled.
-	if (!pgduckdb::IsMotherDuckEnabled()) {
+	if (!IsMotherDuckEnabled()) {
 		elog(LOG, "pg_duckdb background worker: MotherDuck is not enabled, will exit.");
 		return true; // should exit
 	}
 
-	if (!pgduckdb::IsExtensionRegistered()) {
+	if (!IsExtensionRegistered()) {
 		return false; // XXX: shouldn't we exit actually?
 	}
 
 	if (!ddb_connection) {
 		try {
-			ddb_connection = pgduckdb::DuckDBManager::CreateConnection();
+			ddb_connection = DuckDBManager::CreateConnection();
 		} catch (std::exception &ex) {
 			elog(LOG, "pg_duckdb background worker: failed to create connection: %s", ex.what());
 			return true; // should exit
 		}
 	}
 
-	InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
+	InvokeCPPFunc(BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
 	return false;
+}
+
+void
+SetBackgroundWorkerState(Oid database_oid) {
+	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &database_oid, HASH_ENTER, NULL);
+	state->latch = MyLatch;
+	state->activity_count = 0;
+	state->bgw_session_hint_is_reused = false;
 }
 
 } // namespace pgduckdb
@@ -164,8 +196,8 @@ pgduckdb_background_worker_main(Datum main_arg) {
 	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
 
 	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
-	Assert(MyLatch == &MyProc->procLatch);
-	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count - 1; // force a check on the first iteration
+	pgduckdb::SetBackgroundWorkerState(database_oid);
+	int64 last_activity_count = pgduckdb::GetState()->activity_count - 1; // force a check on the first iteration
 	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
 
 	pgduckdb::doing_motherduck_sync = true;
@@ -258,8 +290,9 @@ ShmemRequest(void) {
  */
 static void
 ShmemStartup(void) {
-	if (prev_shmem_startup_hook)
+	if (prev_shmem_startup_hook) {
 		prev_shmem_startup_hook();
+	}
 
 	Size size = sizeof(BackgoundWorkerShmemStruct);
 	bool found;
@@ -279,8 +312,11 @@ ShmemStartup(void) {
 		 */
 		MemSet(BgwShmemStruct, 0, size);
 		SpinLockInit(&BgwShmemStruct->lock);
-		BgwShmemStruct->activity_count = 0;
-		BgwShmemStruct->bgw_session_hint_is_reused = false;
+
+		HASHCTL info;
+		info.keysize = sizeof(Oid);
+		info.entrysize = sizeof(BgwStatePerDB);
+		BgwShmemStruct->statePerDB = ShmemInitHash("ProcBgwStatePerDB", 16, 2048, &info, HASH_ELEM | HASH_BLOBS);
 	}
 
 	LWLockRelease(AddinShmemInitLock);
@@ -352,7 +388,7 @@ UnclaimBgwSessionHint(int /*code*/, Datum /*arg*/) {
 	}
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	BgwShmemStruct->bgw_session_hint_is_reused = false;
+	GetState()->bgw_session_hint_is_reused = false;
 	SpinLockRelease(&BgwShmemStruct->lock);
 	reused_bgw_session_hint = false;
 }
@@ -415,25 +451,9 @@ TriggerActivity(void) {
 	}
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	BgwShmemStruct->activity_count++;
-	/* Iterate over all background workers and notify them */
-	const uint32_t numProcs = ProcGlobal->allProcCount;
-	for (uint32_t i = 0; i < numProcs; i++) {
-		PGPROC *proc = &ProcGlobal->allProcs[i];
-		if (!proc->isBackgroundWorker || proc->databaseId == InvalidOid) {
-			continue;
-		}
-
-		// GetBackgroundWorkerTypeByPid will iterate over all BGW but
-		// it doesn't seem like we can get the type of worker otherwise.
-		const auto type = GetBackgroundWorkerTypeByPid(proc->pid);
-		if (type == nullptr || strcmp(type, PGDUCKDB_SYNC_WORKER_NAME) != 0) {
-			continue;
-		}
-
-		SetLatch(&proc->procLatch);
-	}
-
+	auto state = GetState();
+	state->activity_count++;
+	SetLatch(state->latch);
 	SpinLockRelease(&BgwShmemStruct->lock);
 }
 
@@ -455,9 +475,10 @@ PossiblyReuseBgwSessionHint(void) {
 
 	const char *result = "";
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	if (!BgwShmemStruct->bgw_session_hint_is_reused) {
+	auto state = GetState();
+	if (!state->bgw_session_hint_is_reused) {
 		result = bgw_session_hint;
-		BgwShmemStruct->bgw_session_hint_is_reused = true;
+		state->bgw_session_hint_is_reused = true;
 		reused_bgw_session_hint = true;
 	}
 	SpinLockRelease(&BgwShmemStruct->lock);
