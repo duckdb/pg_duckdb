@@ -250,7 +250,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		Query *original_query = castNode(Query, stmt->query);
 
 		// For cases where Postgres does not usually plan the query, sometimes
-		// still need to. Specifically for these cases:
+		// we still need to. Specifically for these cases:
 		// 1. If we're creating a DuckDB table, we need to plan the query
 		//    because the types that Postgres inferred might be different than
 		//    the ones that DuckDB execution inferred, e.g. when reading a
