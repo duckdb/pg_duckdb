@@ -156,7 +156,7 @@ def test_prepared_ctas(cur: Cursor):
     # crash.
     with pytest.raises(
         psycopg.errors.InternalError,
-        match="Expected 1 parameters, but none were supplied",
+        match="Could not find parameter with identifier 1",
     ):
         cur.sql(
             "CREATE TEMP TABLE t2 USING duckdb AS SELECT * FROM heapt where id = %s",
