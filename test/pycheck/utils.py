@@ -60,16 +60,7 @@ elif platform.system() == "OpenBSD":
 
 BSD = MACOS or FREEBSD or OPENBSD
 
-MOTHERDUCK_TEST_TOKEN = os.environ.get("MOTHERDUCK_TEST_TOKEN", "")
-MOTHERDUCK = bool(MOTHERDUCK_TEST_TOKEN)
-
 os.environ["motherduck_disable_web_login"] = "1"
-if MOTHERDUCK:
-    os.environ["MOTHERDUCK_TOKEN"] = MOTHERDUCK_TEST_TOKEN
-else:
-    # Remove any normal user token from the environment so that we don't
-    # accidentally use it.
-    os.environ.pop("MOTHERDUCK_TOKEN", None)
 
 
 def eprint(*args, **kwargs):
