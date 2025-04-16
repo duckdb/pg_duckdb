@@ -7,7 +7,7 @@ typedef enum {
 	MOTHERDUCK_AUTO,
 } MotherDuckEnabled;
 
-// pgduckdb.c
+// pgduckdb.cpp
 extern "C" void _PG_init(void);
 
 // pgduckdb_hooks.c

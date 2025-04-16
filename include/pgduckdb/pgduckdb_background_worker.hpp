@@ -1,7 +1,5 @@
 #pragma once
 
-#include "pgduckdb/pg/declarations.hpp"
-
 namespace pgduckdb {
 
 void InitBackgroundWorkersShmem(void);
