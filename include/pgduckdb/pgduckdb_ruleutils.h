@@ -22,7 +22,6 @@ bool pgduckdb_is_unresolved_type(Oid type_oid);
 bool pgduckdb_is_fake_type(Oid type_oid);
 bool pgduckdb_var_is_duckdb_row(Var *var);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
-bool pgduckdb_target_list_contains_unresolved_type_or_row(List *target_list);
 Var *pgduckdb_duckdb_row_subscript_var(Expr *expr);
 bool pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell);
 bool pgduckdb_function_needs_subquery(Oid function_oid);

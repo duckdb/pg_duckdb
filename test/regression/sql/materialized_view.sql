@@ -16,6 +16,39 @@ SELECT COUNT(*) FROM tv WHERE a < 3;
 DROP MATERIALIZED VIEW tv;
 DROP TABLE t;
 
+-- materialized view where duckdb execution changes result types of query
+CREATE TABLE t_jsonb(data jsonb);
+INSERT INTO t_jsonb VALUES ('{"a": 1, "b": 2}');
+CREATE MATERIALIZED VIEW mv_json AS SELECT * FROM t_jsonb;
+SELECT * from mv_json;
+-- Should return json, because that's the return type of the query duckdb query
+-- (since it does not have the jsonb type).
+SELECT atttypid::regtype FROM pg_attribute WHERE attrelid = 'mv_json'::regclass AND attname = 'data';
+INSERT INTO t_jsonb VALUES ('{"a": 3, "b": 4}');
+REFRESH MATERIALIZED VIEW mv_json;
+SELECT * from mv_json;
+SET duckdb.force_execution = false;
+INSERT INTO t_jsonb VALUES ('{"a": 5, "b": 6}');
+REFRESH MATERIALIZED VIEW mv_json;
+SET duckdb.force_execution = true;
+
+DROP MATERIALIZED VIEW mv_json;
+
+-- Materialized view created without duckdb execution, and then refresh with
+-- duckdb execution enabled.
+SET duckdb.force_execution = false;
+CREATE MATERIALIZED VIEW mv_jsonb AS SELECT * FROM t_jsonb;
+SELECT * from mv_jsonb;
+SELECT atttypid::regtype FROM pg_attribute WHERE attrelid = 'mv_jsonb'::regclass AND attname = 'data';
+REFRESH MATERIALIZED VIEW mv_jsonb;
+SELECT * from mv_jsonb;
+SET duckdb.force_execution = true;
+REFRESH MATERIALIZED VIEW mv_jsonb;
+SET duckdb.force_execution = false;
+SELECT * from mv_jsonb;
+SET duckdb.force_execution = true;
+DROP MATERIALIZED VIEW mv_jsonb;
+
 -- materialized view from duckdb execution
 
 CREATE TABLE t_csv(a INT, b INT);
