@@ -7,11 +7,12 @@ import os
 os.environ.pop("motherduck_token", None)
 
 MD_TEST_USER_CREATOR_TOKEN = os.environ.get("md_test_user_creator_token")
+MOTHERDUCK_TEST_TOKEN = os.environ.get("MOTHERDUCK_TEST_TOKEN")
 CACHED_TEST_USER = None
 
 
 def can_run_md_tests():
-    return MD_TEST_USER_CREATOR_TOKEN is not None
+    return MD_TEST_USER_CREATOR_TOKEN is not None or MOTHERDUCK_TEST_TOKEN is not None
 
 
 def create_test_user():
@@ -21,6 +22,12 @@ def create_test_user():
 
     For now, this function only supports one user, that will be re-used for all tests.
     """
+
+    if MOTHERDUCK_TEST_TOKEN is not None:
+        print(
+            "Found `MOTHERDUCK_TEST_TOKEN` environment variable, using it as the test user token."
+        )
+        return {"token": MOTHERDUCK_TEST_TOKEN}
 
     global CACHED_TEST_USER
     if CACHED_TEST_USER is not None:
