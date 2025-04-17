@@ -29,10 +29,6 @@ def create_test_user():
         )
         return {"token": MOTHERDUCK_TEST_TOKEN}
 
-    global CACHED_TEST_USER
-    if CACHED_TEST_USER is not None:
-        return CACHED_TEST_USER
-
     token = MD_TEST_USER_CREATOR_TOKEN
     if not token:
         raise ValueError("Environment variable 'motherduck_token' not set.")
@@ -49,5 +45,4 @@ def create_test_user():
         print(
             f"Created user with email='{res_json['testEmail']}' and id='{res_json['id']}'"
         )
-        CACHED_TEST_USER = res_json
         return res_json

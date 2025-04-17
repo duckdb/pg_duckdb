@@ -29,8 +29,8 @@ def default_db_name(request):
     yield request.node.name.removeprefix("test_")
 
 
-def create_duckdb(db_name, token=None):
-    con_string = "md:" if token is None else f"md:?token={token}"
+def create_duckdb(db_name, token):
+    con_string = f"md:?token={token}"
     con = duckdb.connect(con_string)
     con.execute(f"DROP DATABASE IF EXISTS {db_name}")
     con.execute(f"CREATE DATABASE {db_name}")
@@ -76,25 +76,37 @@ def conn(pg):
 
 
 @pytest.fixture
-def md_cur(pg, default_db_name):
-    """A cursor to a MotherDuck enabled pg_duckdb"""
-    test_user = create_test_user()
+def md_test_user():
+    """Returns the test user token for MotherDuck.
 
-    pg.sql(f"SELECT duckdb.enable_motherduck('{test_user['token']}')")
+    This makes sure that it's the same in all the places we use it
+    """
+    return create_test_user()
+
+
+@pytest.fixture
+def md_cur(pg, default_db_name, ddb, md_test_user):
+    """A cursor to a MotherDuck enabled pg_duckdb"""
+    # We don't actually need to use ddb connection, but we include the
+    # fixture to make sure that the test database for the test is
+    # dropped+created
+    _ = ddb
+
+    pg.sql(f"SELECT duckdb.enable_motherduck('{md_test_user['token']}')")
 
     pg.search_path = f"ddb${default_db_name}, public"
     with pg.cur() as cur:
+        cur.wait_until_schema_exists(f"ddb${default_db_name}")
         yield cur
 
 
 @pytest.fixture
-def ddb(default_db_name):
+def ddb(default_db_name, md_test_user):
     """A DuckDB connection to MotherDuck
 
     This also creates a database for the test to use.
     """
-    test_user = create_test_user()
-    ddb_con = create_duckdb(default_db_name, test_user["token"])
+    ddb_con = create_duckdb(default_db_name, md_test_user["token"])
 
     try:
         yield Duckdb(ddb_con)
