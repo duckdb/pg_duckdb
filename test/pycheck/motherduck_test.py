@@ -28,11 +28,17 @@ def test_md_duckdb_version(ddb, md_cur: Cursor):
 
 
 def test_md_create_table(md_cur: Cursor, ddb):
-    ddb.sql("CREATE TABLE t1(a int)")
-    ddb.sql("INSERT INTO t1 VALUES (1)")
+    ddb.sql("CREATE TABLE t1(a int, b varchar)")
+    ddb.sql("INSERT INTO t1 VALUES (1, 'abc')")
     md_cur.wait_until_table_exists("t1")
 
-    assert md_cur.sql("SELECT * FROM t1") == 1
+    assert md_cur.sql("SELECT * FROM t1") == (1, "abc")
+    assert md_cur.sql(
+        "SELECT attname, atttypid::regtype FROM pg_attribute WHERE attrelid = 't1'::regclass AND attnum > 0"
+    ) == [
+        ("a", "integer"),
+        ("b", "text"),
+    ]
     md_cur.sql("CREATE TABLE t2(a int) USING duckdb")
     md_cur.sql("INSERT INTO t2 VALUES (2)")
     assert md_cur.sql("SELECT * FROM t2") == 2
