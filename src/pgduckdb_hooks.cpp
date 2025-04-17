@@ -275,11 +275,7 @@ IsDuckdbPlan(PlannedStmt *stmt) {
 	}
 
 	CustomScan *custom_scan = castNode(CustomScan, plan);
-	if (custom_scan->methods != &duckdb_scan_scan_methods) {
-		return false;
-	}
-
-	return true;
+	return custom_scan->methods == &duckdb_scan_scan_methods;
 }
 
 /*

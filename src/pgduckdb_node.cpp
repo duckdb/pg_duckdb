@@ -362,7 +362,7 @@ Duckdb_ExplainCustomScan(CustomScanState *node, List * /*ancestors*/, ExplainSta
 	InvokeCPPFunc(Duckdb_ExplainCustomScan_Cpp, node, es);
 }
 
-extern "C" void
+void
 DuckdbInitNode() {
 	/* setup scan methods */
 	memset(&duckdb_scan_scan_methods, 0, sizeof(duckdb_scan_scan_methods));
