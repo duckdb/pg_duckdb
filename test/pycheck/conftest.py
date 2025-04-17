@@ -4,6 +4,7 @@ import pytest
 import duckdb
 
 from .utils import Postgres, Duckdb
+from .motherduck_token_helper import create_test_user
 
 
 @pytest.fixture(scope="session")
@@ -15,7 +16,7 @@ def shared_pg(tmp_path_factory):
     pg.start()
     pg.sql("CREATE ROLE duckdb_group")
     pg.sql("GRANT CREATE ON SCHEMA public TO duckdb_group")
-    pg.sql("create extension pg_duckdb")
+    pg.sql("CREATE EXTENSION pg_duckdb")
 
     yield pg
 
@@ -23,7 +24,22 @@ def shared_pg(tmp_path_factory):
 
 
 @pytest.fixture
-def pg(shared_pg, request):
+def default_db_name(request):
+    """Returns the name of the database used by the test"""
+    yield request.node.name.removeprefix("test_")
+
+
+def create_duckdb(db_name, token=None):
+    con_string = "md:" if token is None else f"md:?token={token}"
+    con = duckdb.connect(con_string)
+    con.execute(f"DROP DATABASE IF EXISTS {db_name}")
+    con.execute(f"CREATE DATABASE {db_name}")
+    con.execute(f"USE {db_name}")
+    return con
+
+
+@pytest.fixture
+def pg(shared_pg, default_db_name):
     """
     Wraps the shared_pg fixture to reset the db after each test.
 
@@ -35,7 +51,7 @@ def pg(shared_pg, request):
     with shared_pg.log_path.open() as f:
         f.seek(0, os.SEEK_END)
         try:
-            test_schema_name = request.node.name.removeprefix("test_")
+            test_schema_name = default_db_name
             shared_pg.create_schema(test_schema_name)
             shared_pg.search_path = f"{test_schema_name}, public"
             yield shared_pg
@@ -60,32 +76,28 @@ def conn(pg):
 
 
 @pytest.fixture
-def md_cur(pg, ddb, request):
+def md_cur(pg, default_db_name):
     """A cursor to a MotherDuck enabled pg_duckdb"""
-    _ = ddb  # silence warning, we only need ddb
-    test_db = request.node.name.removeprefix("test_")
+    test_user = create_test_user()
 
-    pg.sql("SELECT duckdb.enable_motherduck()")
+    pg.sql(f"SELECT duckdb.enable_motherduck('{test_user['token']}')")
 
-    pg.search_path = f"ddb${test_db}, public"
+    pg.search_path = f"ddb${default_db_name}, public"
     with pg.cur() as cur:
         yield cur
 
 
 @pytest.fixture
-def ddb(request):
+def ddb(default_db_name):
     """A DuckDB connection to MotherDuck
 
     This also creates a database for the test to use.
     """
-    test_db = request.node.name.removeprefix("test_")
-    ddb = duckdb.connect("md:")
-    ddb.execute(f"DROP DATABASE IF EXISTS {test_db}")
-    ddb.execute(f"CREATE DATABASE {test_db}")
-    ddb.execute(f"USE {test_db}")
+    test_user = create_test_user()
+    ddb_con = create_duckdb(default_db_name, test_user["token"])
 
     try:
-        yield Duckdb(ddb)
+        yield Duckdb(ddb_con)
     finally:
-        ddb.execute("USE my_db")
-        ddb.execute(f"DROP DATABASE {test_db}")
+        ddb_con.execute("USE my_db")
+        ddb_con.execute(f"DROP DATABASE {default_db_name}")

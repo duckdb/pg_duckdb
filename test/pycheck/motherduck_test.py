@@ -6,17 +6,18 @@ different client that pg_duckdb. By using python we can use the DuckDB python
 library for that purpose.
 """
 
-from .utils import Cursor, MOTHERDUCK, PG_MAJOR_VERSION
+from .utils import Cursor, PG_MAJOR_VERSION
+from .motherduck_token_helper import can_run_md_tests
 
 import pytest
 import psycopg.errors
 
 
-if not MOTHERDUCK:
+if not can_run_md_tests():
     pytestmark = pytest.mark.skip(reason="Skipping all motherduck tests")
 
 
-def test_md_duckdb_version(md_cur: Cursor, ddb):
+def test_md_duckdb_version(ddb, md_cur: Cursor):
     version_query = "SELECT library_version FROM pragma_version();"
     python_duckdb_version = ddb.sql(version_query)
     pg_duckdb_duckdb_version = md_cur.sql(
