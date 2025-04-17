@@ -4,6 +4,9 @@ ROOT_DIR = ../..
 
 include $(ROOT_DIR)/Makefile.global
 
+# Make sure foreign_data_wrapper tests fail as expected
+unexport MOTHERDUCK_TOKEN
+
 check-regression-duckdb:
 	TEST_DIR=$(CURDIR) $(pg_regress_installcheck) \
 	--encoding=UTF8 \
