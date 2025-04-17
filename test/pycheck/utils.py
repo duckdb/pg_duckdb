@@ -283,13 +283,29 @@ class Cursor:
 
     def wait_until_table_exists(self, table_name, timeout=5):
         end = time.time() + timeout
+        # Don't log these expected errors to the postgres log
+        self.sql("SET log_min_messages TO FATAL")
         while time.time() < end:
             try:
                 self.sql("SELECT %s::regclass", (table_name,))
+                self.sql("RESET log_min_messages")
                 return
             except psycopg.errors.UndefinedTable:
                 time.sleep(0.1)
         raise TimeoutError(f"Table {table_name} did not appear in time")
+
+    def wait_until_schema_exists(self, schema_name, timeout=5):
+        end = time.time() + timeout
+        # Don't log these expected errors to the postgres log
+        self.sql("SET log_min_messages TO FATAL")
+        while time.time() < end:
+            try:
+                self.sql("SELECT %s::regnamespace", (schema_name,))
+                self.sql("RESET log_min_messages")
+                return
+            except psycopg.errors.InvalidSchemaName:
+                time.sleep(0.1)
+        raise TimeoutError(f"Schema {schema_name} did not appear in time")
 
 
 class AsyncCursor:
