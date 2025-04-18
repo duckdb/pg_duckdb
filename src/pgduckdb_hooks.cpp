@@ -64,21 +64,9 @@ ContainsCatalogTable(List *rtes) {
 }
 
 static bool
-IsDuckdbTable(Oid relid) {
-	if (relid == InvalidOid) {
-		return false;
-	}
-
-	auto rel = RelationIdGetRelation(relid);
-	bool result = pgduckdb::IsDuckdbTableAm(rel->rd_tableam);
-	RelationClose(rel);
-	return result;
-}
-
-static bool
 ContainsDuckdbTables(List *rte_list) {
 	foreach_node(RangeTblEntry, rte, rte_list) {
-		if (IsDuckdbTable(rte->relid)) {
+		if (pgduckdb::IsDuckdbTable(rte->relid)) {
 			return true;
 		}
 	}
@@ -187,8 +175,7 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	/* We don't support modifying statements on Postgres tables yet */
 	if (query->commandType != CMD_SELECT) {
 		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
-		if (!::IsDuckdbTable(resultRte->relid)) {
-			elog(elevel, "DuckDB does not support modififying Postgres tables");
+		if (!pgduckdb::IsDuckdbTable(resultRte->relid) && !IsAllowedPostgresInsert(query, throw_error)) {
 			return false;
 		}
 		if (pgduckdb::DidDisallowedMixedWrites()) {
