@@ -40,7 +40,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 extern "C" {
-bool processed_targetlist = false;
+bool outermost_query = false;
 
 char *
 pgduckdb_function_name(Oid function_oid, bool *use_variadic_p) {
@@ -553,7 +553,7 @@ pgduckdb_relation_name(Oid relation_oid) {
  */
 char *
 pgduckdb_get_querydef(Query *query) {
-	processed_targetlist = false;
+	outermost_query = false;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("DateStyle", "ISO, YMD", PGC_USERSET, PGC_S_SESSION);
 	char *result = pgduckdb_pg_get_querydef_internal(query, false);

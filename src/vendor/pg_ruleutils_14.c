@@ -5507,6 +5507,9 @@ get_with_clause(Query *query, deparse_context *context)
 	if (query->cteList == NIL)
 		return;
 
+	bool previous_outermost_query = outermost_query;
+	outermost_query = true;
+
 	if (PRETTY_INDENT(context))
 	{
 		context->indentLevel += PRETTYINDENT_STD;
@@ -5630,6 +5633,8 @@ get_with_clause(Query *query, deparse_context *context)
 	}
 	else
 		appendStringInfoChar(buf, ' ');
+
+	outermost_query = previous_outermost_query;
 }
 
 /* ----------

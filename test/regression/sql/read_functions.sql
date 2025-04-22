@@ -136,6 +136,31 @@ with experiences as not materialized (
 )
 select * from experiences;
 
+-- ... also when using a single column
+with experiences as (
+  select
+    r['company']
+  from duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+
+with experiences as materialized (
+  select
+    r['company']
+  from duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+
+with experiences as not materialized (
+  select
+    r['company']
+  from duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+
 -- We show a hint for the new syntax when someone uses the old syntax.
 SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT);
 

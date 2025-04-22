@@ -33,4 +33,4 @@ bool is_system_sampling(const char *tsm_name, int num_args);
 bool is_bernoulli_sampling(const char *tsm_name, int num_args);
 void pgduckdb_add_tablesample_percent(const char *tsm_name, StringInfo buf, int num_args);
 
-extern bool processed_targetlist;
+extern bool outermost_query;
