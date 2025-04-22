@@ -6,7 +6,7 @@ Able to read many [data types](https://www.postgresql.org/docs/current/datatype.
 - Floating point types (`real`, `double precision`)
 - `numeric` (might get converted to `double precision` internally see known limitations below for details)
 - `text`/`varchar`/`bpchar`
-- `bit` related types, including both fixed and varied sized bit array 
+- `bit` related types, including both fixed and varied sized bit array
 - `bytea`/`blob`
 - `timestamp`/`timstampz`/`date`/`interval`/`timestamp_ns`/`timestamp_ms`/`timestamp_s`
 - `boolean`
@@ -34,6 +34,7 @@ to fix these limitations:
     ALTER TABLE s ALTER COLUMN a SET DATA TYPE text[][][];
     ```
 9. For the `domain` actually, during the execution of the INSERT operation, the check regarding `domain` is conducted by PostgreSQL rather than DuckDB. When we execute the SELECT operation and the type of the queried field is a `domain`, we will convert it to the corresponding base type and let DuckDB handle it.
+
 ## Special types
 
 pg_duckdb introduces a few special Postgres types. You shouldn't create these types explicitly and normally you don't need to know about their existence, but they might show up in error messages from Postgres. These are explained below:
@@ -52,11 +53,97 @@ Using `SELECT *` will result in the columns of this row being expanded, so your 
 SELECT * FROM read_parquet('file.parquet');
 ```
 
+#### Limitations in CTEs and Subqueries returning
+
+Due to limitations in Postgres, there are some limitations when using a function that returns a `duckdb.row` in a CTE or subquery. The main problem is that pg_duckdb cannot automatically assign useful aliases to the selected columns from the row. So while this query without a CTE/subquery returns the `r[company]` column as `company`:
+
+```sql
+SELECT r['company']
+FROM duckdb.query($$ SELECT 'DuckDB Labs' company $$) r;
+--    company
+-- ─────────────
+--  DuckDB Labs
+```
+
+The same query in a subquery or CTE will return the column simply as `r`:
+
+```sql
+WITH mycte AS (
+    SELECT r['company']
+    FROM duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+)
+SELECT * FROM mycte;
+--       r
+-- ─────────────
+--  DuckDB Labs
+```
+
+This is easy to work around by adding an explicit alias to the column in the CTE/subquery:
+
+```sql
+WITH mycte AS (
+    SELECT r['company'] AS company
+    FROM duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+)
+SELECT * FROM mycte;
+--    company
+-- ─────────────
+--  DuckDB Labs
+```
+
+Another limitation that can be similarly confusing is that when using `SELECT *` inside the CTE/subquery, and you want to reference a specific column outside the CTE/subquery, then you still need to use the `r['colname']` syntax instead of simply `colname`. So while this works as expected:
+```sql
+WITH mycte AS (
+    SELECT *
+    FROM duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+)
+SELECT * FROM mycte;
+--    company
+-- ─────────────
+--  DuckDB Labs
+```
+
+The following query will throw an error:
+
+```sql
+WITH mycte AS (
+    SELECT *
+    FROM duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+)
+SELECT * FROM mycte WHERE company = 'DuckDB Labs';
+-- ERROR:  42703: column "company" does not exist
+-- LINE 5: SELECT * FROM mycte WHERE company = 'DuckDB Labs';
+--                                   ^
+-- HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to to give the function the r alias.
+```
+
+This is easy to work around by using the `r['colname']` syntax like so:
+
+```sql
+> WITH mycte AS (
+    SELECT *
+    FROM duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+)
+SELECT * FROM mycte WHERE r['company'] = 'DuckDB Labs';
+--    company
+-- ─────────────
+--  DuckDB Labs
+```
+
 ### `duckdb.unresolved_type`
 
 The `duckdb.unresolved_type` type is a type that is used to make Postgres understand an expression for which the type is not known at query parse time. This is the type of any of the columns extracted from a `duckdb.row` using the `r['mycol']` syntax. Many operators and aggregates will return a `duckdb.unresolved_type` when one of the sides of the operator is of the type `duckdb.unresolved_type`, for instance `r['age'] + 10`.
 
-Once the query gets executed by DuckDB the actual type will be filled in by DuckDB. So, a query result will never contain a column that has `duckdb.unresolved_type` as its type. And generally you shouldn't even realize that this type even exists. So, if you get errors involving this type, please report an issue.
+Once the query gets executed by DuckDB the actual type will be filled in by DuckDB. So, a query result will never contain a column that has `duckdb.unresolved_type` as its type. And generally you shouldn't even realize that this type even exists.
+
+You might get errors that say that functions or operators don't exist for the `duckdb.unresolved_type`, such as:
+
+```txt
+ERROR:  function some_func(duckdb.unresolved_type) does not exist
+LINE 6:  some_func(r['somecol']) as somecol
+```
+
+In such cases a simple workaround is often to add an explicit cast to the type that the function accepts, such as `some_func(r['somecol']::text) as somecol`. If this happens for builtin Postgres functions, please open an issue on the `pg_duckdb` repository. That way we can consider adding explicit support for these functions.
 
 ### `duckdb.json`
 
