@@ -27,6 +27,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "executor/spi.h"
+#include "commands/dbcommands.h"
 #include "common/file_utils.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
@@ -88,33 +89,55 @@ static bool set_up_unclaim_session_hint_hook = false;
 static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
 static void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *context);
 
-typedef struct BackgoundWorkerShmemStruct {
-	Latch *bgw_latch; /* The latch of the background worker */
-
-	slock_t lock; /* protects all the fields below */
+typedef struct BgwStatePerDB {
+	Oid database_oid;
 
 	int64 activity_count; /* the number of times activity was triggered by other backends */
+
 	bool bgw_session_hint_is_reused;
+
+	Latch *latch;
+} BgwStatePerDB;
+
+typedef struct BackgoundWorkerShmemStruct {
+	slock_t lock; /* protects all the fields below */
+
+	HTAB *statePerDB; /* Map of Database Oid -> {Latch, activity count, etc.} */
 } BackgoundWorkerShmemStruct;
 
 static BackgoundWorkerShmemStruct *BgwShmemStruct;
 
+/*
+MUST be called under a lock
+Get the BGW state for the current database (MyDatabaseId)
+*/
+BgwStatePerDB *
+GetState() {
+	bool found = false;
+	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_FIND, &found);
+	if (!found || !state) {
+		elog(ERROR, "pg_duckdb background worker: could not find state for database %u", MyDatabaseId);
+	}
+	return state;
+}
+
 static void
 BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count) {
-	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
-	int64 new_activity_count = pgduckdb::BgwShmemStruct->activity_count;
-	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+	SpinLockAcquire(&BgwShmemStruct->lock);
+	int64 new_activity_count = GetState()->activity_count;
+	SpinLockRelease(&BgwShmemStruct->lock);
 	if (*last_activity_count != new_activity_count) {
 		*last_activity_count = new_activity_count;
 		/* Trigger some activity to restart the syncing */
-		pgduckdb::DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
+		DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
 	}
+
 	/*
 	 * If the extension is not registerid this loop is a no-op, which
 	 * means we essentially keep polling until the extension is
 	 * installed
 	 */
-	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
+	SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
 }
 
 bool CanTakeBgwLockForDatabase(Oid database_oid);
@@ -122,55 +145,42 @@ bool CanTakeBgwLockForDatabase(Oid database_oid);
 bool
 RunOneCheck(int64 &last_activity_count) {
 	// No need to run if MD is not enabled.
-	if (!pgduckdb::IsMotherDuckEnabled()) {
+	if (!IsMotherDuckEnabled()) {
 		elog(LOG, "pg_duckdb background worker: MotherDuck is not enabled, will exit.");
 		return true; // should exit
 	}
 
-	if (!pgduckdb::IsExtensionRegistered()) {
+	if (!IsExtensionRegistered()) {
 		return false; // XXX: shouldn't we exit actually?
 	}
 
 	if (!ddb_connection) {
 		try {
-			ddb_connection = pgduckdb::DuckDBManager::CreateConnection();
+			ddb_connection = DuckDBManager::CreateConnection();
 		} catch (std::exception &ex) {
 			elog(LOG, "pg_duckdb background worker: failed to create connection: %s", ex.what());
 			return true; // should exit
 		}
 	}
 
-	InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
+	InvokeCPPFunc(BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
 	return false;
 }
 
-} // namespace pgduckdb
+void
+SetBackgroundWorkerState(Oid database_oid) {
+	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &database_oid, HASH_ENTER, NULL);
+	state->latch = MyLatch;
+	state->activity_count = 0;
+	state->bgw_session_hint_is_reused = false;
+}
 
-extern "C" {
+void
+BgwMainLoop() {
+	doing_motherduck_sync = true;
+	is_background_worker = true;
 
-PGDLLEXPORT void
-pgduckdb_background_worker_main(Datum main_arg) {
-	Oid database_oid = DatumGetObjectId(main_arg);
-	if (!pgduckdb::CanTakeBgwLockForDatabase(0)) {
-		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
-		return;
-	}
-
-	elog(LOG, "started pg_duckdb background worker for database %u", database_oid);
-
-	// Set up a signal handler for SIGTERM
-	pqsignal(SIGTERM, die);
-	BackgroundWorkerUnblockSignals();
-
-	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
-
-	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
-	pgduckdb::BgwShmemStruct->bgw_latch = MyLatch;
-	int64 last_activity_count = pgduckdb::BgwShmemStruct->activity_count - 1; // force a check on the first iteration
-	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
-
-	pgduckdb::doing_motherduck_sync = true;
-	pgduckdb::is_background_worker = true;
+	int64 last_activity_count = -1; // force a check on the first iteration
 
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
@@ -179,7 +189,7 @@ pgduckdb_background_worker_main(Datum main_arg) {
 		SPI_connect();
 		PushActiveSnapshot(GetTransactionSnapshot());
 
-		const bool should_exit = pgduckdb::RunOneCheck(last_activity_count);
+		const bool should_exit = RunOneCheck(last_activity_count);
 
 		// Commit the transaction
 		PopActiveSnapshot();
@@ -198,8 +208,44 @@ pgduckdb_background_worker_main(Datum main_arg) {
 		CHECK_FOR_INTERRUPTS();
 		ResetLatch(MyLatch);
 	}
+}
 
-	// Unreachable
+} // namespace pgduckdb
+
+extern "C" {
+
+PGDLLEXPORT void
+pgduckdb_background_worker_main(Datum main_arg) {
+	Oid database_oid = DatumGetObjectId(main_arg);
+	if (!pgduckdb::CanTakeBgwLockForDatabase(database_oid)) {
+		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
+		return;
+	}
+
+	elog(LOG, "started pg_duckdb background worker for database %u", database_oid);
+
+	// Set up a signal handler for SIGTERM
+	pqsignal(SIGTERM, die);
+	BackgroundWorkerUnblockSignals();
+
+	BackgroundWorkerInitializeConnectionByOid(database_oid, InvalidOid, 0);
+
+	SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
+	pgduckdb::SetBackgroundWorkerState(database_oid);
+	SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+
+	PG_TRY();
+	{
+		pgduckdb::BgwMainLoop();
+	}
+	PG_FINALLY();
+	{
+		// Remove state entry.
+		SpinLockAcquire(&pgduckdb::BgwShmemStruct->lock);
+		hash_search(pgduckdb::BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_REMOVE, NULL);
+		SpinLockRelease(&pgduckdb::BgwShmemStruct->lock);
+	}
+	PG_END_TRY();
 }
 
 PG_FUNCTION_INFO_V1(force_motherduck_sync);
@@ -259,8 +305,9 @@ ShmemRequest(void) {
  */
 static void
 ShmemStartup(void) {
-	if (prev_shmem_startup_hook)
+	if (prev_shmem_startup_hook) {
 		prev_shmem_startup_hook();
+	}
 
 	Size size = sizeof(BackgoundWorkerShmemStruct);
 	bool found;
@@ -280,9 +327,12 @@ ShmemStartup(void) {
 		 */
 		MemSet(BgwShmemStruct, 0, size);
 		SpinLockInit(&BgwShmemStruct->lock);
-		BgwShmemStruct->bgw_latch = nullptr;
-		BgwShmemStruct->activity_count = 0;
-		BgwShmemStruct->bgw_session_hint_is_reused = false;
+
+		HASHCTL info;
+		info.keysize = sizeof(Oid);
+		info.entrysize = sizeof(BgwStatePerDB);
+		BgwShmemStruct->statePerDB =
+		    ShmemInitHash("ProcBgwStatePerDB", 1, max_worker_processes, &info, HASH_ELEM | HASH_BLOBS);
 	}
 
 	LWLockRelease(AddinShmemInitLock);
@@ -354,7 +404,7 @@ UnclaimBgwSessionHint(int /*code*/, Datum /*arg*/) {
 	}
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	BgwShmemStruct->bgw_session_hint_is_reused = false;
+	GetState()->bgw_session_hint_is_reused = false;
 	SpinLockRelease(&BgwShmemStruct->lock);
 	reused_bgw_session_hint = false;
 }
@@ -417,11 +467,9 @@ TriggerActivity(void) {
 	}
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	BgwShmemStruct->activity_count++;
-	/* Force wake up the background worker */
-	if (BgwShmemStruct->bgw_latch) {
-		SetLatch(BgwShmemStruct->bgw_latch);
-	}
+	auto state = GetState();
+	state->activity_count++;
+	SetLatch(state->latch);
 	SpinLockRelease(&BgwShmemStruct->lock);
 }
 
@@ -443,9 +491,10 @@ PossiblyReuseBgwSessionHint(void) {
 
 	const char *result = "";
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	if (!BgwShmemStruct->bgw_session_hint_is_reused) {
+	auto state = GetState();
+	if (!state->bgw_session_hint_is_reused) {
 		result = bgw_session_hint;
-		BgwShmemStruct->bgw_session_hint_is_reused = true;
+		state->bgw_session_hint_is_reused = true;
 		reused_bgw_session_hint = true;
 	}
 	SpinLockRelease(&BgwShmemStruct->lock);
@@ -910,7 +959,8 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 		}
 
 		/* The catalog version has changed, we need to sync the catalog */
-		elog(LOG, "Syncing MotherDuck catalog for database %s: %s", motherduck_db.c_str(), catalog_version.c_str());
+		elog(LOG, "Syncing MotherDuck catalog for database '%s' in '%s': %s", motherduck_db.c_str(),
+		     get_database_name(MyDatabaseId), catalog_version.c_str());
 
 		/*
 		 * Because of our SPI_commit_that_works_in_bgworker() workaround we need to
