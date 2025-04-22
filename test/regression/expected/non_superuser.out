@@ -102,10 +102,10 @@ SELECT * FROM duckdb.install_extension('iceberg');
 
 -- We should handle SQL injections carefully though to only allow INSTALL
 SELECT * FROM duckdb.install_extension($$ '; select * from hacky '' $$);
-ERROR:  (PGDuckDB/install_extension_cpp) HTTP Error: Failed to download extension " '; select * from hacky '' " at URL "http://extensions.duckdb.org/v1.2.1/linux_amd64/ '; select * from hacky '' .duckdb_extension.gz" (HTTP 403)
+ERROR:  (PGDuckDB/install_extension_cpp) HTTP Error: Failed to download extension " '; select * from hacky '' " at URL "http://extensions.duckdb.org/v1.2.2/linux_amd64/ '; select * from hacky '' .duckdb_extension.gz" (HTTP 403)
 
 Candidate extensions: "delta", "excel", "sqlite_scanner", "inet", "sqlite"
-For more info, visit https://duckdb.org/docs/extensions/troubleshooting/?version=v1.2.1&platform=linux_amd64&extension= '; select * from hacky '' 
+For more info, visit https://duckdb.org/docs/extensions/troubleshooting/?version=v1.2.2&platform=linux_amd64&extension= '; select * from hacky '' 
 INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky $$);
 SELECT * FROM duckdb.query($$ SELECT 1 $$);
 ERROR:  (PGDuckDB/CreatePlan) Parser Error: unterminated quoted string at or near "'; select * from hacky "
