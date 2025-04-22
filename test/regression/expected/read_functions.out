@@ -267,6 +267,43 @@ select * from experiences;
  DuckDB Labs
 (1 row)
 
+-- ... and also when adding aliasses
+with experiences as (
+  select
+    r['company'] company
+  from duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+   company   
+-------------
+ DuckDB Labs
+(1 row)
+
+with experiences as materialized (
+  select
+    r['company'] company
+  from duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+   company   
+-------------
+ DuckDB Labs
+(1 row)
+
+with experiences as not materialized (
+  select
+    r['company'] company
+  from duckdb.query($$ SELECT 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+   company   
+-------------
+ DuckDB Labs
+(1 row)
+
 -- We show a hint for the new syntax when someone uses the old syntax.
 SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT);
 ERROR:  a column definition list is only allowed for functions returning "record"
