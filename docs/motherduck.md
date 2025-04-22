@@ -72,9 +72,11 @@ Note: with the `duckdb.enable_motherduck` convenience method above, you can simp
 SELECT duckdb.enable_motherduck('<token>', '<default database>');
 ```
 
-The mapping of database+schema to schema name is then done in the following way:
+## How DuckDB schemas are mapped to Postgres schemas
 
-1. Each schema in your default MotherDuck database are simply merged with the Postgres schemas with the same name.
+DuckDB and Postgres schema and database conventions are different. The mapping of database+schema to schema name is then done in the following way:
+
+1. Each schema in your default MotherDuck database (see above on how to configure) is simply merged with the Postgres schema with the same name.
 2. Except for the `main` DuckDB schema in your default database, which is merged with the Postgres `public` schema.
 3. Tables in other databases are put into dedicated DuckDB-only schemas. These schemas are of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
 4. Except for the `main` schema in those other databases. That schema should be accessed using the shorter name `ddb$<db_name>` instead.
@@ -87,6 +89,10 @@ INSERT INTO your_schema.tab1 VALUES (1, 'abc'); -- inserts into my_db.your_schem
 SELECT COUNT(*) FROM ddb$my_shared_db.aggregated_order_data; -- reads from my_shared_db.main.aggregated_order_data
 SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.hn.hacker_news
 ```
+
+## Debugging issues
+
+If some tables or schemas are not showing up as expected, it's best to check your Postgres log file. The background worker that automatically syncs tables might have run into an error when syncing some of the tables. It reports these failures in the log, often even including how the failure can be resolved.
 
 [md]: https://motherduck.com/
 [md-access-token]: https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/authenticating-to-motherduck/#authentication-using-an-access-token
