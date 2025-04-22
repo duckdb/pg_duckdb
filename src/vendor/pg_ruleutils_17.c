@@ -5562,7 +5562,7 @@ get_with_clause(Query *query, deparse_context *context)
 		return;
 
 	bool previous_outermost_query = outermost_query;
-	outermost_query = true;
+	outermost_query = false;
 
 	if (PRETTY_INDENT(context))
 	{
@@ -6050,8 +6050,8 @@ get_target_list(List *targetList, deparse_context *context,
 	StarReconstructionContext star_reconstruction_context = {0};
 	star_reconstruction_context.target_list = targetList;
 
-	bool outermost_targetlist = !outermost_query;
-	outermost_query = true;
+	bool outermost_targetlist = outermost_query;
+	outermost_query = false;
 
 	foreach(l, targetList)
 	{
