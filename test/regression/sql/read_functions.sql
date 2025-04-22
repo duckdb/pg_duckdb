@@ -108,6 +108,34 @@ SELECT * FROM (
     LIMIT 1
 ) q;
 
+-- CTEs work fine, both materialized and not materialized ones.
+with experiences as (
+  select
+    r['starts_at'],
+    r['company']
+  from duckdb.query($$ SELECT '2024-01-01'::date starts_at, 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+
+with experiences as materialized (
+  select
+    r['starts_at'],
+    r['company']
+  from duckdb.query($$ SELECT '2024-01-01'::date starts_at, 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+
+with experiences as not materialized (
+  select
+    r['starts_at'],
+    r['company']
+  from duckdb.query($$ SELECT '2024-01-01'::date starts_at, 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+
 -- We show a hint for the new syntax when someone uses the old syntax.
 SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT);
 

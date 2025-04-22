@@ -16,6 +16,7 @@ extern "C" {
 #include "access/table.h"
 #include "access/xact.h"
 #include "executor/spi.h"
+#include "executor/execExpr.h"
 #include "foreign/foreign.h"
 #include "catalog/indexing.h"
 #include "parser/parse_coerce.h"
@@ -502,16 +503,64 @@ DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struc
 	DuckdbSubscriptTransform(sbsref, indirection, pstate, isSlice, isAssignment, "duckdb.struct");
 }
 
+static bool
+DuckdbSubscriptCheckSubscripts(ExprState * /*state*/, ExprEvalStep *op, ExprContext * /*econtext*/) {
+	SubscriptingRefState *sbsrefstate = op->d.sbsref_subscript.state;
+	char *type_name = strVal(sbsrefstate->workspace);
+	elog(ERROR, "Subscripting %s is not supported in the Postgres Executor", type_name);
+}
+
+static void
+DuckdbSubscriptFetch(ExprState * /*state*/, ExprEvalStep *op, ExprContext * /*econtext*/) {
+	SubscriptingRefState *sbsrefstate = op->d.sbsref_subscript.state;
+	char *type_name = strVal(sbsrefstate->workspace);
+	elog(ERROR, "Subscripting %s is not supported in the Postgres Executor", type_name);
+}
+
+static void
+DuckdbSubscriptAssign(ExprState * /*state*/, ExprEvalStep *op, ExprContext * /*econtext*/) {
+	SubscriptingRefState *sbsrefstate = op->d.sbsref_subscript.state;
+	char *type_name = strVal(sbsrefstate->workspace);
+	elog(ERROR, "Subscripting %s is not supported in the Postgres Executor", type_name);
+}
+
+static void
+DuckdbSubscriptFetchOld(ExprState * /*state*/, ExprEvalStep *op, ExprContext * /*econtext*/) {
+	SubscriptingRefState *sbsrefstate = op->d.sbsref_subscript.state;
+	char *type_name = strVal(sbsrefstate->workspace);
+	elog(ERROR, "Subscripting %s is not supported in the Postgres Executor", type_name);
+}
+
 /*
- * DuckdbRowSubscriptExecSetup is called by the executor when a subscripting
- * operation is performed on a duckdb.row. This should never happen, because
- * any query that contains a duckdb.row should automatically be use DuckDB
- * execution.
+ * DuckdbSubscriptExecSetup stores a bunch of functions in the methods
+ * structure. These functions are called by the Postgres executor when a
+ * subscripting is executed. We need to implement this function, because it is
+ * called for materialized CTEs. Even in that case the actual functions that
+ * are stored in methods are never supposed to be called, because pg_duckdb
+ * shouldn't force usage of DuckDB execution when duckdb types are present in
+ * the query. So these methods are just stubs that throw an error when called.
  */
 void
-DuckdbRowSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
-                            SubscriptExecSteps * /*exprstate*/) {
-	elog(ERROR, "Subscripting duckdb.row is not supported in the Postgres Executor");
+DuckdbSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState *sbsrefstate,
+                         SubscriptExecSteps *methods, const char *type_name) {
+
+	sbsrefstate->workspace = makeString(pstrdup(type_name));
+	methods->sbs_check_subscripts = DuckdbSubscriptCheckSubscripts;
+	methods->sbs_fetch = DuckdbSubscriptFetch;
+	methods->sbs_assign = DuckdbSubscriptAssign;
+	methods->sbs_fetch_old = DuckdbSubscriptFetchOld;
+}
+
+void
+DuckdbRowSubscriptExecSetup(const SubscriptingRef *sbsref, SubscriptingRefState *sbsrefstate,
+                            SubscriptExecSteps *methods) {
+	DuckdbSubscriptExecSetup(sbsref, sbsrefstate, methods, "duckdb.row");
+}
+
+void
+DuckdbStructSubscriptExecSetup(const SubscriptingRef *sbsref, SubscriptingRefState *sbsrefstate,
+                               SubscriptExecSteps *methods) {
+	DuckdbSubscriptExecSetup(sbsref, sbsrefstate, methods, "duckdb.struct");
 }
 
 static SubscriptRoutines duckdb_row_subscript_routines = {
@@ -524,12 +573,6 @@ static SubscriptRoutines duckdb_row_subscript_routines = {
 
 DECLARE_PG_FUNCTION(duckdb_row_subscript) {
 	PG_RETURN_POINTER(&duckdb_row_subscript_routines);
-}
-
-void
-DuckdbStructSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState * /*sbsrefstate*/,
-                               SubscriptExecSteps * /*exprstate*/) {
-	elog(ERROR, "Subscripting duckdb.struct is not supported in the Postgres Executor");
 }
 
 static SubscriptRoutines duckdb_struct_subscript_routines = {

@@ -190,6 +190,46 @@ SELECT * FROM (
  something |          5.1 |         3.5 |          1.4 |         0.2 | Setosa  |      255 |     65535 | 4294967295 | something else
 (1 row)
 
+-- CTEs work fine, both materialized and not materialized ones.
+with experiences as (
+  select
+    r['starts_at'],
+    r['company']
+  from duckdb.query($$ SELECT now() starts_at, 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+                r                 |      r      
+----------------------------------+-------------
+ Tue Apr 22 02:58:09.518 2025 PDT | DuckDB Labs
+(1 row)
+
+with experiences as materialized (
+  select
+    r['starts_at'],
+    r['company']
+  from duckdb.query($$ SELECT now() starts_at, 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+                r                |      r      
+---------------------------------+-------------
+ Tue Apr 22 02:58:09.53 2025 PDT | DuckDB Labs
+(1 row)
+
+with experiences as not materialized (
+  select
+    r['starts_at'],
+    r['company']
+  from duckdb.query($$ SELECT now() starts_at, 'DuckDB Labs' company $$) r
+  limit 100
+)
+select * from experiences;
+                r                 |      r      
+----------------------------------+-------------
+ Tue Apr 22 02:58:09.543 2025 PDT | DuckDB Labs
+(1 row)
+
 -- We show a hint for the new syntax when someone uses the old syntax.
 SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT);
 ERROR:  a column definition list is only allowed for functions returning "record"
