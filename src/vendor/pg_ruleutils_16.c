@@ -5547,6 +5547,9 @@ get_with_clause(Query *query, deparse_context *context)
 	if (query->cteList == NIL)
 		return;
 
+	bool previous_outermost_query = outermost_query;
+	outermost_query = false;
+
 	if (PRETTY_INDENT(context))
 	{
 		context->indentLevel += PRETTYINDENT_STD;
@@ -5670,6 +5673,8 @@ get_with_clause(Query *query, deparse_context *context)
 	}
 	else
 		appendStringInfoChar(buf, ' ');
+
+	outermost_query = previous_outermost_query;
 }
 
 /* ----------
@@ -6031,8 +6036,8 @@ get_target_list(List *targetList, deparse_context *context,
 	StarReconstructionContext star_reconstruction_context = {0};
 	star_reconstruction_context.target_list = targetList;
 
-	bool outermost_targetlist = !processed_targetlist;
-	processed_targetlist = true;
+	bool outermost_targetlist = outermost_query;
+	outermost_query = false;
 
 	foreach(l, targetList)
 	{

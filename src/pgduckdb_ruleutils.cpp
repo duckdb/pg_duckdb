@@ -40,7 +40,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
 extern "C" {
-bool processed_targetlist = false;
+bool outermost_query = true;
 
 char *
 pgduckdb_function_name(Oid function_oid, bool *use_variadic_p) {
@@ -547,13 +547,13 @@ pgduckdb_relation_name(Oid relation_oid) {
  * pgduckdb_pg_get_querydef_internal is because we want to avoid changing that
  * vendored in function as much as possible to keep updates easy.
  *
- * Apart from that it also sets the processed_targetlist variable to false,
- * which we use in get_target_list to determine if we're processing the
- * outermost targetlist or not.
+ * Apart from that it also sets the outermost_query variable to true, which we
+ * use in get_target_list to determine if we're processing the outermost
+ * targetlist or not.
  */
 char *
 pgduckdb_get_querydef(Query *query) {
-	processed_targetlist = false;
+	outermost_query = true;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("DateStyle", "ISO, YMD", PGC_USERSET, PGC_S_SESSION);
 	char *result = pgduckdb_pg_get_querydef_internal(query, false);
