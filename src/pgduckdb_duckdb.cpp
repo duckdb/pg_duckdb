@@ -38,25 +38,8 @@ extern "C" {
 }
 
 namespace pgduckdb {
-static char *
-uri_escape(const char *str) {
-	StringInfoData buf;
-	initStringInfo(&buf);
 
-	while (*str) {
-		char c = *str++;
-		if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
-		    c == '.' || c == '~') {
-			appendStringInfoChar(&buf, c);
-		} else {
-			appendStringInfo(&buf, "%%%02X", (unsigned char)c);
-		}
-	}
-
-	return buf.data;
-}
-
-static const char *
+const char *
 GetSessionHint() {
 	if (!IsEmptyString(duckdb_motherduck_session_hint)) {
 		return duckdb_motherduck_session_hint;
@@ -70,6 +53,7 @@ DidWrites() {
 	if (!DuckDBManager::IsInitialized()) {
 		return false;
 	}
+
 	auto connection = DuckDBManager::GetConnectionUnsafe();
 	auto &context = *connection->context;
 	return DidWrites(context);
@@ -155,16 +139,16 @@ DuckDBManager::Initialize() {
 
 		// Default database
 		auto default_database = FindMotherDuckDefaultDatabase();
-		if (default_database != nullptr) {
-			oss << uri_escape(default_database);
-		}
+		AppendEscapedUri(oss, default_database);
 
 		oss << "?";
 
 		// Session hint
-		auto escaped_session_hint = uri_escape(GetSessionHint());
-		if (!IsEmptyString(escaped_session_hint)) {
-			oss << "session_hint=" << escaped_session_hint << "&";
+		auto session_hint = GetSessionHint();
+		if (!IsEmptyString(session_hint)) {
+			oss << "session_hint=";
+			AppendEscapedUri(oss, session_hint);
+			oss << "&";
 		}
 
 		connection_string = oss.str();
