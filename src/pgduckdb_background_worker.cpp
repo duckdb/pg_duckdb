@@ -99,13 +99,13 @@ typedef struct BgwStatePerDB {
 	Latch *latch;
 } BgwStatePerDB;
 
-typedef struct BackgoundWorkerShmemStruct {
+typedef struct BackgroundWorkerShmemStruct {
 	slock_t lock; /* protects all the fields below */
 
 	HTAB *statePerDB; /* Map of Database Oid -> {Latch, activity count, etc.} */
-} BackgoundWorkerShmemStruct;
+} BackgroundWorkerShmemStruct;
 
-static BackgoundWorkerShmemStruct *BgwShmemStruct;
+static BackgroundWorkerShmemStruct *BgwShmemStruct;
 
 /*
 MUST be called under a lock
@@ -304,7 +304,7 @@ ShmemRequest(void) {
 		prev_shmem_request_hook();
 #endif
 
-	RequestAddinShmemSpace(sizeof(BackgoundWorkerShmemStruct));
+	RequestAddinShmemSpace(sizeof(BackgroundWorkerShmemStruct));
 }
 
 /*
@@ -317,7 +317,7 @@ ShmemStartup(void) {
 		prev_shmem_startup_hook();
 	}
 
-	Size size = sizeof(BackgoundWorkerShmemStruct);
+	Size size = sizeof(BackgroundWorkerShmemStruct);
 	bool found;
 
 	/*
@@ -325,7 +325,7 @@ ShmemStartup(void) {
 	 */
 	LWLockAcquire(AddinShmemInitLock, LW_EXCLUSIVE);
 
-	BgwShmemStruct = (BackgoundWorkerShmemStruct *)ShmemInitStruct("DuckdbBackgroundWorker Data", size, &found);
+	BgwShmemStruct = (BackgroundWorkerShmemStruct *)ShmemInitStruct("DuckdbBackgroundWorker Data", size, &found);
 
 	if (!found) {
 		/*
