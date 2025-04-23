@@ -288,6 +288,8 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			return;
 		}
 
+		MemoryContext oldcontext = CurrentMemoryContext;
+
 		/* NOTE: The below code is mostly copied from ExecCreateTableAs */
 		Query *query = (Query *)copyObjectImpl(original_query);
 		/*
@@ -322,7 +324,16 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		/* This is where our custom code starts again */
 		List *target_list = plan->planTree->targetlist;
 
-		stmt->query = (Node *)WrapQueryInDuckdbQueryCall(rewritten_query_copy, target_list);
+		Query *wrapped_query = WrapQueryInDuckdbQueryCall(rewritten_query_copy, target_list);
+
+		/*
+		 * We need to use the same context as the original query, because it
+		 * might need to live for a long time if this is a prepared statement.
+		 */
+		MemoryContext query_context = GetMemoryChunkContext(stmt->query);
+		MemoryContextSwitchTo(query_context);
+		stmt->query = (Node *)copyObjectImpl(wrapped_query);
+		MemoryContextSwitchTo(oldcontext);
 
 		if (is_create_materialized_view) {
 			/*
@@ -330,8 +341,14 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			 * query. It's important not to set it for regular CTAS queries,
 			 * otherwise Postgres code will assume it's a materialized view
 			 * instead.
+			 *
+			 * Just like for the stmt->query, we need to use the same context
+			 * as the original view query to avoid reads of freed memory.
 			 */
+			MemoryContext view_query_context = GetMemoryChunkContext(stmt->into->viewQuery);
+			MemoryContextSwitchTo(view_query_context);
 			stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
+			MemoryContextSwitchTo(oldcontext);
 		}
 	} else if (IsA(parsetree, RefreshMatViewStmt)) {
 		/* We need to set the top level DDL type to REFRESH_MATERIALIZED_VIEW
