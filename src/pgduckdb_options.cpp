@@ -177,6 +177,25 @@ GetArgString(PG_FUNCTION_ARGS, int argno) {
 	return DatumToString(PG_GETARG_DATUM(argno));
 }
 
+std::string
+ReadOptions(FunctionCallInfo fcinfo, int start, const std::vector<std::string> &names) {
+	std::ostringstream oss;
+	int opt_idx = start;
+	for (const auto &name : names) {
+		auto value = GetArgString(fcinfo, opt_idx++);
+		if (value.empty()) {
+			continue;
+		}
+
+		if (!oss.str().empty()) {
+			oss << ", ";
+		}
+
+		oss << name << " " << duckdb::KeywordHelper::WriteQuoted(value);
+	}
+	return oss.str();
+}
+
 } // namespace pg
 } // namespace pgduckdb
 
@@ -250,8 +269,7 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 	auto type = pgduckdb::pg::GetArgString(fcinfo, 0);
 	auto lc_type = duckdb::StringUtil::Lower(type);
-	const bool is_r2 = lc_type == "r2";
-	if (!is_r2 && lc_type != "s3" && lc_type != "gcs") {
+	if (lc_type != "r2" && lc_type != "s3" && lc_type != "gcs") {
 		elog(ERROR,
 		     "Invalid type '%s': this helper only supports 's3', 'gcs' or 'r2'. Please refer to the documentation to "
 		     "create advanced secrets.",
@@ -260,16 +278,17 @@ DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 
 	auto key = pgduckdb::pg::GetArgString(fcinfo, 1);
 	auto secret = pgduckdb::pg::GetArgString(fcinfo, 2);
-	auto region = pgduckdb::pg::GetArgString(fcinfo, 3);
-	auto session_token = pgduckdb::pg::GetArgString(fcinfo, 4);
+	auto session_token = pgduckdb::pg::GetArgString(fcinfo, 3);
 	auto secret_name = "simple_" + lc_type + "_secret";
 	SPI_connect();
 	auto server_name = pgduckdb::FindServerName(secret_name.c_str());
 	{
 		std::ostringstream create_server_query;
 		create_server_query << "CREATE SERVER " << server_name << " TYPE '" << type << "' FOREIGN DATA WRAPPER duckdb";
-		if (!region.empty() && !is_r2) {
-			create_server_query << " OPTIONS (region " << duckdb::KeywordHelper::WriteQuoted(region) << ")";
+
+		auto options = pgduckdb::pg::ReadOptions(fcinfo, 4, {"region", "url_style", "provider", "endpoint"});
+		if (!options.empty()) {
+			create_server_query << " OPTIONS (" << options << ")";
 		}
 
 		auto ret = SPI_exec(create_server_query.str().c_str(), 0);
@@ -284,7 +303,7 @@ DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 		                     << duckdb::KeywordHelper::WriteQuoted(key) << ", SECRET "
 		                     << duckdb::KeywordHelper::WriteQuoted(secret);
 
-		if (!session_token.empty() && !is_r2) {
+		if (!session_token.empty()) {
 			create_mapping_query << ", session_token " << duckdb::KeywordHelper::WriteQuoted(session_token);
 		}
 

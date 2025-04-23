@@ -8,11 +8,14 @@ For example with utility functions:
 
 ```sql
 SELECT duckdb.create_simple_secret(
-    'S3',                -- Type (S3, GCS, R2)
-    'access_key_id',     -- Key Id
-    'secret_access_key', -- Secret
-    'session_token',     -- Session Token (optional, default: not set)
-    'us-east-1'          -- region (optional, default: 'us-east-1')
+    type          := 'S3',          -- Type: one of (S3, GCS, R2)
+    key_id        := 'access_key_id',
+    secret        := 'xxx',
+    session_token := 'yyy',         -- (optional)
+    region        := 'us-east-1',   -- (optional)
+    url_style     := 'xxx',         -- (optional)
+    provider      := 'xxx',         -- (optional)
+    endpoint      := 'xxx'          -- (optional)
 )
 ```
 

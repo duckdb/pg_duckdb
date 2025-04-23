@@ -148,11 +148,14 @@ Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done
 
 	```sql
 	SELECT duckdb.create_simple_secret(
-		'S3',                -- Type (S3, GCS, R2)
-		'access_key_id',     -- Key Id
-		'secret_access_key', -- Secret
-		'session_token',     -- Session Token (optional)
-		'us-east-1'          -- region (optional)
+		type          := 'S3',          -- Type: one of (S3, GCS, R2)
+		key_id        := 'access_key_id',
+		secret        := 'xxx',
+		session_token := 'yyy',         -- (optional)
+		region        := 'us-east-1',   -- (optional)
+		url_style     := 'xxx',         -- (optional)
+		provider      := 'xxx',         -- (optional)
+		endpoint      := 'xxx'          -- (optional)
 	)
 	```
 
