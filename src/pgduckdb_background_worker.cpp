@@ -60,7 +60,7 @@ extern "C" {
 
 static std::unordered_map<std::string, std::string> last_known_motherduck_catalog_versions;
 static duckdb::unique_ptr<duckdb::Connection> ddb_connection = nullptr;
-static uint64 initial_cache_version = 0;
+static uint64_t initial_cache_version = 0;
 
 namespace pgduckdb {
 
@@ -86,8 +86,8 @@ static bool reused_bgw_session_hint = false;
  */
 static bool set_up_unclaim_session_hint_hook = false;
 
-static void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
-static void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *context);
+void SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context);
+void SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &context);
 
 typedef struct BgwStatePerDB {
 	Oid database_oid;
@@ -122,14 +122,14 @@ GetState() {
 }
 
 static void
-BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count) {
+BackgroundWorkerCheck(duckdb::Connection &connection, int64_t &last_activity_count) {
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	int64 new_activity_count = GetState()->activity_count;
+	int64_t new_activity_count = GetState()->activity_count;
 	SpinLockRelease(&BgwShmemStruct->lock);
-	if (*last_activity_count != new_activity_count) {
-		*last_activity_count = new_activity_count;
+	if (last_activity_count != new_activity_count) {
+		last_activity_count = new_activity_count;
 		/* Trigger some activity to restart the syncing */
-		DuckDBQueryOrThrow(*connection, "FROM duckdb_tables() limit 0");
+		pgduckdb::DuckDBQueryOrThrow(connection, "FROM duckdb_tables() limit 0");
 	}
 
 	/*
@@ -137,13 +137,13 @@ BackgroundWorkerCheck(duckdb::Connection *connection, int64 *last_activity_count
 	 * means we essentially keep polling until the extension is
 	 * installed
 	 */
-	SyncMotherDuckCatalogsWithPg_Cpp(false, connection->context.get());
+	pgduckdb::SyncMotherDuckCatalogsWithPg_Cpp(false, *connection.context);
 }
 
 bool CanTakeBgwLockForDatabase(Oid database_oid);
 
 bool
-RunOneCheck(int64 &last_activity_count) {
+RunOneCheck(int64_t &last_activity_count) {
 	// No need to run if MD is not enabled.
 	if (!IsMotherDuckEnabled()) {
 		elog(LOG, "pg_duckdb background worker: MotherDuck is not enabled, will exit.");
@@ -163,7 +163,7 @@ RunOneCheck(int64 &last_activity_count) {
 		}
 	}
 
-	InvokeCPPFunc(BackgroundWorkerCheck, ddb_connection.get(), &last_activity_count);
+	InvokeCPPFunc(pgduckdb::BackgroundWorkerCheck, *ddb_connection, last_activity_count);
 	return false;
 }
 
@@ -177,10 +177,20 @@ SetBackgroundWorkerState(Oid database_oid) {
 
 void
 BgwMainLoop() {
+	elog(LOG, "pg_duckdb background worker: starting");
+
+	{
+		char *db_name = nullptr;
+		StartTransactionCommand();
+		db_name = strdup(get_database_name(MyDatabaseId));
+		CommitTransactionCommand();
+		elog(LOG, "pg_duckdb background worker: started for database '%s' (%u)", db_name, MyDatabaseId);
+	}
+
 	doing_motherduck_sync = true;
 	is_background_worker = true;
 
-	int64 last_activity_count = -1; // force a check on the first iteration
+	int64_t last_activity_count = -1; // force a check on the first iteration
 
 	while (true) {
 		// Initialize SPI (Server Programming Interface) and connect to the database
@@ -218,11 +228,9 @@ PGDLLEXPORT void
 pgduckdb_background_worker_main(Datum main_arg) {
 	Oid database_oid = DatumGetObjectId(main_arg);
 	if (!pgduckdb::CanTakeBgwLockForDatabase(database_oid)) {
-		elog(LOG, "pg_duckdb background worker: could not take lock for database '%u'. Will exit.", database_oid);
+		elog(LOG, "pg_duckdb background worker: could not take lock for database %u. Will exit.", database_oid);
 		return;
 	}
-
-	elog(LOG, "started pg_duckdb background worker for database %u", database_oid);
 
 	// Set up a signal handler for SIGTERM
 	pqsignal(SIGTERM, die);
@@ -511,7 +519,7 @@ PossiblyReuseBgwSessionHint(void) {
 bool doing_motherduck_sync;
 char *current_motherduck_catalog_version;
 
-static std::string
+std::string
 PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is_default_db) {
 	if (is_default_db) {
 		/*
@@ -519,39 +527,41 @@ PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is
 		 * "public" Postgres schema, because they are pretty much equivalent
 		 * from a user perspective even though they are named differently.
 		 */
-		if (schema_name == "main") {
-			return "public";
-		}
-		return schema_name;
+		return schema_name == "main" ? "public" : schema_name;
 	}
-	std::string escaped_db_name = duckdb::KeywordHelper::EscapeQuotes(db_name, '$');
-	if (schema_name == "main") {
-		return "ddb$" + escaped_db_name;
+
+	std::ostringstream oss;
+	oss << "ddb$" << duckdb::KeywordHelper::EscapeQuotes(db_name, '$');
+	if (schema_name != "main") {
+		oss << "$" << duckdb::KeywordHelper::EscapeQuotes(schema_name, '$');
 	}
-	return "ddb$" + escaped_db_name + "$" + duckdb::KeywordHelper::EscapeQuotes(schema_name, '$');
+	return oss.str();
 }
 
-static std::string
+std::string
 DropPgTableString(const char *postgres_schema_name, const char *table_name, bool with_cascade) {
-	std::string ret = "";
-	ret += "DROP TABLE ";
-	ret += duckdb::KeywordHelper::WriteQuoted(postgres_schema_name, '"');
-	ret += ".";
-	ret += duckdb::KeywordHelper::WriteQuoted(table_name, '"');
-	ret += with_cascade ? " CASCADE; " : "; ";
-	return ret;
+	std::ostringstream oss;
+	oss << "DROP TABLE ";
+	oss << duckdb::KeywordHelper::WriteQuoted(postgres_schema_name, '"');
+	oss << ".";
+	oss << duckdb::KeywordHelper::WriteQuoted(table_name, '"');
+	if (with_cascade) {
+		oss << " CASCADE";
+	}
+	oss << "; ";
+	return oss.str();
 }
 
-static std::string
+std::string
 CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
-	std::string ret = "";
+	std::ostringstream oss;
 
-	ret += "CREATE TABLE ";
+	oss << "CREATE TABLE ";
 	std::string schema_name = PgSchemaName(info.catalog, info.schema, is_default_db);
-	ret += duckdb::KeywordHelper::WriteQuoted(schema_name, '"');
-	ret += ".";
-	ret += duckdb::KeywordHelper::WriteQuoted(info.table, '"');
-	ret += "(";
+	oss << duckdb::KeywordHelper::WriteQuoted(schema_name, '"');
+	oss << ".";
+	oss << duckdb::KeywordHelper::WriteQuoted(info.table, '"');
+	oss << "(";
 
 	bool first = true;
 	for (auto &column : info.columns.Logical()) {
@@ -562,22 +572,26 @@ CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 			continue;
 		}
 
-		if (!first) {
-			ret += ", ";
+		if (first) {
+			first = false;
+		} else {
+			oss << ", ";
 		}
-		first = false;
 
-		ret += duckdb::KeywordHelper::WriteQuoted(column.Name(), '"');
-		ret += " ";
-		int32 typemod = GetPostgresDuckDBTypemod(column.Type());
-		ret += format_type_with_typemod(postgres_type, typemod);
+		oss << duckdb::KeywordHelper::WriteQuoted(column.Name(), '"');
+		oss << " ";
+		int32_t typemod = GetPostgresDuckDBTypemod(column.Type());
+		oss << format_type_with_typemod(postgres_type, typemod);
 	}
+
 	if (first) {
 		elog(WARNING, "Skipping table %s.%s.%s because non of its columns had supported types", info.catalog.c_str(),
 		     info.schema.c_str(), info.table.c_str());
+		return "";
 	}
-	ret += ") USING duckdb;";
-	return ret;
+
+	oss << ") USING duckdb;";
+	return oss.str();
 }
 
 static std::string
@@ -920,23 +934,16 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	return true;
 }
 
-static void
+void
 SyncMotherDuckCatalogsWithPg(bool drop_with_cascade, duckdb::ClientContext &context) {
-	/*
-	 * TODO: Passing a reference through InvokeCPPFunc doesn't work here
-	 * for some reason. So to work around that we use a pointer instead.
-	 * We should fix the underlying problem instead.
-	 */
-	InvokeCPPFunc(SyncMotherDuckCatalogsWithPg_Cpp, drop_with_cascade, &context);
+	InvokeCPPFunc(SyncMotherDuckCatalogsWithPg_Cpp, drop_with_cascade, context);
 }
 
-static void
-SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *_context) {
+void
+SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &context) {
 	if (!pgduckdb::IsMotherDuckEnabled()) {
 		throw std::runtime_error("MotherDuck support is not enabled");
 	}
-
-	auto &context = *_context;
 
 	initial_cache_version = pgduckdb::CacheVersion();
 
@@ -1015,6 +1022,7 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 				if (entry.type != duckdb::CatalogType::TABLE_ENTRY) {
 					return;
 				}
+
 				auto &table = entry.Cast<duckdb::TableCatalogEntry>();
 				auto storage_info = table.GetStorageInfo(context);
 
@@ -1067,15 +1075,14 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext *
 		 * some big schema was deleted all at once). This is probably not
 		 * necessary in most cases.
 		 */
-		Portal deleted_tables_portal =
-		    SPI_cursor_open_with_args(nullptr, R"(
+		auto query_tables = R"(
 			SELECT relid::text FROM duckdb.tables
 			WHERE duckdb_db = $1 AND (
 				motherduck_catalog_version != $2 OR
 				default_database != $3
-			)
-			)",
-		                              lengthof(arg_types), arg_types, values, NULL, false, 0);
+			))";
+		Portal deleted_tables_portal =
+		    SPI_cursor_open_with_args(nullptr, query_tables, lengthof(arg_types), arg_types, values, NULL, false, 0);
 
 		const int deleted_tables_batch_size = 100;
 		int current_batch_size;

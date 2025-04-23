@@ -9,8 +9,8 @@ extern "C" {
 namespace pgduckdb {
 
 template <typename Func, Func func, typename... FuncArgs>
-typename std::invoke_result<Func, FuncArgs...>::type
-__CPPFunctionGuard__(const char *func_name, FuncArgs... args) {
+typename std::invoke_result<Func, FuncArgs &...>::type
+__CPPFunctionGuard__(const char *func_name, FuncArgs &...args) {
 	const char *error_message = nullptr;
 	try {
 		return func(args...);
