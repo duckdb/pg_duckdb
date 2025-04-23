@@ -23,6 +23,8 @@ import psycopg.sql
 import psycopg.conninfo
 from psycopg import sql
 
+import duckdb
+
 TEST_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
 os.chdir(TEST_DIR)
 
@@ -127,6 +129,15 @@ def get_bin_dir():
         os.environ["PG_CONFIG"] if "PG_CONFIG" in os.environ else "pg_config"
     )
     return capture([pg_config_bin, "--bindir"], silent=True).strip()
+
+
+def create_duckdb(db_name, token):
+    con_string = f"md:?token={token}"
+    con = duckdb.connect(con_string)
+    con.execute(f"DROP DATABASE IF EXISTS {db_name}")
+    con.execute(f"CREATE DATABASE {db_name}")
+    con.execute(f"USE {db_name}")
+    return con
 
 
 PG_MAJOR_VERSION = get_pg_major_version()

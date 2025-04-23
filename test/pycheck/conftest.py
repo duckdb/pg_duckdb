@@ -1,9 +1,7 @@
 import os
 import pytest
 
-import duckdb
-
-from .utils import Postgres, Duckdb
+from .utils import Postgres, Duckdb, create_duckdb
 from .motherduck_token_helper import create_test_user
 
 
@@ -27,15 +25,6 @@ def shared_pg(tmp_path_factory):
 def default_db_name(request):
     """Returns the name of the database used by the test"""
     yield request.node.name.removeprefix("test_")
-
-
-def create_duckdb(db_name, token):
-    con_string = f"md:?token={token}"
-    con = duckdb.connect(con_string)
-    con.execute(f"DROP DATABASE IF EXISTS {db_name}")
-    con.execute(f"CREATE DATABASE {db_name}")
-    con.execute(f"USE {db_name}")
-    return con
 
 
 @pytest.fixture
