@@ -21,6 +21,7 @@ extern "C" {
 #include "miscadmin.h"
 #include "access/tupdesc_details.h"
 #include "catalog/pg_type.h"
+#include "common/int.h"
 #include "executor/tuptable.h"
 #include "utils/array.h"
 #include "utils/builtins.h"
@@ -914,15 +915,23 @@ public:
 	AppendValueAtDimension(const duckdb::Value &value, idx_t dimension) {
 		auto &values = GetChildren(value);
 
-		// FIXME: verify that the amount of values does not overflow an `int` ?
-		int to_append = values.size();
+		if (values.size() > PG_INT32_MAX) {
+			throw duckdb::InvalidInputException("Too many values (%llu) at dimension %d: would overflow", values.size(),
+			                                    dimension);
+		}
+
+		int32_t to_append = values.size();
 
 		D_ASSERT(dimension < number_of_dimensions);
 		if (dimensions[dimension] == -1) {
 			// This dimension is not set yet
 			dimensions[dimension] = to_append;
-			// FIXME: verify that the amount of expected_values does not overflow an `int` ?
 			expected_values *= to_append;
+			if (pg_mul_u64_overflow(expected_values, static_cast<uint64>(to_append), &expected_values)) {
+				throw duckdb::InvalidInputException(
+				    "Multiplying %d expected values by %d new ones at dimension %d would overflow", expected_values,
+				    to_append, dimension);
+			}
 		}
 		if (dimensions[dimension] != to_append) {
 			throw duckdb::InvalidInputException("Expected %d values in list at dimension %d, found %d instead",
@@ -962,7 +971,7 @@ private:
 	idx_t count = 0;
 
 public:
-	idx_t expected_values = 1;
+	uint64 expected_values = 1;
 	Datum *datums = nullptr;
 	bool *nulls = nullptr;
 	int *dimensions;
