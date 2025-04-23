@@ -151,6 +151,7 @@ DropTablePreCheck(DropStmt *stmt) {
 }
 
 static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
+static void DuckdbHandleAlterForeignServerStmt(Node *parsetree);
 static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
 
 static void
@@ -392,10 +393,33 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 	} else if (IsA(parsetree, CreateForeignServerStmt)) {
 		DuckdbHandleCreateForeignServerStmt(parsetree);
 		return;
+	} else if (IsA(parsetree, AlterForeignServerStmt)) {
+		DuckdbHandleAlterForeignServerStmt(parsetree);
+		return;
 	} else if (IsA(parsetree, CreateUserMappingStmt)) {
 		DuckdbHandleCreateUserMappingStmt(parsetree);
 		return;
 	}
+}
+
+static void
+DuckdbHandleAlterForeignServerStmt(Node *parsetree) {
+	pgduckdb::CurrentServerType = nullptr;
+	// Propagate the "TYPE" to the server options, don't validate it here though
+	auto stmt = castNode(AlterForeignServerStmt, parsetree);
+	auto server = GetForeignServerByName(stmt->servername, false);
+
+	// XXX - should we cache this?
+	auto duckdb_fdw_oid = get_foreign_data_wrapper_oid("duckdb", false);
+	if (server->fdwid != duckdb_fdw_oid) {
+		return; // Not our FDW, don't do anything
+	}
+
+	if (server->servertype == NULL) {
+		return; // Don't do anything quite yet, let the validator raise an error
+	}
+
+	pgduckdb::CurrentServerType = pstrdup(server->servertype);
 }
 
 static void
