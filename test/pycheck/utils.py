@@ -293,31 +293,48 @@ class Cursor(OutputSilencer):
         """Run a DuckDB query using duckdb.query()"""
         return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
-    def wait_until_table_exists(self, table_name, timeout=5):
-        end = time.time() + timeout
-        # Don't log these expected errors to the postgres log
-        self.sql("SET log_min_messages TO FATAL")
-        while time.time() < end:
-            try:
-                self.sql("SELECT %s::regclass", (table_name,))
-                self.sql("RESET log_min_messages")
-                return
-            except psycopg.errors.UndefinedTable:
-                time.sleep(0.1)
-        raise TimeoutError(f"Table {table_name} did not appear in time")
+    def wait_until_table_exists(self, table_name, timeout=5, **kwargs):
+        self.wait_until(
+            lambda: self.try_sql(
+                "SELECT %s::regclass",
+                (table_name,),
+                psycopg.errors.UndefinedTable,
+                **kwargs,
+            ),
+            f"Table {table_name} did not appear in time",
+            timeout=timeout,
+        )
 
-    def wait_until_schema_exists(self, schema_name, timeout=5):
+    def wait_until_schema_exists(self, schema_name, timeout=5, **kwargs):
+        self.wait_until(
+            lambda: self.try_sql(
+                "SELECT %s::regnamespace",
+                (schema_name,),
+                psycopg.errors.InvalidSchemaName,
+                **kwargs,
+            ),
+            f"Schema {schema_name} did not appear in time",
+            timeout=timeout,
+        )
+
+    def try_sql(
+        self, query, params=None, expected_exception=AssertionError, **kwargs
+    ) -> Any:
+        try:
+            self.sql(query, params=params, **kwargs)
+            return True
+        except expected_exception:
+            return False
+
+    def wait_until(self, predicate, error_msg, timeout=5):
         end = time.time() + timeout
         # Don't log these expected errors to the postgres log
-        self.sql("SET log_min_messages TO FATAL")
-        while time.time() < end:
-            try:
-                self.sql("SELECT %s::regnamespace", (schema_name,))
-                self.sql("RESET log_min_messages")
-                return
-            except psycopg.errors.InvalidSchemaName:
+        with self.silent_logs():
+            while time.time() < end:
+                if predicate():
+                    return
                 time.sleep(0.1)
-        raise TimeoutError(f"Schema {schema_name} did not appear in time")
+            raise TimeoutError(error_msg)
 
 
 class AsyncCursor:
