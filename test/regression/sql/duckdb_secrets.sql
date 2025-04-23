@@ -136,6 +136,10 @@ SELECT duckdb.create_simple_secret(
 -- Alter SERVER (public options only)
 ALTER SERVER simple_s3_secret_3 OPTIONS (SET endpoint 'my_other_endoint', SET url_style 'true');
 
+-- Alter USER MAPPING
+ALTER USER MAPPING FOR CURRENT_USER
+SERVER simple_s3_secret_3 OPTIONS (SET secret 'a better secret');
+
 -- R2
 SELECT duckdb.create_simple_secret('R2', 'my r2 key1', 'my secret', 'my session token', 'my-region-42');
 SELECT duckdb.create_simple_secret('R2', 'my r2 key2', 'my secret');
