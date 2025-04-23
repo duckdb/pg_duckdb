@@ -122,7 +122,7 @@ SELECT duckdb.create_simple_secret('S3', 'my first key', 'my secret', 'my sessio
 SELECT duckdb.create_simple_secret('S3', 'my other key', 'my secret', 'my session token'); -- Default region
 SELECT duckdb.create_simple_secret('S3', 'my third key', 'my secret'); -- No session token, default region
 
--- With named arguments
+-- With named arguments (simple_s3_secret_3)
 SELECT duckdb.create_simple_secret(
     'S3',
     key_id := 'my named key',
@@ -132,6 +132,9 @@ SELECT duckdb.create_simple_secret(
     provider := 'credential_chain',
     endpoint := 'my-endpoint.com'
 );
+
+-- Alter SERVER (public options only)
+ALTER SERVER simple_s3_secret_3 OPTIONS (SET endpoint 'my_other_endoint', SET url_style 'true');
 
 -- R2
 SELECT duckdb.create_simple_secret('R2', 'my r2 key1', 'my secret', 'my session token', 'my-region-42');
