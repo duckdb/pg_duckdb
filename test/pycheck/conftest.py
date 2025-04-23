@@ -75,7 +75,7 @@ def conn(pg):
         yield conn
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def md_test_user():
     """Returns the test user token for MotherDuck.
 
