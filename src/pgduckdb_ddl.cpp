@@ -153,6 +153,7 @@ DropTablePreCheck(DropStmt *stmt) {
 static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
 static void DuckdbHandleAlterForeignServerStmt(Node *parsetree);
 static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
+static void DuckdbHandleAlterUserMappingStmt(Node *parsetree);
 
 static void
 DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
@@ -399,6 +400,9 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 	} else if (IsA(parsetree, CreateUserMappingStmt)) {
 		DuckdbHandleCreateUserMappingStmt(parsetree);
 		return;
+	} else if (IsA(parsetree, AlterUserMappingStmt)) {
+		DuckdbHandleAlterUserMappingStmt(parsetree);
+		return;
 	}
 }
 
@@ -409,7 +413,6 @@ DuckdbHandleAlterForeignServerStmt(Node *parsetree) {
 	auto stmt = castNode(AlterForeignServerStmt, parsetree);
 	auto server = GetForeignServerByName(stmt->servername, false);
 
-	// XXX - should we cache this?
 	auto duckdb_fdw_oid = get_foreign_data_wrapper_oid("duckdb", false);
 	if (server->fdwid != duckdb_fdw_oid) {
 		return; // Not our FDW, don't do anything
@@ -436,6 +439,21 @@ DuckdbHandleCreateForeignServerStmt(Node *parsetree) {
 	}
 
 	pgduckdb::CurrentServerType = pstrdup(stmt->servertype);
+}
+
+static void
+DuckdbHandleAlterUserMappingStmt(Node *parsetree) {
+	pgduckdb::CurrentServerOid = InvalidOid;
+	// Propagate the "servername" to the user mapping options
+	auto stmt = castNode(AlterUserMappingStmt, parsetree);
+
+	auto server = GetForeignServerByName(stmt->servername, false);
+	auto duckdb_fdw_oid = get_foreign_data_wrapper_oid("duckdb", false);
+	if (server->fdwid != duckdb_fdw_oid) {
+		return; // Not our FDW, don't do anything
+	}
+
+	pgduckdb::CurrentServerOid = server->serverid;
 }
 
 static void
