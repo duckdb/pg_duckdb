@@ -118,17 +118,28 @@ SELECT * FROM duckdb.query($$ SELECT name, type FROM duckdb_secrets(); $$);
 -- 1. Simple secrets
 
 -- S3
-SELECT duckdb.create_simple_secret('S3', 'my first key', 'my secret', 'my-region-42', 'my session token');
-SELECT duckdb.create_simple_secret('S3', 'my other key', 'my secret', 'my-region-42'); -- No session token
+SELECT duckdb.create_simple_secret('S3', 'my first key', 'my secret', 'my session token', 'my-region-42');
+SELECT duckdb.create_simple_secret('S3', 'my other key', 'my secret', 'my session token'); -- Default region
 SELECT duckdb.create_simple_secret('S3', 'my third key', 'my secret'); -- No session token, default region
+
+-- With named arguments
+SELECT duckdb.create_simple_secret(
+    'S3',
+    key_id := 'my named key',
+    secret := 'my secret',
+    session_token := 'foo',
+    url_style := 'path',
+    provider := 'credential_chain',
+    endpoint := 'my-endpoint.com'
+);
 
 -- R2
 SELECT duckdb.create_simple_secret('R2', 'my r2 key1', 'my secret', 'my session token', 'my-region-42');
 SELECT duckdb.create_simple_secret('R2', 'my r2 key2', 'my secret');
 
 -- GCS
-SELECT duckdb.create_simple_secret('GCS', 'my first key', 'my secret', 'my-region-42', 'my session token');
-SELECT duckdb.create_simple_secret('GCS', 'my other key', 'my secret', 'my-region-42'); -- No session token
+SELECT duckdb.create_simple_secret('GCS', 'my first key', 'my secret', 'my session token', 'my-region-42');
+SELECT duckdb.create_simple_secret('GCS', 'my other key', 'my secret', 'my session token'); -- Default region
 SELECT duckdb.create_simple_secret('GCS', 'my third key', 'my secret'); -- No session token, default region
 
 -- Invalid
