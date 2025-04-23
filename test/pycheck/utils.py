@@ -1,10 +1,11 @@
 import subprocess
-from contextlib import closing, contextmanager
+from contextlib import closing, contextmanager, redirect_stdout
 from pathlib import Path
 
 from contextlib import asynccontextmanager
 
 import asyncio
+import io
 import os
 import platform
 import re
@@ -258,7 +259,18 @@ Connection = psycopg.Connection
 AsyncConnection = psycopg.AsyncConnection
 
 
-class Cursor:
+class OutputSilencer:
+    @contextmanager
+    def silent_logs(self):
+        """Set the log level to FATAL, so that we don't get any logs"""
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            self.sql("SET log_min_messages TO FATAL")
+            yield
+            self.sql("RESET log_min_messages")
+
+
+class Cursor(OutputSilencer):
     """This is a wrapper around psycopg.Cursor that adds a sql method"""
 
     def __init__(self, cursor: psycopg.Cursor):
@@ -335,7 +347,7 @@ class AsyncCursor:
         return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
 
-class Postgres:
+class Postgres(OutputSilencer):
     def __init__(self, pgdata):
         self.pgdata = pgdata
         self.log_path = self.pgdata / "pg.log"
@@ -552,13 +564,14 @@ class Postgres:
             self.sql(sql.SQL("DROP USER IF EXISTS {}").format(sql.Identifier(user)))
 
     def cleanup_schemas(self):
-        for dbname, schema in self.schemas:
-            self.sql(
-                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(
-                    sql.Identifier(schema)
-                ),
-                dbname=dbname,
-            )
+        with self.silent_logs():
+            for dbname, schema in self.schemas:
+                self.sql(
+                    sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(
+                        sql.Identifier(schema)
+                    ),
+                    dbname=dbname,
+                )
 
     def cleanup_publications(self):
         for dbname, publication in self.publications:
