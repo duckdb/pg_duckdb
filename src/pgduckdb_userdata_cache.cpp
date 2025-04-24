@@ -44,7 +44,7 @@ bool callback_is_configured = false;
 
 void
 InvalidateDuckDBSecrets() {
-	auto manager = pgduckdb::DuckDBManager::Find();
+	auto manager = pgduckdb::DuckDBManager::FindIfInitialized();
 	if (manager) {
 		manager->InvalidateDuckDBSecrets();
 	}

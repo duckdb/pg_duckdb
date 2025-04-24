@@ -25,7 +25,7 @@ public:
 	}
 
 	static inline DuckDBManager *
-	Find() {
+	FindIfInitialized() {
 		return manager_instance.database ? &manager_instance : nullptr;
 	}
 
