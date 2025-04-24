@@ -715,4 +715,13 @@ DECLARE_PG_FUNCTION(duckdb_map_out) {
 	return textout(fcinfo);
 }
 
+DECLARE_PG_FUNCTION(pgduckdb_test_escape_uri) {
+	auto input = pgduckdb::pg::GetArgString(fcinfo, 0);
+	std::ostringstream oss;
+	pgduckdb::AppendEscapedUri(oss, input.c_str());
+	auto result = oss.str();
+	auto text_result = cstring_to_text(result.c_str());
+	PG_RETURN_TEXT_P(text_result);
+}
+
 } // extern "C"

@@ -1,0 +1,24 @@
+CREATE FUNCTION test_escape_uri(
+    input TEXT
+)
+RETURNS TEXT
+SET search_path = pg_catalog, pg_temp
+LANGUAGE C AS 'pg_duckdb', 'pgduckdb_test_escape_uri';
+SELECT test_escape_uri('https://duckdb.org');
+     test_escape_uri      
+--------------------------
+ https%3A%2F%2Fduckdb.org
+(1 row)
+
+SELECT test_escape_uri('https://duckdb.org/with space');
+             test_escape_uri             
+-----------------------------------------
+ https%3A%2F%2Fduckdb.org%2Fwith%20space
+(1 row)
+
+SELECT test_escape_uri('foo $ bar # baz / qux');
+             test_escape_uri             
+-----------------------------------------
+ foo%20%24%20bar%20%23%20baz%20%2F%20qux
+(1 row)
+
