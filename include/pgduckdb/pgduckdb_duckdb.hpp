@@ -24,6 +24,11 @@ public:
 		return manager_instance;
 	}
 
+	static inline DuckDBManager *
+	Find() {
+		return manager_instance.database ? &manager_instance : nullptr;
+	}
+
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
 	static duckdb::Connection *GetConnection(bool force_transaction = false);
 	static duckdb::Connection *GetConnectionUnsafe();
