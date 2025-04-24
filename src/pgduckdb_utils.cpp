@@ -36,7 +36,8 @@ AppendEscapedUri(std::ostringstream &oss, const char *str) {
 		    c == '.' || c == '~') {
 			oss << c;
 		} else {
-			oss << '%' << std::setfill('0') << std::setw(2) << std::hex << std::uppercase << static_cast<int>(c);
+			oss << '%' << std::setfill('0') << std::setw(2) << std::hex << std::uppercase
+			    << static_cast<int>(static_cast<unsigned char>(c));
 		}
 	}
 }
