@@ -14,6 +14,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_fdw.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 namespace pgduckdb {
 namespace {
@@ -42,9 +43,17 @@ struct {
 bool callback_is_configured = false;
 
 void
+InvalidateDuckDBSecrets() {
+	auto manager = pgduckdb::DuckDBManager::FindIfInitialized();
+	if (manager) {
+		manager->InvalidateDuckDBSecrets();
+	}
+}
+
+void
 InvalidateCache(Datum, int, uint32) {
 	InvalidateUserDataCache();
-	pgduckdb::DuckDBManager::Get().InvalidateDuckDBSecrets();
+	InvokeCPPFunc(InvalidateDuckDBSecrets);
 }
 
 } // namespace
