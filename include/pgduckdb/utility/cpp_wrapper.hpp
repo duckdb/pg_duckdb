@@ -12,6 +12,7 @@ template <typename Func, Func func, typename... FuncArgs>
 typename std::invoke_result<Func, FuncArgs &...>::type
 __CPPFunctionGuard__(const char *func_name, FuncArgs &...args) {
 	const char *error_message = nullptr;
+	auto pg_es_start = PG_exception_stack;
 	try {
 		return func(args...);
 	} catch (duckdb::Exception &ex) {
@@ -25,6 +26,11 @@ __CPPFunctionGuard__(const char *func_name, FuncArgs &...args) {
 		} else {
 			error_message = pstrdup(ex.what());
 		}
+	}
+
+	if (pg_es_start != PG_exception_stack) {
+		elog(WARNING, "WARNING: Unexpected exception stack pointer. This is not expected, please report this.");
+		PG_exception_stack = pg_es_start;
 	}
 
 	elog(ERROR, "(PGDuckDB/%s) %s", func_name, error_message);
