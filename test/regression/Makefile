@@ -6,6 +6,7 @@ include $(ROOT_DIR)/Makefile.global
 
 # Make sure foreign_data_wrapper tests fail as expected
 unexport MOTHERDUCK_TOKEN
+unexport motherduck_token
 
 check-regression-duckdb:
 	TEST_DIR=$(CURDIR) $(pg_regress_installcheck) \
