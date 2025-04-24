@@ -6,7 +6,9 @@ different client that pg_duckdb. By using python we can use the DuckDB python
 library for that purpose.
 """
 
-from .utils import Cursor, Postgres, PG_MAJOR_VERSION
+import datetime
+
+from .utils import Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
 from .motherduck_token_helper import (
     can_run_md_multi_user_tests,
     can_run_md_tests,
@@ -196,3 +198,41 @@ def test_md_alter_table(md_cur: Cursor):
         # duckdb after the table is created
         with pytest.raises(psycopg.errors.FeatureNotSupported):
             md_cur.sql("ALTER TABLE t SET ACCESS METHOD duckdb")
+
+
+def test_md_duckdb_only_types(md_cur: Cursor, ddb: Duckdb):
+    ddb.sql("""
+            CREATE TABLE t1(
+                m MAP(INT, VARCHAR),
+                s STRUCT(v VARCHAR, i INTEGER),
+                u UNION(t time, d date),
+            )""")
+    ddb.sql("""
+        INSERT INTO t1 VALUES (
+            MAP{1: 'abc'},
+            {'v': 'struct abc', 'i': 123},
+            '12:00'::time,
+        ), (
+            MAP{2: 'def'},
+            {'v': 'struct def', 'i': 456},
+            '2023-10-01'::date,
+        )
+    """)
+    md_cur.wait_until_table_exists("t1")
+    assert md_cur.sql("""select * from t1""") == [
+        ("{1=abc}", "{'v': struct abc, 'i': 123}", "12:00:00"),
+        ("{2=def}", "{'v': struct def, 'i': 456}", "2023-10-01"),
+    ]
+
+    assert md_cur.sql("""select m[1] from t1""") == ["abc", None]
+    assert md_cur.sql("""select s['v'] from t1""") == ["struct abc", "struct def"]
+    assert md_cur.sql("""select s['i'] from t1""") == [123, 456]
+    assert md_cur.sql("""select union_extract(u,'t') from t1""") == [
+        datetime.time(12, 0),
+        None,
+    ]
+    assert md_cur.sql("""select union_extract(u, 'd') from t1""") == [
+        None,
+        datetime.date(2023, 10, 1),
+    ]
+    assert md_cur.sql("""select union_tag(u) from t1""") == ["t", "d"]

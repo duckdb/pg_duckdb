@@ -686,10 +686,12 @@ LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_enable_motherduck';
 CREATE TYPE duckdb.map;
 CREATE FUNCTION duckdb.map_in(cstring) RETURNS duckdb.map AS 'MODULE_PATHNAME', 'duckdb_map_in' LANGUAGE C IMMUTABLE STRICT;
 CREATE FUNCTION duckdb.map_out(duckdb.map) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_map_out' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.map_subscript(internal) RETURNS internal AS 'MODULE_PATHNAME', 'duckdb_map_subscript' LANGUAGE C IMMUTABLE STRICT;
 CREATE TYPE duckdb.map(
     INTERNALLENGTH = VARIABLE,
     INPUT = duckdb.map_in,
-    OUTPUT = duckdb.map_out
+    OUTPUT = duckdb.map_out,
+    SUBSCRIPT = duckdb.map_subscript
 );
 
 -- Drop legacy secret objects
