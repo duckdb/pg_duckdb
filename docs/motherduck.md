@@ -9,7 +9,7 @@ Then you can enable it by simply using the `enable_motherduck` convenience metho
 ```sql
 -- If not provided, the token will be read from the `motherduck_token` environment variable
 -- If not provided, the default MD database name is `my_db`
-SELECT duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
+CALL duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
 ```
 
 This convenience method creates a `motherduck` `SERVER` using the `pg_duckdb` Foreign Data Wrapper, which hosts the options for this integration. It also provides an `USER MAPPING` for the current user, which stores the provided MotherDuck token (if any).
@@ -69,7 +69,7 @@ CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token '<your tok
 
 Note: with the `duckdb.enable_motherduck` convenience method above, you can simply do:
 ```sql
-SELECT duckdb.enable_motherduck('<token>', '<default database>');
+CALL duckdb.enable_motherduck('<token>', '<default database>');
 ```
 
 ## How DuckDB schemas are mapped to Postgres schemas

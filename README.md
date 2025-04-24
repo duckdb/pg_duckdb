@@ -192,7 +192,7 @@ Then you can enable it by simply using the `enable_motherduck` convenience metho
 ```sql
 -- If not provided, the token will be read from the `motherduck_token` environment variable
 -- If not provided, the default MD database name is `my_db`
-SELECT duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
+CALL duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
 ```
 
 Read more [here][md-docs] about MotherDuck integration.
