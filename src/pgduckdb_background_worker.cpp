@@ -112,10 +112,16 @@ MUST be called under a lock
 Get the BGW state for the current database (MyDatabaseId)
 */
 BgwStatePerDB *
-GetState() {
+FindState() {
 	bool found = false;
 	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_FIND, &found);
-	if (!found || !state) {
+	return found ? state : nullptr;
+}
+
+BgwStatePerDB *
+GetState() {
+	auto state = FindState();
+	if (!state) {
 		elog(ERROR, "pg_duckdb background worker: could not find state for database %u", MyDatabaseId);
 	}
 	return state;
@@ -475,9 +481,11 @@ TriggerActivity(void) {
 	}
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	auto state = GetState();
-	state->activity_count++;
-	SetLatch(state->latch);
+	auto state = FindState();
+	if (state) {
+		state->activity_count++;
+		SetLatch(state->latch);
+	}
 	SpinLockRelease(&BgwShmemStruct->lock);
 }
 
