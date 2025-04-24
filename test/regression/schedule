@@ -42,3 +42,4 @@ test: timestamp_timestamptz
 test: union_functions
 test: foreign_data_wrapper
 test: tablesample
+test: simple_functions

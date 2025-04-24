@@ -119,4 +119,6 @@ duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &c
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(const std::string &query);
 
+void AppendEscapedUri(std::ostringstream &oss, const char *str);
+
 } // namespace pgduckdb
