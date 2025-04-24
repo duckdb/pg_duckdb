@@ -56,6 +56,37 @@ def test_md_create_table(md_cur: Cursor, ddb):
         md_cur.sql("CREATE TABLE t4(a int) USING heap")
 
 
+def test_md_read_scaling(pg: Cursor, ddb, default_db_name, md_test_user):
+    weird_db_name = "some 19 really $  - @ weird name 😀 84"
+    try:
+        ddb.sql(f'DROP DATABASE "{weird_db_name}";')
+    except Exception:
+        pass
+
+    ddb.sql(f'CREATE DATABASE "{weird_db_name}";')
+    pg.search_path = f"ddb${default_db_name}, public"
+    with pg.cur() as cur:
+        hint = "abc123"
+        cur.sql(f"SET duckdb.motherduck_session_hint = '{hint}';")
+
+        # Sanity check
+        assert cur.sql("SHOW duckdb.motherduck_session_hint;") == hint
+
+        cur.execute(
+            f"SELECT duckdb.enable_motherduck('{md_test_user['token']}', '{weird_db_name}')"
+        )
+        cur.wait_until_schema_exists(f"ddb${default_db_name}")
+
+        # Make sure DuckDB is using the provided session hint
+        assert cur.sql(
+            "SELECT * FROM duckdb.query($$ SELECT current_setting('motherduck_session_hint'); $$);"
+        )
+        assert (
+            cur.sql("SELECT * FROM duckdb.query($$ SELECT current_database(); $$);")
+            == weird_db_name
+        )
+
+
 def test_md_ctas(md_cur: Cursor, ddb):
     ddb.sql("CREATE TABLE t1 AS SELECT 1 a")
     md_cur.wait_until_table_exists("t1")
