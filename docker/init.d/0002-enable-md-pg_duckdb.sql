@@ -5,7 +5,7 @@
 \getenv uc_token MOTHERDUCK_TOKEN
 
 \if :{?lc_token}
-    SELECT duckdb.enable_motherduck(:'lc_token'::TEXT);
+    CALL duckdb.enable_motherduck(:'lc_token'::TEXT);
 \elif :{?uc_token}
-    SELECT duckdb.enable_motherduck(:'uc_token'::TEXT);
+    CALL duckdb.enable_motherduck(:'uc_token'::TEXT);
 \endif

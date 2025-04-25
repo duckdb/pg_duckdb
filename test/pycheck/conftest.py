@@ -92,7 +92,7 @@ def md_cur(pg, default_db_name, ddb, md_test_user):
     # dropped+created
     _ = ddb
 
-    pg.sql(f"SELECT duckdb.enable_motherduck('{md_test_user['token']}')")
+    pg.sql(f"CALL duckdb.enable_motherduck('{md_test_user['token']}')")
 
     pg.search_path = f"ddb${default_db_name}, public"
     with pg.cur() as cur:

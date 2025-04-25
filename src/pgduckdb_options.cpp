@@ -6,6 +6,7 @@
 
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_background_worker.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -220,6 +221,8 @@ DECLARE_PG_FUNCTION(pgduckdb_is_motherduck_enabled) {
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
+	pgduckdb::pg::PreventInTransactionBlock("duckdb.enable_motherduck()");
+
 	if (pgduckdb::IsMotherDuckEnabled()) {
 		elog(NOTICE, "MotherDuck is already enabled");
 		PG_RETURN_BOOL(false);
@@ -233,7 +236,7 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 		elog(ERROR, "No token was provided and `motherduck_token` environment variable was not set");
 	}
 
-	SPI_connect();
+	SPI_connect_ext(SPI_OPT_NONATOMIC);
 
 	if (pgduckdb::GetMotherduckForeignServerOid() == InvalidOid) {
 		std::string query = "CREATE SERVER motherduck TYPE 'motherduck' FOREIGN DATA WRAPPER duckdb";
@@ -261,9 +264,17 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 		}
 	}
 
+	/*
+	 * New we need to start the background worker, so that the table sync
+	 * starts. We need to first commit though, otherwise if the background
+	 * worker starts quick enough, it will not see that we enabled motherduck
+	 * (i.e. it does not see the motherduck SERVER).
+	 */
+	SPI_commit();
 	SPI_finish();
+	pgduckdb::StartBackgroundWorkerIfNeeded();
 
-	PG_RETURN_BOOL(pgduckdb::IsMotherDuckEnabled());
+	PG_RETURN_VOID();
 }
 
 DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {

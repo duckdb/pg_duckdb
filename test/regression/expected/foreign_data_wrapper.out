@@ -78,16 +78,33 @@ SELECT * FROM duckdb.is_motherduck_enabled();
  f
 (1 row)
 
--- Use helper to enable MD: will fail since there's no token in environment
-SELECT duckdb.enable_motherduck();
-ERROR:  No token was provided and `motherduck_token` environment variable was not set
--- Use helper to enable MD: will succeed
-SELECT duckdb.enable_motherduck('foo');
- enable_motherduck 
--------------------
- t
+-- Not possible to run in a transaction
+BEGIN;
+SELECT 1;
+ ?column? 
+----------
+        1
 (1 row)
 
+CALL duckdb.enable_motherduck();
+ERROR:  (PGDuckDB/pgduckdb_enable_motherduck_cpp) Executor Error: (PGDuckDB/::PreventInTransactionBlock) duckdb.enable_motherduck() cannot run inside a transaction block
+ROLLBACK;
+-- Use helper to enable MD: will fail since there's no token in environment
+CALL duckdb.enable_motherduck();
+ERROR:  No token was provided and `motherduck_token` environment variable was not set
+-- Use helper to enable MD: will succeed
+CALL duckdb.enable_motherduck('foo');
+-- Not possible to run in a transaction, even when it's enabled.
+BEGIN;
+SELECT 1;
+ ?column? 
+----------
+        1
+(1 row)
+
+CALL duckdb.enable_motherduck();
+ERROR:  (PGDuckDB/pgduckdb_enable_motherduck_cpp) Executor Error: (PGDuckDB/::PreventInTransactionBlock) duckdb.enable_motherduck() cannot run inside a transaction block
+ROLLBACK;
 -- Now MD is enabled again
 SELECT * FROM duckdb.is_motherduck_enabled();
  is_motherduck_enabled 

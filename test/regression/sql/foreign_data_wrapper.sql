@@ -62,11 +62,23 @@ DROP SERVER valid_md_server1 CASCADE;
 -- Now MD is not enabled anymore
 SELECT * FROM duckdb.is_motherduck_enabled();
 
+-- Not possible to run in a transaction
+BEGIN;
+SELECT 1;
+CALL duckdb.enable_motherduck();
+ROLLBACK;
+
 -- Use helper to enable MD: will fail since there's no token in environment
-SELECT duckdb.enable_motherduck();
+CALL duckdb.enable_motherduck();
 
 -- Use helper to enable MD: will succeed
-SELECT duckdb.enable_motherduck('foo');
+CALL duckdb.enable_motherduck('foo');
+
+-- Not possible to run in a transaction, even when it's enabled.
+BEGIN;
+SELECT 1;
+CALL duckdb.enable_motherduck();
+ROLLBACK;
 
 -- Now MD is enabled again
 SELECT * FROM duckdb.is_motherduck_enabled();
