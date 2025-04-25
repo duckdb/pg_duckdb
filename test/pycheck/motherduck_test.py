@@ -56,6 +56,56 @@ def test_md_create_table(md_cur: Cursor, ddb):
         md_cur.sql("CREATE TABLE t4(a int) USING heap")
 
 
+def test_md_default_db_escape(pg: Cursor, ddb, default_db_name, md_test_user):
+    # Make sure MD is not enabled
+    pg.sql("DROP SERVER IF EXISTS motherduck CASCADE;")
+
+    weird_db_name = "some 19 really $  - @ weird name 😀 84"
+    ddb.sql(f'DROP DATABASE IF EXISTS "{weird_db_name}";')
+    ddb.sql(f'CREATE DATABASE "{weird_db_name}";')
+    pg.search_path = f"ddb${default_db_name}, public"
+    with pg.cur() as cur:
+        cur.execute(
+            f"CALL duckdb.enable_motherduck('{md_test_user['token']}', '{weird_db_name}')"
+        )
+        cur.wait_until_schema_exists(f"ddb${default_db_name}")
+
+        # Make sure DuckDB is using the provided session hint
+        assert (
+            cur.sql("SELECT * FROM duckdb.query($$ SELECT current_database(); $$);")
+            == weird_db_name
+        )
+
+        assert pg.sql("""
+            SELECT fs.srvname, fs.srvtype, fs.srvoptions
+            FROM pg_foreign_server fs
+            INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
+            LEFT JOIN pg_user_mapping um ON um.umserver = fs.oid
+            WHERE fdw.fdwname = 'duckdb' AND fs.srvtype = 'motherduck';
+        """) == ("motherduck", "motherduck", [f"default_database={weird_db_name}"])
+
+
+def test_md_read_scaling(pg: Cursor, ddb, default_db_name, md_test_user):
+    pg.search_path = f"ddb${default_db_name}, public"
+
+    # Make sure MD is not enabled
+    pg.sql("DROP SERVER IF EXISTS motherduck CASCADE;")
+    with pg.cur() as cur:
+        hint = "abc123"
+        cur.sql(f"SET duckdb.motherduck_session_hint = '{hint}';")
+
+        # Sanity check
+        assert cur.sql("SHOW duckdb.motherduck_session_hint;") == hint
+
+        cur.execute(f"CALL duckdb.enable_motherduck('{md_test_user['token']}')")
+        cur.wait_until_schema_exists(f"ddb${default_db_name}")
+
+        # Make sure DuckDB is using the provided session hint
+        assert cur.sql(
+            "SELECT * FROM duckdb.query($$ SELECT current_setting('motherduck_session_hint'); $$);"
+        )
+
+
 def test_md_ctas(md_cur: Cursor, ddb):
     ddb.sql("CREATE TABLE t1 AS SELECT 1 a")
     md_cur.wait_until_table_exists("t1")

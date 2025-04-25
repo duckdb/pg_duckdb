@@ -10,3 +10,11 @@ SELECT test_escape_uri('https://duckdb.org');
 SELECT test_escape_uri('https://duckdb.org/with space');
 
 SELECT test_escape_uri('foo $ bar # baz / qux');
+
+SELECT test_escape_uri('foo 😀 bar # baz / qux');
+
+SELECT test_escape_uri('Hannes Mühleisen');
+
+SELECT test_escape_uri('Hannes M□hleisen');
+
+SELECT test_escape_uri('some 19 really $  - @ weird name 😀 84');
