@@ -77,6 +77,12 @@ GucCheckDuckDBNotInitdHook(T *, void **, GucSource) {
 	return true;
 }
 
+template <typename T>
+using GucTypeCheckHook = bool (*)(T *, void **, GucSource);
+
+template <typename T>
+using GucTypeAssignHook = void (*)(T, void *);
+
 void
 DefineCustomVariable(const char *name, const char *short_desc, bool *var, GucContext context = PGC_USERSET,
                      int flags = 0, GucBoolCheckHook check_hook = NULL, GucBoolAssignHook assign_hook = NULL,
@@ -92,12 +98,6 @@ DefineCustomVariable(const char *name, const char *short_desc, char **var, GucCo
 	DefineCustomStringVariable(name, gettext_noop(short_desc), NULL, var, *var, context, flags, check_hook, assign_hook,
 	                           show_hook);
 }
-
-template <typename T>
-using GucTypeCheckHook = bool (*)(T *, void **, GucSource);
-
-template <typename T>
-using GucTypeAssignHook = void (*)(T, void *);
 
 template <typename T>
 void
