@@ -265,7 +265,7 @@ DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 		 * database after the DuckDB connection is created for a non
 		 * superuser, any further connections will inherit this
 		 * restriction. This means that once a non-superuser used a
-		 * DuckDB connection in aside a Postgres backend, any loter
+		 * DuckDB connection in aside a Postgres backend, any other
 		 * connection will inherit these same filesystem restrictions.
 		 * This shouldn't be a problem in practice.
 		 */
