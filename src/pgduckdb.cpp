@@ -102,7 +102,7 @@ using GucTypeAssignHook = void (*)(T, void *);
 template <typename T>
 void
 DefineCustomVariable(const char *name, const char *short_desc, T *var, T min, T max, GucContext context = PGC_USERSET,
-                     int flags = 0, GucIntCheckHook check_hook = NULL, GucIntAssignHook assign_hook = NULL,
+                     int flags = 0, GucTypeCheckHook<T> check_hook = NULL, GucTypeAssignHook<T> assign_hook = NULL,
                      GucShowHook show_hook = NULL) {
 	/* clang-format off */
 	void (*func)(
@@ -147,8 +147,8 @@ template <typename T>
 void
 DefineCustomDuckDBVariable(const char *name, const char *short_desc, T *var, T min, T max,
                            GucContext context = PGC_USERSET, int flags = 0) {
-	DefineCustomVariable(name, short_desc, var, min, max, context, flags, NULL, NULL, // GucCheckDuckDBNotInitdHook<T>,
-	                     NULL);
+	DefineCustomVariable(name, short_desc, var, min, max, context, flags, GucCheckDuckDBNotInitdHook<T>,
+	                     (GucTypeAssignHook<T>)NULL, NULL);
 }
 } // namespace
 
