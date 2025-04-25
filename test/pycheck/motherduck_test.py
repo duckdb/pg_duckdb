@@ -57,15 +57,11 @@ def test_md_create_table(md_cur: Cursor, ddb):
 
 
 def test_md_default_db_escape(pg: Cursor, ddb, default_db_name, md_test_user):
-    weird_db_name = "some 19 really $  - @ weird name 😀 84"
-    try:
-        ddb.sql(f'DROP DATABASE IF EXISTS "{weird_db_name}";')
-    except Exception:
-        pass
-
     # Make sure MD is not enabled
     pg.sql("DROP SERVER IF EXISTS motherduck CASCADE;")
 
+    weird_db_name = "some 19 really $  - @ weird name 😀 84"
+    ddb.sql(f'DROP DATABASE IF EXISTS "{weird_db_name}";')
     ddb.sql(f'CREATE DATABASE "{weird_db_name}";')
     pg.search_path = f"ddb${default_db_name}, public"
     with pg.cur() as cur:
