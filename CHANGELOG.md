@@ -28,7 +28,7 @@
 ## Changed
 
 - Update to DuckDB 1.2.0. ([#548])
-- Allow executing `duckdb.raw_query`, `duckdb.cache_info`, `duckdb.cache_delete` and `duckdb.recycle_db` as non-superusers. ([#572])
+- Allow executing `duckdb.raw_query`, `duckdb.cache_info`, `duckdb.cache_delete` and `duckdb.recycle_ddb` as non-superusers. ([#572])
 - Only sync MotherDuck catalogs when there is DuckDB query activity. ([#582])
 
 ## Fixed
