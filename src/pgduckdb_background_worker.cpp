@@ -122,6 +122,7 @@ BgwStatePerDB *
 GetState() {
 	auto state = FindState();
 	if (!state) {
+		SpinLockRelease(&BgwShmemStruct->lock);
 		elog(ERROR, "pg_duckdb background worker: could not find state for database %u", MyDatabaseId);
 	}
 	return state;
