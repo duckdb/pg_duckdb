@@ -1,11 +1,8 @@
 import subprocess
-from contextlib import closing, contextmanager, redirect_stdout
+from contextlib import closing, contextmanager, asynccontextmanager, suppress
 from pathlib import Path
 
-from contextlib import asynccontextmanager
-
 import asyncio
-import io
 import os
 import platform
 import re
@@ -140,6 +137,18 @@ def create_duckdb(db_name, token):
     return con
 
 
+def loop_until(timeout=5, error_message="Did not complete in time"):
+    """
+    Loop until the timeout is reached. If the timeout is reached, raise an
+    exception with the given error message.
+    """
+    end = time.time() + timeout
+    while time.time() < end:
+        yield
+        time.sleep(0.1)
+    raise TimeoutError(error_message)
+
+
 PG_MAJOR_VERSION = get_pg_major_version()
 
 PG_BIN_DIR = get_bin_dir()
@@ -270,14 +279,18 @@ Connection = psycopg.Connection
 AsyncConnection = psycopg.AsyncConnection
 
 
+class EasySqlProtocol(typing.Protocol):
+    def sql(self, query: str, params=None, **kwargs) -> Any: ...
+
+
 class OutputSilencer:
     @contextmanager
-    def silent_logs(self):
+    def silent_logs(self: EasySqlProtocol):
         """Set the log level to FATAL, so that we don't get any logs"""
-        buffer = io.StringIO()
-        with redirect_stdout(buffer):
-            self.sql("SET log_min_messages TO FATAL")
+        self.sql("SET log_min_messages TO FATAL")
+        try:
             yield
+        finally:
             self.sql("RESET log_min_messages")
 
 
@@ -305,47 +318,27 @@ class Cursor(OutputSilencer):
         return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
     def wait_until_table_exists(self, table_name, timeout=5, **kwargs):
-        self.wait_until(
-            lambda: self.try_sql(
-                "SELECT %s::regclass",
-                (table_name,),
-                psycopg.errors.UndefinedTable,
-                **kwargs,
-            ),
-            f"Table {table_name} did not appear in time",
+        while loop_until(
+            error_message=f"Table {table_name} did not appear in time",
             timeout=timeout,
-        )
+        ):
+            with self.suppress(psycopg.errors.UndefinedTable):
+                self.sql("SELECT %s::regclass", (table_name,), **kwargs)
+                return
 
     def wait_until_schema_exists(self, schema_name, timeout=5, **kwargs):
-        self.wait_until(
-            lambda: self.try_sql(
-                "SELECT %s::regnamespace",
-                (schema_name,),
-                psycopg.errors.InvalidSchemaName,
-                **kwargs,
-            ),
-            f"Schema {schema_name} did not appear in time",
+        while loop_until(
             timeout=timeout,
-        )
+            error_message=f"Schema {schema_name} did not appear in time",
+        ):
+            with self.suppress(psycopg.errors.InvalidSchemaName):
+                self.sql("SELECT %s::regnamespace", (schema_name,), **kwargs)
+                return
 
-    def try_sql(
-        self, query, params=None, expected_exception=AssertionError, **kwargs
-    ) -> Any:
-        try:
-            self.sql(query, params=params, **kwargs)
-            return True
-        except expected_exception:
-            return False
-
-    def wait_until(self, predicate, error_msg, timeout=5):
-        end = time.time() + timeout
-        # Don't log these expected errors to the postgres log
-        with self.silent_logs():
-            while time.time() < end:
-                if predicate():
-                    return
-                time.sleep(0.1)
-            raise TimeoutError(error_msg)
+    @contextmanager
+    def suppress(self, ignore_exception):
+        with self.silent_logs(), suppress(ignore_exception):
+            yield
 
 
 class AsyncCursor:
@@ -590,16 +583,17 @@ class Postgres(OutputSilencer):
     def cleanup_users(self):
         for user in self.users:
             self.sql(sql.SQL("DROP USER IF EXISTS {}").format(sql.Identifier(user)))
+        self.users.clear()
 
     def cleanup_schemas(self):
-        with self.silent_logs():
-            for dbname, schema in self.schemas:
-                self.sql(
-                    sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(
-                        sql.Identifier(schema)
-                    ),
-                    dbname=dbname,
-                )
+        for dbname, schema in self.schemas:
+            self.sql(
+                sql.SQL("DROP SCHEMA IF EXISTS {} CASCADE").format(
+                    sql.Identifier(schema)
+                ),
+                dbname=dbname,
+            )
+        self.schemas.clear()
 
     def cleanup_publications(self):
         for dbname, publication in self.publications:
@@ -609,6 +603,7 @@ class Postgres(OutputSilencer):
                 ),
                 dbname=dbname,
             )
+        self.publications.clear()
 
     def cleanup_replication_slots(self):
         for slot in self.replication_slots:
@@ -625,6 +620,7 @@ class Postgres(OutputSilencer):
                         continue
                     raise
                 break
+        self.replication_slots.clear()
 
     def cleanup_subscriptions(self):
         for dbname, subscription in self.subscriptions:
@@ -648,6 +644,7 @@ class Postgres(OutputSilencer):
                 sql.SQL("DROP SUBSCRIPTION {}").format(sql.Identifier(subscription)),
                 dbname=dbname,
             )
+        self.subscriptions.clear()
 
     def debug(self):
         print("Connect manually to:\n   ", repr(self.make_conninfo()))
