@@ -154,6 +154,7 @@ DefineCustomDuckDBVariable(const char *name, const char *short_desc, T *var, T m
 
 void
 DuckdbInitGUC() {
+	/* pg_duckdb specific GUCs */
 	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
 
 	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
@@ -163,6 +164,16 @@ DuckdbInitGUC() {
 	DefineCustomVariable("duckdb.log_pg_explain", "Logs the EXPLAIN plan of a Postgres scan at the NOTICE log level",
 	                     &duckdb_log_pg_explain);
 
+	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
+	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
+	                     &duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
+
+	DefineCustomVariable("duckdb.postgres_role",
+	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
+	                     "MotherDuck tables. Defaults to superusers only",
+	                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	/* GUCs acting on DuckDB instance */
 	DefineCustomDuckDBVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
 	                           &duckdb_enable_external_access, PGC_SUSET);
 
@@ -205,26 +216,18 @@ DuckdbInitGUC() {
 	    "Set the directory to where DuckDB stores extensions in, alias for duckdb.extension_directory",
 	    &duckdb_extension_directory, PGC_SUSET);
 
-	// Doesn't need `GucCheckDuckDBNotInitdHook` because we actually handle its update after DuckDB is initialized
-	DefineCustomVariable("duckdb.disabled_filesystems",
-	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
-	                     &duckdb_disabled_filesystems, PGC_SUSET);
-
 	DefineCustomDuckDBVariable("duckdb.threads", "Maximum number of DuckDB threads per Postgres backend.",
 	                           &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
 	DefineCustomDuckDBVariable("duckdb.worker_threads",
 	                           "Maximum number of DuckDB threads per Postgres backend, alias for duckdb.threads",
 	                           &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
 
-	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
-	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
-	                     &duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
-
-	DefineCustomVariable("duckdb.postgres_role",
-	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
-	                     "MotherDuck tables. Defaults to superusers only",
-	                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
-
 	DefineCustomDuckDBVariable("duckdb.motherduck_session_hint", "The session hint to use for MotherDuck connections",
 	                           &duckdb_motherduck_session_hint);
+
+	// This is also a DuckDB variable, but it doesn't need `GucCheckDuckDBNotInitdHook` because we actually handle its
+	// update after DuckDB is initialized (cf. `DuckdbInstallExtension` function)
+	DefineCustomVariable("duckdb.disabled_filesystems",
+	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
+	                     &duckdb_disabled_filesystems, PGC_SUSET);
 }
