@@ -280,18 +280,25 @@ AsyncConnection = psycopg.AsyncConnection
 
 
 class EasySqlProtocol(typing.Protocol):
-    def sql(self, query: str, params=None, **kwargs) -> Any: ...
+    def sql(self, query, params=None, **kwargs) -> Any: ...
 
 
-class OutputSilencer:
+class OutputSilencer(EasySqlProtocol):
     @contextmanager
-    def silent_logs(self: EasySqlProtocol):
+    def silent_logs(self):
         """Set the log level to FATAL, so that we don't get any logs"""
         self.sql("SET log_min_messages TO FATAL")
         try:
             yield
         finally:
             self.sql("RESET log_min_messages")
+
+    @contextmanager
+    def suppress(self, *exceptions: type[BaseException]):
+        """A simple copy of the suppress context manager, which also silences logs.
+        Which also silences the PG logs at the same time"""
+        with self.silent_logs(), suppress(*exceptions):
+            yield
 
 
 class Cursor(OutputSilencer):
@@ -335,11 +342,6 @@ class Cursor(OutputSilencer):
                 self.sql("SELECT %s::regnamespace", (schema_name,), **kwargs)
                 return
 
-    @contextmanager
-    def suppress(self, ignore_exception):
-        with self.silent_logs(), suppress(ignore_exception):
-            yield
-
 
 class AsyncCursor:
     """This is a wrapper around psycopg.AsyncCursor that adds a sql method"""
@@ -369,6 +371,8 @@ class AsyncCursor:
 
 
 class Postgres(OutputSilencer):
+    search_path: str | None
+
     def __init__(self, pgdata):
         self.pgdata = pgdata
         self.log_path = self.pgdata / "pg.log"
