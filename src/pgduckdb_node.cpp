@@ -296,7 +296,21 @@ void
 Duckdb_EndCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
+	/*
+	 * BUG: In rare error casess it's possible that we call this when we are
+	 * currently accepting interupts, in those cases we should not resume them
+	 * yet again otherwise QueryCancelHoldoffCount becomes negative. We should
+	 * fix this, but it's not easy to reproduce this issue. So for now we at
+	 * least make sure that users without assert builds won't hit it in
+	 * production. So check that we are allowed to decrement it.
+	 */
+#ifdef USE_ASSERT_CHECKING
 	RESUME_CANCEL_INTERRUPTS();
+#else
+	if (QueryCancelHoldoffCount > 0) {
+		RESUME_CANCEL_INTERRUPTS();
+	}
+#endif
 }
 
 void
