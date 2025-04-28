@@ -6,7 +6,7 @@ different client that pg_duckdb. By using python we can use the DuckDB python
 library for that purpose.
 """
 
-from .utils import Cursor, PG_MAJOR_VERSION
+from .utils import Cursor, Postgres, PG_MAJOR_VERSION
 from .motherduck_token_helper import can_run_md_tests
 
 import pytest
@@ -56,7 +56,7 @@ def test_md_create_table(md_cur: Cursor, ddb):
         md_cur.sql("CREATE TABLE t4(a int) USING heap")
 
 
-def test_md_default_db_escape(pg: Cursor, ddb, default_db_name, md_test_user):
+def test_md_default_db_escape(pg: Postgres, ddb, default_db_name, md_test_user):
     # Make sure MD is not enabled
     pg.sql("DROP SERVER IF EXISTS motherduck CASCADE;")
 
@@ -85,7 +85,7 @@ def test_md_default_db_escape(pg: Cursor, ddb, default_db_name, md_test_user):
         """) == ("motherduck", "motherduck", [f"default_database={weird_db_name}"])
 
 
-def test_md_read_scaling(pg: Cursor, ddb, default_db_name, md_test_user):
+def test_md_read_scaling(pg: Postgres, ddb, default_db_name, md_test_user):
     pg.search_path = f"ddb${default_db_name}, public"
 
     # Make sure MD is not enabled
