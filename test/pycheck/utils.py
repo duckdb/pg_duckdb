@@ -371,6 +371,7 @@ class AsyncCursor:
 
 
 class Postgres(OutputSilencer):
+
     search_path: str | None
 
     def __init__(self, pgdata):
