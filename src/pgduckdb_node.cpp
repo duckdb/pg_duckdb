@@ -324,6 +324,10 @@ Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 
 void
 Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
+	if (es->format == EXPLAIN_FORMAT_JSON)
+		duckdb_explain_format = duckdb::ExplainFormat::JSON;
+	else
+		duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	ExecuteQuery(duckdb_scan_state);
 
