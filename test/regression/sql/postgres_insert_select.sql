@@ -20,7 +20,8 @@ CREATE TABLE tbl_p2 PARTITION OF tbl FOR VALUES FROM (10) TO (20);
 INSERT INTO tbl select r['a']::int, r['b'] from duckdb.query($$ SELECT 1 a, 'abc' b $$) r;
 INSERT INTO tbl select r['a']::int, r['b'] from duckdb.query($$ SELECT 11 a, 'def' b $$) r;
 INSERT INTO tbl select r['a']::int, r['b'] from duckdb.query($$ SELECT 21 a, 'ghi' b $$) r;
-SELECT * FROM tbl ORDER BY a LIMIT 5;
+SELECT * FROM tbl_p1 ORDER BY a;
+SELECT * FROM tbl_p2 ORDER BY a;
 DROP TABLE tbl;
 
 -- case: INSERT INTO TABLE (col1, col3)
@@ -46,5 +47,17 @@ DROP TABLE tbl;
 CREATE TABLE tbl (a int PRIMARY KEY, b text);
 INSERT INTO tbl (a, b) SELECT i, 'foo' FROM generate_series(1, 2) i;
 INSERT INTO tbl (a, b) SELECT i, 'qux' FROM generate_series(1, 4) i ON CONFLICT DO NOTHING;
+SELECT * FROM tbl;
+DROP TABLE tbl;
+
+CREATE TABLE tbl (a INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, b text);
+INSERT INTO tbl (b) SELECT 'foo' FROM generate_series(1, 2);
+INSERT INTO tbl (b) SELECT 'qux' FROM generate_series(1, 4);;
+SELECT * FROM tbl;
+DROP TABLE tbl;
+
+CREATE TABLE tbl (a SERIAL PRIMARY KEY, b text);
+INSERT INTO tbl (b) SELECT 'foo' FROM generate_series(1, 2);
+INSERT INTO tbl (b) SELECT 'qux' FROM generate_series(1, 4);;
 SELECT * FROM tbl;
 DROP TABLE tbl;
