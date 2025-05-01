@@ -181,7 +181,7 @@ Note, for Azure, we provide a dedicated function:
 SELECT duckdb.create_azure_secret('< connection string >');
 ```
 
-Note: writes to Azure are not yet supported, please see [the current discussion](duckdb/duckdb_azure#44) for more information.
+Note: writes to Azure are not yet supported, please see [the current discussion](https://github.com/duckdb/duckdb-azure/issues/44) for more information.
 
 ### Connect with MotherDuck
 
