@@ -83,6 +83,13 @@ def test_explain(cur: Cursor):
     assert "Planning Time" in (result[0]).keys()
     assert "Execution Time" in (result[0]).keys()
 
+    cur.sql("EXPLAIN (ANALYZE, FORMAT JSON) SELECT * FROM test_table t")
+    cur.sql("PREPARE test_query AS SELECT * FROM test_table t")
+    result = cur.sql("EXPLAIN EXECUTE test_query")
+    result2 = cur.sql("EXPLAIN EXECUTE test_query")
+    # second output will be in different format
+    assert result[3] != result2[3]
+
 
 def test_explain_dml(cur: Cursor):
     cur.sql("CREATE TEMP TABLE test_table (id int) USING duckdb")
