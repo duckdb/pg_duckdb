@@ -280,6 +280,15 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
+-- time_bucket is a common name for a function, specifically the Timescale also
+-- has a function with the same name and arguments. If any of these functions
+-- conflicts with an already existing function, we make sure not to create any
+-- of them for consistency. We'll always create the time_bucket function in the
+-- duckdb schema, that people can use even if they have timescale installed
+-- too. We'll also always create the unresolved_type time_bucket variants in
+-- @extschema@, because these will never conflict.
+DO $$
+BEGIN
 CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts date)
 RETURNS date
 SET search_path = pg_catalog, pg_temp
@@ -340,6 +349,16 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
+EXCEPTION
+WHEN duplicate_function THEN
+    -- Do nothing, it's probably the timescale variant. We still have
+    -- duckdb.time_bucket and the unresolved_type versions as a backup for
+    -- users. We do let the user know that we skipped the creation of the
+    -- function though.
+    RAISE WARNING 'time_bucket function already exists, use duckdb.time_bucket instead. This is usually because the timescale extension is installed.';
+END;
+$$;
+
 CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts duckdb.unresolved_type)
 RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
@@ -371,6 +390,102 @@ AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 CREATE FUNCTION @extschema@.time_bucket(bucket_width interval, ts duckdb.unresolved_type, timezone varchar)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts date)
+RETURNS date
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts date, origin date)
+RETURNS date
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts date, time_offset interval)
+RETURNS date
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts timestamp)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts timestamp, time_offset interval)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts timestamp, origin timestamp)
+RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts timestamp with time zone)
+RETURNS timestamp with time zone
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts timestamp with time zone, time_offset interval)
+RETURNS timestamp with time zone
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts timestamp with time zone, origin timestamp with time zone)
+RETURNS timestamp with time zone
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts timestamp with time zone, timezone varchar)
+RETURNS timestamp with time zone
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts duckdb.unresolved_type)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts duckdb.unresolved_type, time_offset interval)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts duckdb.unresolved_type, origin date)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts duckdb.unresolved_type, origin timestamp)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts duckdb.unresolved_type, origin timestamp with time zone)
+RETURNS duckdb.unresolved_type
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION duckdb.time_bucket(bucket_width interval, ts duckdb.unresolved_type, timezone varchar)
 RETURNS duckdb.unresolved_type
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
