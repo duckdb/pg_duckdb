@@ -185,7 +185,7 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	}
 
 	/* We don't support modifying statements on Postgres tables yet */
-	if (query->commandType != CMD_SELECT) {
+	if (ContainsFromClause(query) && query->commandType != CMD_SELECT) {
 		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
 		if (!::IsDuckdbTable(resultRte->relid)) {
 			elog(elevel, "DuckDB does not support modififying Postgres tables");

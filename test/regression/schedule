@@ -31,6 +31,7 @@ test: gucs
 test: function
 test: issue_410
 test: issue_730
+test: issue_748
 test: timestamp_with_interval
 test: approx_count_distinct
 test: time_bucket
