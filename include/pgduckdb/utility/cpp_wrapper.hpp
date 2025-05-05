@@ -10,7 +10,7 @@ namespace pgduckdb {
 
 template <typename Func, Func func, typename... FuncArgs>
 typename std::invoke_result<Func, FuncArgs &...>::type
-__CPPFunctionGuard__(const char *func_name, FuncArgs &...args) {
+__CPPFunctionGuard__(const char *func_name, const char *file_name, int line, FuncArgs &...args) {
 	const char *error_message = nullptr;
 	auto pg_es_start = PG_exception_stack;
 	try {
@@ -73,12 +73,18 @@ __CPPFunctionGuard__(const char *func_name, FuncArgs &...args) {
 		PG_exception_stack = pg_es_start;
 	}
 
-	elog(ERROR, "(PGDuckDB/%s) %s", func_name, error_message);
+	// Simplified version of `elog(ERROR, ...)`, with arguments inlined
+	if (errstart_cold(ERROR, TEXTDOMAIN)) {
+		errmsg_internal("(PGDuckDB/%s) %s", func_name, error_message);
+		errfinish(file_name, line, func_name);
+	}
+	pg_unreachable();
 }
 
 } // namespace pgduckdb
 
-#define InvokeCPPFunc(FUNC, ...) pgduckdb::__CPPFunctionGuard__<decltype(&FUNC), &FUNC>(#FUNC, ##__VA_ARGS__)
+#define InvokeCPPFunc(FUNC, ...)                                                                                       \
+	pgduckdb::__CPPFunctionGuard__<decltype(&FUNC), &FUNC>(#FUNC, __FILE__, __LINE__, ##__VA_ARGS__)
 
 // Wrappers
 
