@@ -300,7 +300,7 @@ DuckdbXactCallback(XactEvent event, void * /*arg*/) {
  * Throws an error when starting a new subtransaction in a DuckDB transaction.
  * Existing subtransactions are handled at creation of the DuckDB connection.
  * Throwing here for every event type is problematic, because that would also
- * cause a failure in the resulting sovepoint abort event. Which in turn would
+ * cause a failure in the resulting savepoint abort event. Which in turn would
  * cause the postgres error stack to overflow.
  */
 static void
