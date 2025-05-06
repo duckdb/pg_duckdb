@@ -20,6 +20,7 @@ BEGIN
 END;
 $$;
 SET duckdb.force_execution = false;
+
 SELECT * FROM f();
 
 DROP TABLE ta;
