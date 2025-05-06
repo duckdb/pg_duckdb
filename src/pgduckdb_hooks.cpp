@@ -185,12 +185,15 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	}
 
 	/* We don't support modifying statements on Postgres tables yet */
-	if (ContainsFromClause(query) && query->commandType != CMD_SELECT) {
-		RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
-		if (!::IsDuckdbTable(resultRte->relid)) {
-			elog(elevel, "DuckDB does not support modififying Postgres tables");
-			return false;
+	if (query->commandType != CMD_SELECT) {
+		if (ContainsFromClause(query)) {
+			RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
+			if (!::IsDuckdbTable(resultRte->relid)) {
+				elog(elevel, "DuckDB does not support modififying Postgres tables");
+				return false;
+			}
 		}
+
 		if (pgduckdb::DidDisallowedMixedWrites()) {
 			elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 			return false;
