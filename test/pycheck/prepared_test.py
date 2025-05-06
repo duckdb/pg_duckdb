@@ -169,3 +169,24 @@ def test_prepared_ctas(cur: Cursor):
     cur.sql("DROP TABLE t3")
     cur.sql(prepared_query)
     assert cur.sql("SELECT count(*) FROM t3") == 3
+
+
+def test_prepared_change_type(cur: Cursor, tmp_path):
+    tmp_path = tmp_path / "test.csv"
+    tmp_path.write_text("123\n")
+    prepared_query = f"SELECT * FROM read_csv('{tmp_path}')"
+    cur.sql(prepared_query, prepare=True)
+
+    tmp_path.write_text("abc\n")
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="Types returned by duckdb query changed between planning and execution",
+    ):
+        cur.sql(prepared_query)
+
+    tmp_path.write_text("1,234\n")
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="Number of columns returned by DuckDB query changed between planning and execution",
+    ):
+        cur.sql(prepared_query)

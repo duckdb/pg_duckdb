@@ -33,6 +33,7 @@ static CustomExecMethods duckdb_scan_exec_methods;
 
 typedef struct DuckdbScanState {
 	CustomScanState css; /* must be first field */
+	const CustomScan *custom_scan;
 	const Query *query;
 	ParamListInfo params;
 	duckdb::Connection *duckdb_connection;
@@ -72,6 +73,7 @@ static Node *
 Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)newNode(sizeof(DuckdbScanState), T_CustomScanState);
 	CustomScanState *custom_scan_state = &duckdb_scan_state->css;
+	duckdb_scan_state->custom_scan = cscan;
 
 	duckdb_scan_state->query = (const Query *)linitial(cscan->custom_private);
 	custom_scan_state->methods = &duckdb_scan_exec_methods;
@@ -84,7 +86,9 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 
 	StringInfo explain_prefix = makeStringInfo();
 
-	if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+	bool is_explain_query = ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN;
+
+	if (is_explain_query) {
 		appendStringInfoString(explain_prefix, "EXPLAIN ");
 
 		if (NEED_JSON_PLAN(duckdb_explain_format))
@@ -112,6 +116,33 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 	if (prepared_query->HasError()) {
 		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
 		                        "DuckDB re-planning failed: " + prepared_query->GetError());
+	}
+
+	if (!is_explain_query) {
+		auto &prepared_result_types = prepared_query->GetTypes();
+
+		size_t target_list_length = static_cast<size_t>(list_length(duckdb_scan_state->custom_scan->custom_scan_tlist));
+
+		if (prepared_result_types.size() != target_list_length) {
+			elog(ERROR,
+			     "(PGDuckDB/CreatePlan) Number of columns returned by DuckDB query changed between planning and "
+			     "execution, expected %zu got %zu",
+			     target_list_length, prepared_result_types.size());
+		}
+
+		for (size_t i = 0; i < prepared_result_types.size(); i++) {
+			Oid postgres_column_oid = pgduckdb::GetPostgresDuckDBType(prepared_result_types[i]);
+			if (!OidIsValid(postgres_column_oid)) {
+				elog(ERROR, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgres_column_oid);
+			}
+			TargetEntry *target_entry =
+			    list_nth_node(TargetEntry, duckdb_scan_state->custom_scan->custom_scan_tlist, i);
+			Var *var = castNode(Var, target_entry->expr);
+			if (var->vartype != postgres_column_oid) {
+				elog(ERROR, "Types returned by duckdb query changed between planning and execution, expected %d got %d",
+				     var->vartype, postgres_column_oid);
+			}
+		}
 	}
 
 	duckdb_scan_state->duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
