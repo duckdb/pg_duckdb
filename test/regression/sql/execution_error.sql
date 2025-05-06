@@ -6,3 +6,6 @@ INSERT INTO int_as_varchar SELECT * from (
 
 SELECT a::INTEGER FROM int_as_varchar;
 DROP TABLE int_as_varchar;
+
+\set VERBOSITY verbose
+select * from duckdb.raw_query('aaaaa');
