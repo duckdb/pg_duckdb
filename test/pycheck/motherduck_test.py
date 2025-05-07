@@ -102,8 +102,11 @@ def test_md_read_scaling(pg: Postgres, ddb, default_db_name, md_test_user):
         cur.wait_until_schema_exists(f"ddb${default_db_name}")
 
         # Make sure DuckDB is using the provided session hint
-        assert cur.sql(
-            "SELECT * FROM duckdb.query($$ SELECT current_setting('motherduck_session_hint'); $$);"
+        assert (
+            cur.sql(
+                "SELECT * FROM duckdb.query($$ SELECT current_setting('motherduck_session_hint'); $$);"
+            )
+            == hint
         )
 
 
