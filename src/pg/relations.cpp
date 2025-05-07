@@ -172,4 +172,9 @@ GetRelationName(Relation rel) {
 	return RelationGetRelationName(rel);
 }
 
+Oid
+GetOid(Form_pg_class rel) {
+	return rel->oid;
+}
+
 } // namespace pgduckdb

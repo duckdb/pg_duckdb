@@ -14,6 +14,7 @@
 #include "duckdb/main/attached_database.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pg/relations.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include <string>
 #include <unordered_map>
@@ -22,34 +23,35 @@
 
 extern "C" {
 #include "postgres.h"
-#include "fmgr.h"
 #include "access/xact.h"
-#include "miscadmin.h"
-#include "pgstat.h"
-#include "executor/spi.h"
+#include "catalog/dependency.h"
+#include "catalog/namespace.h"
+#include "catalog/objectaddress.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_class.h"
+#include "catalog/pg_extension.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/pg_namespace.h"
 #include "commands/dbcommands.h"
 #include "common/file_utils.h"
+#include "executor/spi.h"
+#include "fmgr.h"
+#include "miscadmin.h"
+#include "pgstat.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"
-#include "tcop/tcopprot.h"
 #include "storage/proc.h"
 #include "storage/shmem.h"
-#include "utils/builtins.h"
-#include "catalog/dependency.h"
-#include "catalog/pg_authid.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_namespace.h"
-#include "catalog/pg_extension.h"
-#include "catalog/pg_foreign_server.h"
+#include "tcop/tcopprot.h"
 #include "utils/acl.h"
+#include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
-#include "catalog/objectaddress.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -229,6 +231,16 @@ BgwMainLoop() {
 	}
 
 	elog(LOG, "pg_duckdb background worker for database '%s' (%u) has now terminated.", db_name, MyDatabaseId);
+}
+
+void
+recordDependencyOnMDServer(ObjectAddress *object_address) {
+	ObjectAddress server_address = {
+	    .classId = ForeignServerRelationId,
+	    .objectId = GetMotherduckForeignServerOid(),
+	    .objectSubId = 0,
+	};
+	recordDependencyOn(object_address, &server_address, DEPENDENCY_NORMAL);
 }
 
 } // namespace pgduckdb
@@ -781,6 +793,26 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 		return false;
 	}
 
+	// Record the dependency on the MotherDuck server
+	{
+		HeapTuple new_table_tuple =
+		    SearchSysCache2(RELNAMENSP, CStringGetDatum(table_name), ObjectIdGetDatum(schema_oid));
+		if (HeapTupleIsValid(new_table_tuple)) {
+			Form_pg_class postgres_relation = (Form_pg_class)GETSTRUCT(new_table_tuple);
+			ReleaseSysCache(new_table_tuple);
+			ObjectAddress object_address = {
+			    .classId = RelationRelationId,
+			    .objectId = GetOid(postgres_relation),
+			    .objectSubId = 0,
+			};
+			recordDependencyOnMDServer(&object_address);
+		} else {
+			// Something went really wrong (since `create_table_succeeded`)
+			elog(WARNING, "Failed to find table '%s.%s' so won't record dependency to 'motherduck' SERVER", table_name,
+			     postgres_schema_name);
+		}
+	}
+
 	if (did_delete_table) {
 		/*
 		 * Commit the subtransaction that contains both the drop and the create that
@@ -940,12 +972,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		    .objectId = schema_oid,
 		    .objectSubId = 0,
 		};
-		ObjectAddress server_address = {
-		    .classId = ForeignServerRelationId,
-		    .objectId = GetMotherduckForeignServerOid(), // pgduckdb::ExtensionOid(),
-		    .objectSubId = 0,
-		};
-		recordDependencyOn(&schema_address, &server_address, DEPENDENCY_NORMAL);
+		recordDependencyOnMDServer(&schema_address);
 	}
 
 	/* Success, so we commit the subtransaction */
