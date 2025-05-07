@@ -15,6 +15,10 @@ def can_run_md_tests():
     return MD_TEST_USER_CREATOR_TOKEN is not None or MOTHERDUCK_TEST_TOKEN is not None
 
 
+def can_run_md_multi_user_tests():
+    return MD_TEST_USER_CREATOR_TOKEN is not None
+
+
 def create_test_user():
     """
     Given a `motherduck_token` environment variable, this function creates a test user and returns its details.
@@ -23,7 +27,7 @@ def create_test_user():
     For now, this function only supports one user, that will be re-used for all tests.
     """
 
-    if MOTHERDUCK_TEST_TOKEN is not None:
+    if MD_TEST_USER_CREATOR_TOKEN is None and MOTHERDUCK_TEST_TOKEN is not None:
         print(
             "Found `MOTHERDUCK_TEST_TOKEN` environment variable, using it as the test user token."
         )

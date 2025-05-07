@@ -1,5 +1,6 @@
 import os
 import pytest
+import psycopg.errors
 
 from .utils import Postgres, Duckdb, create_duckdb
 from .motherduck_token_helper import create_test_user
@@ -13,8 +14,6 @@ def shared_pg(tmp_path_factory):
 
     pg.start()
     pg.sql("CREATE ROLE duckdb_group")
-    pg.sql("GRANT CREATE ON SCHEMA public TO duckdb_group")
-    pg.sql("CREATE EXTENSION pg_duckdb")
 
     yield pg
 
@@ -27,22 +26,38 @@ def default_db_name(request):
     yield request.node.name.removeprefix("test_")
 
 
+def init_pg(pgobj, **kwargs):
+    pgobj.sql("GRANT CREATE ON SCHEMA public TO duckdb_group", **kwargs)
+    pgobj.sql("CREATE EXTENSION pg_duckdb", **kwargs)
+
+
+def teardown_pg(pgobj, **kwargs):
+    pgobj.sql("REVOKE ALL PRIVILEGES ON SCHEMA public FROM duckdb_group", **kwargs)
+    pgobj.sql("DROP EXTENSION pg_duckdb CASCADE", **kwargs)
+
+
+@pytest.fixture(scope="session")
+def initialized_shared_pg(shared_pg):
+    init_pg(shared_pg)
+    yield shared_pg
+
+
 @pytest.fixture
-def pg(shared_pg, default_db_name):
+def pg(initialized_shared_pg, default_db_name):
     """
     Wraps the shared_pg fixture to reset the db after each test.
 
     It also creates a schema for the test to use. And logs the pg log to stdout
     for debugging failures.
     """
+    shared_pg = initialized_shared_pg
     shared_pg.reset()
 
     with shared_pg.log_path.open() as f:
         f.seek(0, os.SEEK_END)
         try:
-            test_schema_name = default_db_name
-            shared_pg.create_schema(test_schema_name)
-            shared_pg.search_path = f"{test_schema_name}, public"
+            shared_pg.create_schema(default_db_name)
+            shared_pg.search_path = f"{default_db_name}, public"
             yield shared_pg
         finally:
             try:
@@ -50,6 +65,39 @@ def pg(shared_pg, default_db_name):
             finally:
                 print("\n\nPG_LOG\n")
                 print(f.read())
+
+
+@pytest.fixture
+def pg_two_dbs(shared_pg):
+    """A cursor to a pg_duckdb enabled postgres"""
+
+    for dbname in ["test_pg_db_1", "test_pg_db_2"]:
+        try:
+            shared_pg.dropdb(dbname)
+        except psycopg.errors.InvalidCatalogName:
+            pass  # ignore if it doesn't exist
+        shared_pg.createdb(dbname)
+        init_pg(shared_pg, dbname=dbname)
+
+    shared_pg.reset()
+
+    with shared_pg.log_path.open() as f:
+        f.seek(0, os.SEEK_END)
+        try:
+            with shared_pg.cur(dbname="test_pg_db_1") as cur1:
+                with shared_pg.cur(dbname="test_pg_db_2") as cur2:
+                    assert cur1.sql(" SELECT current_database();") == "test_pg_db_1"
+                    assert cur2.sql(" SELECT current_database();") == "test_pg_db_2"
+                    yield cur1, cur2
+        finally:
+            try:
+                for dbname in ["test_pg_db_1", "test_pg_db_2"]:
+                    teardown_pg(shared_pg, dbname=dbname)
+            finally:
+                print("\n\nPG_LOG\n")
+                print(f.read())
+
+    shared_pg.cleanup_test_leftovers()
 
 
 @pytest.fixture

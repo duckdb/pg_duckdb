@@ -186,8 +186,8 @@ void
 BgwMainLoop() {
 	elog(LOG, "pg_duckdb background worker: starting");
 
+	char *db_name = nullptr;
 	{
-		char *db_name = nullptr;
 		StartTransactionCommand();
 		db_name = strdup(get_database_name(MyDatabaseId));
 		CommitTransactionCommand();
@@ -225,6 +225,8 @@ BgwMainLoop() {
 		CHECK_FOR_INTERRUPTS();
 		ResetLatch(MyLatch);
 	}
+
+	elog(LOG, "pg_duckdb background worker for database '%s' (%u) has now terminated.", db_name, MyDatabaseId);
 }
 
 } // namespace pgduckdb
