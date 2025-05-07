@@ -63,7 +63,8 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	table_scan_planstate =
 	    PostgresFunctionGuard(ExecInitNode, planned_stmt->planTree, table_scan_query_desc->estate, 0);
 
-	bool run_scan_with_parallel_workers = persistence != RELPERSISTENCE_TEMP;
+	bool run_scan_with_parallel_workers =
+	    persistence != RELPERSISTENCE_TEMP && duckdb_max_workers_per_postgres_scan > 0;
 	run_scan_with_parallel_workers &= CanTableScanRunInParallel(table_scan_query_desc->planstate->plan);
 
 	/* Temp tables can be excuted with parallel workers, and whole plan should be parallel aware */
@@ -118,6 +119,11 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
 }
 
+TupleTableSlot *
+PostgresTableReader::InitTupleSlot() {
+	return PostgresFunctionGuard(MakeTupleTableSlot, table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
+}
+
 PostgresTableReader::~PostgresTableReader() {
 	if (cleaned_up) {
 		return;
@@ -126,6 +132,7 @@ PostgresTableReader::~PostgresTableReader() {
 	PostgresTableReaderCleanup();
 }
 
+// The caller should hold GlobalProcessLock to ensure thread-safety
 void
 PostgresTableReader::PostgresTableReaderCleanup() {
 	D_ASSERT(!cleaned_up);
@@ -278,13 +285,33 @@ PostgresTableReader::GetNextTuple() {
 	return PostgresFunctionGuard(ExecClearTuple, slot);
 }
 
+/*
+ * Get the next minimal tuple from the table scan into the provided buffer.
+ * Returns true if a tuple was read, false if the scan is finished.
+ * GlobalProcessLock should be held before calling this.
+ */
+bool
+PostgresTableReader::GetNextMinimalTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
+	MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
+	if (HeapTupleIsValid(worker_minmal_tuple)) {
+		// deep copy worker_minmal_tuple to destination buffer
+		Size tuple_size = worker_minmal_tuple->t_len + MINIMAL_TUPLE_DATA_OFFSET;
+		minimal_tuple_buffer.resize(tuple_size);
+		memcpy(minimal_tuple_buffer.data(), worker_minmal_tuple, tuple_size);
+		return true;
+	}
+
+	minimal_tuple_buffer.resize(0);
+	return false;
+}
+
 MinimalTuple
 PostgresTableReader::GetNextWorkerTuple() {
 	int nvisited = 0;
 	TupleQueueReader *reader = NULL;
 	MinimalTuple minimal_tuple = NULL;
 	bool readerdone = false;
-	for (;;) {
+	for (; next_parallel_reader < nreaders;) {
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
 
 		minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
@@ -324,6 +351,8 @@ PostgresTableReader::GetNextWorkerTuple() {
 			nvisited = 0;
 		}
 	}
+
+	return NULL;
 }
 
 } // namespace pgduckdb
