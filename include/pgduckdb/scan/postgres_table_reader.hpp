@@ -2,6 +2,8 @@
 
 #include "pgduckdb/pg/declarations.hpp"
 
+#include <vector>
+
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 namespace pgduckdb {
@@ -11,7 +13,13 @@ public:
 	PostgresTableReader(const char *table_scan_query, bool count_tuples_only);
 	~PostgresTableReader();
 	TupleTableSlot *GetNextTuple();
+	bool GetNextMinimalTuple(std::vector<uint8_t> &minimal_tuple_buffer);
 	void PostgresTableReaderCleanup();
+	TupleTableSlot *InitTupleSlot();
+	bool
+	IsParallelScan() const {
+		return nworkers_launched > 0;
+	}
 
 private:
 	MinimalTuple GetNextWorkerTuple();
