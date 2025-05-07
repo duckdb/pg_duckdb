@@ -98,10 +98,16 @@ def test_explain_execute_statement(cur: Cursor):
     cur.sql("EXPLAIN (ANALYZE, FORMAT JSON) SELECT * FROM test_table t")
     cur.sql("PREPARE test_query AS SELECT * FROM test_table t")
     result = cur.sql("EXPLAIN EXECUTE test_query")
+    plan = "\n".join(result)
+    print(plan)
     result2 = cur.sql("EXPLAIN EXECUTE test_query")
+    plan2 = "\n".join(result2)
+    print(plan2)
     # Due to bugs the second output will be in different format, the first one
     # will still be using JSON formatting as well as using EXPLAIN ANALYZE.
     assert result[3] != result2[3]
+    assert "EXPLAIN_ANALYZE" in plan
+    assert "EXPLAIN_ANALYZE" not in plan2
     # Similarly the first run like this will result in invalid JSON
     with pytest.raises(
         json.decoder.JSONDecodeError,
@@ -109,7 +115,7 @@ def test_explain_execute_statement(cur: Cursor):
         cur.sql("EXPLAIN (FORMAT JSON) EXECUTE test_query")
 
     # The second query correctly creates JSON output though.
-    result4 = cur.sql("EXPLAIN (FORMAT JSON) EXECUTE test_query")
+    cur.sql("EXPLAIN (FORMAT JSON) EXECUTE test_query")
 
 
 def test_explain_dml(cur: Cursor):
