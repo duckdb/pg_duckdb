@@ -7,7 +7,10 @@ library for that purpose.
 """
 
 from .utils import Cursor, Postgres, PG_MAJOR_VERSION
-from .motherduck_token_helper import can_run_md_tests
+from .motherduck_token_helper import (
+    can_run_md_multi_user_tests,
+    can_run_md_tests,
+)
 from .multi_duckdb_helper import MDClient
 
 import pytest
@@ -110,6 +113,7 @@ def test_md_read_scaling(pg: Postgres, ddb, default_db_name, md_test_user):
         )
 
 
+@pytest.mark.skipif(not can_run_md_multi_user_tests(), reason="needs multiple users")
 def test_md_multiple_databases(pg_two_dbs, md_test_user):
     cur1, cur2 = pg_two_dbs
     with MDClient.create("test_md_db_1", "test_md_db_2") as (cli1, cli2):
