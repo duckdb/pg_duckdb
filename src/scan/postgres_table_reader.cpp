@@ -27,8 +27,8 @@ extern "C" {
 namespace pgduckdb {
 
 PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool count_tuples_only)
-    : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
-      entered_parallel_mode(false), cleaned_up(false) {
+    : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nworkers_launched(0), nreaders(0),
+      next_parallel_reader(0), entered_parallel_mode(false), cleaned_up(false) {
 
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
@@ -63,8 +63,7 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	table_scan_planstate =
 	    PostgresFunctionGuard(ExecInitNode, planned_stmt->planTree, table_scan_query_desc->estate, 0);
 
-	bool run_scan_with_parallel_workers =
-	    persistence != RELPERSISTENCE_TEMP && duckdb_max_workers_per_postgres_scan > 0;
+	bool run_scan_with_parallel_workers = persistence != RELPERSISTENCE_TEMP;
 	run_scan_with_parallel_workers &= CanTableScanRunInParallel(table_scan_query_desc->planstate->plan);
 
 	/* Temp tables can be excuted with parallel workers, and whole plan should be parallel aware */
@@ -119,15 +118,16 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
 }
 
+// The caller should hold GlobalProcessLock to ensure thread-safety
 TupleTableSlot *
 PostgresTableReader::InitTupleSlot() {
+	if (cleaned_up) {
+		return NULL;
+	}
 	return PostgresFunctionGuard(MakeTupleTableSlot, table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
 }
 
 PostgresTableReader::~PostgresTableReader() {
-	if (cleaned_up) {
-		return;
-	}
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	PostgresTableReaderCleanup();
 }
@@ -135,7 +135,10 @@ PostgresTableReader::~PostgresTableReader() {
 // The caller should hold GlobalProcessLock to ensure thread-safety
 void
 PostgresTableReader::PostgresTableReaderCleanup() {
-	D_ASSERT(!cleaned_up);
+	if (cleaned_up) {
+		return;
+	}
+
 	cleaned_up = true;
 	PostgresScopedStackReset scoped_stack_reset;
 	PostgresMemberGuard(PostgresTableReader::PostgresTableReaderCleanupUnsafe);
