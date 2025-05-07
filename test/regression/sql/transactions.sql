@@ -222,6 +222,26 @@ BEGIN;
     CREATE TABLE t_x(a int);
 END;
 
+BEGIN;
+    CREATE TABLE t_x(a int);
+    ALTER TABLE t_ddb RENAME COLUMN a TO z;
+END;
+
+BEGIN;
+    ALTER TABLE t_ddb RENAME COLUMN a TO z;
+    CREATE TABLE t_x(a int);
+END;
+
+BEGIN;
+    CREATE TABLE t_x(a int);
+    ALTER TABLE t_ddb RENAME TO t_ddb_new;
+END;
+
+BEGIN;
+    ALTER TABLE t_ddb RENAME TO t_ddb_new;
+    CREATE TABLE t_x(a int);
+END;
+
 -- Dropping both duckdb tables and postgres tables in the same command is
 -- disallowed in a transaction.
 BEGIN;
