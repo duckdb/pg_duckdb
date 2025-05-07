@@ -163,6 +163,14 @@ ShouldTryToUseDuckdbExecution(Query *query) {
 		return false;
 	}
 
+	if (pgduckdb::is_background_worker) {
+		/* If we're the background worker, we don't want to force duckdb
+		 * execution. Some of the queries that we're doing depend on Postgres
+		 * execution, particularly the ones that use the regclsas type to
+		 * understand tablenames. */
+		return false;
+	}
+
 	return duckdb_force_execution && pgduckdb::IsAllowedStatement(query) && ContainsFromClause(query);
 }
 

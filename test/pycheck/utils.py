@@ -753,7 +753,7 @@ class Postgres(OutputSilencer):
         try:
             self.pgctl(f'-o "-p {self.port}" -l {self.log_path} start')
         except Exception:
-            print("\n\nPG_LOG\n")
+            print(f"\n\nPG_LOG {self.log_path}\n")
             with self.log_path.open() as f:
                 print(f.read())
             raise

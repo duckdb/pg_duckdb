@@ -120,6 +120,7 @@ FindState() {
 
 BgwStatePerDB *
 GetState() {
+	Assert(is_background_worker);
 	auto state = FindState();
 	if (!state) {
 		SpinLockRelease(&BgwShmemStruct->lock);
@@ -421,7 +422,10 @@ UnclaimBgwSessionHint(int /*code*/, Datum /*arg*/) {
 	}
 
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	GetState()->bgw_session_hint_is_reused = false;
+	auto *state = FindState();
+	if (state) {
+		state->bgw_session_hint_is_reused = false;
+	}
 	SpinLockRelease(&BgwShmemStruct->lock);
 	reused_bgw_session_hint = false;
 }
@@ -510,8 +514,8 @@ PossiblyReuseBgwSessionHint(void) {
 
 	const char *result = "";
 	SpinLockAcquire(&BgwShmemStruct->lock);
-	auto state = GetState();
-	if (!state->bgw_session_hint_is_reused) {
+	auto state = FindState();
+	if (state && !state->bgw_session_hint_is_reused) {
 		result = bgw_session_hint;
 		state->bgw_session_hint_is_reused = true;
 		reused_bgw_session_hint = true;
