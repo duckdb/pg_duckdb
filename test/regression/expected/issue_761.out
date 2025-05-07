@@ -1,0 +1,24 @@
+SET duckdb.force_execution = TRUE;
+DO $$
+DECLARE
+    objtype text;
+BEGIN
+    FOR objtype IN VALUES ('toast table'), ('index column'), ('sequence column'),
+        ('toast table column'), ('view column'), ('materialized view column')
+    LOOP
+        BEGIN
+            PERFORM pg_get_object_address(objtype, '{one}', '{}');
+        EXCEPTION WHEN invalid_parameter_value THEN
+            RAISE WARNING 'error for %: %', objtype, sqlerrm;
+        END;
+    END LOOP;
+END;
+$$;
+WARNING:  error for toast table: unsupported object type "toast table"
+WARNING:  error for index column: unsupported object type "index column"
+WARNING:  error for sequence column: unsupported object type "sequence column"
+WARNING:  error for toast table column: unsupported object type "toast table column"
+WARNING:  error for view column: unsupported object type "view column"
+WARNING:  error for materialized view column: unsupported object type "materialized view column"
+ERROR:  (PGDuckDB/Duckdb_EndCustomScan_Cpp) Executor Error: SAVEPOINT is not supported in DuckDB
+CONTEXT:  PL/pgSQL function inline_code_block line 5 at FOR over SELECT rows
