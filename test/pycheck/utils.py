@@ -662,6 +662,20 @@ class Postgres(OutputSilencer):
             silent=True,
         )
 
+    def createdb(self, name, **kwargs):
+        """Create a database with the given name"""
+        self.sql(
+            sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)),
+            **kwargs,
+        )
+
+    def dropdb(self, name, **kwargs):
+        """Drop a database with the given name"""
+        self.sql(
+            sql.SQL("DROP DATABASE {}").format(sql.Identifier(name)),
+            **kwargs,
+        )
+
     def initdb(self):
         initdb = pg_bin("initdb")
         run(

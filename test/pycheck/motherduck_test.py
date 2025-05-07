@@ -8,6 +8,7 @@ library for that purpose.
 
 from .utils import Cursor, Postgres, PG_MAJOR_VERSION
 from .motherduck_token_helper import can_run_md_tests
+from .multi_duckdb_helper import MDClient
 
 import pytest
 import psycopg.errors
@@ -104,6 +105,39 @@ def test_md_read_scaling(pg: Postgres, ddb, default_db_name, md_test_user):
         assert cur.sql(
             "SELECT * FROM duckdb.query($$ SELECT current_setting('motherduck_session_hint'); $$);"
         )
+
+
+def test_md_multiple_databases(pg_two_dbs, md_test_user):
+    cur1, cur2 = pg_two_dbs
+    with MDClient.create("test_md_db_1", "test_md_db_2") as (cli1, cli2):
+        # Connect each user in PG to their respective DBs
+        cur1.sql(f"CALL duckdb.enable_motherduck('{cli1.get_token()}', 'test_md_db_1')")
+        cur2.sql(f"CALL duckdb.enable_motherduck('{cli2.get_token()}', 'test_md_db_2')")
+
+        # Create a table in user1's DB...
+        cli1.run_query("CREATE TABLE user1_t1(a int, b varchar)")
+        cli1.run_query("INSERT INTO user1_t1 VALUES (41, 'hello user1')")
+
+        # And make sure we can read it.
+        cur1.wait_until_table_exists("user1_t1")
+        assert cur1.sql("SELECT * FROM user1_t1") == (41, "hello user1")
+
+        # Same for user2
+        cli2.run_query("CREATE TABLE user2_t1(a int, b varchar)")
+        cli2.run_query("INSERT INTO user2_t1 VALUES (42, 'hello user2')")
+
+        cur2.wait_until_table_exists("user2_t1")
+        assert cur2.sql("SELECT * FROM user2_t1") == (42, "hello user2")
+
+        # Make sure each user can only see their own tables
+        list_tables_query = """
+        SELECT table_schema,table_name
+        FROM information_schema.tables
+        WHERE table_schema NOT IN ('pg_catalog', 'information_schema', 'duckdb')
+          AND table_schema NOT LIKE 'ddb$sample_data%';
+        """
+        assert cur1.sql(list_tables_query) == ("public", "user1_t1")
+        assert cur2.sql(list_tables_query) == ("public", "user2_t1")
 
 
 def test_md_ctas(md_cur: Cursor, ddb):
