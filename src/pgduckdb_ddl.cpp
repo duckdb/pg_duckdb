@@ -378,12 +378,11 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			if (strncmp("ddb$", stmt->newname, 4) == 0) {
 				elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
 			}
-		}
-		if (stmt->renameType == OBJECT_TABLE || stmt->renameType == OBJECT_COLUMN) {
+		} else if (stmt->renameType == OBJECT_TABLE || stmt->renameType == OBJECT_COLUMN) {
 			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
-			Relation relation = RelationIdGetRelation(relation_oid);
+			Relation rel = RelationIdGetRelation(relation_oid);
 
-			if (pgduckdb::IsDuckdbTable(relation)) {
+			if (pgduckdb::IsDuckdbTable(rel)) {
 				if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
 					ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 					                errmsg("Only one DuckDB %s can be renamed in a single statement",
@@ -392,7 +391,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 				pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::ALTER_TABLE;
 				pgduckdb::ClaimCurrentCommandId();
 			}
-			RelationClose(relation);
+			RelationClose(rel);
 		}
 
 		return;
