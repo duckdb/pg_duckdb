@@ -63,8 +63,20 @@ def pg(initialized_shared_pg, default_db_name):
             try:
                 shared_pg.cleanup_test_leftovers()
             finally:
-                print("\n\nPG_LOG\n")
-                print(f.read())
+                print(f"\n\nPG_LOG {shared_pg.log_path}\n")
+                logs = f.read()
+                print(logs)
+                # Usually when Postgres crashes we quickly notice due to a
+                # query failing. Sometimes though it restarts fast enough that
+                # there's no indictaion of the crash except for the logs. So
+                # here we check that postgres did not crash during the last
+                # test.
+                assert (
+                    "was terminated by signal 6" not in logs
+                ), "Postgres crashed! Check the logs above."
+                assert (
+                    "was terminated by signal 11" not in logs
+                ), "Postgres crashed! Check the logs above."
 
 
 @pytest.fixture
