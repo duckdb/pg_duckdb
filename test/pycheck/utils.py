@@ -333,6 +333,14 @@ class Cursor(OutputSilencer):
                 self.sql("SELECT %s::regclass", (table_name,), **kwargs)
                 return
 
+    def wait_until(self, func, error_message, timeout=5):
+        while loop_until(
+            error_message=error_message,
+            timeout=timeout,
+        ):
+            if func():
+                return
+
     def wait_until_schema_exists(self, schema_name, timeout=5, **kwargs):
         while loop_until(
             timeout=timeout,

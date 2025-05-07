@@ -170,6 +170,9 @@ def test_md_alter_table(md_cur: Cursor):
         md_cur.sql("ALTER TABLE t FORCE ROW LEVEL SECURITY")
 
     md_cur.sql("ALTER TABLE t ADD COLUMN b int DEFAULT 100")
+    md_cur.wait_until(
+        lambda: md_cur.sql("SELECT * FROM t") == (1, 100), "Failed to add column"
+    )
     assert md_cur.sql("SELECT * FROM t") == (1, 100)
 
     if PG_MAJOR_VERSION >= 15:
