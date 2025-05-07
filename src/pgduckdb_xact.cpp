@@ -3,6 +3,7 @@
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 
@@ -214,10 +215,11 @@ IsDuckdbTempTable(Oid relid) {
 static void
 DuckdbXactCallback_Cpp(XactEvent event) {
 	/*
-	 * We're in a committing phase, always reset the top_level_statement flag,
-	 * even if this was not a DuckDB transaction.
+	 * We're in a committing phase. Some global variables we modify even when
+	 * we're not using DuckDB execution. So we always reset those.
 	 */
 	top_level_statement = true;
+	executor_nest_level = 0;
 
 	/* If DuckDB is not initialized there's no need to do anything */
 	if (!DuckDBManager::IsInitialized()) {

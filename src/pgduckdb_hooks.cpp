@@ -146,6 +146,8 @@ ContainsFromClause(Query *query) {
 
 namespace pgduckdb {
 
+int64_t executor_nest_level = 0;
+
 bool
 ShouldTryToUseDuckdbExecution(Query *query) {
 	if (top_level_duckdb_ddl_type == DDLType::REFRESH_MATERIALIZED_VIEW) {
@@ -198,6 +200,11 @@ IsAllowedStatement(Query *query, bool throw_error) {
 			elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 			return false;
 		}
+	}
+
+	if (pgduckdb::executor_nest_level > 0) {
+		elog(elevel, "DuckDB execution is not supported inside functions");
+		return false;
 	}
 
 	/*
@@ -317,6 +324,7 @@ DuckdbExecutorStartHook_Cpp(QueryDesc *queryDesc) {
 
 static void
 DuckdbExecutorStartHook(QueryDesc *queryDesc, int eflags) {
+	pgduckdb::executor_nest_level++;
 	if (!pgduckdb::IsExtensionRegistered()) {
 		pgduckdb::MarkStatementNotTopLevel();
 		prev_executor_start_hook(queryDesc, eflags);
@@ -349,6 +357,8 @@ DuckdbExecutorFinishHook_Cpp(QueryDesc *queryDesc) {
 
 static void
 DuckdbExecutorFinishHook(QueryDesc *queryDesc) {
+	Assert(pgduckdb::executor_nest_level > 0);
+	pgduckdb::executor_nest_level--;
 	if (!pgduckdb::IsExtensionRegistered()) {
 		prev_executor_finish_hook(queryDesc);
 		return;

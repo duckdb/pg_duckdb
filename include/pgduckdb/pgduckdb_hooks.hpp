@@ -3,6 +3,7 @@
 #include "pgduckdb/pg/declarations.hpp"
 
 namespace pgduckdb {
+extern int64_t executor_nest_level;
 bool IsAllowedStatement(Query *query, bool throw_error = false);
 bool IsCatalogTable(Relation rel);
 bool NeedsDuckdbExecution(Query *query);
