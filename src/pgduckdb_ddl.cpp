@@ -371,16 +371,30 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		return;
 	} else if (IsA(parsetree, RenameStmt)) {
 		auto stmt = castNode(RenameStmt, parsetree);
-		if (stmt->renameType != OBJECT_SCHEMA) {
-			/* We only care about schema renames for now */
-			return;
+		if (stmt->renameType == OBJECT_SCHEMA) {
+			if (strncmp("ddb$", stmt->subname, 4) == 0) {
+				elog(ERROR, "Changing the name of a ddb$ schema is currently not supported");
+			}
+			if (strncmp("ddb$", stmt->newname, 4) == 0) {
+				elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
+			}
 		}
-		if (strncmp("ddb$", stmt->subname, 4) == 0) {
-			elog(ERROR, "Changing the name of a ddb$ schema is currently not supported");
+		if (stmt->renameType == OBJECT_TABLE || stmt->renameType == OBJECT_COLUMN) {
+			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
+			Relation relation = RelationIdGetRelation(relation_oid);
+
+			if (pgduckdb::IsDuckdbTable(relation)) {
+				if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+					ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					                errmsg("Only one DuckDB %s can be renamed in a single statement",
+					                       stmt->renameType == OBJECT_TABLE ? "table" : "column")));
+				}
+				pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::ALTER_TABLE;
+				pgduckdb::ClaimCurrentCommandId();
+			}
+			RelationClose(relation);
 		}
-		if (strncmp("ddb$", stmt->newname, 4) == 0) {
-			elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
-		}
+
 		return;
 	} else if (IsA(parsetree, DropStmt)) {
 		auto stmt = castNode(DropStmt, parsetree);
@@ -588,13 +602,11 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		PG_RETURN_NULL();
 	}
 
-	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::CREATE_TABLE &&
-	    pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
-		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-		                errmsg("Cannot create a DuckDB table this way, use CREATE TABLE or CREATE TABLE ... AS")));
-		PG_RETURN_NULL();
-	}
-	/* Reset it back to NONE, for the remainder of the event trigger */
+	/*
+	 * Save the top level DDL type so we can check it later, but reset the
+	 * global variable for the rest of the execution.
+	 */
+	pgduckdb::DDLType original_ddl_type = pgduckdb::top_level_duckdb_ddl_type;
 	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
@@ -641,6 +653,12 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (SPI_processed != 1) {
 		elog(ERROR, "Expected single table to be created, but found %" PRIu64, static_cast<uint64_t>(SPI_processed));
 	}
+
+	if (original_ddl_type != pgduckdb::DDLType::CREATE_TABLE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Cannot create a DuckDB table this way, use CREATE TABLE or CREATE TABLE ... AS")));
+	}
+	/* Reset it back to NONE, for the remainder of the event trigger */
 
 	HeapTuple tuple = SPI_tuptable->vals[0];
 	bool isnull;
@@ -1045,14 +1063,11 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		PG_RETURN_NULL();
 	}
 
-	/* Reset since we don't need it anymore */
-	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::ALTER_TABLE &&
-	    pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
-		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-		                errmsg("Cannot ALTER a DuckDB table this way, please use ALTER TABLE")));
-		PG_RETURN_NULL();
-	}
-	/* Reset it back to NONE, for the remainder of the event trigger */
+	/*
+	 * Save the top level DDL type so we can check it later, but reset the
+	 * global variable for the rest of the execution.
+	 */
+	pgduckdb::DDLType original_ddl_type = pgduckdb::top_level_duckdb_ddl_type;
 	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
 
 	SPI_connect();
@@ -1140,6 +1155,11 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 			/* It was a regular temporary table, so this ALTER is allowed */
 			PG_RETURN_NULL();
 		}
+	}
+
+	if (original_ddl_type != pgduckdb::DDLType::ALTER_TABLE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Cannot ALTER a DuckDB table this way, please use ALTER TABLE")));
 	}
 
 	/* Forcibly allow whatever writes Postgres did for this command */
