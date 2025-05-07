@@ -5,6 +5,7 @@
 
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 
 extern "C" {
@@ -325,6 +326,12 @@ void
 Duckdb_EndCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
+
+	auto err = pgduckdb::FindAndResetPendingError();
+	if (!err.empty() && QueryCancelHoldoffCount == 0) {
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, err);
+	}
+
 	/*
 	 * BUG: In rare error casess it's possible that we call this when we are
 	 * currently accepting interupts, in those cases we should not resume them

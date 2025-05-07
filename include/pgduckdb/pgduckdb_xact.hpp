@@ -23,4 +23,5 @@ void AutocommitSingleStatementQueries();
 void MarkStatementNotTopLevel();
 void SetStatementTopLevel(bool top_level);
 bool IsStatementTopLevel();
+std::string FindAndResetPendingError();
 } // namespace pgduckdb
