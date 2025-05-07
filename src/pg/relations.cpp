@@ -69,6 +69,16 @@ SlotGetAllAttrs(TupleTableSlot *slot) {
 	PostgresFunctionGuard(slot_getallattrs, slot);
 }
 
+void
+SlotGetAllAttrsUnsafe(TupleTableSlot *slot) {
+	slot_getallattrs(slot);
+}
+
+TupleTableSlot *
+ExecStoreMinimalTupleUnsafe(MinimalTuple minmal_tuple, TupleTableSlot *slot, bool shouldFree) {
+	return ExecStoreMinimalTuple(minmal_tuple, slot, shouldFree);
+}
+
 Relation
 OpenRelation(Oid relationId) {
 	if (PostgresFunctionGuard(check_enable_rls, relationId, InvalidOid, false) == RLS_ENABLED) {
