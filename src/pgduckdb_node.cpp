@@ -355,6 +355,22 @@ Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 
 void
 Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
+	/*
+	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_format,
+	 * is copied from ExplainOneQueryHook. Sadly that hook is not run for
+	 * EXPLAIN EXECUTE ..., and the code here runs too late to actually impact
+	 * the query that we send to DuckDB. However, putting it here as well is a
+	 * hacky bandaid to make the code below not crash. And it has the
+	 * sideeffect that if you run EXPLAIN EXECUTE twice in a row, you will get
+	 * the intended output. Since EXPLAIN EXECUTE is pretty rare for people to
+	 * run, we consider this fine for now.
+	 */
+	duckdb_explain_analyze = es->analyze;
+	if (es->format == EXPLAIN_FORMAT_JSON)
+		duckdb_explain_format = duckdb::ExplainFormat::JSON;
+	else
+		duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
+
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	ExecuteQuery(duckdb_scan_state);
 
