@@ -113,39 +113,6 @@ def pg_two_dbs(shared_pg):
 
 
 @pytest.fixture
-def pg_two_dbs(shared_pg):
-    """A cursor to a pg_duckdb enabled postgres"""
-
-    for dbname in ["test_pg_db_1", "test_pg_db_2"]:
-        try:
-            shared_pg.dropdb(dbname)
-        except psycopg.errors.InvalidCatalogName:
-            pass  # ignore if it doesn't exist
-        shared_pg.createdb(dbname)
-        init_pg(shared_pg, dbname=dbname)
-
-    shared_pg.reset()
-
-    with shared_pg.log_path.open() as f:
-        f.seek(0, os.SEEK_END)
-        try:
-            with shared_pg.cur(dbname="test_pg_db_1") as cur1:
-                with shared_pg.cur(dbname="test_pg_db_2") as cur2:
-                    assert cur1.sql(" SELECT current_database();") == "test_pg_db_1"
-                    assert cur2.sql(" SELECT current_database();") == "test_pg_db_2"
-                    yield cur1, cur2
-        finally:
-            try:
-                for dbname in ["test_pg_db_1", "test_pg_db_2"]:
-                    teardown_pg(shared_pg, dbname=dbname)
-            finally:
-                print("\n\nPG_LOG\n")
-                print(f.read())
-
-    shared_pg.cleanup_test_leftovers()
-
-
-@pytest.fixture
 def cur(pg):
     with pg.cur() as cur:
         yield cur
