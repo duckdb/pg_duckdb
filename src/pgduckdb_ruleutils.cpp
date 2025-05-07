@@ -1,4 +1,5 @@
 #include "duckdb.hpp"
+#include "pgduckdb/pg/string_utils.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -454,7 +455,7 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
 		return list_make2((void *)dbname, (void *)"main");
 	}
 
-	if (strncmp("ddb$", postgres_schema_name, 4) != 0) {
+	if (pgduckdb::IsDuckdbSchemaName(postgres_schema_name)) {
 		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
 		return list_make2((void *)dbname, (void *)postgres_schema_name);
 	}
