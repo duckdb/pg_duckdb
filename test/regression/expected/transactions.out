@@ -272,6 +272,26 @@ BEGIN;
     CREATE TABLE t_x(a int);
 END;
 ERROR:  (PGDuckDB/DuckdbXactCallback_Cpp) Not implemented Error: Writing to DuckDB and Postgres tables in the same transaction block is not supported
+BEGIN;
+    CREATE TABLE t_x(a int);
+    ALTER TABLE t_ddb RENAME COLUMN a TO z;
+ERROR:  (PGDuckDB/DuckdbUtilityHook_Cpp) Not implemented Error: Writing to DuckDB and Postgres tables in the same transaction block is not supported
+END;
+BEGIN;
+    ALTER TABLE t_ddb RENAME COLUMN a TO z;
+    CREATE TABLE t_x(a int);
+END;
+ERROR:  (PGDuckDB/DuckdbXactCallback_Cpp) Not implemented Error: Writing to DuckDB and Postgres tables in the same transaction block is not supported
+BEGIN;
+    CREATE TABLE t_x(a int);
+    ALTER TABLE t_ddb RENAME TO t_ddb_new;
+ERROR:  (PGDuckDB/DuckdbUtilityHook_Cpp) Not implemented Error: Writing to DuckDB and Postgres tables in the same transaction block is not supported
+END;
+BEGIN;
+    ALTER TABLE t_ddb RENAME TO t_ddb_new;
+    CREATE TABLE t_x(a int);
+END;
+ERROR:  (PGDuckDB/DuckdbXactCallback_Cpp) Not implemented Error: Writing to DuckDB and Postgres tables in the same transaction block is not supported
 -- Dropping both duckdb tables and postgres tables in the same command is
 -- disallowed in a transaction.
 BEGIN;

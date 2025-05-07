@@ -219,6 +219,7 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 	 * we're not using DuckDB execution. So we always reset those.
 	 */
 	top_level_statement = true;
+	top_level_duckdb_ddl_type = DDLType::NONE;
 	executor_nest_level = 0;
 
 	/* If DuckDB is not initialized there's no need to do anything */
@@ -234,8 +235,6 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 	case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		CheckForDisallowedMixedWrites();
 
-		top_level_duckdb_ddl_type = DDLType::NONE;
-		top_level_statement = true;
 		next_expected_command_id = FirstCommandId;
 		pg::force_allow_writes = false;
 		if (modified_temporary_duckdb_tables) {
@@ -251,8 +250,6 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 
 	case XACT_EVENT_ABORT:
 	case XACT_EVENT_PARALLEL_ABORT:
-		top_level_duckdb_ddl_type = DDLType::NONE;
-		top_level_statement = true;
 		next_expected_command_id = FirstCommandId;
 		pg::force_allow_writes = false;
 		if (modified_temporary_duckdb_tables) {
