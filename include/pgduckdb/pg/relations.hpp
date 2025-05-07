@@ -21,6 +21,9 @@ Form_pg_attribute GetAttr(const TupleDesc tupleDesc, int i);
 bool TupleIsNull(TupleTableSlot *slot);
 
 void SlotGetAllAttrs(TupleTableSlot *slot);
+void SlotGetAllAttrsUnsafe(TupleTableSlot *slot);
+
+TupleTableSlot *ExecStoreMinimalTupleUnsafe(MinimalTuple minmal_tuple, TupleTableSlot *slot, bool shouldFree);
 
 double EstimateRelSize(Relation rel);
 

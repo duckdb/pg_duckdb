@@ -134,6 +134,7 @@ ToastFetchDatum(struct varlena *attr) {
 	return result;
 }
 
+// This function is thread-safe and does not utilize the PostgreSQL memory context.
 Datum
 DetoastPostgresDatum(struct varlena *attr, bool *should_free) {
 	struct varlena *toasted_value = nullptr;
