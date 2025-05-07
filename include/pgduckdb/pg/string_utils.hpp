@@ -11,3 +11,10 @@ inline bool
 IsEmptyString(const char *str) {
 	return AreStringEqual(str, "");
 }
+
+namespace pgduckdb {
+inline bool
+IsDuckdbSchemaName(const char *s) {
+	return strncmp("ddb$", s, 4) == 0;
+}
+} // namespace pgduckdb
