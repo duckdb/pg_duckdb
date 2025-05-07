@@ -42,6 +42,7 @@ extern "C" {
 #include "catalog/namespace.h"
 #include "catalog/pg_namespace.h"
 #include "catalog/pg_extension.h"
+#include "catalog/pg_foreign_server.h"
 #include "utils/acl.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
@@ -925,7 +926,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	if (!is_default_db) {
 		/*
 		 * For ddb$ schemas we need to record a dependency between the schema
-		 * and the extension, so that DROP EXTENSION also drops these schemas.
+		 * and the FDW, so that DROP SERVER motherduck also drops these schemas.
 		 */
 		schema_oid = get_namespace_oid(postgres_schema_name, true);
 		if (schema_oid == InvalidOid) {
@@ -939,12 +940,12 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		    .objectId = schema_oid,
 		    .objectSubId = 0,
 		};
-		ObjectAddress extension_address = {
-		    .classId = ExtensionRelationId,
-		    .objectId = pgduckdb::ExtensionOid(),
+		ObjectAddress server_address = {
+		    .classId = ForeignServerRelationId,
+		    .objectId = GetMotherduckForeignServerOid(), // pgduckdb::ExtensionOid(),
 		    .objectSubId = 0,
 		};
-		recordDependencyOn(&schema_address, &extension_address, DEPENDENCY_NORMAL);
+		recordDependencyOn(&schema_address, &server_address, DEPENDENCY_NORMAL);
 	}
 
 	/* Success, so we commit the subtransaction */
