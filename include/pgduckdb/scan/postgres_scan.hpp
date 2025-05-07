@@ -48,7 +48,7 @@ struct PostgresScanLocalState : public duckdb::LocalTableFunctionState {
 	~PostgresScanLocalState() override;
 
 	PostgresScanGlobalState *global_state;
-	TupleTableSlot *slots[LOCAL_STATE_SLOT_BATCH_SIZE];
+	TupleTableSlot *slot;
 	std::vector<uint8_t> minimal_tuple_buffer[LOCAL_STATE_SLOT_BATCH_SIZE];
 
 	size_t output_vector_size;

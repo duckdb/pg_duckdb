@@ -68,8 +68,7 @@ PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_
 
 	table_scan_planstate = ExecInitNode(planned_stmt->planTree, table_scan_query_desc->estate, 0);
 
-	bool run_scan_with_parallel_workers =
-	    persistence != RELPERSISTENCE_TEMP && duckdb_max_workers_per_postgres_scan > 0;
+	bool run_scan_with_parallel_workers = persistence != RELPERSISTENCE_TEMP;
 	run_scan_with_parallel_workers &= CanTableScanRunInParallel(table_scan_query_desc->planstate->plan);
 
 	/* Temp tables cannot be excuted with parallel workers, and whole plan should be parallel aware */
@@ -130,16 +129,16 @@ PostgresTableReader::InitRunWithParallelScan(PlannedStmt *planned_stmt, bool cou
 	}
 }
 
+// The caller should hold GlobalProcessLock to ensure thread-safety
 TupleTableSlot *
 PostgresTableReader::InitTupleSlot() {
+	if (cleaned_up) {
+		return NULL;
+	}
 	return PostgresFunctionGuard(MakeTupleTableSlot, table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
 }
 
 PostgresTableReader::~PostgresTableReader() {
-	if (cleaned_up) {
-		return;
-	}
-
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	Cleanup();
 }
@@ -147,7 +146,10 @@ PostgresTableReader::~PostgresTableReader() {
 // The caller should hold GlobalProcessLock to ensure thread-safety
 void
 PostgresTableReader::Cleanup() {
-	D_ASSERT(!cleaned_up);
+	if (cleaned_up) {
+		return;
+	}
+
 	cleaned_up = true;
 	PostgresScopedStackReset scoped_stack_reset;
 	PostgresMemberGuard(PostgresTableReader::CleanupUnsafe);
