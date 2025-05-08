@@ -1,5 +1,5 @@
 comment = 'DuckDB Embedded in Postgres'
-default_version = '0.4.0'
+default_version = '1.0.0'
 module_pathname = '$libdir/pg_duckdb'
 relocatable = false
 schema = public
