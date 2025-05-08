@@ -70,8 +70,8 @@ CoerceSubscriptToText(struct ParseState *pstate, A_Indices *subscript, const cha
  * See also comments on SubscriptingRef in nodes/subscripting.h
  */
 void
-AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_Indices *subscript, bool isSlice) {
-	Assert(isSlice || subscript->uidx);
+AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_Indices *subscript, bool is_slice) {
+	Assert(is_slice || subscript->uidx);
 
 	Node *upper_subscript_expr = NULL;
 	if (subscript->uidx) {
@@ -80,7 +80,7 @@ AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_In
 
 	sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, upper_subscript_expr);
 
-	if (isSlice) {
+	if (is_slice) {
 		Node *lower_subscript_expr = NULL;
 		if (subscript->uidx) {
 			lower_subscript_expr = transformExpr(pstate, subscript->lidx, pstate->p_expr_kind);
@@ -96,8 +96,8 @@ AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_In
  * subscript returns an an duckdb.unresolved_type again.
  */
 void
-DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                         bool isAssignment, const char *type_name) {
+DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+                         bool is_assignment, const char *type_name) {
 	/*
 	 * We need to populate our cache for some of the code below. Normally this
 	 * cache is populated at the start of our planner hook, but this function
@@ -107,7 +107,7 @@ DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct Pars
 		elog(ERROR, "BUG: Using %s but the pg_duckdb extension is not installed", type_name);
 	}
 
-	if (isAssignment) {
+	if (is_assignment) {
 		elog(ERROR, "Assignment to %s is not supported", type_name);
 	}
 
@@ -117,7 +117,7 @@ DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct Pars
 
 	// Transform each subscript expression
 	foreach_node(A_Indices, subscript, indirection) {
-		AddSubscriptExpressions(sbsref, pstate, subscript, isSlice);
+		AddSubscriptExpressions(sbsref, pstate, subscript, is_slice);
 	}
 
 	// Set the result type of the subscripting operation
@@ -136,8 +136,8 @@ DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct Pars
  * Currently this is used for duckdb.row and duckdb.struct types.
  */
 void
-DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                             bool isAssignment, const char *type_name) {
+DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+                             bool is_assignment, const char *type_name) {
 	/*
 	 * We need to populate our cache for some of the code below. Normally this
 	 * cache is populated at the start of our planner hook, but this function
@@ -147,7 +147,7 @@ DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct 
 		elog(ERROR, "BUG: Using %s but the pg_duckdb extension is not installed", type_name);
 	}
 
-	if (isAssignment) {
+	if (is_assignment) {
 		elog(ERROR, "Assignment to %s is not supported", type_name);
 	}
 
@@ -165,14 +165,14 @@ DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct 
 		if (first) {
 			sbsref->refupperindexpr =
 			    lappend(sbsref->refupperindexpr, CoerceSubscriptToText(pstate, subscript, type_name));
-			if (isSlice) {
+			if (is_slice) {
 				sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, NULL);
 			}
 			first = false;
 			continue;
 		}
 
-		AddSubscriptExpressions(sbsref, pstate, subscript, isSlice);
+		AddSubscriptExpressions(sbsref, pstate, subscript, is_slice);
 	}
 
 	// Set the result type of the subscripting operation
@@ -229,9 +229,9 @@ DuckdbSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefStat
 }
 
 void
-DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                            bool isAssignment) {
-	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, isSlice, isAssignment, "duckdb.row");
+DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+                            bool is_assignment) {
+	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.row");
 }
 
 void
@@ -250,8 +250,8 @@ static SubscriptRoutines duckdb_row_subscript_routines = {
 
 void
 DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate,
-                                       bool isSlice, bool isAssignment) {
-	DuckdbSubscriptTransform(sbsref, indirection, pstate, isSlice, isAssignment, "duckdb.unresolved_type");
+                                       bool is_slice, bool is_assignment) {
+	DuckdbSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.unresolved_type");
 }
 
 void
@@ -269,9 +269,9 @@ static SubscriptRoutines duckdb_unresolved_type_subscript_routines = {
 };
 
 void
-DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                               bool isAssignment) {
-	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, isSlice, isAssignment, "duckdb.struct");
+DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+                               bool is_assignment) {
+	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.struct");
 }
 
 void
@@ -289,9 +289,9 @@ static SubscriptRoutines duckdb_struct_subscript_routines = {
 };
 
 void
-DuckdbMapSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool isSlice,
-                            bool isAssignment) {
-	DuckdbSubscriptTransform(sbsref, indirection, pstate, isSlice, isAssignment, "duckdb.map");
+DuckdbMapSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+                            bool is_assignment) {
+	DuckdbSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.map");
 }
 
 void
