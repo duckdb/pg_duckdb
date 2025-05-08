@@ -455,7 +455,7 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
 		return list_make2((void *)dbname, (void *)"main");
 	}
 
-	if (pgduckdb::IsDuckdbSchemaName(postgres_schema_name)) {
+	if (!pgduckdb::IsDuckdbSchemaName(postgres_schema_name)) {
 		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
 		return list_make2((void *)dbname, (void *)postgres_schema_name);
 	}
