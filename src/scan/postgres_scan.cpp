@@ -5,6 +5,7 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pg/relations.hpp"
+#include "pgduckdb/pgduckdb_guc.h"
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/logger.hpp"
@@ -170,6 +171,12 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	ConstructTableScanQuery(input);
 	table_reader_global_state =
 	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
+	// Default to a single thread if `count_tuples_only` is true or if the reader does not initialize a parallel scan.
+	max_threads = 1;
+	if (table_reader_global_state->IsParallelScan() && !count_tuples_only) {
+		max_threads = duckdb_threads_for_postgres_scan;
+	}
+
 	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 
@@ -182,6 +189,7 @@ PostgresScanGlobalState::~PostgresScanGlobalState() {
 
 PostgresScanLocalState::PostgresScanLocalState(PostgresScanGlobalState *_global_state)
     : global_state(_global_state), exhausted_scan(false) {
+	slot = global_state->table_reader_global_state->InitTupleSlot();
 }
 
 PostgresScanLocalState::~PostgresScanLocalState() {
@@ -256,17 +264,51 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 	local_state.output_vector_size = 0;
 
-	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
-		if (pgduckdb::TupleIsNull(slot)) {
-			local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
-			local_state.exhausted_scan = true;
-			break;
+	// Normal scan without parallelism
+	bool is_parallel_scan = local_state.global_state->MaxThreads() > 1;
+	if (!is_parallel_scan) {
+		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+		for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
+			TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
+			if (pgduckdb::TupleIsNull(slot)) {
+				local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
+				local_state.exhausted_scan = true;
+				break;
+			}
+
+			SlotGetAllAttrs(slot);
+			InsertTupleIntoChunk(output, local_state, slot);
+		}
+		SetOutputCardinality(output, local_state);
+		return;
+	}
+
+	D_ASSERT(STANDARD_VECTOR_SIZE % LOCAL_STATE_SLOT_BATCH_SIZE == 0);
+	for (size_t i = 0; i < STANDARD_VECTOR_SIZE / LOCAL_STATE_SLOT_BATCH_SIZE; i++) {
+		int valid_slots = 0;
+		{
+			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+			for (size_t j = 0; j < LOCAL_STATE_SLOT_BATCH_SIZE; j++) {
+				bool ret = local_state.global_state->table_reader_global_state->GetNextMinimalTuple(
+				    local_state.minimal_tuple_buffer[j]);
+				if (!ret) {
+					local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
+					local_state.exhausted_scan = true;
+					break;
+				}
+				valid_slots++;
+			}
 		}
 
-		SlotGetAllAttrs(slot);
-		InsertTupleIntoChunk(output, local_state, slot);
+		for (size_t j = 0; j < valid_slots; j++) {
+			MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[j].data());
+			local_state.slot = ExecStoreMinimalTupleUnsafe(minmal_tuple, local_state.slot, false);
+			SlotGetAllAttrsUnsafe(local_state.slot);
+			InsertTupleIntoChunk(output, local_state, local_state.slot);
+		}
+
+		if (valid_slots == 0)
+			break;
 	}
 
 	SetOutputCardinality(output, local_state);
