@@ -61,3 +61,43 @@ INSERT INTO tbl (b) SELECT 'foo' FROM generate_series(1, 2);
 INSERT INTO tbl (b) SELECT 'qux' FROM generate_series(1, 4);;
 SELECT * FROM tbl;
 DROP TABLE tbl;
+
+-- case: ARRAY / JSON type
+CREATE TABLE tbl (a int, b text[], c jsonb);
+CREATE TABLE tbl1 (a int, b text[], c jsonb);
+INSERT INTO tbl (a, b, c) VALUES (1, ARRAY ['foo', 'bar'], '{"a": 1, "b": 2}');
+INSERT INTO tbl1 SELECT * FROM tbl;
+SELECT * FROM tbl1;
+DROP TABLE tbl, tbl1;
+
+-- case: UPDATE/DELETE should be blocked
+SET duckdb.log_pg_explain to on;
+CREATE TABLE tbl (a int PRIMARY KEY, b text);
+INSERT INTO tbl (a, b) SELECT i, 'foo' FROM generate_series(1, 3) i;
+UPDATE tbl SET b = 'bar' WHERE a = 1;
+DELETE FROM tbl WHERE a = 1;
+-- INSERT without subquery should also be blocked
+INSERT INTO tbl (a, b) VALUES (1, 'foo');
+DROP TABLE tbl;
+SET duckdb.log_pg_explain to off;
+
+-- case: UNSUPPORTED TYPE
+CREATE TABLE tbl (a int, b xml);
+CREATE TABLE tbl1 (a int, b xml);
+INSERT INTO tbl (a, b) VALUES (1, '<xml>foo</xml>');
+SET duckdb.log_pg_explain to on;
+INSERT INTO tbl1 SELECT * FROM tbl;
+DROP TABLE tbl, tbl1;
+SET duckdb.log_pg_explain to off;
+
+-- case: query with JOIN
+CREATE TABLE tbl (a int, b text);
+CREATE TABLE tbl1 (a int, b1 text, b2 text);
+INSERT INTO tbl (a, b) VALUES (1, 'foo'), (2, 'bar'), (1, 'baz');
+EXPLAIN INSERT INTO tbl1 SELECT a.a, a.b, b.b FROM tbl a JOIN tbl b ON a.a = b.a;
+INSERT INTO tbl1 SELECT a.a, a.b, b.b FROM tbl a JOIN tbl b ON a.a = b.a;
+SET duckdb.log_pg_explain to on;
+-- The following query should be blocked because of VALUE RTE in the subquery
+INSERT INTO tbl1 SELECT a.a, a.b, b.column2 FROM tbl a JOIN (VALUES (2, 'yoyo'), (4, 'yoyo2')) AS b(column1, column2) ON a.a = b.column1;
+SELECT * FROM tbl1 ORDER BY 1, 2, 3;
+DROP TABLE tbl, tbl1;

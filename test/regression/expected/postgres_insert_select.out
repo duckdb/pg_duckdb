@@ -39,12 +39,17 @@ INSERT INTO tbl select r['a']::int, r['b'] from duckdb.query($$ SELECT 11 a, 'de
 INSERT INTO tbl select r['a']::int, r['b'] from duckdb.query($$ SELECT 21 a, 'ghi' b $$) r;
 ERROR:  no partition of relation "tbl" found for row
 DETAIL:  Partition key of the failing row contains (a) = (21).
-SELECT * FROM tbl ORDER BY a LIMIT 5;
+SELECT * FROM tbl_p1 ORDER BY a;
+ a |  b  
+---+-----
+ 1 | abc
+(1 row)
+
+SELECT * FROM tbl_p2 ORDER BY a;
  a  |  b  
 ----+-----
-  1 | abc
  11 | def
-(2 rows)
+(1 row)
 
 DROP TABLE tbl;
 -- case: INSERT INTO TABLE (col1, col3)
@@ -101,3 +106,125 @@ SELECT * FROM tbl;
 (4 rows)
 
 DROP TABLE tbl;
+CREATE TABLE tbl (a INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY, b text);
+INSERT INTO tbl (b) SELECT 'foo' FROM generate_series(1, 2);
+INSERT INTO tbl (b) SELECT 'qux' FROM generate_series(1, 4);;
+SELECT * FROM tbl;
+ a |  b  
+---+-----
+ 1 | foo
+ 2 | foo
+ 3 | qux
+ 4 | qux
+ 5 | qux
+ 6 | qux
+(6 rows)
+
+DROP TABLE tbl;
+CREATE TABLE tbl (a SERIAL PRIMARY KEY, b text);
+INSERT INTO tbl (b) SELECT 'foo' FROM generate_series(1, 2);
+INSERT INTO tbl (b) SELECT 'qux' FROM generate_series(1, 4);;
+SELECT * FROM tbl;
+ a |  b  
+---+-----
+ 1 | foo
+ 2 | foo
+ 3 | qux
+ 4 | qux
+ 5 | qux
+ 6 | qux
+(6 rows)
+
+DROP TABLE tbl;
+-- case: ARRAY / JSON type
+CREATE TABLE tbl (a int, b text[], c jsonb);
+CREATE TABLE tbl1 (a int, b text[], c jsonb);
+INSERT INTO tbl (a, b, c) VALUES (1, ARRAY ['foo', 'bar'], '{"a": 1, "b": 2}');
+INSERT INTO tbl1 SELECT * FROM tbl;
+SELECT * FROM tbl1;
+ a |     b     |        c         
+---+-----------+------------------
+ 1 | {foo,bar} | {"a": 1, "b": 2}
+(1 row)
+
+DROP TABLE tbl, tbl1;
+-- case: UPDATE/DELETE should be blocked
+SET duckdb.log_pg_explain to on;
+CREATE TABLE tbl (a int PRIMARY KEY, b text);
+INSERT INTO tbl (a, b) SELECT i, 'foo' FROM generate_series(1, 3) i;
+UPDATE tbl SET b = 'bar' WHERE a = 1;
+NOTICE:  DuckDB only supports INSERT/SELECT on Postgres tables
+DELETE FROM tbl WHERE a = 1;
+NOTICE:  DuckDB only supports INSERT/SELECT on Postgres tables
+-- INSERT without subquery should also be blocked
+INSERT INTO tbl (a, b) VALUES (1, 'foo');
+NOTICE:  DuckDB does not support INSERT without a subquery
+DROP TABLE tbl;
+SET duckdb.log_pg_explain to off;
+-- case: UNSUPPORTED TYPE
+CREATE TABLE tbl (a int, b xml);
+CREATE TABLE tbl1 (a int, b xml);
+INSERT INTO tbl (a, b) VALUES (1, '<xml>foo</xml>');
+SET duckdb.log_pg_explain to on;
+INSERT INTO tbl1 SELECT * FROM tbl;
+NOTICE:  DuckDB does not support INSERTs into tables with column `b` of unsupported type (OID 142). 
+DROP TABLE tbl, tbl1;
+SET duckdb.log_pg_explain to off;
+-- case: query with JOIN
+CREATE TABLE tbl (a int, b text);
+CREATE TABLE tbl1 (a int, b1 text, b2 text);
+INSERT INTO tbl (a, b) VALUES (1, 'foo'), (2, 'bar'), (1, 'baz');
+EXPLAIN INSERT INTO tbl1 SELECT a.a, a.b, b.b FROM tbl a JOIN tbl b ON a.a = b.a;
+                            QUERY PLAN                            
+------------------------------------------------------------------
+ Insert on tbl1  (cost=176.34..303.67 rows=0 width=0)
+   ->  Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
+         DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │         HASH_JOIN         │
+ │    ────────────────────   │
+ │      Join Type: INNER     │
+ │     Conditions: a = a     ├──────────────┐
+ │                           │              │
+ │         ~1270 Rows        │              │
+ └─────────────┬─────────────┘              │
+ ┌─────────────┴─────────────┐┌─────────────┴─────────────┐
+ │  PGDUCKDB_POSTGRES_SCAN   ││  PGDUCKDB_POSTGRES_SCAN   │
+ │    ────────────────────   ││    ────────────────────   │
+ │         Table: tbl        ││         Table: tbl        │
+ │                           ││                           │
+ │        Projections:       ││        Projections:       │
+ │             a             ││             a             │
+ │             b             ││             b             │
+ │                           ││                           │
+ │         ~1270 Rows        ││         ~1270 Rows        │
+ └───────────────────────────┘└───────────────────────────┘
+ 
+ 
+(25 rows)
+
+INSERT INTO tbl1 SELECT a.a, a.b, b.b FROM tbl a JOIN tbl b ON a.a = b.a;
+SET duckdb.log_pg_explain to on;
+-- The following query should be blocked because of VALUE RTE in the subquery
+INSERT INTO tbl1 SELECT a.a, a.b, b.column2 FROM tbl a JOIN (VALUES (2, 'yoyo'), (4, 'yoyo2')) AS b(column1, column2) ON a.a = b.column1;
+NOTICE:  DuckDB does not support INSERTs with value subqueries
+SELECT * FROM tbl1 ORDER BY 1, 2, 3;
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a, b1, b2 FROM public.tbl1
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on tbl1
+
+ a | b1  |  b2  
+---+-----+------
+ 1 | baz | baz
+ 1 | baz | foo
+ 1 | foo | baz
+ 1 | foo | foo
+ 2 | bar | bar
+ 2 | bar | yoyo
+(6 rows)
+
+DROP TABLE tbl, tbl1;

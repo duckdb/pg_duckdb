@@ -37,13 +37,32 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/pgduckdb_guc.h"
 #include "pgduckdb/pgduckdb_types.hpp"
+
+static bool
+ContainValueRTE(Query *query) {
+	foreach_node(RangeTblEntry, rte, query->rtable) {
+		if (rte->rtekind == RTE_VALUES) {
+			return true;
+		} else if (rte->rtekind == RTE_SUBQUERY) {
+			if (ContainValueRTE(rte->subquery)) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
 
 bool
 IsAllowedPostgresInsert(Query *query, bool throw_error) {
+	if (query->commandType == CMD_SELECT) {
+		return false;
+	}
+
 	int elevel = throw_error ? ERROR : DEBUG4;
 	if (query->commandType != CMD_INSERT) {
-		elog(elevel, "DuckDB only supports INSERT/SELECT on Postgres tables");
+		elog(duckdb_log_pg_explain ? NOTICE : elevel, "DuckDB only supports INSERT/SELECT on Postgres tables");
 		return false;
 	}
 
@@ -62,11 +81,19 @@ IsAllowedPostgresInsert(Query *query, bool throw_error) {
 	}
 
 	if (!select_rte) {
-		elog(elevel, "DuckDB does not support INSERT without a subquery");
+		elog(duckdb_log_pg_explain ? NOTICE : elevel, "DuckDB does not support INSERT without a subquery");
 		return false;
 	}
-	
-	/* TODO: Checking supported target column types */
+
+	/*
+	 * The referenced rtables in the subquery should not include value RTEs. Literal input may vary between Postgres and
+	 * DuckDB, such as differences in bytea representation and numeric rounding.
+	 */
+	if (ContainValueRTE(select_rte->subquery)) {
+		elog(duckdb_log_pg_explain ? NOTICE : elevel, "DuckDB does not support INSERTs with value subqueries");
+		return false;
+	}
+
 	Relation rel = RelationIdGetRelation(target_rel->relid);
 	TupleDesc target_desc = RelationGetDescr(rel);
 	bool ret = true;
@@ -76,9 +103,15 @@ IsAllowedPostgresInsert(Query *query, bool throw_error) {
 			continue;
 		}
 
-		if (attr->atttypid == BYTEAOID || attr->atttypid == XMLOID || pgduckdb::pg::IsDomainType(attr->atttypid) ||
-		    pgduckdb::pg::IsArrayType(attr->atttypid)) {
-			elog(elevel, "DuckDB does not support INSERT/SELECT on BYTEA/ARRAY columns");
+		/*
+		 * Check if the target column type is supported by pg_duckdb. The type is allowed as long as the type conversion
+		 * is implemented.
+		 */
+		auto duckdb_col_type = pgduckdb::ConvertPostgresToDuckColumnType(attr);
+		if (duckdb_col_type.id() == duckdb::LogicalTypeId::USER) {
+			elog(duckdb_log_pg_explain ? NOTICE : elevel,
+			     "DuckDB does not support INSERTs into tables with column `%s` of unsupported type (OID %u). ",
+			     NameStr(attr->attname), attr->atttypid);
 			ret = false;
 			break;
 		}
@@ -232,7 +265,7 @@ CreatePlan(Query *query, bool throw_error) {
 	}
 
 	if (IsAllowedPostgresInsert(query)) {
-		RangeTblEntry *target_rel = (RangeTblEntry *)list_nth(query->rtable, query->resultRelation - 1);		
+		RangeTblEntry *target_rel = (RangeTblEntry *)list_nth(query->rtable, query->resultRelation - 1);
 		Relation rel = RelationIdGetRelation(target_rel->relid);
 		TupleDesc pg_tupdesc = RelationGetDescr(rel);
 
@@ -317,7 +350,7 @@ CoerceTargetList(List *duckdb_targetlist, TupleDesc pg_tupdesc) {
 			if (expr == NULL)
 				elog(ERROR, "cannot coerce column %d from type %u to target type %u", attnum, sourceTypeId,
 				     targetTypeId);
-				     
+
 			/* Create a new target entry with coerced expression */
 			TargetEntry *new_te = makeTargetEntry(expr, attnum, source_te->resname, source_te->resjunk);
 			ret = lappend(ret, new_te);
