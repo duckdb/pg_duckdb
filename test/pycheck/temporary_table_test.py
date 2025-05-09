@@ -27,3 +27,18 @@ def test_temporary_table_alter_table(cur: Cursor):
         # duckdb after the table is created
         with pytest.raises(psycopg.errors.FeatureNotSupported):
             cur.sql("ALTER TABLE t SET ACCESS METHOD duckdb")
+
+
+def test_temporary_table_partition(cur: Cursor):
+    if PG_MAJOR_VERSION >= 17:
+        with pytest.raises(
+            psycopg.errors.FeatureNotSupported,
+            match="Using duckdb as a table access method on a partitioned table is not supported",
+        ):
+            cur.sql("CREATE TEMP TABLE t(a int) PARTITION BY RANGE (a) USING duckdb")
+    else:
+        with pytest.raises(
+            psycopg.errors.FeatureNotSupported,
+            match="specifying a table access method is not supported on a partitioned table",
+        ):
+            cur.sql("CREATE TEMP TABLE t(a int) PARTITION BY RANGE (a) USING duckdb")

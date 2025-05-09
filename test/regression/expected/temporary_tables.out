@@ -525,4 +525,14 @@ SELECT * FROM ta;
  3 | 3 |     | 
 (6 rows)
 
-DROP TABLE webpages, t, t_heap, t_heap2, t_heap3, ta, tb, tc, td;
+CREATE TEMP TABLE measurement (
+    city_id         int not null,
+    logdate         date not null,
+    peaktemp        int,
+    unitsales       int
+) PARTITION BY RANGE (logdate);
+-- This command should fail because we don't support duckdb partitions yet
+CREATE TEMP TABLE measurement_y2006m02 PARTITION OF measurement
+    FOR VALUES FROM ('2006-02-01') TO ('2006-03-01') USING duckdb;
+ERROR:  DuckDB tables cannot be used as a partition
+DROP TABLE webpages, t, t_heap, t_heap2, t_heap3, ta, tb, tc, td, measurement;
