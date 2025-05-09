@@ -187,3 +187,17 @@ SELECT * FROM duckdb.query($$
         FROM duckdb_secrets()
     );
 $$);
+
+set client_min_messages=WARNING; -- suppress NOTICE that include username
+DROP SERVER
+    simple_s3_secret,
+    simple_s3_secret_1,
+    simple_s3_secret_2,
+    simple_s3_secret_3,
+    simple_r2_secret,
+    simple_r2_secret_1,
+    simple_gcs_secret,
+    simple_gcs_secret_1,
+    simple_gcs_secret_2,
+    azure_secret
+CASCADE;

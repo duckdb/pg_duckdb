@@ -49,21 +49,12 @@ GetOption(List *options_list, const char *name) {
 
 namespace {
 
-bool
+void
 appendOptions(StringInfoData &buf, List *options) {
-	bool first = true;
 	foreach_node(DefElem, def, options) {
-		if (first) {
-			first = false;
-		} else {
-			appendStringInfoString(&buf, ", ");
-		}
-
 		// No need to sanitize option's name since it went through PG's validation
-		appendStringInfo(&buf, "%s %s", def->defname, quote_literal_cstr(defGetString(def)));
+		appendStringInfo(&buf, ", %s %s", def->defname, quote_literal_cstr(defGetString(def)));
 	}
-
-	return !first;
 }
 
 char *
@@ -73,19 +64,15 @@ MakeDuckDBCreateSecretQuery(const char *server_name, const char *type, List *ser
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "CREATE SECRET pgduckdb_secret_%s (", server_name);
 
-	bool appended_options = appendOptions(buf, server_options);
+	appendStringInfo(&buf, "TYPE %s", type);
+
+	appendOptions(buf, server_options);
 	if (list_length(mapping_options) > 0) {
-		if (appended_options) {
-			appendStringInfoString(&buf, ", ");
-		}
-		appended_options = appendOptions(buf, mapping_options);
+		appendOptions(buf, mapping_options);
 	}
 
-	if (appended_options) {
-		appendStringInfoString(&buf, ", ");
-	}
+	appendStringInfoString(&buf, ")");
 
-	appendStringInfo(&buf, "TYPE %s)", type);
 	return buf.data;
 }
 
