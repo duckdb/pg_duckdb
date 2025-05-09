@@ -13,7 +13,7 @@
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_fdw.hpp"
-#include "pgduckdb/pgduckdb_guc.h"
+#include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_options.hpp"
 #include "pgduckdb/pgduckdb_secrets_helper.hpp"
