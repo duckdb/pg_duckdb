@@ -43,17 +43,9 @@ struct {
 bool callback_is_configured = false;
 
 void
-InvalidateDuckDBSecrets() {
-	auto manager = pgduckdb::DuckDBManager::FindIfInitialized();
-	if (manager) {
-		manager->InvalidateDuckDBSecrets();
-	}
-}
-
-void
 InvalidateCache(Datum, int, uint32) {
 	InvalidateUserDataCache();
-	InvokeCPPFunc(InvalidateDuckDBSecrets);
+	InvokeCPPFunc(pgduckdb::DuckDBManager::InvalidateDuckDBSecretsIfInitialized);
 }
 
 } // namespace
