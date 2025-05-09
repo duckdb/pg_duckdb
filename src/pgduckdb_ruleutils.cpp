@@ -584,8 +584,15 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	StringInfoData buffer;
 	initStringInfo(&buffer);
 
-	if (get_rel_relkind(relation_oid) != RELKIND_RELATION) {
+	if (relation->rd_rel->relkind == RELKIND_PARTITIONED_TABLE) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("Using duckdb as a table access method on a partitioned table is not supported")));
+	} else if (relation->rd_rel->relkind != RELKIND_RELATION) {
 		elog(ERROR, "Only regular tables are supported in DuckDB");
+	}
+
+	if (relation->rd_rel->relispartition) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("DuckDB tables cannot be used as a partition")));
 	}
 
 	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
