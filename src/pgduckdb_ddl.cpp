@@ -422,6 +422,18 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			pgduckdb::ClaimCurrentCommandId();
 		}
 		RelationClose(relation);
+	} else if (IsA(parsetree, AlterObjectSchemaStmt)) {
+		auto stmt = castNode(AlterObjectSchemaStmt, parsetree);
+		if (stmt->objectType == OBJECT_TABLE) {
+			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
+			Relation rel = RelationIdGetRelation(relation_oid);
+
+			if (pgduckdb::IsDuckdbTable(rel)) {
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				                errmsg("Changing the schema of a duckdb table is currently not supported")));
+			}
+			RelationClose(rel);
+		}
 	} else if (IsA(parsetree, CreateForeignServerStmt)) {
 		DuckdbHandleCreateForeignServerStmt(parsetree);
 		return;
