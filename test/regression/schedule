@@ -42,6 +42,7 @@ test: json_functions_duckdb
 test: date
 test: timestamp_timestamptz
 test: union_functions
+test: postgres_insert_select
 test: foreign_data_wrapper
 test: tablesample
 test: simple_functions

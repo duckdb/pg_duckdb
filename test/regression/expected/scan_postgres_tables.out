@@ -84,6 +84,7 @@ Parallel Index Scan using t1_a_idx on t1
 -- TEMPORARY TABLES JOIN WITH HEAP TABLES
 CREATE TEMP TABLE t2(a int);
 INSERT INTO t2 VALUES (1), (2), (3);
+NOTICE:  DuckDB does not support INSERT without a subquery
 SELECT t1.a, t2.a FROM t1, t2 WHERE t1.a = t2.a;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
