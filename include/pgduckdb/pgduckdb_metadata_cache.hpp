@@ -15,10 +15,10 @@ Oid DuckdbUnionOid();
 Oid DuckdbMapOid();
 Oid DuckdbJsonOid();
 Oid DuckdbTableAmOid();
-Oid IsDuckdbTable(Form_pg_class relation);
-Oid IsDuckdbTable(Relation relation);
-Oid IsMotherDuckTable(Form_pg_class relation);
-Oid IsMotherDuckTable(Relation relation);
-Oid IsDuckdbExecutionAllowed();
+bool IsDuckdbTable(Form_pg_class relation);
+bool IsDuckdbTable(Relation relation);
+bool IsMotherDuckTable(Form_pg_class relation);
+bool IsMotherDuckTable(Relation relation);
+bool IsDuckdbExecutionAllowed();
 void RequireDuckdbExecution();
 } // namespace pgduckdb

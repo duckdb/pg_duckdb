@@ -355,31 +355,31 @@ DuckdbTableAmOid() {
 	return cache.table_am_oid;
 }
 
-Oid
+bool
 IsDuckdbTable(Form_pg_class relation) {
 	Assert(cache.valid);
 	return relation->relam == pgduckdb::DuckdbTableAmOid();
 }
 
-Oid
+bool
 IsDuckdbTable(Relation relation) {
 	Assert(cache.valid);
 	return IsDuckdbTable(relation->rd_rel);
 }
 
-Oid
+bool
 IsMotherDuckTable(Form_pg_class relation) {
 	Assert(cache.valid);
 	return IsDuckdbTable(relation) && relation->relpersistence == RELPERSISTENCE_PERMANENT;
 }
 
-Oid
+bool
 IsMotherDuckTable(Relation relation) {
 	Assert(cache.valid);
 	return IsMotherDuckTable(relation->rd_rel);
 }
 
-Oid
+bool
 IsDuckdbExecutionAllowed() {
 	Assert(cache.valid);
 	Assert(cache.postgres_role_oid != InvalidOid);
