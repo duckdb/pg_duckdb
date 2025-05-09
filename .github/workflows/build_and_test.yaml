@@ -147,7 +147,9 @@ jobs:
 
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.installcheck.outcome == 'failure'
-        run: cat duckdb/test/regression/regression.diffs
+        # Always "fail" this task by adding "&& false", so that rits output
+        # gets expanded in the github UI.
+        run: cat duckdb/test/regression/regression.diffs && false
 
       - name: Print postmaster.log if regression tests failed
         if: failure() && steps.installcheck.outcome == 'failure'
