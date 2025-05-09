@@ -1,6 +1,7 @@
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_guc.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -17,8 +18,6 @@ extern "C" {
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
 #include "utils/wait_event.h"
-
-#include "pgduckdb/pgduckdb_guc.h"
 }
 
 #include "pgduckdb/vendor/pg_list.hpp"

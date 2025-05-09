@@ -1,5 +1,8 @@
 #pragma once
 
+namespace pgduckdb {
+void InitGUC();
+
 extern bool duckdb_force_execution;
 extern bool duckdb_unsafe_allow_mixed_transactions;
 extern bool duckdb_log_pg_explain;
@@ -17,3 +20,4 @@ extern char *duckdb_motherduck_session_hint;
 extern char *duckdb_temporary_directory;
 extern char *duckdb_extension_directory;
 extern char *duckdb_max_temp_directory_size;
+} // namespace pgduckdb

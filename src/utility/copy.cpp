@@ -2,7 +2,7 @@
 
 #include <inttypes.h>
 
-#include "pgduckdb/pgduckdb_guc.h"
+#include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_hooks.hpp"
 
@@ -347,7 +347,7 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 
 	if (NeedsDuckdbExecution(copy_stmt)) {
 		IsAllowedStatement(copy_stmt, true);
-	} else if (!duckdb_force_execution || !IsAllowedStatement(copy_stmt)) {
+	} else if (!pgduckdb::duckdb_force_execution || !IsAllowedStatement(copy_stmt)) {
 		if (copy_stmt->relation && !copy_stmt->is_from) {
 			/*
 			 * We don't support enough of the table access method API to allow
