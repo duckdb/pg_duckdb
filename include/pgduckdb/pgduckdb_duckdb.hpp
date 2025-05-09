@@ -24,9 +24,12 @@ public:
 		return manager_instance;
 	}
 
-	static inline DuckDBManager *
-	FindIfInitialized() {
-		return manager_instance.database ? &manager_instance : nullptr;
+	static void
+	InvalidateDuckDBSecretsIfInitialized() {
+		// Only invalidate the secrets if the database is initialized.
+		if (IsInitialized()) {
+			manager_instance.InvalidateDuckDBSecrets();
+		}
 	}
 
 	static duckdb::unique_ptr<duckdb::Connection> CreateConnection();
