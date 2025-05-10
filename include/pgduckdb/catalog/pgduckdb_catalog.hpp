@@ -30,21 +30,21 @@ public:
 	duckdb::string GetCatalogType() override;
 	duckdb::optional_ptr<duckdb::CatalogEntry> CreateSchema(duckdb::CatalogTransaction transaction,
 	                                                        duckdb::CreateSchemaInfo &info) override;
-	duckdb::optional_ptr<duckdb::SchemaCatalogEntry>
-	GetSchema(duckdb::CatalogTransaction transaction, const duckdb::string &schema_name,
-	          duckdb::OnEntryNotFound if_not_found,
-	          duckdb::QueryErrorContext error_context = duckdb::QueryErrorContext()) override;
+	duckdb::optional_ptr<duckdb::SchemaCatalogEntry> LookupSchema(duckdb::CatalogTransaction transaction,
+	                                                              const duckdb::EntryLookupInfo &schema_lookup,
+	                                                              const duckdb::OnEntryNotFound if_not_found) override;
 	void ScanSchemas(duckdb::ClientContext &context,
 	                 std::function<void(duckdb::SchemaCatalogEntry &)> callback) override;
-	duckdb::unique_ptr<duckdb::PhysicalOperator>
-	PlanCreateTableAs(duckdb::ClientContext &context, duckdb::LogicalCreateTable &op,
-	                  duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
-	duckdb::unique_ptr<duckdb::PhysicalOperator> PlanInsert(duckdb::ClientContext &context, duckdb::LogicalInsert &op,
-	                                                        duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
-	duckdb::unique_ptr<duckdb::PhysicalOperator> PlanDelete(duckdb::ClientContext &context, duckdb::LogicalDelete &op,
-	                                                        duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
-	duckdb::unique_ptr<duckdb::PhysicalOperator> PlanUpdate(duckdb::ClientContext &context, duckdb::LogicalUpdate &op,
-	                                                        duckdb::unique_ptr<duckdb::PhysicalOperator> plan) override;
+	duckdb::PhysicalOperator &PlanCreateTableAs(duckdb::ClientContext &context, duckdb::PhysicalPlanGenerator &planner,
+	                                            duckdb::LogicalCreateTable &op,
+	                                            duckdb::PhysicalOperator &plan) override;
+	duckdb::PhysicalOperator &PlanInsert(duckdb::ClientContext &context, duckdb::PhysicalPlanGenerator &planner,
+	                                     duckdb::LogicalInsert &op,
+	                                     duckdb::optional_ptr<duckdb::PhysicalOperator> plan) override;
+	duckdb::PhysicalOperator &PlanDelete(duckdb::ClientContext &context, duckdb::PhysicalPlanGenerator &planner,
+	                                     duckdb::LogicalDelete &op, duckdb::PhysicalOperator &plan) override;
+	duckdb::PhysicalOperator &PlanUpdate(duckdb::ClientContext &context, duckdb::PhysicalPlanGenerator &planner,
+	                                     duckdb::LogicalUpdate &op, duckdb::PhysicalOperator &plan) override;
 	duckdb::unique_ptr<duckdb::LogicalOperator>
 	BindCreateIndex(duckdb::Binder &binder, duckdb::CreateStatement &stmt, duckdb::TableCatalogEntry &table,
 	                duckdb::unique_ptr<duckdb::LogicalOperator> plan) override;
