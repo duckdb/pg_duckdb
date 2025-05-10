@@ -40,6 +40,8 @@ extern "C" {
 
 namespace pgduckdb {
 
+extern MemoryContext duckdb_pg_scan_memory_ctx;
+
 NumericVar FromNumeric(Numeric num);
 
 struct NumericAsDouble : public duckdb::ExtraTypeInfo {
@@ -1505,11 +1507,16 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 
 static void
 AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
+	D_ASSERT(duckdb_pg_scan_memory_ctx != nullptr);
+	MemoryContext old_context = MemoryContextSwitchTo(duckdb_pg_scan_memory_ctx);
 	auto jsonb = DatumGetJsonbP(value);
-	auto jsonb_str = JsonbToCString(NULL, &jsonb->root, VARSIZE(jsonb));
-	duckdb::string_t str(jsonb_str);
+	StringInfo str = makeStringInfo();
+	auto json_str = JsonbToCString(str, &jsonb->root, VARSIZE(jsonb));
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
-	data[offset] = duckdb::StringVector::AddString(result, str);
+	data[offset] = duckdb::StringVector::AddString(result, json_str, str->len);
+	pfree(str->data);
+	pfree(str);
+	MemoryContextSwitchTo(old_context);
 }
 
 static void
@@ -1810,6 +1817,8 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
+		D_ASSERT(duckdb_pg_scan_memory_ctx != nullptr);
+		MemoryContext old_context = MemoryContextSwitchTo(duckdb_pg_scan_memory_ctx);
 		// Convert Datum to ArrayType
 		auto array = DatumGetArrayTypeP(value);
 
@@ -1878,6 +1887,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 			}
 			ConvertPostgresToDuckValue(elem_type, elems[i], *vec, dest_idx);
 		}
+		MemoryContextSwitchTo(old_context);
 		break;
 	}
 	default:
