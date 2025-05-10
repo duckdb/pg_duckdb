@@ -20,8 +20,8 @@ extern "C" {
 namespace pgduckdb {
 
 /*
- * Currently, it is dedicated to converting JSON and LIST types to manage memory recycling. Its lifetime matches that of
- * the PostgreSQL scan global state. The global lock must be held when accessing this context.
+ * Currently, it is used for memory recycling during JSON and LIST type conversions. Its lifetime matches that of the
+ * PostgreSQL scan global state. The global lock must be held when accessing this context.
  */
 MemoryContext duckdb_pg_scan_memory_ctx;
 
