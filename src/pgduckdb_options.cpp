@@ -55,11 +55,12 @@ ReadDuckdbExtensions() {
 		bool is_null_array[Natts_duckdb_extension];
 
 		heap_deform_tuple(tuple, RelationGetDescr(duckdb_extension_relation), datum_array, is_null_array);
-		DuckdbExtension secret;
+		DuckdbExtension extension;
 
-		secret.name = DatumToString(datum_array[Anum_duckdb_extension_name - 1]);
-		secret.enabled = DatumGetBool(datum_array[Anum_duckdb_extension_enable - 1]);
-		duckdb_extensions.push_back(secret);
+		extension.name = DatumToString(datum_array[Anum_duckdb_extension_name - 1]);
+		extension.enabled = DatumGetBool(datum_array[Anum_duckdb_extension_enable - 1]);
+		extension.repository = DatumToString(datum_array[Anum_duckdb_extension_repository - 1]);
+		duckdb_extensions.push_back(extension);
 	}
 
 	systable_endscan(scan);
@@ -67,9 +68,10 @@ ReadDuckdbExtensions() {
 	return duckdb_extensions;
 }
 
-static void
-DuckdbInstallExtension(const std::string &extension_name, const std::string &repository) {
+std::string
+DuckdbInstallExtensionQuery(const std::string &extension_name, const std::string &repository) {
 	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name) + " FROM ";
+
 	if (repository == "core" || repository == "core_nightly" || repository == "community" ||
 	    repository == "local_build_debug" || repository == "local_build_release") {
 		install_extension_command += repository;
@@ -77,40 +79,7 @@ DuckdbInstallExtension(const std::string &extension_name, const std::string &rep
 		install_extension_command += duckdb::KeywordHelper::WriteQuoted(repository);
 	}
 
-	/*
-	 * Temporily allow all filesystems for this query, because INSTALL needs
-	 * local filesystem access. Since this setting cannot be changed inside
-	 * DuckDB after it's set to LocalFileSystem this temporary configuration
-	 * change only really has effect duckdb.install_extension is called as the
-	 * first DuckDB query for this session. Since we cannot change it back.
-	 *
-	 * While that's suboptimal it's also not a huge problem. Users only need to
-	 * install an extension once on a server. So doing that on a new connection
-	 * or after calling duckdb.recycle_ddb() should not be a big deal.
-	 *
-	 * NOTE: Because each backend has its own DuckDB instance, this setting
-	 * does not impact other backends and thus cannot cause a security issue
-	 * due to a race condition.
-	 */
-	auto save_nestlevel = NewGUCNestLevel();
-	SetConfigOption("duckdb.disabled_filesystems", "", PGC_SUSET, PGC_S_SESSION);
-	pgduckdb::DuckDBQueryOrThrow(install_extension_command);
-	AtEOXact_GUC(false, save_nestlevel);
-	Datum extension_name_datum = CStringGetTextDatum(extension_name.c_str());
-
-	Oid arg_types[] = {TEXTOID};
-	Datum values[] = {extension_name_datum};
-
-	SPI_connect();
-	auto ret = SPI_execute_with_args(R"(
-		INSERT INTO duckdb.extensions (name, enabled)
-		VALUES ($1, true)
-		ON CONFLICT (name) DO UPDATE SET enabled = true
-		)",
-	                                 lengthof(arg_types), arg_types, values, NULL, false, 0);
-	if (ret != SPI_OK_INSERT)
-		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
-	SPI_finish();
+	return install_extension_command;
 }
 
 // Find a unique name for the server, based on the given prefix.
@@ -185,7 +154,26 @@ extern "C" {
 DECLARE_PG_FUNCTION(install_extension) {
 	std::string extension_name = pgduckdb::pg::GetArgString(fcinfo, 0);
 	std::string repository = pgduckdb::pg::GetArgString(fcinfo, 1);
-	pgduckdb::DuckdbInstallExtension(extension_name, repository);
+
+	pgduckdb::DuckDBQueryOrThrow(pgduckdb::DuckdbInstallExtensionQuery(extension_name, repository));
+
+	Datum extension_name_datum = CStringGetTextDatum(extension_name.c_str());
+	Datum repository_datum = CStringGetTextDatum(repository.c_str());
+
+	Oid arg_types[] = {TEXTOID, TEXTOID};
+	Datum values[] = {extension_name_datum, repository_datum};
+
+	SPI_connect();
+	auto ret = SPI_execute_with_args(R"(
+		INSERT INTO duckdb.extensions (name, enabled, repository)
+		VALUES ($1, true, $2)
+		ON CONFLICT (name) DO UPDATE SET enabled = true
+		)",
+	                                 lengthof(arg_types), arg_types, values, NULL, false, 0);
+	if (ret != SPI_OK_INSERT)
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	SPI_finish();
+
 	PG_RETURN_VOID();
 }
 
