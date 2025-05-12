@@ -38,7 +38,7 @@ else
 	DUCKDB_MAKE_TARGET = release
 endif
 
-PG_DUCKDB_LINK_FLAGS = -Wl,-rpath,$(PG_LIB)/ -lpq -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lstdc++ -llz4
+PG_DUCKDB_LINK_FLAGS = -Wl,-rpath,$(PG_LIB)/ -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lstdc++ -llz4
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
