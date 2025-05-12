@@ -81,7 +81,7 @@ SET ROLE user1;
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.install_extension('iceberg');
 -- We should handle SQL injections carefully though to only allow INSTALL
-SELECT * FROM duckdb.install_extension($$ '; select * from hacky '' $$);
+-- `duckdb.install_extension` is tested in Python
 INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky $$);
 SELECT * FROM duckdb.query($$ SELECT 1 $$);
 TRUNCATE duckdb.extensions;
