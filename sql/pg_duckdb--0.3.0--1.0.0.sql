@@ -64,7 +64,9 @@ LANGUAGE C;
 
 DROP FUNCTION duckdb.install_extension(TEXT);
 CREATE FUNCTION duckdb.install_extension(extension_name TEXT, source TEXT DEFAULT 'core') RETURNS void
+    SECURITY DEFINER
     SET search_path = pg_catalog, pg_temp
+    SET duckdb.force_execution = false
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 REVOKE ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) FROM PUBLIC;
 
@@ -725,4 +727,6 @@ RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_azure_secret';
 
-
+ALTER TABLE duckdb.extensions ADD COLUMN repository TEXT DEFAULT 'core';
+-- TODO: Maybe rename/replace "enabled" column of extensions with autoload or
+-- something similar.

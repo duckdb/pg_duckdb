@@ -9,6 +9,7 @@
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/pg/guc.hpp"
+#include "pgduckdb/pg/permissions.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
@@ -31,7 +32,7 @@ extern "C" {
 #include "catalog/namespace.h"
 #include "common/file_perm.h"
 #include "lib/stringinfo.h"
-#include "miscadmin.h" // superuser
+#include "miscadmin.h"        // superuser
 #include "nodes/value.h"      // strVal
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "utils/lsyscache.h"  // get_relname_relid
@@ -189,6 +190,9 @@ DuckDBManager::Initialize() {
 	}
 
 	LoadFunctions(context);
+	if (duckdb_autoinstall_known_extensions) {
+		InstallExtensions(context);
+	}
 	LoadExtensions(context);
 }
 
@@ -246,7 +250,44 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 }
 
 void
+DuckDBManager::InstallExtensions(duckdb::ClientContext &context) {
+	auto duckdb_extensions = ReadDuckdbExtensions();
+
+	for (auto &extension : duckdb_extensions) {
+		DuckDBQueryOrThrow(context, DuckdbInstallExtensionQuery(extension.name, extension.repository));
+	}
+}
+
+static std::string
+DisabledFileSystems() {
+	if (pgduckdb::pg::AllowRawFileAccess()) {
+		return duckdb_disabled_filesystems;
+	}
+
+	if (IsEmptyString(duckdb_disabled_filesystems)) {
+		return "LocalFileSystem";
+	}
+
+	return "LocalFileSystem," + std::string(duckdb_disabled_filesystems);
+}
+
+void
 DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
+	std::string disabled_filesystems = DisabledFileSystems();
+	if (disabled_filesystems != "") {
+		/*
+		 * DuckDB does not allow us to disable this setting on the
+		 * database after the DuckDB connection is created for a non
+		 * superuser, any further connections will inherit this
+		 * restriction. This means that once a non-superuser used a
+		 * DuckDB connection in a Postgres backend, any other
+		 * connection will inherit these same filesystem restrictions.
+		 * This shouldn't be a problem in practice.
+		 */
+		pgduckdb::DuckDBQueryOrThrow(context, "SET disabled_filesystems=" +
+		                                          duckdb::KeywordHelper::WriteQuoted(disabled_filesystems));
+	}
+
 	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");
 	if (IsExtensionsSeqLessThan(extensions_table_last_seq)) {
 		LoadExtensions(context);
@@ -257,20 +298,6 @@ DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 		DropSecrets(context);
 		LoadSecrets(context);
 		secrets_valid = true;
-	}
-
-	if (duckdb_disabled_filesystems != NULL && !superuser()) {
-		/*
-		 * DuckDB does not allow us to disable this setting on the
-		 * database after the DuckDB connection is created for a non
-		 * superuser, any further connections will inherit this
-		 * restriction. This means that once a non-superuser used a
-		 * DuckDB connection in aside a Postgres backend, any other
-		 * connection will inherit these same filesystem restrictions.
-		 * This shouldn't be a problem in practice.
-		 */
-		pgduckdb::DuckDBQueryOrThrow(context,
-		                             "SET disabled_filesystems='" + std::string(duckdb_disabled_filesystems) + "'");
 	}
 }
 
@@ -328,8 +355,8 @@ DuckDBManager::GetConnection(bool force_transaction) {
  * Returns the cached connection to the global DuckDB instance, but does not do
  * any checks required to correctly initialize the DuckDB transaction nor
  * refreshes the secrets/extensions/etc. Only use this in rare cases where you
- * know for sure that the connection is already initialized for the correctly
- * for the current query, and you just want a pointer to it.
+ * know for sure that the connection is already initialized correctly for the
+ * current query, and you just want a pointer to it.
  */
 duckdb::Connection *
 DuckDBManager::GetConnectionUnsafe() {

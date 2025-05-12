@@ -210,6 +210,9 @@ def cleanup_test_leftovers(*nodes):
         node.cleanup_replication_slots()
 
     for node in nodes:
+        node.cleanup_servers()
+
+    for node in nodes:
         node.cleanup_schemas()
 
     for node in nodes:
@@ -393,6 +396,7 @@ class Postgres(OutputSilencer):
         self.subscriptions = set()
         self.publications = set()
         self.replication_slots = set()
+        self.servers = set()
         self.schemas = set()
         self.users = set()
 
@@ -562,6 +566,11 @@ class Postgres(OutputSilencer):
         self.schemas.add((dbname, name))
         self.sql(sql.SQL("CREATE SCHEMA {}").format(sql.Identifier(name)))
 
+    def create_server(self, name: str, args: psycopg.sql.Composable, dbname=None):
+        dbname = dbname or self.default_db
+        self.servers.add((dbname, name))
+        self.sql(sql.SQL("CREATE SERVER {} {}").format(sql.Identifier(name), args))
+
     def create_publication(self, name: str, args: psycopg.sql.Composable, dbname=None):
         dbname = dbname or self.default_db
         self.publications.add((dbname, name))
@@ -592,6 +601,16 @@ class Postgres(OutputSilencer):
         for user in self.users:
             self.sql(sql.SQL("DROP USER IF EXISTS {}").format(sql.Identifier(user)))
         self.users.clear()
+
+    def cleanup_servers(self):
+        for dbname, schema in self.servers:
+            self.sql(
+                sql.SQL("DROP SERVER IF EXISTS {} CASCADE").format(
+                    sql.Identifier(schema)
+                ),
+                dbname=dbname,
+            )
+        self.servers.clear()
 
     def cleanup_schemas(self):
         for dbname, schema in self.schemas:
