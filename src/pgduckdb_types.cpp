@@ -1021,7 +1021,7 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 
 bool
 ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
-	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
+	Oid oid = TupleDescAttr(slot->tts_tupleDescriptor, col)->atttypid;
 
 	switch (oid) {
 	case BITOID:
@@ -1904,17 +1904,18 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state.output_vector_size);
 		} else {
-			auto attr = slot->tts_tupleDescriptor->attrs[duckdb_output_index];
-			if (attr.attlen == -1) {
+			auto attr = TupleDescAttr(slot->tts_tupleDescriptor, duckdb_output_index);
+			if (attr->attlen == -1) {
 				bool should_free = false;
 				Datum detoasted_value = DetoastPostgresDatum(
 				    reinterpret_cast<varlena *>(slot->tts_values[duckdb_output_index]), &should_free);
-				ConvertPostgresToDuckValue(attr.atttypid, detoasted_value, result, scan_local_state.output_vector_size);
+				ConvertPostgresToDuckValue(attr->atttypid, detoasted_value, result,
+				                           scan_local_state.output_vector_size);
 				if (should_free) {
 					duckdb_free(reinterpret_cast<void *>(detoasted_value));
 				}
 			} else {
-				ConvertPostgresToDuckValue(attr.atttypid, slot->tts_values[duckdb_output_index], result,
+				ConvertPostgresToDuckValue(attr->atttypid, slot->tts_values[duckdb_output_index], result,
 				                           scan_local_state.output_vector_size);
 			}
 		}
