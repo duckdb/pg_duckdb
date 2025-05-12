@@ -3,6 +3,7 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pg/relations.hpp"
+#include "pgduckdb/pg/locale.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -718,8 +719,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		 * this?
 		 */
 		Oid collation = column->attcollation;
-		if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && collation != C_COLLATION_OID &&
-		    collation != POSIX_COLLATION_OID) {
+		if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && !pgduckdb::pg::IsCLocale(collation)) {
 			elog(ERROR, "DuckDB does not support column collations");
 		}
 	}

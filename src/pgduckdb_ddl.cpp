@@ -593,7 +593,11 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 			 */
 			MemoryContext view_query_context = GetMemoryChunkContext(stmt->into->viewQuery);
 			MemoryContextSwitchTo(view_query_context);
+#if PG_VERSION_NUM >= 180000
+			stmt->into->viewQuery = (Query *)copyObjectImpl(stmt->query);
+#else
 			stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
+#endif
 			MemoryContextSwitchTo(oldcontext);
 		}
 	} else if (IsA(parsetree, RefreshMatViewStmt)) {

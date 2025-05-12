@@ -56,7 +56,7 @@ GetAttName(const Form_pg_attribute att) {
 
 Form_pg_attribute
 GetAttr(const TupleDesc tupleDesc, int i) {
-	return &tupleDesc->attrs[i];
+	return TupleDescAttr(tupleDesc, i);
 }
 
 bool
