@@ -312,13 +312,12 @@ class Cursor(OutputSilencer):
 
     def sql(self, query, params=None, **kwargs) -> Any:
         self.execute(query, params, **kwargs)
-        try:
-            return simplify_query_results(self.fetchall())
-        except psycopg.ProgrammingError as e:
-            if "the last operation didn't produce a result" == str(e):
-                # This happens when the query is a DDL statement
-                return NoResult
-            raise
+        if self.pgresult and self.pgresult.status == psycopg.pq.ExecStatus.COMMAND_OK:
+            # This happens when the query is a DDL statement. Calling fetchall
+            # would fail with a ProgrammingError in that case.
+            return NoResult
+
+        return simplify_query_results(self.fetchall())
 
     def dsql(self, query, **kwargs):
         """Run a DuckDB query using duckdb.query()"""
@@ -365,13 +364,12 @@ class AsyncCursor:
 
     async def sql_coroutine(self, query, params=None, **kwargs) -> Any:
         await self.execute(query, params, **kwargs)
-        try:
-            return simplify_query_results(await self.fetchall())
-        except psycopg.ProgrammingError as e:
-            if "the last operation didn't produce a result" == str(e):
-                # This happens when the query is a DDL statement
-                return NoResult
-            raise
+        if self.pgresult and self.pgresult.status == psycopg.pq.ExecStatus.COMMAND_OK:
+            # This happens when the query is a DDL statement. Calling fetchall
+            # would fail with a ProgrammingError in that case.
+            return NoResult
+
+        return simplify_query_results(await self.fetchall())
 
     def dsql(self, query, **kwargs):
         """Run a DuckDB query using duckdb.query()"""
