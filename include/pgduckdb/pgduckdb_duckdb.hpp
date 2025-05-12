@@ -65,6 +65,7 @@ private:
 	void LoadSecrets(duckdb::ClientContext &);
 	void DropSecrets(duckdb::ClientContext &);
 	void LoadExtensions(duckdb::ClientContext &);
+	void InstallExtensions(duckdb::ClientContext &);
 	void LoadFunctions(duckdb::ClientContext &);
 	void RefreshConnectionState(duckdb::ClientContext &);
 

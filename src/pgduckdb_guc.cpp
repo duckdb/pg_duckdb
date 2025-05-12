@@ -111,6 +111,7 @@ DefineCustomDuckDBVariable(const char *name, const char *short_desc, T *var, T m
 
 bool duckdb_force_execution = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
+bool duckdb_install_missing_extensions = false;
 bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_session_hint = strdup("");
@@ -118,7 +119,7 @@ char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
-char *duckdb_disabled_filesystems = strdup("LocalFileSystem");
+char *duckdb_disabled_filesystems = strdup("");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_community_extensions = false;
 bool duckdb_allow_unsigned_extensions = false;
@@ -148,6 +149,8 @@ InitGUC() {
 	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
 	                     "MotherDuck tables. Defaults to superusers only",
 	                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.install_missing_extensions", "Install extensions that are configured in pg_duckdb, but not installed on disk", &duckdb_install_missing_extensions, PGC_SUSET);
 
 	/* GUCs acting on DuckDB instance */
 	DefineCustomDuckDBVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
@@ -201,9 +204,7 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.motherduck_session_hint", "The session hint to use for MotherDuck connections",
 	                           &duckdb_motherduck_session_hint);
 
-	// This is also a DuckDB variable, but it doesn't need `GucCheckDuckDBNotInitdHook` because we actually handle its
-	// update after DuckDB is initialized (cf. `DuckdbInstallExtension` function)
-	DefineCustomVariable("duckdb.disabled_filesystems",
+	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                     &duckdb_disabled_filesystems, PGC_SUSET);
 }
