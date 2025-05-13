@@ -19,12 +19,6 @@ extern "C" {
 
 namespace pgduckdb {
 
-/*
- * Currently, it is used for memory recycling during JSON and LIST type conversions. Its lifetime matches that of the
- * PostgreSQL scan global state. The global lock must be held when accessing this context.
- */
-MemoryContext duckdb_pg_scan_memory_ctx;
-
 //
 // PostgresScanGlobalState
 //
@@ -182,15 +176,14 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	ConstructTableScanQuery(input);
 	table_reader_global_state =
 	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
-	duckdb_pg_scan_memory_ctx =
-	    AllocSetContextCreate(CurrentMemoryContext, "DuckDBPerTupleContext", ALLOCSET_DEFAULT_MINSIZE,
+	duckdb_scan_memory_ctx =
+	    AllocSetContextCreate(CurrentMemoryContext, "DuckdbScanContext", ALLOCSET_DEFAULT_MINSIZE,
 	                          ALLOCSET_DEFAULT_INITSIZE, ALLOCSET_DEFAULT_MAXSIZE);
 	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 
 PostgresScanGlobalState::~PostgresScanGlobalState() {
-	/* Set it to nullptr directly and leave the memory reset to the parent memory context. */
-	duckdb_pg_scan_memory_ctx = nullptr;
+	MemoryContextDelete(duckdb_scan_memory_ctx);
 }
 
 //
@@ -274,6 +267,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	local_state.output_vector_size = 0;
 
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+	MemoryContext old_context = MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
 	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {
@@ -284,13 +278,10 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 		SlotGetAllAttrs(slot);
 		InsertTupleIntoChunk(output, local_state, slot);
-
-		if (MemoryContextMemAllocated(duckdb_pg_scan_memory_ctx, false) > 8 * 1024 * 1024L) {
-			MemoryContextReset(duckdb_pg_scan_memory_ctx);
-		}
 	}
 
-	MemoryContextReset(duckdb_pg_scan_memory_ctx);
+	MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
+	MemoryContextSwitchTo(old_context);
 	SetOutputCardinality(output, local_state);
 }
 
