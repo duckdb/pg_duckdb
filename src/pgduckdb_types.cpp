@@ -1506,8 +1506,8 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 static void
 AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
 	auto jsonb = DatumGetJsonbP(value);
-	StringInfo str = makeStringInfo();
-	auto json_str = JsonbToCString(str, &jsonb->root, VARSIZE(jsonb));
+	StringInfo str = PostgresFunctionGuard(makeStringInfo);
+	auto json_str = PostgresFunctionGuard(JsonbToCString, str, &jsonb->root, VARSIZE(jsonb));
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
 	data[offset] = duckdb::StringVector::AddString(result, json_str, str->len);
 }
@@ -1715,7 +1715,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	case duckdb::LogicalTypeId::VARCHAR: {
 		// NOTE: This also handles JSON
 		if (attr_type == JSONBOID) {
-			PostgresFunctionGuard(AppendJsonb, result, value, offset);
+			AppendJsonb(result, value, offset);
 			break;
 		} else {
 			AppendString(result, value, offset, attr_type == BPCHAROID);
