@@ -95,8 +95,9 @@ check-regression-duckdb:
 clean-regression:
 	$(MAKE) -C test/regression clean-regression
 
+# Specify AWS_REGION to make sure test output the same thing regardless of where they are run
 installcheck: all install
-	$(MAKE) check-regression-duckdb
+	AWS_REGION=us-east-1 $(MAKE) check-regression-duckdb
 
 pycheck: all install
 	LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH} pytest -n $(PYTEST_CONCURRENCY)

@@ -47,3 +47,25 @@ def test_community_extensions(pg: Postgres):
             match='permission denied to set parameter "duckdb.allow_community_extensions"',
         ):
             cur.sql("SET duckdb.allow_community_extensions = true")
+
+
+def test_install_extension_injection(pg: Postgres):
+    pg.create_user("user1", psycopg.sql.SQL("IN ROLE duckdb_group"))
+    with pg.cur() as cur:
+        cur.sql("SET duckdb.force_execution = false")
+        cur.sql("GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO user1;")
+        cur.sql("GRANT ALL ON TABLE duckdb.extensions TO user1;")
+        cur.sql("GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO user1;")
+        cur.sql("SET ROLE user1")
+
+        # Try with the install_extension function
+        with pytest.raises(
+            Exception,
+            match=r"""\(PGDuckDB/install_extension_cpp\) HTTP Error: Failed to download extension " '; select \* from hacky '' " at URL "http://extensions\.duckdb\.org/.*/ '; select \* from hacky '' \.duckdb_extension\.gz" \(HTTP 403\)""",
+        ):
+            cur.sql(
+                "SELECT * FROM duckdb.install_extension($$ '; select * from hacky '' $$);"
+            )
+
+        cur.sql("RESET ROLE")
+        cur.sql("DROP OWNED BY user1")
