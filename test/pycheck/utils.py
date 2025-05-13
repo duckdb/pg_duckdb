@@ -128,25 +128,37 @@ def get_bin_dir():
     return capture([pg_config_bin, "--bindir"], silent=True).strip()
 
 
-def create_duckdb(db_name, token):
-    con_string = f"md:?token={token}"
-    con = duckdb.connect(con_string)
-    con.execute(f"DROP DATABASE IF EXISTS {db_name}")
-    con.execute(f"CREATE DATABASE {db_name}")
-    con.execute(f"USE {db_name}")
-    return con
-
-
 def wait_until(error_message="Did not complete in time", timeout=5, interval=1):
     """
     Loop until the timeout is reached. If the timeout is reached, raise an
     exception with the given error message.
     """
     end = time.time() + timeout
+    print_progress = timeout / 10 > 4
+    last_printed_progress = 0
     while time.time() < end:
+        if print_progress and time.time() - last_printed_progress > 4:
+            last_printed_progress = time.time()
+            print(f"{error_message} - will retry")
         yield
         time.sleep(interval)
     raise TimeoutError(error_message)
+
+
+def make_new_duckdb_connection(db_name, token, reset=True, hint=None):
+    hint_str = f"&session_hint={hint}" if hint else ""
+    con = duckdb.connect(f"md:?token={token}{hint_str}")
+    if reset:
+        con.execute(f"DROP DATABASE IF EXISTS {db_name}")
+        con.execute(f"CREATE DATABASE {db_name}")
+
+    for _ in wait_until(f"Database {db_name} did not appear in time", timeout=60):
+        try:
+            return con.execute(f"USE {db_name}")
+        except duckdb.duckdb.CatalogException:
+            con.execute("REFRESH DATABASES").fetchall()
+
+    return con
 
 
 PG_MAJOR_VERSION = get_pg_major_version()
