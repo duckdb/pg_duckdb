@@ -1715,7 +1715,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	case duckdb::LogicalTypeId::VARCHAR: {
 		// NOTE: This also handles JSON
 		if (attr_type == JSONBOID) {
-			AppendJsonb(result, value, offset);
+			PostgresFunctionGuard(AppendJsonb, result, value, offset);
 			break;
 		} else {
 			AppendString(result, value, offset, attr_type == BPCHAROID);
@@ -1820,13 +1820,13 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		int16 typlen;
 		bool typbyval;
 		char typalign;
-		get_typlenbyvalalign(elem_type, &typlen, &typbyval, &typalign);
+		PostgresFunctionGuard(get_typlenbyvalalign, elem_type, &typlen, &typbyval, &typalign);
 
 		int nelems;
 		Datum *elems;
 		bool *nulls;
 		// Deconstruct the array into Datum elements
-		deconstruct_array(array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
+		PostgresFunctionGuard(deconstruct_array, array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
 
 		if (ndims == -1) {
 			throw duckdb::InternalException("Array type has an ndims of -1, so it's actually not an array??");
