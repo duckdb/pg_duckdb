@@ -8,7 +8,7 @@ library for that purpose.
 
 import datetime
 
-from .utils import Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
+from .utils import wait_until, Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
 from .motherduck_token_helper import (
     can_run_md_multi_user_tests,
     can_run_md_tests,
@@ -182,7 +182,7 @@ def test_md_alter_table(md_cur: Cursor):
         md_cur.sql("ALTER TABLE t SET SCHEMA public")
 
     md_cur.sql("ALTER TABLE t ADD COLUMN b int DEFAULT 100")
-    md_cur.wait_until(
+    wait_until(
         lambda: md_cur.sql("SELECT * FROM t") == (1, 100), "Failed to add column"
     )
     assert md_cur.sql("SELECT * FROM t") == (1, 100)
