@@ -176,7 +176,6 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 }
 
 PostgresScanGlobalState::~PostgresScanGlobalState() {
-	pg::MemoryContextDelete(duckdb_scan_memory_ctx);
 }
 
 //
