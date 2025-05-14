@@ -137,7 +137,7 @@ def create_duckdb(db_name, token):
     return con
 
 
-def loop_until(timeout=5, error_message="Did not complete in time"):
+def wait_until(error_message="Did not complete in time", timeout=5, interval=1):
     """
     Loop until the timeout is reached. If the timeout is reached, raise an
     exception with the given error message.
@@ -145,7 +145,7 @@ def loop_until(timeout=5, error_message="Did not complete in time"):
     end = time.time() + timeout
     while time.time() < end:
         yield
-        time.sleep(0.1)
+        time.sleep(interval)
     raise TimeoutError(error_message)
 
 
@@ -323,31 +323,17 @@ class Cursor(OutputSilencer):
         """Run a DuckDB query using duckdb.query()"""
         return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
-    def wait_until(self, func, error_message, timeout=5):
-        while loop_until(
-            error_message=error_message,
-            timeout=timeout,
-        ):
-            if func():
-                return
-
     def wait_until_table_exists(self, table_name, timeout=5, **kwargs):
-        while loop_until(
-            error_message=f"Table {table_name} did not appear in time",
-            timeout=timeout,
-        ):
+        for _ in wait_until(f"Table {table_name} did not appear in time", timeout):
             with self.suppress(psycopg.errors.UndefinedTable):
                 self.sql("SELECT %s::regclass", (table_name,), **kwargs)
-                return
+                break
 
     def wait_until_schema_exists(self, schema_name, timeout=5, **kwargs):
-        while loop_until(
-            timeout=timeout,
-            error_message=f"Schema {schema_name} did not appear in time",
-        ):
+        for _ in wait_until(f"Schema {schema_name} did not appear in time", timeout):
             with self.suppress(psycopg.errors.InvalidSchemaName):
                 self.sql("SELECT %s::regnamespace", (schema_name,), **kwargs)
-                return
+                break
 
 
 class AsyncCursor:

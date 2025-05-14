@@ -7,14 +7,16 @@ library for that purpose.
 """
 
 import datetime
+import duckdb
 
-from .utils import Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
+from .utils import wait_until, Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
 from .motherduck_token_helper import (
     can_run_md_multi_user_tests,
     can_run_md_tests,
 )
 from .multi_duckdb_helper import MDClient
 
+from contextlib import suppress
 import pytest
 import psycopg.errors
 
@@ -182,10 +184,10 @@ def test_md_alter_table(md_cur: Cursor):
         md_cur.sql("ALTER TABLE t SET SCHEMA public")
 
     md_cur.sql("ALTER TABLE t ADD COLUMN b int DEFAULT 100")
-    md_cur.wait_until(
-        lambda: md_cur.sql("SELECT * FROM t") == (1, 100), "Failed to add column"
-    )
-    assert md_cur.sql("SELECT * FROM t") == (1, 100)
+    for _ in wait_until("Failed to add column"):
+        with suppress(duckdb.duckdb.CatalogException):
+            if md_cur.sql("SELECT * FROM t") == (1, 100):
+                break
 
     if PG_MAJOR_VERSION >= 15:
         # We specifically want to disallow changing the access method
