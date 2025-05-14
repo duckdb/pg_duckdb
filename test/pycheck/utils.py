@@ -137,39 +137,16 @@ def create_duckdb(db_name, token):
     return con
 
 
-def wait_until(func, on_fail=None, timeout=5, interval=0.1):
+def wait_until(error_message="Did not complete in time", timeout=5, interval=1):
     """
-    Repeatedly calls `func()` until it returns a truthy value or timeout is reached.
-
-    Args:
-        func: A callable that returns True when the condition is met.
-        timeout: Maximum time in seconds to wait.
-        interval: Time to wait between retries (in seconds).
-        on_fail: Optional callable to run or message to raise if the condition isn't met in time.
-
-    Returns:
-        The result of `func()` if successful.
-
-    Raises:
-        TimeoutError: If the condition isn't met before timeout.
+    Loop until the timeout is reached. If the timeout is reached, raise an
+    exception with the given error message.
     """
-    start = time.time()
-    while True:
-        result = func()
-        if result:
-            return result
-        if time.time() - start > timeout:
-            if callable(on_fail):
-                on_fail()
-
-            message = (
-                on_fail
-                if isinstance(on_fail, str)
-                else f"Condition not met within {timeout} seconds"
-            )
-            message = f"Timeout after {timeout}s: {message}"
-            raise TimeoutError(message)
+    end = time.time() + timeout
+    while time.time() < end:
+        yield
         time.sleep(interval)
+    raise TimeoutError(error_message)
 
 
 PG_MAJOR_VERSION = get_pg_major_version()
@@ -347,20 +324,16 @@ class Cursor(OutputSilencer):
         return self.sql(f"SELECT * FROM duckdb.query($ddb$ {query} $ddb$)", **kwargs)
 
     def wait_until_table_exists(self, table_name, timeout=5, **kwargs):
-        def has_table():
+        for _ in wait_until(f"Table {table_name} did not appear in time", timeout):
             with self.suppress(psycopg.errors.UndefinedTable):
                 self.sql("SELECT %s::regclass", (table_name,), **kwargs)
-                return True
-
-        wait_until(has_table, f"Table {table_name} did not appear in time", **kwargs)
+                break
 
     def wait_until_schema_exists(self, schema_name, timeout=5, **kwargs):
-        def has_schema():
+        for _ in wait_until(f"Schema {schema_name} did not appear in time", timeout):
             with self.suppress(psycopg.errors.InvalidSchemaName):
                 self.sql("SELECT %s::regnamespace", (schema_name,), **kwargs)
-                return True
-
-        wait_until(has_schema, f"Schema {schema_name} did not appear in time", timeout)
+                break
 
 
 class AsyncCursor:
