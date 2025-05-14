@@ -106,6 +106,11 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 	/* First we let postgres plan the query */
 	PlannedStmt *postgres_plan = pg_plan_query(copied_query, query_string, CURSOR_OPT_PARALLEL_OK, NULL);
 
+	if (postgres_plan == nullptr) {
+		// Utility commands have no plans.
+		return;
+	}
+
 #if PG_VERSION_NUM >= 160000
 	ExecCheckPermissions(postgres_plan->rtable, postgres_plan->permInfos, true);
 #else

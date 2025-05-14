@@ -1,0 +1,3 @@
+SET duckdb.force_execution = TRUE;
+COPY (SELECT 1 INTO frak UNION SELECT 2) TO 'blob';
+ERROR:  (PGDuckDB/DuckdbUtilityHook_Cpp) Executor Error: (PGDuckDB/MakeDuckdbCopyQuery) unexpected utility statement type
