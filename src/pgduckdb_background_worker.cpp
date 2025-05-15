@@ -697,6 +697,13 @@ SPI_run_utility_command(const char *query) {
 static bool
 CreateTable(const char *postgres_schema_name, const char *table_name, const char *create_table_query,
             bool drop_with_cascade) {
+	/* -1 is for the NULL terminator */
+	if (strlen(table_name) > NAMEDATALEN - 1) {
+		ereport(WARNING, (errmsg("Skipping sync of MotherDuck table '%s' because its name is too long", table_name),
+		                  errhint("The maximum length of a table name is %d characters", NAMEDATALEN - 1)));
+		return false;
+	}
+
 	/*
 	 * We need to fetch this over-and-over again, because we commit the
 	 * transaction and thus release locks. So in theory the schema could be
