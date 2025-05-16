@@ -35,6 +35,7 @@ public:
 	std::atomic<std::uint32_t> total_row_count;
 	std::ostringstream scan_query;
 	duckdb::shared_ptr<PostgresTableReader> table_reader_global_state;
+	MemoryContext duckdb_scan_memory_ctx;
 };
 
 // Local State

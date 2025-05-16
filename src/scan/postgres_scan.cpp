@@ -4,6 +4,7 @@
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pg/memory.hpp"
 #include "pgduckdb/pg/relations.hpp"
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
@@ -170,6 +171,7 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	ConstructTableScanQuery(input);
 	table_reader_global_state =
 	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
+	duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
 	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
 }
 
@@ -257,6 +259,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	local_state.output_vector_size = 0;
 
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+	MemoryContext old_context = pg::MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
 	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {
@@ -269,6 +272,8 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 		InsertTupleIntoChunk(output, local_state, slot);
 	}
 
+	pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
+	pg::MemoryContextSwitchTo(old_context);
 	SetOutputCardinality(output, local_state);
 }
 

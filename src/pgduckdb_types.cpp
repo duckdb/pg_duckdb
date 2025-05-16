@@ -1506,10 +1506,10 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 static void
 AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
 	auto jsonb = DatumGetJsonbP(value);
-	auto jsonb_str = JsonbToCString(NULL, &jsonb->root, VARSIZE(jsonb));
-	duckdb::string_t str(jsonb_str);
+	StringInfo str = PostgresFunctionGuard(makeStringInfo);
+	auto json_str = PostgresFunctionGuard(JsonbToCString, str, &jsonb->root, VARSIZE(jsonb));
 	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
-	data[offset] = duckdb::StringVector::AddString(result, str);
+	data[offset] = duckdb::StringVector::AddString(result, json_str, str->len);
 }
 
 static void
@@ -1820,13 +1820,13 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		int16 typlen;
 		bool typbyval;
 		char typalign;
-		get_typlenbyvalalign(elem_type, &typlen, &typbyval, &typalign);
+		PostgresFunctionGuard(get_typlenbyvalalign, elem_type, &typlen, &typbyval, &typalign);
 
 		int nelems;
 		Datum *elems;
 		bool *nulls;
 		// Deconstruct the array into Datum elements
-		deconstruct_array(array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
+		PostgresFunctionGuard(deconstruct_array, array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
 
 		if (ndims == -1) {
 			throw duckdb::InternalException("Array type has an ndims of -1, so it's actually not an array??");

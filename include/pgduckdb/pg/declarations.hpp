@@ -25,6 +25,9 @@ typedef double Cardinality;
 
 typedef uintptr_t Datum;
 
+struct MemoryContextData;
+typedef MemoryContextData *MemoryContext;
+
 struct FormData_pg_attribute;
 typedef FormData_pg_attribute *Form_pg_attribute;
 
