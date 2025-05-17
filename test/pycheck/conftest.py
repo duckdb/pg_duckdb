@@ -2,7 +2,7 @@ import os
 import pytest
 import psycopg.errors
 
-from .utils import Postgres, Duckdb, create_duckdb
+from .utils import Postgres, Duckdb, make_new_duckdb_connection
 from .motherduck_token_helper import create_test_user
 
 
@@ -155,7 +155,7 @@ def ddb(default_db_name, md_test_user):
 
     This also creates a database for the test to use.
     """
-    ddb_con = create_duckdb(default_db_name, md_test_user["token"])
+    ddb_con = make_new_duckdb_connection(default_db_name, md_test_user["token"])
 
     try:
         yield Duckdb(ddb_con)
