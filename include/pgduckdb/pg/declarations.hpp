@@ -84,4 +84,6 @@ struct TupleQueueReader;
 struct PlanState;
 
 struct Plan;
+
+struct ExplainState;
 }
