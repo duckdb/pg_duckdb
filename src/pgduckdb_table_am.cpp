@@ -484,4 +484,16 @@ bool
 IsDuckdbTableAm(const TableAmRoutine *am) {
 	return am == &duckdb_methods;
 }
+
+bool
+IsDuckdbTable(Oid relid) {
+	if (relid == InvalidOid) {
+		return false;
+	}
+
+	auto rel = RelationIdGetRelation(relid);
+	bool result = IsDuckdbTableAm(rel->rd_tableam);
+	RelationClose(rel);
+	return result;
+}
 } // namespace pgduckdb
