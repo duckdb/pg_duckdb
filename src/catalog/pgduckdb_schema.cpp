@@ -71,10 +71,10 @@ PostgresSchema::CreateType(duckdb::CatalogTransaction, duckdb::CreateTypeInfo &)
 }
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
-PostgresSchema::GetEntry(duckdb::CatalogTransaction _catalog_transaction, duckdb::CatalogType _type,
-                         const duckdb::string &_entry_name) {
+PostgresSchema::LookupEntry(duckdb::CatalogTransaction _catalog_transaction,
+                            const duckdb::EntryLookupInfo &lookup_info) {
 	auto &pg_transaction = _catalog_transaction.transaction->Cast<PostgresTransaction>();
-	return pg_transaction.GetCatalogEntry(_type, name, _entry_name);
+	return pg_transaction.GetCatalogEntry(lookup_info.GetCatalogType(), name, lookup_info.GetEntryName());
 }
 
 void
