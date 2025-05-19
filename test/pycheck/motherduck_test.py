@@ -66,6 +66,23 @@ def test_md_create_table(md_cur: Cursor, ddb):
         md_cur.sql("CREATE TABLE t4(a int) USING heap")
 
 
+def test_md_table_dropped_when_disabled(md_cur: Cursor, ddb):
+    ddb.sql("CREATE TABLE t1(a int, b varchar)")
+    ddb.sql("INSERT INTO t1 VALUES (1, 'abc')")
+    md_cur.wait_until_table_exists("t1")
+
+    assert md_cur.sql("SELECT * FROM t1") == (1, "abc")
+
+    # Disable MD, should CASCADE drop the table
+    md_cur.sql("DROP SERVER motherduck CASCADE;")
+
+    with pytest.raises(
+        psycopg.errors.UndefinedTable,
+        match=r'relation "t1" does not exist',
+    ):
+        md_cur.sql("SELECT * FROM t1")
+
+
 def test_md_default_db_escape(pg: Postgres, ddb, default_db_name, md_test_user):
     # Make sure MD is not enabled
     pg.sql("DROP SERVER IF EXISTS motherduck CASCADE;")

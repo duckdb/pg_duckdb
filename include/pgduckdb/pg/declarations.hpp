@@ -81,6 +81,8 @@ typedef MinimalTupleData *MinimalTuple;
 
 struct TupleQueueReader;
 
+struct ObjectAddress;
+
 struct PlanState;
 
 struct Plan;

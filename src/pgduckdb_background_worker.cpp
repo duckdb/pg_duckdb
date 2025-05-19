@@ -12,8 +12,10 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pg/relations.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include <string>
 #include <unordered_map>
@@ -22,33 +24,35 @@
 
 extern "C" {
 #include "postgres.h"
-#include "fmgr.h"
 #include "access/xact.h"
-#include "miscadmin.h"
-#include "pgstat.h"
-#include "executor/spi.h"
+#include "catalog/dependency.h"
+#include "catalog/namespace.h"
+#include "catalog/objectaddress.h"
+#include "catalog/pg_authid.h"
+#include "catalog/pg_class.h"
+#include "catalog/pg_extension.h"
+#include "catalog/pg_foreign_server.h"
+#include "catalog/pg_namespace.h"
 #include "commands/dbcommands.h"
 #include "common/file_utils.h"
+#include "executor/spi.h"
+#include "fmgr.h"
+#include "miscadmin.h"
+#include "pgstat.h"
 #include "postmaster/bgworker.h"
 #include "postmaster/interrupt.h"
 #include "storage/ipc.h"
 #include "storage/latch.h"
-#include "tcop/tcopprot.h"
 #include "storage/proc.h"
 #include "storage/shmem.h"
-#include "utils/builtins.h"
-#include "catalog/dependency.h"
-#include "catalog/pg_authid.h"
-#include "catalog/namespace.h"
-#include "catalog/pg_namespace.h"
-#include "catalog/pg_extension.h"
+#include "tcop/tcopprot.h"
 #include "utils/acl.h"
+#include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
-#include "catalog/objectaddress.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -925,7 +929,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	if (!is_default_db) {
 		/*
 		 * For ddb$ schemas we need to record a dependency between the schema
-		 * and the extension, so that DROP EXTENSION also drops these schemas.
+		 * and the FDW, so that DROP SERVER motherduck also drops these schemas.
 		 */
 		schema_oid = get_namespace_oid(postgres_schema_name, true);
 		if (schema_oid == InvalidOid) {
@@ -939,12 +943,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		    .objectId = schema_oid,
 		    .objectSubId = 0,
 		};
-		ObjectAddress extension_address = {
-		    .classId = ExtensionRelationId,
-		    .objectId = pgduckdb::ExtensionOid(),
-		    .objectSubId = 0,
-		};
-		recordDependencyOn(&schema_address, &extension_address, DEPENDENCY_NORMAL);
+		RecordDependencyOnMDServer(&schema_address);
 	}
 
 	/* Success, so we commit the subtransaction */

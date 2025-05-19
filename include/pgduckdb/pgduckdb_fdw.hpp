@@ -57,5 +57,7 @@ const char *FindMotherDuckToken();
 
 const char *FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
 
+void RecordDependencyOnMDServer(ObjectAddress *);
+
 } // namespace pgduckdb
 }

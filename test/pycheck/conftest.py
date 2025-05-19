@@ -145,7 +145,7 @@ def md_cur(pg, default_db_name, ddb, md_test_user):
 
     pg.search_path = f"ddb${default_db_name}, public"
     with pg.cur() as cur:
-        cur.wait_until_schema_exists(f"ddb${default_db_name}")
+        cur.wait_until_schema_exists(f"ddb${default_db_name}", timeout=60)
         yield cur
 
 

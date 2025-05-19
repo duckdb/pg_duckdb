@@ -8,6 +8,7 @@ extern "C" {
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_user_mapping.h"
 #include "commands/defrem.h"
+#include "catalog/dependency.h"
 #include "executor/executor.h"
 #include "executor/spi.h"
 #include "fmgr.h"
@@ -258,6 +259,16 @@ ValidateMotherduckServerFdw(List *options_list, Oid context) {
 }
 
 } // namespace pg
+
+void
+RecordDependencyOnMDServer(ObjectAddress *object_address) {
+	ObjectAddress server_address = {
+	    .classId = ForeignServerRelationId,
+	    .objectId = GetMotherduckForeignServerOid(),
+	    .objectSubId = 0,
+	};
+	recordDependencyOn(object_address, &server_address, DEPENDENCY_NORMAL);
+}
 
 const char *CurrentServerType = nullptr;
 Oid CurrentServerOid = InvalidOid;
