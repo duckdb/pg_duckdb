@@ -8,15 +8,17 @@ library for that purpose.
 
 import datetime
 import duckdb
+import uuid
 
 from .utils import wait_until, Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
 from .motherduck_token_helper import (
     can_run_md_multi_user_tests,
     can_run_md_tests,
+    create_read_scaling_token,
 )
 from .multi_duckdb_helper import MDClient
-
 from contextlib import suppress
+
 import pytest
 import psycopg.errors
 
@@ -93,7 +95,7 @@ def test_md_default_db_escape(pg: Postgres, ddb, default_db_name, md_test_user):
         """) == ("motherduck", "motherduck", [f"default_database={weird_db_name}"])
 
 
-def test_md_read_scaling(pg: Postgres, ddb, default_db_name, md_test_user):
+def test_md_session_hint(pg: Postgres, ddb, default_db_name, md_test_user):
     pg.search_path = f"ddb${default_db_name}, public"
 
     # Make sure MD is not enabled
@@ -118,7 +120,7 @@ def test_md_read_scaling(pg: Postgres, ddb, default_db_name, md_test_user):
 
 
 @pytest.mark.skipif(not can_run_md_multi_user_tests(), reason="needs multiple users")
-def test_md_multiple_databases(pg_two_dbs, md_test_user):
+def test_md_multiple_databases(pg_two_dbs):
     cur1, cur2 = pg_two_dbs
     with MDClient.create("test_md_db_1", "test_md_db_2") as (cli1, cli2):
         # Connect each user in PG to their respective DBs
@@ -149,6 +151,55 @@ def test_md_multiple_databases(pg_two_dbs, md_test_user):
         """
         assert cur1.sql(list_tables_query) == ("public", "user1_t1")
         assert cur2.sql(list_tables_query) == ("public", "user2_t1")
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.skipif(not can_run_md_multi_user_tests(), reason="needs multiple users")
+def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
+    cur1, cur2 = pg_two_dbs
+    ## FIXME - If the DB is not unique, the test fails
+    db_name = "test_md_db" + str(uuid.uuid4()).replace("-", "")
+    user1_spec = {"database": db_name, "token": md_test_user["token"], "hint": "cli1"}
+    user2_spec = {
+        "database": db_name,
+        "token": create_read_scaling_token(md_test_user)["token"],
+        "reset_db": False,
+        "hint": "cli2",
+    }
+
+    with MDClient.create(user1_spec) as cli1:
+        # Create a table in user1's DB...
+        cli1.run_query("DROP TABLE IF EXISTS t1;")
+        cli1.run_query("CREATE TABLE t1(a int, b varchar)")
+        cli1.run_query("INSERT INTO t1 VALUES (41, 'hello world')")
+
+        with MDClient.create(user2_spec) as cli2:
+            # First check in the second connection that we can see the table
+            for _ in wait_until("Failed to get t1 records", timeout=70):
+                with suppress(duckdb.duckdb.CatalogException):
+                    cli2.run_query(f"REFRESH DATABASE {db_name};")
+                    if cli2.run_query("SELECT * FROM t1") == [(41, "hello world")]:
+                        break
+
+            # Connect each user in PG to their respective DBs
+            cur1.sql(
+                f"CALL duckdb.enable_motherduck('{cli1.get_token()}', '{db_name}')"
+            )
+            cur2.sql(
+                f"CALL duckdb.enable_motherduck('{cli2.get_token()}', '{db_name}')"
+            )
+
+            cur1.wait_until_table_exists("t1", timeout=70)
+            assert cur1.sql("SELECT * FROM t1") == (41, "hello world")
+
+            cur2.wait_until_table_exists("t1", timeout=70)
+            assert cur2.sql("SELECT * FROM t1") == (41, "hello world")
+
+            with pytest.raises(
+                psycopg.errors.InternalError_,
+                match=r"Cannot execute statement of type \"INSERT\" on database \".*\" which is attached in read-only mode!",
+            ):
+                cur2.sql("INSERT INTO t1 VALUES (42, 'nope')")
 
 
 def test_md_ctas(md_cur: Cursor, ddb):
