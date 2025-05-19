@@ -12,6 +12,7 @@
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pg/relations.hpp"
@@ -231,16 +232,6 @@ BgwMainLoop() {
 	}
 
 	elog(LOG, "pg_duckdb background worker for database '%s' (%u) has now terminated.", db_name, MyDatabaseId);
-}
-
-void
-RecordDependencyOnMDServer(ObjectAddress *object_address) {
-	ObjectAddress server_address = {
-	    .classId = ForeignServerRelationId,
-	    .objectId = GetMotherduckForeignServerOid(),
-	    .objectSubId = 0,
-	};
-	recordDependencyOn(object_address, &server_address, DEPENDENCY_NORMAL);
 }
 
 } // namespace pgduckdb
