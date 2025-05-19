@@ -153,7 +153,7 @@ def test_md_multiple_databases(pg_two_dbs):
         assert cur2.sql(list_tables_query) == ("public", "user2_t1")
 
 
-@pytest.mark.timeout(0)
+@pytest.mark.timeout(120)
 @pytest.mark.skipif(not can_run_md_multi_user_tests(), reason="needs multiple users")
 def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
     cur1, cur2 = pg_two_dbs
@@ -175,7 +175,7 @@ def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
 
         with MDClient.create(user2_spec) as cli2:
             # First check in the second connection that we can see the table
-            for _ in wait_until("Failed to get t1 records", timeout=60):
+            for _ in wait_until("Failed to get t1 records", timeout=70):
                 with suppress(duckdb.duckdb.CatalogException):
                     cli2.run_query(f"REFRESH DATABASE {db_name};")
                     if cli2.run_query("SELECT * FROM t1") == [(41, "hello world")]:
@@ -189,11 +189,18 @@ def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
                 f"CALL duckdb.enable_motherduck('{cli2.get_token()}', '{db_name}')"
             )
 
-            cur1.wait_until_table_exists("t1")
+            cur1.wait_until_table_exists("t1", timeout=70)
             assert cur1.sql("SELECT * FROM t1") == (41, "hello world")
 
-            cur2.wait_until_table_exists("t1")
+            cur2.wait_until_table_exists("t1", timeout=70)
             assert cur2.sql("SELECT * FROM t1") == (41, "hello world")
+
+            with pytest.raises(
+                psycopg.errors.InternalError_,
+                match=r"Cannot execute statement of type \"INSERT\" on database \".*\" which is attached in read-only mode!",
+            ):
+                cur2.sql("INSERT INTO t1 VALUES (42, 'nope')")
+
 
 
 def test_md_ctas(md_cur: Cursor, ddb):
