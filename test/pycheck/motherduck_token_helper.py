@@ -29,7 +29,7 @@ def make_request(uri, headers, data_json):
         return json.loads(res)
 
 
-def create_rs_token(user, token_name="test_rs"):
+def create_read_scaling_token(user, token_name="test_rs"):
     return make_request(
         uri=f"/v1/users/{user['id']}/tokens",
         headers={

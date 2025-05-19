@@ -14,7 +14,7 @@ from .utils import wait_until, Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
 from .motherduck_token_helper import (
     can_run_md_multi_user_tests,
     can_run_md_tests,
-    create_rs_token,
+    create_read_scaling_token,
 )
 from .multi_duckdb_helper import MDClient
 from contextlib import suppress
@@ -162,7 +162,7 @@ def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
     user1_spec = {"database": db_name, "token": md_test_user["token"], "hint": "cli1"}
     user2_spec = {
         "database": db_name,
-        "token": create_rs_token(md_test_user)["token"],
+        "token": create_read_scaling_token(md_test_user)["token"],
         "reset_db": False,
         "hint": "cli2",
     }
@@ -200,7 +200,6 @@ def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
                 match=r"Cannot execute statement of type \"INSERT\" on database \".*\" which is attached in read-only mode!",
             ):
                 cur2.sql("INSERT INTO t1 VALUES (42, 'nope')")
-
 
 
 def test_md_ctas(md_cur: Cursor, ddb):
