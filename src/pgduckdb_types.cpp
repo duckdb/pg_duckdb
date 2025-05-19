@@ -5,6 +5,7 @@
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/uuid.hpp"
 
+#include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -1211,7 +1212,8 @@ numeric_typmod_scale(int32 typmod) {
 
 duckdb::LogicalType
 ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
-	Oid typoid = pg::GetBaseDuckColumnType(attribute->atttypid);
+	int32 type_modifier = attribute->atttypmod;
+	Oid typoid = pg::GetBaseTypeAndTypmod(attribute->atttypid, &type_modifier);
 	switch (typoid) {
 	case BOOLOID:
 	case BOOLARRAYOID:
@@ -1265,12 +1267,33 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 		return duckdb::LogicalTypeId::DOUBLE;
 	case NUMERICOID:
 	case NUMERICARRAYOID: {
-		auto &typmod = attribute->atttypmod;
-		auto precision = numeric_typmod_precision(typmod);
-		auto scale = numeric_typmod_scale(typmod);
-		if (typmod == -1 || precision < 0 || scale < 0 || precision > 38) {
-			auto extra_type_info = duckdb::make_shared_ptr<NumericAsDouble>();
-			return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
+		auto precision = numeric_typmod_precision(type_modifier);
+		auto scale = numeric_typmod_scale(type_modifier);
+		if (type_modifier == -1 || precision < 1 || precision > 38 || scale < 0 || scale > 38 || scale > precision) {
+			if (duckdb_convert_unsupported_numeric_to_double) {
+				auto extra_type_info = duckdb::make_shared_ptr<NumericAsDouble>();
+				return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
+			}
+
+			/* We don't allow conversion then! */
+			if (type_modifier == -1) {
+				return duckdb::LogicalType::USER(
+				    "DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to "
+				    "a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+			} else if (precision < 1 || precision > 38) {
+				return duckdb::LogicalType::USER(
+				    "DuckDB only supports NUMERIC with a precision of 1-38. You can choose to convert these NUMERICs "
+				    "to a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+			} else if (scale < 0 || scale > 38) {
+				return duckdb::LogicalType::USER(
+				    "DuckDB only supports NUMERIC with a scale of 0-38. You can choose to convert these NUMERICs to a "
+				    "DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+			} else {
+				return duckdb::LogicalType::USER(
+				    "DuckDB does not support NUMERIC with a scale that is larger than the precision. You can choose to "
+				    "convert these NUMERICs to a DOUBLE by using 'SET "
+				    "duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+			}
 		}
 
 		return duckdb::LogicalType::DECIMAL(precision, scale);
@@ -1295,7 +1318,8 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 		} else if (typoid == pgduckdb::DuckdbStructOid()) {
 			return duckdb::LogicalTypeId::STRUCT;
 		}
-		return duckdb::LogicalType::USER("UnsupportedPostgresType (Oid=" + std::to_string(attribute->atttypid) + ")");
+		return duckdb::LogicalType::USER(
+		    "No conversion to DuckDB available for type with oid=" + std::to_string(attribute->atttypid) + ")");
 	}
 }
 
@@ -1339,7 +1363,8 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 }
 
 Oid
-GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
+GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
+	int elevel = throw_error ? ERROR : WARNING;
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLARRAYOID;
@@ -1385,16 +1410,22 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type) {
 		return UUIDARRAYOID;
 	case duckdb::LogicalTypeId::BLOB:
 		return BYTEAARRAYOID;
-	default: {
-		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %d to Postgres type",
-		     static_cast<uint8_t>(type.id()));
+	case duckdb::LogicalTypeId::VARINT:
+		return NUMERICARRAYOID;
+	case duckdb::LogicalTypeId::USER:
+		elog(elevel, "Unsupported Postgres type: %s", type.ToString().c_str());
 		return InvalidOid;
+	default: {
 	}
 	}
+	elog(elevel, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %s to Postgres type",
+	     type.ToString().c_str());
+	return InvalidOid;
 }
 
 Oid
-GetPostgresDuckDBType(const duckdb::LogicalType &type) {
+GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
+	int elevel = throw_error ? ERROR : WARNING;
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
@@ -1454,7 +1485,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 			auto &child_type = pgduckdb::GetChildType(*duck_type);
 			duck_type = &child_type;
 		}
-		return GetPostgresArrayDuckDBType(*duck_type);
+		return GetPostgresArrayDuckDBType(*duck_type, throw_error);
 	}
 	case duckdb::LogicalTypeId::BLOB:
 		return BYTEAOID;
@@ -1464,8 +1495,11 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type) {
 		return pgduckdb::DuckdbMapOid();
 	case duckdb::LogicalTypeId::ENUM:
 		return VARCHAROID;
+	case duckdb::LogicalTypeId::USER:
+		elog(elevel, "Unsupported Postgres type: %s", type.ToString().c_str());
+		return InvalidOid;
 	default: {
-		elog(WARNING, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
+		elog(elevel, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
 		     type.ToString().c_str());
 		return InvalidOid;
 	}

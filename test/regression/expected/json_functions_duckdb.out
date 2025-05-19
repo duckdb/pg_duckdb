@@ -163,8 +163,7 @@ SELECT public.json_array_length('{"not_an_array": {"key": "value"}}', '$.not_an_
 -- BUG: This fails due to not being able to convert the UBIGINT array to a
 -- postgres type yet.
 SELECT public.json_array_length('{"a": [1, 2, 3, 4, 5], "b": [1]}', ARRAY['$.a', 'b']) AS array_length;
-WARNING:  (PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype 31 to Postgres type
-ERROR:  (PGDuckDB/CreatePlan) Cache lookup failed for type 0
+ERROR:  (PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype UBIGINT to Postgres type
 -- </JSON_ARRAY_LENGTH>
 -- <JSON_CONTAINS>
 -- Simple JSON array with numeric needle

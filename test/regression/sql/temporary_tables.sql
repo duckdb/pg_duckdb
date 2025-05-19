@@ -113,6 +113,9 @@ CREATE TEMP TABLE t(A text COMPRESSION "pglz");
 
 CREATE TEMP TABLE t(a int) WITH (fillfactor = 50);
 
+-- Should fail because user should specify the precision of the NUMERIC.
+CREATE TEMP TABLE large_numeric_tbl (a NUMERIC) USING duckdb;
+
 CREATE TEMP TABLE cities_duckdb (
   name       text,
   population real,

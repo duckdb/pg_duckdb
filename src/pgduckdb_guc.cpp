@@ -111,6 +111,7 @@ DefineCustomDuckDBVariable(const char *name, const char *short_desc, T *var, T m
 
 bool duckdb_force_execution = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
+bool duckdb_convert_unsupported_numeric_to_double = false;
 bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_session_hint = strdup("");
@@ -136,6 +137,10 @@ InitGUC() {
 	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
 	                     "Allow mixed transactions between DuckDB and Postgres",
 	                     &duckdb_unsafe_allow_mixed_transactions);
+
+	DefineCustomVariable("duckdb.convert_unsupported_numeric_to_double",
+	                     "Convert NUMERIC types of unsupported precision to DOUBLE",
+	                     &duckdb_convert_unsupported_numeric_to_double);
 
 	DefineCustomVariable("duckdb.log_pg_explain", "Logs the EXPLAIN plan of a Postgres scan at the NOTICE log level",
 	                     &duckdb_log_pg_explain);

@@ -35,11 +35,11 @@ IsArrayDomainType(Oid type_oid) {
 }
 
 static Oid
-GetBaseDuckColumnType_C(Oid attribute_type_oid) {
+GetBaseTypeAndTypmod_C(Oid attribute_type_oid, int32 *type_modifier) {
 	Oid typoid = attribute_type_oid;
 	if (get_typtype(attribute_type_oid) == TYPTYPE_DOMAIN) {
 		/* It is a domain type that needs to be reduced to its base type */
-		typoid = getBaseType(attribute_type_oid);
+		typoid = getBaseTypeAndTypmod(attribute_type_oid, type_modifier);
 	} else if (type_is_array(attribute_type_oid)) {
 		Oid eltoid = get_base_element_type(attribute_type_oid);
 		if (OidIsValid(eltoid) && get_typtype(eltoid) == TYPTYPE_DOMAIN) {
@@ -50,9 +50,15 @@ GetBaseDuckColumnType_C(Oid attribute_type_oid) {
 	return typoid;
 }
 
+/*
+ * If the given type is a domain, return its base type and type_modifier;
+ * If the type is an array of a domain type, return the type of array-base
+ * type. This leaves the type_modifier unchanged.
+ * Otherwise, return the type's own OID, and leave *type_modifier unchanged.
+ */
 Oid
-GetBaseDuckColumnType(Oid attribute_type_oid) {
-	return PostgresFunctionGuard(GetBaseDuckColumnType_C, attribute_type_oid);
+GetBaseTypeAndTypmod(Oid attribute_type_oid, int32 *type_modifier) {
+	return PostgresFunctionGuard(GetBaseTypeAndTypmod_C, attribute_type_oid, type_modifier);
 }
 
 static Datum

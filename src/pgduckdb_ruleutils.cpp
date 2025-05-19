@@ -1,5 +1,6 @@
 #include "duckdb.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -634,6 +635,15 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		}
 
 		const char *column_name = NameStr(column->attname);
+
+		/*
+		 * Check that this type is known by DuckDB, and throw the appropriate
+		 * error otherwise. This is particularly important for NUMERIC without
+		 * precision specified. Because that means something very different in
+		 * Postgres
+		 */
+		auto duck_type = pgduckdb::ConvertPostgresToDuckColumnType(column);
+		pgduckdb::GetPostgresDuckDBType(duck_type, true);
 
 		const char *column_type_name = format_type_with_typemod(column->atttypid, column->atttypmod);
 

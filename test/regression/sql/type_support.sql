@@ -145,6 +145,9 @@ INSERT INTO numeric_as_double SELECT a FROM (VALUES
     (458234502034234234234.000012)
 ) t(a);
 SELECT * FROM numeric_as_double;
+SET duckdb.convert_unsupported_numeric_to_double = true;
+SELECT * FROM numeric_as_double;
+RESET duckdb.convert_unsupported_numeric_to_double;
 
 -- NUMERIC with a physical type of SMALLINT
 CREATE TABLE smallint_numeric(a NUMERIC(4, 2));
