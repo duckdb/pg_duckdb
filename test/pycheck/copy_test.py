@@ -196,3 +196,27 @@ def test_copy_from_local(cur: Cursor, tmp_path: Path):
         match="pg_duckdb does not support COPY ... FROM ... yet for Postgres tables",
     ):
         cur.sql(f"COPY pg_table FROM '{parquet_path}' WITH (FORMAT PARQUET)")
+
+    # Non-SELECT queries fall back to the Postgres COPY logic if we're not
+    # using DuckDB features.
+    cur.sql(f"COPY (INSERT INTO pg_table VALUES (42) RETURNING (id)) TO '{csv_path}'")
+    assert cur.sql(f"select * from read_csv('{csv_path}')") == 42
+    cur.sql(f"COPY (INSERT INTO duck_table VALUES (43) RETURNING (id)) TO '{csv_path}'")
+    assert cur.sql(f"select * from read_csv('{csv_path}')") == 43
+
+    # If that's not possible (e.g. due to parquet), then we throw a clear error
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="DuckDB does not support modififying Postgres tables",
+    ):
+        cur.sql(
+            f"COPY (INSERT INTO pg_table VALUES (1) RETURNING (id)) TO '{parquet_path}'"
+        )
+
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="DuckDB COPY only supports SELECT statement",
+    ):
+        cur.sql(
+            f"COPY (INSERT INTO duck_table VALUES (1) RETURNING (id)) TO '{parquet_path}'"
+        )

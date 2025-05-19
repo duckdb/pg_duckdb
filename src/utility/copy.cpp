@@ -106,6 +106,11 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 	/* First we let postgres plan the query */
 	PlannedStmt *postgres_plan = pg_plan_query(copied_query, query_string, CURSOR_OPT_PARALLEL_OK, NULL);
 
+	if (postgres_plan == nullptr) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("(PGDuckDB/CheckQueryPermissions) Used query in COPY that could not be planned")));
+	}
+
 #if PG_VERSION_NUM >= 160000
 	ExecCheckPermissions(postgres_plan->rtable, postgres_plan->permInfos, true);
 #else
@@ -344,8 +349,9 @@ NeedsDuckdbExecution(CopyStmt *stmt) {
 const char *
 MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEnvironment *query_env) {
 	CopyStmt *copy_stmt = (CopyStmt *)pstmt->utilityStmt;
+	bool needs_duckdb_execution = NeedsDuckdbExecution(copy_stmt);
 
-	if (NeedsDuckdbExecution(copy_stmt)) {
+	if (needs_duckdb_execution) {
 		IsAllowedStatement(copy_stmt, true);
 	} else if (!pgduckdb::duckdb_force_execution || !IsAllowedStatement(copy_stmt)) {
 		if (copy_stmt->relation && !copy_stmt->is_from) {
@@ -377,7 +383,7 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 	appendStringInfo(rewritten_query_info, "COPY ");
 	if (copy_stmt->query) {
 		RawStmt *raw_stmt = makeNode(RawStmt);
-		raw_stmt->stmt = copy_stmt->query;
+		raw_stmt->stmt = (Node *)copyObjectImpl(copy_stmt->query);
 		raw_stmt->stmt_location = pstmt->stmt_location;
 		raw_stmt->stmt_len = pstmt->stmt_len;
 
@@ -389,8 +395,20 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 		CheckRewritten(rewritten);
 
 		Query *query = linitial_node(Query, rewritten);
+
+		if (needs_duckdb_execution) {
+			pgduckdb::IsAllowedStatement(query, true);
+		} else if (!pgduckdb::IsAllowedStatement(query, false) || query->commandType != CMD_SELECT) {
+			/* We don't need to do anything */
+			return nullptr;
+		}
+
+		if (query->commandType != CMD_SELECT) {
+			ereport(ERROR,
+			        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("DuckDB COPY only supports SELECT statements")));
+		}
+
 		CheckQueryPermissions(query, query_string);
-		pgduckdb::IsAllowedStatement(query, true);
 
 		appendStringInfo(rewritten_query_info, "(");
 		appendStringInfoString(rewritten_query_info, pgduckdb_get_querydef(query));
