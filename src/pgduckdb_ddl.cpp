@@ -732,6 +732,12 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 		}
 
+		ObjectAddress table_address = {
+		    .classId = RelationRelationId,
+		    .objectId = relid,
+		    .objectSubId = 0,
+		};
+		pgduckdb::RecordDependencyOnMDServer(&table_address);
 		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
 	}
 

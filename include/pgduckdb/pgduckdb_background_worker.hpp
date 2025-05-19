@@ -10,6 +10,8 @@ void TriggerActivity(void);
 void UnclaimBgwSessionHint(int code = 0, Datum arg = 0);
 const char *PossiblyReuseBgwSessionHint(void);
 
+void RecordDependencyOnMDServer(ObjectAddress *);
+
 extern bool is_background_worker;
 extern bool doing_motherduck_sync;
 extern char *current_duckdb_database_name;

@@ -234,7 +234,7 @@ BgwMainLoop() {
 }
 
 void
-recordDependencyOnMDServer(ObjectAddress *object_address) {
+RecordDependencyOnMDServer(ObjectAddress *object_address) {
 	ObjectAddress server_address = {
 	    .classId = ForeignServerRelationId,
 	    .objectId = GetMotherduckForeignServerOid(),
@@ -793,26 +793,6 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 		return false;
 	}
 
-	// Record the dependency on the MotherDuck server
-	{
-		HeapTuple new_table_tuple =
-		    SearchSysCache2(RELNAMENSP, CStringGetDatum(table_name), ObjectIdGetDatum(schema_oid));
-		if (HeapTupleIsValid(new_table_tuple)) {
-			Form_pg_class postgres_relation = (Form_pg_class)GETSTRUCT(new_table_tuple);
-			ReleaseSysCache(new_table_tuple);
-			ObjectAddress object_address = {
-			    .classId = RelationRelationId,
-			    .objectId = GetOid(postgres_relation),
-			    .objectSubId = 0,
-			};
-			recordDependencyOnMDServer(&object_address);
-		} else {
-			// Something went really wrong (since `create_table_succeeded`)
-			elog(WARNING, "Failed to find table '%s.%s' so won't record dependency to 'motherduck' SERVER", table_name,
-			     postgres_schema_name);
-		}
-	}
-
 	if (did_delete_table) {
 		/*
 		 * Commit the subtransaction that contains both the drop and the create that
@@ -972,7 +952,7 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		    .objectId = schema_oid,
 		    .objectSubId = 0,
 		};
-		recordDependencyOnMDServer(&schema_address);
+		RecordDependencyOnMDServer(&schema_address);
 	}
 
 	/* Success, so we commit the subtransaction */
