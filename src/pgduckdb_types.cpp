@@ -1364,7 +1364,6 @@ ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 
 Oid
 GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
-	int elevel = throw_error ? ERROR : WARNING;
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLARRAYOID;
@@ -1412,20 +1411,28 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return BYTEAARRAYOID;
 	case duckdb::LogicalTypeId::VARINT:
 		return NUMERICARRAYOID;
-	case duckdb::LogicalTypeId::USER:
-		elog(elevel, "Unsupported Postgres type: %s", type.ToString().c_str());
-		return InvalidOid;
+	case duckdb::LogicalTypeId::USER: {
+		std::string type_name = duckdb::UserType::GetTypeName(type);
+		if (throw_error) {
+			throw duckdb::NotImplementedException("Unsupported Postgres type: " + type_name);
+		} else {
+			pd_log(WARNING, "Unsupported Postgres type: %s", type_name.c_str());
+			return InvalidOid;
+		}
+	}
 	default: {
+		if (throw_error) {
+			throw duckdb::NotImplementedException("Unsupported DuckDB `LIST` subtype: " + type.ToString());
+		} else {
+			pd_log(WARNING, "Unsupported DuckDB `LIST` subtype: %s", type.ToString().c_str());
+			return InvalidOid;
+		}
 	}
 	}
-	elog(elevel, "(PGDuckDB/GetPostgresDuckDBType) Unsupported `LIST` subtype %s to Postgres type",
-	     type.ToString().c_str());
-	return InvalidOid;
 }
 
 Oid
 GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
-	int elevel = throw_error ? ERROR : WARNING;
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
@@ -1495,13 +1502,23 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbMapOid();
 	case duckdb::LogicalTypeId::ENUM:
 		return VARCHAROID;
-	case duckdb::LogicalTypeId::USER:
-		elog(elevel, "Unsupported Postgres type: %s", type.ToString().c_str());
-		return InvalidOid;
+	case duckdb::LogicalTypeId::USER: {
+		std::string type_name = duckdb::UserType::GetTypeName(type);
+		if (throw_error) {
+			throw duckdb::NotImplementedException("Unsupported Postgres type: " + type_name);
+		} else {
+			pd_log(WARNING, "Unsupported Postgres type: %s", type_name.c_str());
+			return InvalidOid;
+		}
+	}
 	default: {
-		elog(elevel, "(PGDuckDB/GetPostgresDuckDBType) Could not convert DuckDB type: %s to Postgres type",
-		     type.ToString().c_str());
-		return InvalidOid;
+		if (throw_error) {
+			throw duckdb::NotImplementedException("Could not convert DuckDB type: " + type.ToString() +
+			                                      " to Postgres type");
+		} else {
+			pd_log(WARNING, "Could not convert DuckDB type: %s to Postgres type", type.ToString().c_str());
+			return InvalidOid;
+		}
 	}
 	}
 }
