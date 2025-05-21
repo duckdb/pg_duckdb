@@ -132,9 +132,6 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 
 		for (size_t i = 0; i < prepared_result_types.size(); i++) {
 			Oid postgres_column_oid = pgduckdb::GetPostgresDuckDBType(prepared_result_types[i], true);
-			if (!OidIsValid(postgres_column_oid)) {
-				elog(ERROR, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgres_column_oid);
-			}
 
 			TargetEntry *target_entry =
 			    list_nth_node(TargetEntry, duckdb_scan_state->custom_scan->custom_scan_tlist, i);
