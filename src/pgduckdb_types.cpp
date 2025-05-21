@@ -1269,6 +1269,13 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 	case NUMERICARRAYOID: {
 		auto precision = numeric_typmod_precision(type_modifier);
 		auto scale = numeric_typmod_scale(type_modifier);
+
+		/*
+		 * DuckDB decimals only support up to 38 digits. So we cannot convert
+		 * NUMERICs of higher precision losslessly. We do allow conversion to
+		 * doubles.
+		 * https://duckdb.org/docs/stable/sql/data_types/numeric.html#fixed-point-decimals
+		 */
 		if (type_modifier == -1 || precision < 1 || precision > 38 || scale < 0 || scale > 38 || scale > precision) {
 			if (duckdb_convert_unsupported_numeric_to_double) {
 				auto extra_type_info = duckdb::make_shared_ptr<NumericAsDouble>();
