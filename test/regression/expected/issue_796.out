@@ -1,0 +1,8 @@
+SET duckdb.force_execution = TRUE;
+CREATE TEMP TABLE t2(a INT);
+INSERT INTO t2 SELECT i from generate_series(1, 2048) as i; -- works with 2047
+SELECT * FROM t2;
+server closed the connection unexpectedly
+	This probably means the server terminated abnormally
+	before or while processing the request.
+connection to server was lost
