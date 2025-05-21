@@ -174,6 +174,9 @@ INSERT INTO numeric_array_1d SELECT CAST(a as NUMERIC[]) FROM (VALUES
     ('{}')
 ) t(a);
 SELECT * FROM numeric_array_1d;
+SET duckdb.convert_unsupported_numeric_to_double = true;
+SELECT * FROM numeric_array_1d;
+RESET duckdb.convert_unsupported_numeric_to_double;
 
 -- UUID (single dimension)
 CREATE TABLE uuid_array_1d(a UUID[]);
@@ -338,6 +341,9 @@ INSERT INTO numeric_array_2d VALUES
     ('{}'),
     ('{{11.1,12.2},{NULL,14.4}}');
 SELECT * FROM numeric_array_2d;
+SET duckdb.convert_unsupported_numeric_to_double = true;
+SELECT * FROM numeric_array_2d;
+RESET duckdb.convert_unsupported_numeric_to_double;
 
 -- UUID (two dimensions)
 CREATE TABLE uuid_array_2d(a UUID[][]);
