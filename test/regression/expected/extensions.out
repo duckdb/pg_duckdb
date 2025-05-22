@@ -115,15 +115,14 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 (7 rows)
 
 SELECT duckdb.install_extension('duckpgq', 'community');
- install_extension 
--------------------
- 
-(1 row)
+ERROR:  (PGDuckDB/install_extension_cpp) HTTP Error: Failed to download extension "duckpgq" at URL "http://community-extensions.duckdb.org/v1.3.0/linux_amd64/duckpgq.duckdb_extension.gz" (HTTP 403)
 
+Candidate extensions: "autocomplete", "ui", "md", "iceberg", "encodings"
+For more info, visit https://duckdb.org/docs/stable/extensions/troubleshooting/?version=v1.3.0&platform=linux_amd64&extension=duckpgq
 SELECT last_value FROM duckdb.extensions_table_seq;
  last_value 
 ------------
-         10
+          8
 (1 row)
 
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
@@ -131,13 +130,12 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 ----------------+--------+-----------+----------------
  aws            | t      | t         | core
  core_functions | t      | t         | 
- duckpgq        | t      | t         | community
  httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
-(8 rows)
+(7 rows)
 
 -- cleanup
 TRUNCATE duckdb.extensions;

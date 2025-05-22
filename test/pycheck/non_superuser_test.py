@@ -5,6 +5,7 @@ import psycopg.errors
 import psycopg.sql
 
 
+@pytest.mark.skip(reason="duckpgq not available in duckdb 1.3.0")
 def test_community_extensions(pg: Postgres):
     pg.create_user("user1", psycopg.sql.SQL("IN ROLE duckdb_group"))
     # Raw extension installation should not be possible non-superusers, because
