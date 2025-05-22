@@ -80,6 +80,7 @@ CreatePlan(Query *query, bool throw_error) {
 		}
 
 		typtup = (Form_pg_type)GETSTRUCT(tp);
+		typtup->typtypmod = pgduckdb::GetPostgresDuckDBTypemod(prepared_result_types[i]);
 
 		/* We fill in the varno later, once we know the index of the custom RTE
 		 * that we create. We'll know this at the end of DuckdbPlanNode. This
