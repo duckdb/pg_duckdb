@@ -480,6 +480,18 @@ EXPLAIN VERBOSE INSERT INTO tc(c) SELECT md5('ta');
  ┌─────────────┴─────────────┐
  │         PROJECTION        │
  │    ────────────────────   │
+ │     CAST(3 AS INTEGER)    │
+ │            NULL           │
+ │             #0            │
+ │  (CAST('a' AS VARCHAR) || │
+ │    CAST('b' AS VARCHAR))  │
+ │          (1 + 2)          │
+ │                           │
+ │          ~1 Rows          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         PROJECTION        │
+ │    ────────────────────   │
  │            md5            │
  │                           │
  │          ~1 Rows          │
@@ -489,7 +501,7 @@ EXPLAIN VERBOSE INSERT INTO tc(c) SELECT md5('ta');
  └───────────────────────────┘
  
  
-(19 rows)
+(31 rows)
 
 INSERT INTO tc(c) SELECT md5('ta');
 EXPLAIN VERBOSE INSERT INTO tc(d) SELECT md5('test');
@@ -505,6 +517,18 @@ EXPLAIN VERBOSE INSERT INTO tc(d) SELECT md5('test');
  ┌─────────────┴─────────────┐
  │         PROJECTION        │
  │    ────────────────────   │
+ │     CAST(3 AS INTEGER)    │
+ │            NULL           │
+ │    CAST('pg_duckdb' AS    │
+ │          VARCHAR)         │
+ │             #0            │
+ │          (1 + 2)          │
+ │                           │
+ │          ~1 Rows          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         PROJECTION        │
+ │    ────────────────────   │
  │            md5            │
  │                           │
  │          ~1 Rows          │
@@ -514,7 +538,7 @@ EXPLAIN VERBOSE INSERT INTO tc(d) SELECT md5('test');
  └───────────────────────────┘
  
  
-(19 rows)
+(31 rows)
 
 INSERT INTO tc(d) SELECT md5('test');
 SELECT * FROM tc;
@@ -527,7 +551,7 @@ SELECT * FROM tc;
 -- Set Returning Function
 TRUNCATE TABLE ta;
 INSERT INTO ta (a) SELECT generate_series(1, 3); -- failed. DuckDB expects this "INSERT INTO ta (a) FROM generate_series(1, 3)"
-ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Conversion Error: Unimplemented type for cast (BIGINT[] -> INTEGER)
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Conversion Error: Unimplemented type for cast (BIGINT[] -> INTEGER) when casting from source column generate_series
 
 LINE 1:  INSERT INTO pg_temp.main.ta (a) SELECT generate_series(1, 3) AS generate_series
                                                 ^
