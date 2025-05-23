@@ -994,8 +994,9 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 
 			char *postgres_schema_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
 			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
-			char *drop_query = psprintf("DROP TABLE %s.%s", pgduckdb_db_and_schema_string(postgres_schema_name, true),
-			                            quote_identifier(table_name));
+			char *drop_query =
+			    psprintf("DROP TABLE IF EXISTS %s.%s", pgduckdb_db_and_schema_string(postgres_schema_name, true),
+			             quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 
 			deleted_duckdb_tables++;
