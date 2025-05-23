@@ -36,7 +36,7 @@ UPDATE duckdb.extensions SET enabled = (false|true) WHERE name = 'iceberg';
 -- remove an extension
 DELETE FROM duckdb.extensions WHERE name = 'iceberg';
 -- You can also install community extensions
-SELECT duckdb.install_extension('duckpgq', 'community');
+SELECT duckdb.install_extension('prql', 'community');
 ```
 
 There is currently no practical difference between a disabled and uninstalled extension.

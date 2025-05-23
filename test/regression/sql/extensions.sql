@@ -40,7 +40,7 @@ SELECT last_value FROM duckdb.extensions_table_seq;
 
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 
-SELECT duckdb.install_extension('duckpgq', 'community');
+SELECT duckdb.install_extension('prql', 'community');
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 
