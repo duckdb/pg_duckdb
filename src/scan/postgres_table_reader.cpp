@@ -63,12 +63,11 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	table_scan_planstate =
 	    PostgresFunctionGuard(ExecInitNode, planned_stmt->planTree, table_scan_query_desc->estate, 0);
 
-	bool run_scan_with_parallel_workers = persistence != RELPERSISTENCE_TEMP;
-	run_scan_with_parallel_workers &= CanTableScanRunInParallel(table_scan_query_desc->planstate->plan);
+	bool run_scan_with_parallel_workers =
+	    persistence != RELPERSISTENCE_TEMP && CanTableScanRunInParallel(table_scan_query_desc->planstate->plan);
 
-	/* Temp tables can be excuted with parallel workers, and whole plan should be parallel aware */
+	/* Temp tables cannot be excuted with parallel workers, and whole plan should be parallel aware */
 	if (run_scan_with_parallel_workers) {
-
 		int parallel_workers = 0;
 		if (count_tuples_only) {
 			/* For count_tuples_only we will try to execute aggregate node on table scan */
