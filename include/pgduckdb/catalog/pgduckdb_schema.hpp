@@ -37,8 +37,8 @@ public:
 	                                                           duckdb::CreateCollationInfo &info) override;
 	duckdb::optional_ptr<duckdb::CatalogEntry> CreateType(duckdb::CatalogTransaction transaction,
 	                                                      duckdb::CreateTypeInfo &info) override;
-	duckdb::optional_ptr<duckdb::CatalogEntry> GetEntry(duckdb::CatalogTransaction transaction,
-	                                                    duckdb::CatalogType type, const duckdb::string &name) override;
+	duckdb::optional_ptr<duckdb::CatalogEntry> LookupEntry(duckdb::CatalogTransaction transaction,
+	                                                       const duckdb::EntryLookupInfo &lookup_info) override;
 	void DropEntry(duckdb::ClientContext &context, duckdb::DropInfo &info) override;
 	void Alter(duckdb::CatalogTransaction transaction, duckdb::AlterInfo &info) override;
 
