@@ -268,9 +268,12 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 		}
 
 		SlotGetAllAttrs(slot);
-		// Only use the `duckdb_scan_memory_ctx` for InsertTupleIntoChunk, not for `GetNextTuple` above
-		// since the latter needs the state to be kept around from one call of the `PostgresScanFunction`
-		// to the next. Cf. issue 796 and 802
+
+		// This memory context is use as a scratchpad space for any allocation required to add the tuple
+		// into the chunk, such as decoding jsonb columns to their json string representation. We need to
+		// only use this memory context here, and not for the full loop, because GetNextTuple() needs the
+		// actual tuple to survive until the next call to GetNextTuple(), to be able to do index scans.
+		// Cf. issue 796 and 802
 		MemoryContext old_context = pg::MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
 		InsertTupleIntoChunk(output, local_state, slot);
 		pg::MemoryContextSwitchTo(old_context);
