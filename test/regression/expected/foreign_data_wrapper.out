@@ -122,3 +122,6 @@ SELECT * FROM duckdb.is_motherduck_enabled();
 (1 row)
 
 -- TODO: test ALTER SERVER & USER MAPPING
+DROP OWNED BY user1;
+DROP USER user1;
+DROP SERVER motherduck;

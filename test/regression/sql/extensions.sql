@@ -1,3 +1,5 @@
+DROP EXTENSION pg_duckdb CASCADE;
+CREATE EXTENSION pg_duckdb;
 
 SET duckdb.force_execution TO false;
 SET duckdb.allow_community_extensions = true;
