@@ -25,7 +25,7 @@ ERROR:  permission denied for table extensions
 -- permissions checked even if it happens straight from DuckDB.
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
-ERROR:  (PGDuckDB/pgduckdb_raw_query_cpp) Executor Error: (PGDuckDB/ExecutorStart) permission denied for table t
+ERROR:  (PGDuckDB/pgduckdb_raw_query_cpp) Executor Error: (PGDuckDB/Init) permission denied for table t
 SET duckdb.force_execution = true;
 -- read_csv from the local filesystem should be disallowed
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
