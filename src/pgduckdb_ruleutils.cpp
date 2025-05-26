@@ -1,6 +1,7 @@
 #include "duckdb.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pg/relations.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -762,16 +763,6 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 
 	return buffer.data;
 }
-Form_pg_attribute
-GetAttributeByName(TupleDesc tupdesc, const char *colname) {
-	for (int i = 0; i < tupdesc->natts; i++) {
-		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
-		if (strcmp(NameStr(attr->attname), colname) == 0) {
-			return attr;
-		}
-	}
-	return NULL; // Return NULL if the column name is not found
-}
 
 /*
  * Take a raw CHECK constraint expression and convert it to a cooked format
@@ -963,7 +954,7 @@ pgduckdb_get_alter_tabledef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 		case AT_ColumnDefault: {
 			const char *column_name = cmd->name;
 			TupleDesc tupdesc = RelationGetDescr(relation);
-			Form_pg_attribute attribute = GetAttributeByName(tupdesc, column_name);
+			Form_pg_attribute attribute = pgduckdb::pg::GetAttributeByName(tupdesc, column_name);
 			if (!attribute) {
 				elog(ERROR, "Column %s not found in table %s", column_name, relation_name);
 			}
@@ -992,7 +983,6 @@ pgduckdb_get_alter_tabledef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 		}
 
 		case AT_AddConstraint: {
-			pprint(cmd);
 			Constraint *constraint = castNode(Constraint, cmd->def);
 
 			appendStringInfoString(&buffer, "ADD ");
