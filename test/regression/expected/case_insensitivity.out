@@ -48,12 +48,27 @@ SELECT * FROM b.a, "B".a as a2;
 (1 row)
 
 -- Supports casing in column names
--- select r['UPPER'], r['lower'] from read_parquet('./test/regression/data/uppercase.parquet') r;
+select r['UPPER'], r['lower'] from read_parquet('../../data/uppercase.parquet') r;
+ UPPER | lower 
+-------+-------
+     1 |     2
+(1 row)
+
 -- DuckDB is case insensitive though. So this should work too. But it will
 -- still return the original casing.
--- select r['upper'], r['LOWER'] from read_parquet('./test/regression/data/uppercase.parquet') r;
+select r['upper'], r['LOWER'] from read_parquet('../../data/uppercase.parquet') r;
+ UPPER | lower 
+-------+-------
+     1 |     2
+(1 row)
+
 -- You can change the casing by using aliasses (issue #564)
--- select r['UPPER'] as upper, r['lower'] as "LOWER" from read_parquet('./test/regression/data/uppercase.parquet') r;
+select r['UPPER'] as upper, r['lower'] as "LOWER" from read_parquet('../../data/uppercase.parquet') r;
+ upper | LOWER 
+-------+-------
+     1 |     2
+(1 row)
+
 set client_min_messages TO WARNING;
 DROP TABLE a, "A";
 DROP SCHEMA b, "B" CASCADE;
