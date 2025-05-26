@@ -259,7 +259,6 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	local_state.output_vector_size = 0;
 
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	MemoryContext old_context = pg::MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
 	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {
@@ -269,11 +268,12 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 		}
 
 		SlotGetAllAttrs(slot);
+		MemoryContext old_context = pg::MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
 		InsertTupleIntoChunk(output, local_state, slot);
+		pg::MemoryContextSwitchTo(old_context);
 	}
 
 	pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
-	pg::MemoryContextSwitchTo(old_context);
 	SetOutputCardinality(output, local_state);
 }
 

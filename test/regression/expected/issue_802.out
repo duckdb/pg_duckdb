@@ -1,0 +1,89 @@
+SET duckdb.force_execution = TRUE;
+create temp table t1(a int);
+insert into t1 select * from generate_series(0,8800);
+create index ON t1 (a);
+set enable_seqscan=off;
+explain (costs off)
+  select count(*), sum(a), count(*) = 880
+  from t1, generate_series(1, 8800, 10) as i
+  where t1.a = i;
+                         QUERY PLAN                         
+------------------------------------------------------------
+ Custom Scan (DuckDBScan)
+   DuckDB Execution Plan: 
+ 
+ ┌───────────────────────────┐
+ │         PROJECTION        │
+ │    ────────────────────   │
+ │           count           │
+ │            sum            │
+ │          ?column?         │
+ │                           │
+ │          ~1 Rows          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │    UNGROUPED_AGGREGATE    │
+ │    ────────────────────   │
+ │        Aggregates:        │
+ │        count_star()       │
+ │          sum(#0)          │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         PROJECTION        │
+ │    ────────────────────   │
+ │             a             │
+ │                           │
+ │         ~8801 Rows        │
+ └─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐
+ │         HASH_JOIN         │
+ │    ────────────────────   │
+ │      Join Type: INNER     │
+ │                           │
+ │        Conditions:        ├──────────────┐
+ │   CAST(a AS BIGINT) = i   │              │
+ │                           │              │
+ │         ~8801 Rows        │              │
+ └─────────────┬─────────────┘              │
+ ┌─────────────┴─────────────┐┌─────────────┴─────────────┐
+ │         PROJECTION        ││         PROJECTION        │
+ │    ────────────────────   ││    ────────────────────   │
+ │            NULL           ││            NULL           │
+ │             #2            ││             #2            │
+ │            NULL           ││            NULL           │
+ │             #1            ││             #1            │
+ │            NULL           ││            NULL           │
+ │             #0            ││             #0            │
+ │            NULL           ││            NULL           │
+ │                           ││                           │
+ │         ~8801 Rows        ││         ~879 Rows         │
+ └─────────────┬─────────────┘└─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐┌─────────────┴─────────────┐
+ │         PROJECTION        ││         PROJECTION        │
+ │    ────────────────────   ││    ────────────────────   │
+ │            NULL           ││            NULL           │
+ │             #0            ││             #0            │
+ │            NULL           ││            NULL           │
+ │                           ││                           │
+ │         ~8801 Rows        ││         ~879 Rows         │
+ └─────────────┬─────────────┘└─────────────┬─────────────┘
+ ┌─────────────┴─────────────┐┌─────────────┴─────────────┐
+ │  PGDUCKDB_POSTGRES_SCAN   ││      GENERATE_SERIES      │
+ │    ────────────────────   ││    ────────────────────   │
+ │         Table: t1         ││         Function:         │
+ │       Projections: a      ││      GENERATE_SERIES      │
+ │                           ││                           │
+ │         ~8801 Rows        ││         ~879 Rows         │
+ └───────────────────────────┘└───────────────────────────┘
+ 
+ 
+(68 rows)
+
+select count(*), sum(a), count(*) = 880
+  from t1, generate_series(1, 8800, 10) as i
+  where t1.a = i;
+ count |   sum   | ?column? 
+-------+---------+----------
+   880 | 3868480 | t
+(1 row)
+
