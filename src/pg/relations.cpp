@@ -177,4 +177,19 @@ GetOid(Form_pg_class rel) {
 	return rel->oid;
 }
 
+namespace pg {
+
+Form_pg_attribute
+GetAttributeByName(TupleDesc tupdesc, const char *colname) {
+	for (int i = 0; i < tupdesc->natts; i++) {
+		Form_pg_attribute attr = TupleDescAttr(tupdesc, i);
+		if (strcmp(NameStr(attr->attname), colname) == 0) {
+			return attr;
+		}
+	}
+	return NULL; // Return NULL if the column name is not found
+}
+
+} // namespace pg
+
 } // namespace pgduckdb

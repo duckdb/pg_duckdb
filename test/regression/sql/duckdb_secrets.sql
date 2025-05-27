@@ -201,3 +201,6 @@ DROP SERVER
     simple_gcs_secret_2,
     azure_secret
 CASCADE;
+
+-- Remove aws extension
+DELETE FROM duckdb.extensions WHERE name = 'aws';

@@ -37,4 +37,8 @@ const char *GetRelationName(Relation rel);
 
 Oid GetOid(Form_pg_class rel);
 
+namespace pg {
+Form_pg_attribute GetAttributeByName(TupleDesc tupdesc, const char *colname);
+}
+
 } // namespace pgduckdb

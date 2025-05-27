@@ -90,3 +90,6 @@ DROP USER MAPPING FOR CURRENT_USER SERVER motherduck;
 SELECT * FROM duckdb.is_motherduck_enabled();
 
 -- TODO: test ALTER SERVER & USER MAPPING
+DROP OWNED BY user1;
+DROP USER user1;
+DROP SERVER motherduck;
