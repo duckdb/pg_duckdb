@@ -119,7 +119,7 @@ char *duckdb_postgres_role = strdup("");
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
-char *duckdb_disabled_filesystems = strdup("LocalFileSystem");
+char *duckdb_disabled_filesystems = strdup("");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_community_extensions = false;
 bool duckdb_allow_unsigned_extensions = false;
@@ -206,11 +206,9 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.motherduck_session_hint", "The session hint to use for MotherDuck connections",
 	                           &duckdb_motherduck_session_hint);
 
-	// This is also a DuckDB variable, but it doesn't need `GucCheckDuckDBNotInitdHook` because we actually handle its
-	// update after DuckDB is initialized (cf. `DuckdbInstallExtension` function)
-	DefineCustomVariable("duckdb.disabled_filesystems",
-	                     "Disable specific file systems preventing access (e.g., LocalFileSystem)",
-	                     &duckdb_disabled_filesystems, PGC_SUSET);
+	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
+	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
+	                           &duckdb_disabled_filesystems, PGC_SUSET);
 }
 
 } // namespace pgduckdb
