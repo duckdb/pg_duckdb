@@ -38,16 +38,18 @@ else
 	DUCKDB_MAKE_TARGET = release
 endif
 
-PG_DUCKDB_LINK_FLAGS = -Wl,-rpath,$(PG_LIB)/ -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lstdc++ -llz4
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
-	PG_DUCKDB_LINK_FLAGS += third_party/duckdb/build/release/libduckdb_bundle.a
+	PG_DUCKDB_LINK_FLAGS = third_party/duckdb/build/release/libduckdb_bundle.a
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/$(DUCKDB_LIB)
 else
-	PG_DUCKDB_LINK_FLAGS += -lduckdb
+	PG_DUCKDB_LINK_FLAGS = -lduckdb
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/$(DUCKDB_LIB)/libduckdb$(DLSUFFIX)
 endif
+
+
+PG_DUCKDB_LINK_FLAGS += -Wl,-rpath,$(PG_LIB)/ -L$(DUCKDB_BUILD_DIR)/src -L$(PG_LIB) -lstdc++ -llz4
 
 ERROR_ON_WARNING ?=
 ifeq ($(ERROR_ON_WARNING), 1)
