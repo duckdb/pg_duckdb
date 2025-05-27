@@ -26,6 +26,24 @@ SELECT * FROM int_array_1d;
  {}
 (4 rows)
 
+SET client_min_messages=DEBUG1;
+SELECT * FROM int_array_1d WHERE a @> ARRAY[4];
+DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.int_array_1d'
+DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+      a       
+--------------
+ {4,5,NULL,7}
+(1 row)
+
+SELECT * FROM duckdb.query($$ FROM pgduckdb.public.int_array_1d WHERE contains(a, 4) $$);
+DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.int_array_1d'
+DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+      a       
+--------------
+ {4,5,NULL,7}
+(1 row)
+
+RESET client_min_messages;
 -- INT4 (two dimensional data, single dimension type)
 CREATE TABLE int_array_2d(a INT[]);
 INSERT INTO int_array_2d VALUES

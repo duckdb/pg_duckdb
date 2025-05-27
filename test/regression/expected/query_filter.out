@@ -48,6 +48,65 @@ SELECT a, COUNT(*) FROM query_filter_varchar WHERE a = 't1' GROUP BY a;
  t1 |     2
 (1 row)
 
+INSERT INTO query_filter_varchar VALUES ('at1'), ('btt'), ('ttt');
+SET client_min_messages=DEBUG1;
+-- Pushed down to PG executor
+SELECT * FROM query_filter_varchar WHERE a LIKE '%t%';
+DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.query_filter_varchar WHERE a LIKE '%t%''
+DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+  a  
+-----
+ t1
+ t2
+ t1
+ at1
+ btt
+ ttt
+(6 rows)
+
+SELECT * FROM query_filter_varchar WHERE a LIKE 't%';
+DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.query_filter_varchar WHERE (a>='t' AND a<'u')'
+DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+  a  
+-----
+ t1
+ t2
+ t1
+ ttt
+(4 rows)
+
+SELECT * FROM query_filter_varchar WHERE a LIKE '%t';
+DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.query_filter_varchar WHERE a LIKE '%t''
+DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+  a  
+-----
+ btt
+ ttt
+(2 rows)
+
+RESET client_min_messages;
+-- Not pushed down but making sure nothing's broken
+SELECT * FROM query_filter_varchar WHERE a LIKE NULL;
+ a 
+---
+(0 rows)
+
+SELECT * FROM query_filter_varchar WHERE NULL LIKE a;
+ a 
+---
+(0 rows)
+
+SELECT * FROM query_filter_varchar WHERE a LIKE a;
+  a  
+-----
+ t1
+ t2
+ t1
+ at1
+ btt
+ ttt
+(6 rows)
+
 DROP TABLE query_filter_varchar;
 CREATE TABLE query_filter_output_column(a INT, b VARCHAR, c FLOAT8);
 INSERT INTO query_filter_output_column VALUES (1, 't1', 1.0), (2, 't1', 2.0), (2, 't2', 1.0);

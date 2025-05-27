@@ -15,6 +15,12 @@ INSERT INTO int_array_1d SELECT CAST(a as INT[]) FROM (VALUES
 ) t(a);
 SELECT * FROM int_array_1d;
 
+SET client_min_messages=DEBUG1;
+SELECT * FROM int_array_1d WHERE a @> ARRAY[4];
+
+SELECT * FROM duckdb.query($$ FROM pgduckdb.public.int_array_1d WHERE contains(a, 4) $$);
+RESET client_min_messages;
+
 -- INT4 (two dimensional data, single dimension type)
 CREATE TABLE int_array_2d(a INT[]);
 INSERT INTO int_array_2d VALUES
