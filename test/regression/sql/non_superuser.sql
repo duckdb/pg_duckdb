@@ -80,10 +80,6 @@ GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO user1;
 SET ROLE user1;
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.install_extension('iceberg');
--- We should handle SQL injections carefully though to only allow INSTALL
--- `duckdb.install_extension` is tested in Python
-INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky $$);
-SELECT * FROM duckdb.query($$ SELECT 1 $$);
 TRUNCATE duckdb.extensions;
 SET duckdb.force_execution = true;
 

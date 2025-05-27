@@ -15,7 +15,7 @@
 #include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/pgduckdb_options.hpp"
+#include "pgduckdb/pgduckdb_extensions.hpp"
 #include "pgduckdb/pgduckdb_secrets_helper.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -242,8 +242,8 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
-		if (extension.enabled) {
-			DuckDBQueryOrThrow(context, "LOAD " + extension.name);
+		if (extension.autoload) {
+			DuckDBQueryOrThrow(context, ddb::LoadExtensionQuery(extension.name));
 		}
 	}
 }
@@ -253,7 +253,7 @@ DuckDBManager::InstallExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
-		DuckDBQueryOrThrow(context, DuckdbInstallExtensionQuery(extension.name, extension.repository));
+		DuckDBQueryOrThrow(context, ddb::InstallExtensionQuery(extension.name, extension.repository));
 	}
 }
 

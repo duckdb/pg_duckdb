@@ -21,4 +21,4 @@ ERROR:  XX000: (PGDuckDB/pgduckdb_raw_query_cpp) Parser Error: syntax error at o
 
 LINE 1: aaaaa
         ^
-LOCATION:  pgduckdb_raw_query_cpp, pgduckdb_options.cpp:180
+LOCATION:  pgduckdb_raw_query_cpp, pgduckdb_options.cpp:77
