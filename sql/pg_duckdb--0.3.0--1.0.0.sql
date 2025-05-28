@@ -64,9 +64,26 @@ LANGUAGE C;
 
 DROP FUNCTION duckdb.install_extension(TEXT);
 CREATE FUNCTION duckdb.install_extension(extension_name TEXT, source TEXT DEFAULT 'core') RETURNS void
+    SECURITY DEFINER
     SET search_path = pg_catalog, pg_temp
+    SET duckdb.force_execution = false
     LANGUAGE C AS 'MODULE_PATHNAME', 'install_extension';
 REVOKE ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) FROM PUBLIC;
+
+CREATE FUNCTION duckdb.autoload_extension(extension_name TEXT, autoload BOOLEAN DEFAULT TRUE) RETURNS void
+    SECURITY DEFINER
+    SET search_path = pg_catalog, pg_temp
+    SET duckdb.force_execution = false
+    LANGUAGE C AS 'MODULE_PATHNAME', 'duckdb_autoload_extension';
+REVOKE ALL ON FUNCTION duckdb.autoload_extension(TEXT, BOOLEAN) FROM PUBLIC;
+
+CREATE FUNCTION duckdb.load_extension(extension_name TEXT) RETURNS void
+    SET search_path = pg_catalog, pg_temp
+    SET duckdb.force_execution = false
+    LANGUAGE C AS 'MODULE_PATHNAME', 'duckdb_load_extension';
+-- load_extension is allowed for all users, because it is trivial for users run
+-- a raw query that does the same. This function only exists for completeness
+-- and convenience.
 
 -- The min aggregate was somehow missing from the list of aggregates in 0.3.0
 CREATE AGGREGATE @extschema@.min(duckdb.unresolved_type) (
@@ -725,4 +742,6 @@ RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_azure_secret';
 
-
+ALTER TABLE duckdb.extensions ADD COLUMN repository TEXT NOT NULL DEFAULT 'core';
+ALTER TABLE duckdb.extensions RENAME COLUMN enabled TO autoload;
+ALTER TABLE duckdb.extensions ALTER COLUMN autoload SET NOT NULL;

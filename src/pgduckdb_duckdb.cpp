@@ -15,7 +15,7 @@
 #include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
-#include "pgduckdb/pgduckdb_options.hpp"
+#include "pgduckdb/pgduckdb_extensions.hpp"
 #include "pgduckdb/pgduckdb_secrets_helper.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -31,7 +31,7 @@ extern "C" {
 #include "catalog/namespace.h"
 #include "common/file_perm.h"
 #include "lib/stringinfo.h"
-#include "miscadmin.h" // superuser
+#include "miscadmin.h"        // superuser
 #include "nodes/value.h"      // strVal
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "utils/lsyscache.h"  // get_relname_relid
@@ -189,6 +189,9 @@ DuckDBManager::Initialize() {
 	}
 
 	LoadFunctions(context);
+	if (duckdb_autoinstall_known_extensions) {
+		InstallExtensions(context);
+	}
 	LoadExtensions(context);
 }
 
@@ -239,9 +242,18 @@ DuckDBManager::LoadExtensions(duckdb::ClientContext &context) {
 	auto duckdb_extensions = ReadDuckdbExtensions();
 
 	for (auto &extension : duckdb_extensions) {
-		if (extension.enabled) {
-			DuckDBQueryOrThrow(context, "LOAD " + extension.name);
+		if (extension.autoload) {
+			DuckDBQueryOrThrow(context, ddb::LoadExtensionQuery(extension.name));
 		}
+	}
+}
+
+void
+DuckDBManager::InstallExtensions(duckdb::ClientContext &context) {
+	auto duckdb_extensions = ReadDuckdbExtensions();
+
+	for (auto &extension : duckdb_extensions) {
+		DuckDBQueryOrThrow(context, ddb::InstallExtensionQuery(extension.name, extension.repository));
 	}
 }
 
@@ -328,8 +340,8 @@ DuckDBManager::GetConnection(bool force_transaction) {
  * Returns the cached connection to the global DuckDB instance, but does not do
  * any checks required to correctly initialize the DuckDB transaction nor
  * refreshes the secrets/extensions/etc. Only use this in rare cases where you
- * know for sure that the connection is already initialized for the correctly
- * for the current query, and you just want a pointer to it.
+ * know for sure that the connection is already initialized correctly for the
+ * current query, and you just want a pointer to it.
  */
 duckdb::Connection *
 DuckDBManager::GetConnectionUnsafe() {

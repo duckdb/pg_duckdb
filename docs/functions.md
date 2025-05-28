@@ -268,8 +268,6 @@ permissions:
 
 ```sql
 GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO my_admin;
-GRANT ALL ON TABLE duckdb.extensions TO my_admin;
-GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO my_admin;
 ```
 
 ##### Required Arguments

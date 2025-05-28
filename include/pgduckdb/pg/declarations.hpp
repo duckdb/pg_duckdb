@@ -86,4 +86,6 @@ struct ObjectAddress;
 struct PlanState;
 
 struct Plan;
+
+typedef struct FunctionCallInfoBaseData *FunctionCallInfo;
 }

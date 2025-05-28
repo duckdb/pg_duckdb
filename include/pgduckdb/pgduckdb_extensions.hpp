@@ -18,6 +18,11 @@ typedef struct DuckdbExension {
 } DuckdbExtension;
 
 extern std::vector<DuckdbExtension> ReadDuckdbExtensions();
-extern std::string DuckdbInstallExtensionQuery(const std::string &extension_name, const std::string &repository);
 
+namespace ddb {
+
+extern std::string LoadExtensionQuery(const std::string &extension_name);
+extern std::string InstallExtensionQuery(const std::string &extension_name, const std::string &repository);
+
+} // namespace ddb
 } // namespace pgduckdb
