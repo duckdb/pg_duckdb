@@ -411,6 +411,13 @@ IsOutdatedMotherduckCatalogErrcode(int error_code) {
 	}
 }
 
+static bool
+ContainsDuckdbRowReturningFunction(const char *query_string) {
+	return strstr(query_string, "read_parquet") || strstr(query_string, "read_csv") ||
+	       strstr(query_string, "read_json") || strstr(query_string, "delta_scan") ||
+	       strstr(query_string, "iceberg_scan") || strstr(query_string, "duckdb.query");
+}
+
 static void
 DuckdbEmitLogHook(ErrorData *edata) {
 	if (prev_emit_log_hook) {
@@ -418,30 +425,25 @@ DuckdbEmitLogHook(ErrorData *edata) {
 	}
 
 	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_UNDEFINED_COLUMN && pgduckdb::IsExtensionRegistered()) {
-		/*
-		 * XXX: It would be nice if we could check if the query contained any
-		 * of the functions. We could probably check the debug_query_string
-		 * global for this. For now we don't consider that too important though.
-		 * So instead we simply always add this HINT for this specific error if
-		 * the pg_duckdb extension is installed.
-		 */
-		edata->hint = pstrdup(
-		    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If "
-		    "you're already doing that, maybe you forgot to to give the function the r alias.");
+		if (ContainsDuckdbRowReturningFunction(debug_query_string)) {
+			edata->hint = pstrdup("If you use DuckDB functions like read_parquet, you need to use the r['colname'] "
+			                      "syntax to use columns. If "
+			                      "you're already doing that, maybe you forgot to to give the function the r alias.");
+		}
 	} else if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_SYNTAX_ERROR &&
 	           pgduckdb::IsExtensionRegistered() &&
 	           strcmp(edata->message_id,
 	                  "a column definition list is only allowed for functions returning \"record\"") == 0) {
-		/*
-		 * NOTE: We can probably remove this hint after a few releases once
-		 * we've updated all known blogposts that still used the old syntax.
-		 *
-		 * Similarly to the other hint, this could check for actual usages of
-		 * the relevant DuckDB functions.
-		 */
-		edata->hint = pstrdup(
-		    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax introduced "
-		    "in pg_duckdb 0.3.0. It seems like you might be using the outdated \"AS (colname coltype, ...)\" syntax");
+		if (ContainsDuckdbRowReturningFunction(debug_query_string)) {
+			/*
+			 * NOTE: We can probably remove this hint after a few releases once
+			 * we've updated all known blogposts that still used the old syntax.
+			 */
+			edata->hint = pstrdup(
+			    "If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax introduced "
+			    "in pg_duckdb 0.3.0. It seems like you might be using the outdated \"AS (colname coltype, ...)\" "
+			    "syntax");
+		}
 	}
 
 	/*
