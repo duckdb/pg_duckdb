@@ -599,6 +599,12 @@ class Postgres(OutputSilencer):
 
     def cleanup_users(self):
         for user in self.users:
+            try:
+                self.sql(
+                    sql.SQL("DROP OWNED BY {} CASCADE").format(sql.Identifier(user))
+                )
+            except psycopg.errors.UndefinedObject:
+                pass
             self.sql(sql.SQL("DROP USER IF EXISTS {}").format(sql.Identifier(user)))
         self.users.clear()
 
@@ -787,6 +793,7 @@ class Postgres(OutputSilencer):
 
     def reset(self):
         os.truncate(self.pgdata / "postgresql.auto.conf", 0)
+        self.sql("TRUNCATE duckdb.extensions")
 
         # If a previous test restarted postgres, it was probably because of some
         # config that could only be changed across restarts. To reset those, we'll

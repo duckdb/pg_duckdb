@@ -22,9 +22,9 @@ Access: Needs to be in the `postgresql.conf` file and requires a restart
 
 ### `duckdb.disabled_filesystems`
 
-Disable specific file systems preventing access. This setting only applies to non-superusers. Superusers can always access all file systems. Unless you completely trust the user in `duckdb.posgres_role`, it is recommended to disable `LocalFileSystem`. Otherwise they can trivially read and write any file on the machine that the Postgres process can.
+Disable specific file systems preventing access. This setting only to all users including superusers. For non-superusers that are not a member of both the `pg_read_server_files` and `pg_write_server_files` roles, the `LocalFileSystem` is always disabled. If you add `LocalFileSystem` to this setting, superusers won't be able to access the `LocalFileSystem` either through DuckDB.
 
-Default: `"LocalFileSystem"`
+Default: `""`
 
 Access: Superuser-only
 
