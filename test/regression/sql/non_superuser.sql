@@ -1,6 +1,7 @@
 CREATE USER user1 IN ROLE duckdb_group;
 CREATE USER user2 IN ROLE duckdb_group;
 CREATE USER user3;
+CREATE USER user4 IN ROLE duckdb_group, pg_write_server_files, pg_read_server_files;
 CREATE TABLE t (a int);
 GRANT SELECT ON t TO user1;
 GRANT SELECT ON t TO user3;
@@ -23,6 +24,11 @@ SET duckdb.force_execution = true;
 
 -- read_csv from the local filesystem should be disallowed
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
+CALL duckdb.recycle_ddb();
+-- It's allowed for users with pg_read_server_files and pg_write_server_files.
+SET ROLE user4;
+SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
+
 -- Should fail because DuckDB execution is not allowed for this user
 SET ROLE user3;
 SELECT * FROM t;
