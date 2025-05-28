@@ -100,14 +100,6 @@ SELECT * FROM duckdb.install_extension('iceberg');
  
 (1 row)
 
--- We should handle SQL injections carefully though to only allow INSTALL
--- `duckdb.install_extension` is tested in Python
-INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky $$);
-SELECT * FROM duckdb.query($$ SELECT 1 $$);
-ERROR:  (PGDuckDB/CreatePlan) Parser Error: unterminated quoted string at or near "'; select * from hacky "
-
-LINE 1: LOAD  '; select * from hacky 
-              ^
 TRUNCATE duckdb.extensions;
 SET duckdb.force_execution = true;
 RESET ROLE;

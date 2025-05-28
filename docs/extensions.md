@@ -31,19 +31,21 @@ Installing an extension causes it to be loaded and installed globally for any co
 SELECT duckdb.install_extension('iceberg');
 -- view currently installed extensions
 SELECT * FROM duckdb.extensions;
--- disable or enable an extension
-UPDATE duckdb.extensions SET enabled = (false|true) WHERE name = 'iceberg';
--- remove an extension
-DELETE FROM duckdb.extensions WHERE name = 'iceberg';
+-- Change an extension to stop being automatically loaded in new connections
+SELECT duckdb.auotoload_extension('iceberg', false);
+-- For such extensions, you can still load them manually in a session
+SELECT duckdb.load_extension('iceberg');
 -- You can also install community extensions
 SELECT duckdb.install_extension('prql', 'community');
 ```
 
-There is currently no practical difference between a disabled and uninstalled extension.
-
 ## Supported Extensions
 
 You can install any extension DuckDB extension, but you might run into various issues when trying to use them from Postgres. Often you should be able to work around such issues by using `duckdb.query` or `duckdb.raw_query`. For some extensions pg_duckdb has added dedicated support to Postgres. These extensions are listed below.
+
+### `azure`
+
+Allows reading files from Azure Blob Storage by using `az://...` filepaths.
 
 ### `iceberg`
 
@@ -52,3 +54,9 @@ Iceberg support adds functions to read Iceberg tables and metadata. For a list o
 ### `delta`
 
 Delta support adds the ability to read Delta Lake files via [delta_scan](functions.md#delta_scan).
+
+## Security considerations
+
+By default execution `duckdb.install_extension` and `duckdb.autoload_extension` is only allowed for superusers. This is to prevent users from installing extensions that may have security implications or that may interfere with the database's operation.
+
+That means that users can only use extensions that DuckDB has marked as "auto-installable". If you want to restrict the use of those extensions as well to a specific list of allowed extensions, you can do so by setting the [`duckdb.autoinstall_known_extensions`](settings.md#duckdbautoload_known_extensions) to `false`. This will prevent users from automatically install any known extensions. Note that this requires that any of the extensions you **do** want to allow are already installed by a superuser.

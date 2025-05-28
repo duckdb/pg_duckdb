@@ -67,5 +67,14 @@ def test_install_extension_injection(pg: Postgres):
                 "SELECT * FROM duckdb.install_extension($$ '; select * from hacky '' $$);"
             )
 
+        cur.sql(
+            "INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky $$);"
+        )
+        with pytest.raises(
+            psycopg.errors.InternalError,
+            match=r"""Extension ".*'; select \* from hacky \.duckdb_extension" not found""",
+        ):
+            cur.sql("SELECT * FROM duckdb.query($$ SELECT 1 $$)")
+
         cur.sql("RESET ROLE")
         cur.sql("DROP OWNED BY user1")
