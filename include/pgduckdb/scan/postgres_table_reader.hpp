@@ -18,9 +18,8 @@ public:
 	bool GetNextMinimalTuple(std::vector<uint8_t> &minimal_tuple_buffer);
 	void PostgresTableReaderCleanup();
 	TupleTableSlot *InitTupleSlot();
-	bool
-	IsParallelScan() const {
-		return nworkers_launched > 0;
+	int NumWorkersLaunched() const {
+		return nworkers_launched;
 	}
 
 private:

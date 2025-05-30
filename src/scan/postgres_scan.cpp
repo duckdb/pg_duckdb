@@ -14,7 +14,7 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pg/memory.hpp"
 #include "pgduckdb/pg/relations.hpp"
-#include "pgduckdb/pgduckdb_guc.h"
+#include "pgduckdb/pgduckdb_guc.hpp"
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/logger.hpp"
@@ -426,9 +426,16 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
 	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
 	duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
-	// Default to a single thread if `count_tuples_only` is true or if the reader does not initialize a parallel scan.
+
+	// For the scan, there are two aspects of parallelism. First, the table_reader can initiate parallel workers
+	// processes for scanning. Second, the # of DuckDB threads (controlled by max_threads here) that read the output
+	// from the table_reader.
+	// 
+	// Set the default DuckDB threads to 1 if either:
+	//  1. The query is count-tuples-only, or
+	//  2. The table_reader does not initialize parallel workers, and the scan will be executed by the current process.
 	max_threads = 1;
-	if (table_reader_global_state->IsParallelScan() && !count_tuples_only) {
+	if (table_reader_global_state->NumWorkersLaunched() > 0 && !count_tuples_only) {
 		max_threads = duckdb_threads_for_postgres_scan;
 	}
 	pd_log(DEBUG1, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads: '%s'", (uint64_t)MaxThreads(),
@@ -575,7 +582,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 		for (size_t j = 0; j < valid_slots; j++) {
 			MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[j].data());
 			local_state.slot = ExecStoreMinimalTupleUnsafe(minmal_tuple, local_state.slot, false);
-			SlotGetAllAttrsUnsafe(local_state.slot);
+			SlotGetAllAttrs(local_state.slot);
 			InsertTupleIntoChunk(output, local_state, local_state.slot);
 		}
 		pg::MemoryContextSwitchTo(old_context);
