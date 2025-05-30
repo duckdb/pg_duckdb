@@ -49,11 +49,17 @@ SELECT a, COUNT(*) FROM query_filter_varchar WHERE a = 't1' GROUP BY a;
 (1 row)
 
 INSERT INTO query_filter_varchar VALUES ('at1'), ('btt'), ('ttt');
-SET client_min_messages=DEBUG1;
+SET duckdb.log_pg_explain = true;
 -- Pushed down to PG executor
 SELECT * FROM query_filter_varchar WHERE a LIKE '%t%';
-DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.query_filter_varchar WHERE a LIKE '%t%''
-DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%t%'
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((a)::text ~~ '%t%'::text)
+
   a  
 -----
  t1
@@ -65,8 +71,14 @@ DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
 (6 rows)
 
 SELECT * FROM query_filter_varchar WHERE a LIKE 't%';
-DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.query_filter_varchar WHERE (a>='t' AND a<'u')'
-DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (a>='t' AND a<'u')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (((a)::text >= 't'::text) AND ((a)::text < 'u'::text))
+
   a  
 -----
  t1
@@ -76,15 +88,21 @@ DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
 (4 rows)
 
 SELECT * FROM query_filter_varchar WHERE a LIKE '%t';
-DEBUG:  (DuckDB/PostgresSeqScanGlobalState) Running 1 threads: 'SELECT a FROM public.query_filter_varchar WHERE a LIKE '%t''
-DEBUG:  rehashing catalog cache id 44 for pg_proc; 33 lists, 16 buckets
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%t'
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((a)::text ~~ '%t'::text)
+
   a  
 -----
  btt
  ttt
 (2 rows)
 
-RESET client_min_messages;
+RESET duckdb.log_pg_explain;
 -- Not pushed down but making sure nothing's broken
 SELECT * FROM query_filter_varchar WHERE a LIKE NULL;
  a 

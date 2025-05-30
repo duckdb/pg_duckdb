@@ -17,12 +17,12 @@ SELECT COUNT(a) FROM query_filter_varchar WHERE a = 't1';
 SELECT a, COUNT(*) FROM query_filter_varchar WHERE a = 't1' GROUP BY a;
 
 INSERT INTO query_filter_varchar VALUES ('at1'), ('btt'), ('ttt');
-SET client_min_messages=DEBUG1;
+SET duckdb.log_pg_explain = true;
 -- Pushed down to PG executor
 SELECT * FROM query_filter_varchar WHERE a LIKE '%t%';
 SELECT * FROM query_filter_varchar WHERE a LIKE 't%';
 SELECT * FROM query_filter_varchar WHERE a LIKE '%t';
-RESET client_min_messages;
+RESET duckdb.log_pg_explain;
 
 -- Not pushed down but making sure nothing's broken
 SELECT * FROM query_filter_varchar WHERE a LIKE NULL;
