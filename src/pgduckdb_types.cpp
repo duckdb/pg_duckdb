@@ -1565,6 +1565,7 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 
 static void
 AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	auto jsonb = DatumGetJsonbP(value);
 	StringInfo str = PostgresFunctionGuard(makeStringInfo);
 	auto json_str = PostgresFunctionGuard(JsonbToCString, str, &jsonb->root, VARSIZE(jsonb));
@@ -1870,6 +1871,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		break;
 	}
 	case duckdb::LogicalTypeId::LIST: {
+		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 		// Convert Datum to ArrayType
 		auto array = DatumGetArrayTypeP(value);
 
