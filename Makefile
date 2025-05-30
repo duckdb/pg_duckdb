@@ -41,11 +41,11 @@ endif
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
-	PG_DUCKDB_LINK_FLAGS = third_party/duckdb/build/release/libduckdb_bundle.a
-	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/$(DUCKDB_LIB)
+	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/libduckdb_bundle.a
+	PG_DUCKDB_LINK_FLAGS = $(FULL_DUCKDB_LIB)
 else
+	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb$(DLSUFFIX)
 	PG_DUCKDB_LINK_FLAGS = -lduckdb
-	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/$(DUCKDB_LIB)/libduckdb$(DLSUFFIX)
 endif
 
 

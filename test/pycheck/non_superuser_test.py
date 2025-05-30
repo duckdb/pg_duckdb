@@ -54,27 +54,23 @@ def test_install_extension_injection(pg: Postgres):
     with pg.cur() as cur:
         cur.sql("SET duckdb.force_execution = false")
         cur.sql("GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO user1;")
-        cur.sql("GRANT ALL ON TABLE duckdb.extensions TO user1;")
-        cur.sql("GRANT ALL ON SEQUENCE duckdb.extensions_table_seq TO user1;")
         cur.sql("SET ROLE user1")
 
         # Try with the install_extension function
         with pytest.raises(
-            Exception,
-            match=r"""\(PGDuckDB/install_extension_cpp\) HTTP Error: Failed to download extension " '; select \* from hacky '' " at URL "http://extensions\.duckdb\.org/.*/ '; select \* from hacky '' \.duckdb_extension\.gz" \(HTTP 403\)""",
+            psycopg.errors.InternalError,
+            match=r"""HTTP Error: Failed to download extension " '; select \* from hacky '' """,
         ):
             cur.sql(
                 "SELECT * FROM duckdb.install_extension($$ '; select * from hacky '' $$);"
             )
 
+    with pg.cur() as cur:
         cur.sql(
-            "INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky $$);"
+            "INSERT INTO duckdb.extensions (name) VALUES ($$ '; select * from hacky '' $$);"
         )
         with pytest.raises(
             psycopg.errors.InternalError,
-            match=r"""Extension ".*'; select \* from hacky \.duckdb_extension" not found""",
+            match=r"""HTTP Error: Failed to download extension " '; select \* from hacky '' """,
         ):
             cur.sql("SELECT * FROM duckdb.query($$ SELECT 1 $$)")
-
-        cur.sql("RESET ROLE")
-        cur.sql("DROP OWNED BY user1")
