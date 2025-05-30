@@ -177,7 +177,7 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
  pgduckdb       | t      | f         | 
 (6 rows)
 
-SELECT duckdb.install_extension('duckpgq', 'community');
+SELECT duckdb.install_extension('prql', 'community');
  install_extension 
 -------------------
  
@@ -193,12 +193,12 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
- duckpgq        | t      | t         | community
  httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
+ prql           | t      | t         | community
 (7 rows)
 
 -- cleanup

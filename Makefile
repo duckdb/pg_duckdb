@@ -13,7 +13,7 @@ OBJS += $(subst .c,.o, $(C_SRCS))
 # set to `make` to disable ninja
 DUCKDB_GEN ?= ninja
 # used to know what version of extensions to download
-DUCKDB_VERSION = v1.2.2
+DUCKDB_VERSION = v1.3.0
 # duckdb build tweaks
 DUCKDB_CMAKE_VARS = -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
 # set to 1 to disable asserts in DuckDB. This is particularly useful in combinition with MotherDuck.
@@ -38,16 +38,18 @@ else
 	DUCKDB_MAKE_TARGET = release
 endif
 
-PG_DUCKDB_LINK_FLAGS = -Wl,-rpath,$(PG_LIB)/ -Lthird_party/duckdb/build/$(DUCKDB_BUILD_TYPE)/src -L$(PG_LIB) -lstdc++ -llz4
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/libduckdb_bundle.a
-	PG_DUCKDB_LINK_FLAGS += $(FULL_DUCKDB_LIB)
+	PG_DUCKDB_LINK_FLAGS = $(FULL_DUCKDB_LIB)
 else
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb$(DLSUFFIX)
-	PG_DUCKDB_LINK_FLAGS += -lduckdb
+	PG_DUCKDB_LINK_FLAGS = -lduckdb
 endif
+
+
+PG_DUCKDB_LINK_FLAGS += -Wl,-rpath,$(PG_LIB)/ -L$(DUCKDB_BUILD_DIR)/src -L$(PG_LIB) -lstdc++ -llz4
 
 ERROR_ON_WARNING ?=
 ifeq ($(ERROR_ON_WARNING), 1)

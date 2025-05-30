@@ -36,7 +36,7 @@ SELECT duckdb.auotoload_extension('iceberg', false);
 -- For such extensions, you can still load them manually in a session
 SELECT duckdb.load_extension('iceberg');
 -- You can also install community extensions
-SELECT duckdb.install_extension('duckpgq', 'community');
+SELECT duckdb.install_extension('prql', 'community');
 ```
 
 ## Supported Extensions

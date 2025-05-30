@@ -793,7 +793,11 @@ class Postgres(OutputSilencer):
 
     def reset(self):
         os.truncate(self.pgdata / "postgresql.auto.conf", 0)
-        self.sql("TRUNCATE duckdb.extensions")
+        try:
+            self.sql("TRUNCATE duckdb.extensions")
+        except psycopg.errors.InvalidSchemaName:
+            # pg_duckdb is not installed, so no need to reset the extensions
+            pass
 
         # If a previous test restarted postgres, it was probably because of some
         # config that could only be changed across restarts. To reset those, we'll
