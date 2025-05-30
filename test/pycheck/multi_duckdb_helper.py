@@ -1,5 +1,6 @@
 from contextlib import contextmanager
-from multiprocessing import Process, Queue
+from threading import Thread
+from queue import Queue
 
 from .motherduck_token_helper import create_test_user
 from .utils import make_new_duckdb_connection
@@ -20,7 +21,7 @@ class MDClient:
     def __init__(self, spec):
         self.cmd_queue = Queue()
         self.res_queue = Queue()
-        self.process = Process(
+        self.thread = Thread(
             target=MDClient.run,
             args=(
                 self.cmd_queue,
@@ -28,7 +29,7 @@ class MDClient:
             ),
         )
 
-        self.process.start()
+        self.thread.start()
 
         spec = MDClient.normalize_spec(spec)
         self.send("createddb", [spec])
@@ -98,7 +99,7 @@ class MDClient:
                 responder.ko(e)
 
     def send(self, command, args=None):
-        if not self.process.is_alive():
+        if not self.thread.is_alive():
             if command == "terminate":
                 return
             raise RuntimeError(f"Process is not alive. Cannot send {command}.")
@@ -118,4 +119,4 @@ class MDClient:
 
     def terminate(self):
         self.send("terminate")
-        self.process.join()
+        self.thread.join()

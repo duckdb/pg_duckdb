@@ -1,4 +1,7 @@
 #include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include "duckdb/planner/expression/bound_constant_expression.hpp"
 
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
@@ -22,6 +25,62 @@ static duckdb::string
 FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) {
 	return std::accumulate(filters.begin() + 1, filters.end(), filters[0],
 	                       [&delimiter](duckdb::string l, duckdb::string r) { return l + delimiter + r; });
+}
+
+bool
+IsSupportedExpressionChild(const duckdb::Expression &expr) {
+	switch (expr.GetExpressionType()) {
+	case duckdb::ExpressionType::BOUND_REF:
+	case duckdb::ExpressionType::BOUND_COLUMN_REF:
+		return true;
+	case duckdb::ExpressionType::VALUE_CONSTANT: {
+		auto &value = expr.Cast<duckdb::BoundConstantExpression>().value;
+		return value.type().id() == duckdb::LogicalTypeId::VARCHAR;
+	}
+	default:
+		return false;
+	}
+}
+
+bool
+IsSupportedExpression(const duckdb::BoundFunctionExpression &expr) {
+	if (expr.function.name != "contains" && expr.function.name != "suffix") {
+		return false;
+	}
+	if (expr.children.size() != 2) {
+		return false;
+	}
+	return IsSupportedExpressionChild(*expr.children[0]) && IsSupportedExpressionChild(*expr.children[1]);
+}
+
+duckdb::string
+ExpressionToString(const duckdb::string &func_name, const duckdb::Expression &expr, const duckdb::string &column_name) {
+	switch (expr.GetExpressionType()) {
+	case duckdb::ExpressionType::BOUND_REF:
+		return column_name;
+	case duckdb::ExpressionType::VALUE_CONSTANT: {
+		auto &value = expr.Cast<duckdb::BoundConstantExpression>().value;
+		if (value.IsNull()) {
+			return "NULL";
+		} else if (value.type().id() != duckdb::LogicalTypeId::VARCHAR) {
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
+			                        "Unsupported Value Type in Expression: " + value.type().ToString());
+		}
+
+		auto str_val = duckdb::StringUtil::Replace(value.ToString(), "'", "''");
+		if (func_name == "contains") {
+			return "'%" + str_val + "%'";
+		} else if (func_name == "suffix") {
+			return "'%" + str_val + "'";
+		} else {
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Unsupported function: '" + func_name + "'");
+		}
+	}
+	default:
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
+		                        "Unsupported Expression Type: " +
+		                            duckdb::ExpressionTypeToString(expr.GetExpressionType()));
+	}
 }
 
 int
@@ -56,6 +115,27 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 	case duckdb::TableFilterType::OPTIONAL_FILTER: {
 		auto optional_filter = reinterpret_cast<duckdb::OptionalFilter *>(filter);
 		return ExtractQueryFilters(optional_filter->child_filter.get(), column_name, query_filters, true);
+	}
+	case duckdb::TableFilterType::EXPRESSION_FILTER: {
+		auto &expression_filter = filter->Cast<duckdb::ExpressionFilter>();
+		if (expression_filter.expr->GetExpressionType() != duckdb::ExpressionType::BOUND_FUNCTION) {
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
+			                        "Unsupported Expression Filter Type: " + expression_filter.ToString(column_name));
+		}
+
+		auto &func_expr = expression_filter.expr->Cast<duckdb::BoundFunctionExpression>();
+		if (!IsSupportedExpression(func_expr)) {
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
+			                        "Unsupported Function in Expression Filter: " + func_expr.function.name);
+		} else if (func_expr.children.size() != 2) {
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
+			                        "Unexpected child numbers: " + std::to_string(func_expr.children.size()));
+		}
+
+		const auto &func_name = func_expr.function.name;
+		query_filters += ExpressionToString(func_name, *func_expr.children[0], column_name) + " LIKE " +
+		                 ExpressionToString(func_name, *func_expr.children[1], column_name);
+		return 1;
 	}
 	/* DYNAMIC_FILTER is push down filter from topN execution. STRUCT_EXTRACT is
 	 * only received if struct_extract function is used. Default will catch all
@@ -155,7 +235,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 		auto col = pgduckdb::QuoteIdentifier(GetAttName(attr));
 		if (ExtractQueryFilters(filter, col, column_query_filters, false)) {
 			query_filters.emplace_back(column_query_filters);
-		};
+		}
 	}
 
 	if (query_filters.size()) {
@@ -172,7 +252,8 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	table_reader_global_state =
 	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
 	duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
-	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads -- ", (uint64_t)MaxThreads());
+	pd_log(DEBUG1, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads: '%s'", (uint64_t)MaxThreads(),
+	       scan_query.str().c_str());
 }
 
 PostgresScanGlobalState::~PostgresScanGlobalState() {
@@ -204,6 +285,16 @@ PostgresScanFunctionData::~PostgresScanFunctionData() {
 // PostgresScanFunction
 //
 
+static bool
+PostgresScanPushdownExpression(duckdb::ClientContext &, const duckdb::LogicalGet &, duckdb::Expression &expr) {
+	if (expr.GetExpressionType() != duckdb::ExpressionType::BOUND_FUNCTION) {
+		return false;
+	}
+
+	auto &func_expr = expr.Cast<duckdb::BoundFunctionExpression>();
+	return IsSupportedExpression(func_expr);
+}
+
 PostgresScanTableFunction::PostgresScanTableFunction()
     : TableFunction("pgduckdb_postgres_scan", {}, PostgresScanFunction, nullptr, PostgresScanInitGlobal,
                     PostgresScanInitLocal) {
@@ -214,6 +305,7 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 	filter_pushdown = true;
 	filter_prune = true;
 	cardinality = PostgresScanCardinality;
+	pushdown_expression = PostgresScanPushdownExpression;
 	to_string = ToString;
 }
 

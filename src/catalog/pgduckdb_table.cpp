@@ -41,7 +41,7 @@ PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, Relation rel) {
 		auto duck_type = ConvertPostgresToDuckColumnType(attr);
 		info.columns.AddColumn(duckdb::ColumnDefinition(col_name, duck_type));
 		/* Log column name and type */
-		pd_log(DEBUG2, "(DuckDB/SetTableInfo) Column name: %s, Type: %s --", col_name.c_str(),
+		pd_log(DEBUG2, "(DuckDB/SetTableInfo) Column name: '%s', Type: %s", col_name.c_str(),
 		       duck_type.ToString().c_str());
 	}
 }
