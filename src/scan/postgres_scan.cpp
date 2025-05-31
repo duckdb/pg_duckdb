@@ -427,17 +427,32 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
 	duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
 
-	// For the scan, there are two aspects of parallelism. First, the table_reader can initiate parallel workers
-	// processes for scanning. Second, the # of DuckDB threads (controlled by max_threads here) that read the output
-	// from the table_reader.
-	// 
-	// Set the default DuckDB threads to 1 if either:
-	//  1. The query is count-tuples-only, or
-	//  2. The table_reader does not initialize parallel workers, and the scan will be executed by the current process.
+	// Parallelism in scanning has two layers:
+	//   1. The Postgres table_reader may launch parallel worker processes to scan the table.
+	//   2. DuckDB can use multiple threads (controlled by max_threads) to consume results from the table_reader.
+	//
+	// By default, we restrict DuckDB to a single thread (max_threads = 1) in the following cases:
+	//   - The scan is a count-only query (count_tuples_only).
+	//   - The table_reader does not launch any parallel Postgres workers, so scanning is done in the current process.
+	//   - The scan includes JSON or LIST columns, since parallelism is inefficient for these types. This is because
+	//     converting these types requires calling Postgres functions, which use the Postgres memory context and
+	//     require holding the global lock, limiting parallel efficiency.
 	max_threads = 1;
 	if (table_reader_global_state->NumWorkersLaunched() > 0 && !count_tuples_only) {
 		max_threads = duckdb_threads_for_postgres_scan;
 	}
+	for (auto attr_num : output_columns) {
+		Form_pg_attribute attr = GetAttr(table_tuple_desc, attr_num - 1);
+		auto duckdb_type = ConvertPostgresToDuckColumnType(attr);
+		// Set max_threads to 1 if the column is a JSON column
+		if (duckdb_type.IsJSONType() || duckdb_type.id() == duckdb::LogicalTypeId::LIST) {
+			max_threads = 1;
+			pd_log(DEBUG2,
+			       "(DuckDB/PostgresSeqScanGlobalState) Setting max_threads to 1 because of JSON or LIST column");
+			break;
+		}
+	}
+
 	pd_log(DEBUG1, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads: '%s'", (uint64_t)MaxThreads(),
 	       scan_query.str().c_str());
 }
@@ -554,6 +569,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 			InsertTupleIntoChunk(output, local_state, slot);
 			pg::MemoryContextSwitchTo(old_context);
 		}
+		pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
 		SetOutputCardinality(output, local_state);
 		return;
 	}
@@ -564,7 +580,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 		{
 			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 			for (size_t j = 0; j < LOCAL_STATE_SLOT_BATCH_SIZE; j++) {
-				bool ret = local_state.global_state->table_reader_global_state->GetNextMinimalTuple(
+				bool ret = local_state.global_state->table_reader_global_state->GetNextMinimalWorkerTuple(
 				    local_state.minimal_tuple_buffer[j]);
 				if (!ret) {
 					local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
@@ -578,17 +594,14 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 		if (valid_slots == 0)
 			break;
 
-		MemoryContext old_context = pg::MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
 		for (size_t j = 0; j < valid_slots; j++) {
 			MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[j].data());
 			local_state.slot = ExecStoreMinimalTupleUnsafe(minmal_tuple, local_state.slot, false);
 			SlotGetAllAttrs(local_state.slot);
 			InsertTupleIntoChunk(output, local_state, local_state.slot);
 		}
-		pg::MemoryContextSwitchTo(old_context);
 	}
 
-	pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
 	SetOutputCardinality(output, local_state);
 }
 

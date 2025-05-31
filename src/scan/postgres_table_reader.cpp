@@ -291,12 +291,16 @@ PostgresTableReader::GetNextTupleUnsafe() {
 }
 
 /*
- * Get the next minimal tuple from the table scan into the provided buffer.
- * Returns true if a tuple was read, false if the scan is finished.
- * GlobalProcessLock should be held before calling this.
+ * Reads the next minimal tuple from a Postgres parallel worker and copies it into the provided buffer.
+ * This function should only be called when the table scan is running with parallel workers.
+ *
+ * @param minimal_tuple_buffer Buffer to store the copied minimal tuple.
+ * @return true if a tuple was read and copied; false if the scan is complete and no more tuples are available.
+ *
+ * Note: The caller must hold the GlobalProcessLock before invoking this function.
  */
 bool
-PostgresTableReader::GetNextMinimalTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
+PostgresTableReader::GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
 	MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
 	if (HeapTupleIsValid(worker_minmal_tuple)) {
 		// deep copy worker_minmal_tuple to destination buffer
