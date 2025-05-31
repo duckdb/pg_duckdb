@@ -50,7 +50,7 @@ EXPLAIN SELECT count(*) FROM ta;
 -- Not allowed in a transaction
 BEGIN;
 CALL duckdb.recycle_ddb();
-ERROR:  (PGDuckDB/pgduckdb_recycle_ddb_cpp) Executor Error: (PGDuckDB/::PreventInTransactionBlock) duckdb.recycle_ddb() cannot run inside a transaction block
+ERROR:  duckdb.recycle_ddb() cannot run inside a transaction block
 END;
 -- Nor in a function
 CREATE OR REPLACE FUNCTION f() RETURNS void
@@ -64,7 +64,7 @@ END;
 $$;
 SET duckdb.force_execution = false;
 SELECT * FROM f();
-ERROR:  (PGDuckDB/pgduckdb_recycle_ddb_cpp) Executor Error: (PGDuckDB/::PreventInTransactionBlock) duckdb.recycle_ddb() cannot be executed from a function
+ERROR:  duckdb.recycle_ddb() cannot be executed from a function
 CONTEXT:  SQL statement "CALL duckdb.recycle_ddb()"
 PL/pgSQL function f() line 3 at CALL
 DROP TABLE ta;
