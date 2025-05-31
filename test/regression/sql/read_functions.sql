@@ -190,6 +190,15 @@ select * from experiences;
 -- We show a hint for the new syntax when someone uses the old syntax.
 SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet') AS ("sepal.length" FLOAT);
 
+-- But we don't show that hint for queries that don't use these functions.
+SELECT count("sepal.length") FROM generate_series(1, 100) AS ("sepal.length" FLOAT);
+
+-- Show a hint for users trying to use columns as normal instead of using r['column_name']
+SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet');
+
+-- But again only show it when we use functions that return duckdb.rows
+SELECT count("sepal.length") FROM generate_series(1, 100) a(x);
+
 -- read_csv
 
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
