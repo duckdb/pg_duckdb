@@ -425,6 +425,8 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	ConstructTableScanQuery(input);
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
 	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
+	// Dedicated Postgres memory context for temporary allocations during type conversion in scans. Current only used in
+	// single-threaded scans.
 	duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
 
 	// Parallelism in scanning has two layers:
@@ -534,6 +536,32 @@ SetOutputCardinality(duckdb::DataChunk &output, PostgresScanLocalState &local_st
 	local_state.output_vector_size -= output_cardinality;
 }
 
+
+/*
+ * Fetches a single tuple from the underlying PostgreSQL table and appends it to the DuckDB output chunk.
+ * This function is intended for use in single-threaded scans.
+ *
+ * @return True if a tuple was successfully fetched and inserted; false if there are no more tuples to scan.
+ */
+static bool
+ScanSingleTuple(duckdb::DataChunk &output, PostgresScanLocalState &local_state) {
+	TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
+	if (pgduckdb::TupleIsNull(slot)) {
+		return false;
+	}
+
+	SlotGetAllAttrs(slot);
+	// This memory context is use as a scratchpad space for any allocation required to add the tuple
+	// into the chunk, such as decoding jsonb columns to their json string representation. We need to
+	// only use this memory context here, and not for the full loop, because GetNextTuple() needs the
+	// actual tuple to survive until the next call to GetNextTuple(), to be able to do index scans.
+	// Cf. issue 796 and 802
+	MemoryContext old_context = pg::MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
+	InsertTupleIntoChunk(output, local_state, slot);
+	pg::MemoryContextSwitchTo(old_context);
+	return true;
+}
+
 void
 PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb::TableFunctionInput &data,
                                                 duckdb::DataChunk &output) {
@@ -547,58 +575,46 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 	local_state.output_vector_size = 0;
 
-	// Normal scan without parallelism
-	bool is_parallel_scan = local_state.global_state->MaxThreads() > 1;
-	if (!is_parallel_scan) {
-		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-		for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
-			TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
-			if (pgduckdb::TupleIsNull(slot)) {
-				local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
-				local_state.exhausted_scan = true;
-				break;
-			}
-
-			SlotGetAllAttrs(slot);
-			// This memory context is use as a scratchpad space for any allocation required to add the tuple
-			// into the chunk, such as decoding jsonb columns to their json string representation. We need to
-			// only use this memory context here, and not for the full loop, because GetNextTuple() needs the
-			// actual tuple to survive until the next call to GetNextTuple(), to be able to do index scans.
-			// Cf. issue 796 and 802
-			MemoryContext old_context = pg::MemoryContextSwitchTo(local_state.global_state->duckdb_scan_memory_ctx);
-			InsertTupleIntoChunk(output, local_state, slot);
-			pg::MemoryContextSwitchTo(old_context);
-		}
-		pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
-		SetOutputCardinality(output, local_state);
-		return;
-	}
-
 	D_ASSERT(STANDARD_VECTOR_SIZE % LOCAL_STATE_SLOT_BATCH_SIZE == 0);
-	for (size_t i = 0; i < STANDARD_VECTOR_SIZE / LOCAL_STATE_SLOT_BATCH_SIZE; i++) {
+	bool is_parallel_scan = local_state.global_state->MaxThreads() > 1;
+	int batch_size = is_parallel_scan ? LOCAL_STATE_SLOT_BATCH_SIZE : STANDARD_VECTOR_SIZE;
+	int num_batches = STANDARD_VECTOR_SIZE / batch_size;
+
+	/*
+	 * Main read logic, in single-thread case there would be only one batch.
+	 * 
+	 * Global lock is held for each batch scan
+	 * 
+	 */
+	for (size_t batch_idx = 0; batch_idx < num_batches; batch_idx++) {
 		int valid_slots = 0;
 		{
 			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-			for (size_t j = 0; j < LOCAL_STATE_SLOT_BATCH_SIZE; j++) {
-				bool ret = local_state.global_state->table_reader_global_state->GetNextMinimalWorkerTuple(
-				    local_state.minimal_tuple_buffer[j]);
+			for (size_t i = 0; i < batch_size; i++) {
+				bool ret = is_parallel_scan
+				               ? local_state.global_state->table_reader_global_state->GetNextMinimalWorkerTuple(
+				                     local_state.minimal_tuple_buffer[i])
+				               : ScanSingleTuple(output, local_state);
 				if (!ret) {
 					local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
 					local_state.exhausted_scan = true;
 					break;
 				}
-				valid_slots++;
+
+				++valid_slots;
 			}
 		}
 
-		if (valid_slots == 0)
-			break;
-
-		for (size_t j = 0; j < valid_slots; j++) {
-			MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[j].data());
-			local_state.slot = ExecStoreMinimalTupleUnsafe(minmal_tuple, local_state.slot, false);
-			SlotGetAllAttrs(local_state.slot);
-			InsertTupleIntoChunk(output, local_state, local_state.slot);
+		if (is_parallel_scan) {
+			for (size_t i = 0; i < valid_slots; i++) {
+				MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[i].data());
+				local_state.slot = ExecStoreMinimalTupleUnsafe(minmal_tuple, local_state.slot, false);
+				SlotGetAllAttrs(local_state.slot);
+				InsertTupleIntoChunk(output, local_state, local_state.slot);
+			}
+		} else {
+			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+			pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
 		}
 	}
 
