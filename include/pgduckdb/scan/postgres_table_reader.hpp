@@ -18,7 +18,8 @@ public:
 	bool GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer);
 	void PostgresTableReaderCleanup();
 	TupleTableSlot *InitTupleSlot();
-	int NumWorkersLaunched() const {
+	int
+	NumWorkersLaunched() const {
 		return nworkers_launched;
 	}
 

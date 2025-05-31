@@ -420,7 +420,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _rel,
                                                  const duckdb::TableFunctionInitInput &input)
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
-      output_columns(), total_row_count(0), scan_query(), table_reader_global_state(nullptr),
+      output_columns(), total_row_count(0), max_threads(1), scan_query(), table_reader_global_state(nullptr),
       duckdb_scan_memory_ctx(nullptr) {
 	ConstructTableScanQuery(input);
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
@@ -439,14 +439,13 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	//   - The scan includes JSON or LIST columns, since parallelism is inefficient for these types. This is because
 	//     converting these types requires calling Postgres functions, which use the Postgres memory context and
 	//     require holding the global lock, limiting parallel efficiency.
-	max_threads = 1;
 	if (table_reader_global_state->NumWorkersLaunched() > 0 && !count_tuples_only) {
 		max_threads = duckdb_threads_for_postgres_scan;
 	}
 	for (auto attr_num : output_columns) {
 		Form_pg_attribute attr = GetAttr(table_tuple_desc, attr_num - 1);
 		auto duckdb_type = ConvertPostgresToDuckColumnType(attr);
-		// Set max_threads to 1 if the column is a JSON column
+		// Set max_threads to 1 if the column is a JSON or LIST type.
 		if (duckdb_type.IsJSONType() || duckdb_type.id() == duckdb::LogicalTypeId::LIST) {
 			max_threads = 1;
 			pd_log(DEBUG2,
@@ -536,7 +535,6 @@ SetOutputCardinality(duckdb::DataChunk &output, PostgresScanLocalState &local_st
 	local_state.output_vector_size -= output_cardinality;
 }
 
-
 /*
  * Fetches a single tuple from the underlying PostgreSQL table and appends it to the DuckDB output chunk.
  * This function is intended for use in single-threaded scans.
@@ -584,33 +582,36 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	// For parallel scans, multiple batches are processed; the global lock is held only during tuple retrieval
 	// from the PostgreSQL parallel worker, allowing the rest of the processing to proceed concurrently.
 	for (size_t batch_idx = 0; batch_idx < num_batches; batch_idx++) {
-		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 		int valid_slots = 0;
-		for (size_t i = 0; i < batch_size; i++) {
-			bool ret = is_parallel_scan
+		{
+			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+			for (size_t i = 0; i < batch_size; i++) {
+				bool ret = is_parallel_scan
 							? local_state.global_state->table_reader_global_state->GetNextMinimalWorkerTuple(
 									local_state.minimal_tuple_buffer[i])
 							: ScanSingleTuple(output, local_state);
-			if (!ret) {
-				local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
-				local_state.exhausted_scan = true;
+				if (!ret) {
+					local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
+					local_state.exhausted_scan = true;
+					break;
+				}
+
+				++valid_slots;
+			}
+
+			if (!is_parallel_scan) {
+				pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
+				D_ASSERT(num_batches == 1);
 				break;
 			}
-
-			++valid_slots;
 		}
 
-		if (is_parallel_scan) {
-			// The follow-up convertion logic is thread-safe, so release the lock to allow parallel execution.
-			lock.unlock();
-			for (size_t i = 0; i < valid_slots; i++) {
-				MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[i].data());
-				local_state.slot = ExecStoreMinimalTupleUnsafe(minmal_tuple, local_state.slot, false);
-				SlotGetAllAttrs(local_state.slot);
-				InsertTupleIntoChunk(output, local_state, local_state.slot);
-			}
-		} else {
-			pg::MemoryContextReset(local_state.global_state->duckdb_scan_memory_ctx);
+		// The follow-up convertion logic is thread-safe.
+		for (size_t i = 0; i < valid_slots; i++) {
+			MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[i].data());
+			local_state.slot = ExecStoreMinimalTupleUnsafe(minmal_tuple, local_state.slot, false);
+			SlotGetAllAttrs(local_state.slot);
+			InsertTupleIntoChunk(output, local_state, local_state.slot);
 		}
 	}
 
