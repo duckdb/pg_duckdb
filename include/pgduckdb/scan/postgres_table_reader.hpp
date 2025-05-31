@@ -13,7 +13,7 @@ public:
 	PostgresTableReader(const char *table_scan_query, bool count_tuples_only);
 	~PostgresTableReader();
 	TupleTableSlot *GetNextTuple();
-	bool GetNextMinimalTuple(std::vector<uint8_t> &minimal_tuple_buffer);
+	bool GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer);
 	void PostgresTableReaderCleanup();
 	TupleTableSlot *InitTupleSlot();
 	int NumWorkersLaunched() const {
