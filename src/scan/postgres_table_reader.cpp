@@ -27,8 +27,8 @@ extern "C" {
 namespace pgduckdb {
 
 PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool count_tuples_only)
-    : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nreaders(0), next_parallel_reader(0),
-      entered_parallel_mode(false), cleaned_up(false) {
+    : parallel_executor_info(nullptr), parallel_worker_readers(nullptr), nworkers_launched(0), nreaders(0),
+      next_parallel_reader(0), entered_parallel_mode(false), cleaned_up(false) {
 
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	PostgresScopedStackReset scoped_stack_reset;
@@ -118,17 +118,27 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
 }
 
-PostgresTableReader::~PostgresTableReader() {
+// The caller should hold GlobalProcessLock to ensure thread-safety
+TupleTableSlot *
+PostgresTableReader::InitTupleSlot() {
 	if (cleaned_up) {
-		return;
+		return NULL;
 	}
+	return PostgresFunctionGuard(MakeTupleTableSlot, table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
+}
+
+PostgresTableReader::~PostgresTableReader() {
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	PostgresTableReaderCleanup();
 }
 
+// The caller should hold GlobalProcessLock to ensure thread-safety
 void
 PostgresTableReader::PostgresTableReaderCleanup() {
-	D_ASSERT(!cleaned_up);
+	if (cleaned_up) {
+		return;
+	}
+
 	cleaned_up = true;
 	PostgresScopedStackReset scoped_stack_reset;
 
@@ -278,13 +288,37 @@ PostgresTableReader::GetNextTuple() {
 	return PostgresFunctionGuard(ExecClearTuple, slot);
 }
 
+/*
+ * Reads the next minimal tuple from a Postgres parallel worker and copies it into the provided buffer.
+ * This function should only be called when the table scan is running with parallel workers.
+ *
+ * @param minimal_tuple_buffer Buffer to store the copied minimal tuple.
+ * @return true if a tuple was read and copied; false if the scan is complete and no more tuples are available.
+ *
+ * Note: The caller must hold the GlobalProcessLock before invoking this function.
+ */
+bool
+PostgresTableReader::GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
+	MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
+	if (HeapTupleIsValid(worker_minmal_tuple)) {
+		// deep copy worker_minmal_tuple to destination buffer
+		Size tuple_size = worker_minmal_tuple->t_len + MINIMAL_TUPLE_DATA_OFFSET;
+		minimal_tuple_buffer.resize(tuple_size);
+		memcpy(minimal_tuple_buffer.data(), worker_minmal_tuple, tuple_size);
+		return true;
+	}
+
+	minimal_tuple_buffer.resize(0);
+	return false;
+}
+
 MinimalTuple
 PostgresTableReader::GetNextWorkerTuple() {
 	int nvisited = 0;
 	TupleQueueReader *reader = NULL;
 	MinimalTuple minimal_tuple = NULL;
 	bool readerdone = false;
-	for (;;) {
+	for (; next_parallel_reader < nreaders;) {
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
 
 		minimal_tuple = PostgresFunctionGuard(TupleQueueReaderNext, reader, true, &readerdone);
@@ -324,6 +358,8 @@ PostgresTableReader::GetNextWorkerTuple() {
 			nvisited = 0;
 		}
 	}
+
+	return NULL;
 }
 
 } // namespace pgduckdb
