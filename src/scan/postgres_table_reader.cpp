@@ -131,27 +131,31 @@ PostgresTableReader::PostgresTableReaderCleanup() {
 	D_ASSERT(!cleaned_up);
 	cleaned_up = true;
 	PostgresScopedStackReset scoped_stack_reset;
+	PostgresMemberGuard(PostgresTableReader::PostgresTableReaderCleanupUnsafe);
+}
 
+void
+PostgresTableReader::PostgresTableReaderCleanupUnsafe() {
 	if (table_scan_planstate) {
-		PostgresFunctionGuard(ExecEndNode, table_scan_planstate);
+		ExecEndNode(table_scan_planstate);
 		table_scan_planstate = nullptr;
 	}
 
 	if (parallel_executor_info != NULL) {
-		PostgresFunctionGuard(ExecParallelFinish, parallel_executor_info);
-		PostgresFunctionGuard(ExecParallelCleanup, parallel_executor_info);
+		ExecParallelFinish(parallel_executor_info);
+		ExecParallelCleanup(parallel_executor_info);
 		parallel_executor_info = nullptr;
 	}
 
 	if (parallel_worker_readers) {
-		PostgresFunctionGuard(pfree, parallel_worker_readers);
+		pfree(parallel_worker_readers);
 		parallel_worker_readers = nullptr;
 	}
 
 	if (table_scan_query_desc) {
-		PostgresFunctionGuard(ExecutorFinish, table_scan_query_desc);
-		PostgresFunctionGuard(ExecutorEnd, table_scan_query_desc);
-		PostgresFunctionGuard(FreeQueryDesc, table_scan_query_desc);
+		ExecutorFinish(table_scan_query_desc);
+		ExecutorEnd(table_scan_query_desc);
+		FreeQueryDesc(table_scan_query_desc);
 		table_scan_query_desc = nullptr;
 	}
 

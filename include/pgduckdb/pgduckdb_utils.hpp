@@ -113,6 +113,45 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
 	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(#FUNC, ##__VA_ARGS__)
 
+template <typename T, typename ReturnType>
+ReturnType
+__PostgresMemberGuard__(ReturnType (T::*func)(), T *instance, const char *func_name) {
+	MemoryContext ctx = CurrentMemoryContext;
+
+	{ // Scope for PG_END_TRY
+		PgExceptionGuard g;
+		sigjmp_buf _local_sigjmp_buf;
+		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
+			PG_exception_stack = &_local_sigjmp_buf;
+			return (instance->*func)();
+		}
+	} // PG_END_TRY();
+
+	CurrentMemoryContext = ctx;
+
+	ErrorData *edata = nullptr;
+
+	{ // PG_CATCH
+		// Extract the error message (edata) within a PG_TRY block.
+		PgExceptionGuard g;
+		sigjmp_buf _local_sigjmp_buf;
+		if (sigsetjmp(_local_sigjmp_buf, 0) == 0) {
+			PG_exception_stack = &_local_sigjmp_buf;
+
+			edata = CopyErrorData();
+			FlushErrorState();
+		} else {
+			// This is a pretty bad situation - we failed to extract the error message.
+			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Failed to extract Postgres error message");
+		}
+	} // PG_END_TRY
+
+	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, pg::GetErrorDataMessage(edata));
+	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
+}
+
+#define PostgresMemberGuard(FUNC, ...) pgduckdb::__PostgresMemberGuard__(&FUNC, this, __func__)
+
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::Connection &connection, const std::string &query);

@@ -14,6 +14,7 @@ public:
 	void PostgresTableReaderCleanup();
 
 private:
+	void PostgresTableReaderCleanupUnsafe();
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
 	const char *ExplainScanPlan(QueryDesc *query_desc);
