@@ -587,9 +587,9 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 			for (size_t i = 0; i < batch_size; i++) {
 				bool ret = is_parallel_scan
-							? local_state.global_state->table_reader_global_state->GetNextMinimalWorkerTuple(
-									local_state.minimal_tuple_buffer[i])
-							: ScanSingleTuple(output, local_state);
+				               ? local_state.global_state->table_reader_global_state->GetNextMinimalWorkerTuple(
+				                     local_state.minimal_tuple_buffer[i])
+				               : ScanSingleTuple(output, local_state);
 				if (!ret) {
 					local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
 					local_state.exhausted_scan = true;
