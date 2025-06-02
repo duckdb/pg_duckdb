@@ -133,6 +133,12 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 		return "(" + *arg0_str + " " + duckdb::ExpressionTypeToOperator(expr.type) + " " + *arg1_str + ")";
 	}
 
+		// XXX: IN and NOT IN are not listed here on purpose. DuckDB transforms a 2
+		// element in IN query to a hash join. Once we find a query that actually
+		// keeps the IN expression, we can implement IN/NOT IN support here. Maybe
+		// that happens when we start adding postgres indexes to the duckdb
+		// metadata.
+
 	case duckdb::ExpressionType::CONJUNCTION_AND:
 	case duckdb::ExpressionType::CONJUNCTION_OR: {
 		auto &comp_expr = expr.Cast<duckdb::BoundConjunctionExpression>();

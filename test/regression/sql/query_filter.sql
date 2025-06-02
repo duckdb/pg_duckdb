@@ -41,6 +41,9 @@ SELECT a FROM query_filter_varchar WHERE upper(a) < 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) > 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) <= 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) >= 'B';
+SELECT a FROM query_filter_varchar WHERE upper(a) BETWEEN 'BAA' AND 'BXX';
+SELECT a FROM query_filter_varchar WHERE upper(a) NOT BETWEEN 'BAA' AND 'BXX';
+-- BUG: Why doesn't this get pushed down????
 SELECT a FROM query_filter_varchar WHERE lower(a) > 'b';
 SELECT a FROM query_filter_varchar WHERE upper(a) IS DISTINCT FROM 'BTT';
 SELECT a FROM query_filter_varchar WHERE upper(a) IS NOT DISTINCT FROM 'BTT';
@@ -73,6 +76,9 @@ SELECT a FROM query_filter_varchar WHERE a LIKE NULL;
 SELECT a FROM query_filter_varchar WHERE NULL LIKE b;
 -- Not pushed down because filter involves multiple columns. Should not crash.
 SELECT a FROM query_filter_varchar WHERE a LIKE b;
+-- Not pushed because DuckDB transforms this into a hash join.
+SELECT a FROM query_filter_varchar WHERE upper(a) IN ('BTT', 'CTT');
+SELECT a FROM query_filter_varchar WHERE upper(a) NOT IN ('BTT', 'CTT');
 
 DROP TABLE query_filter_varchar;
 

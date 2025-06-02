@@ -468,6 +468,39 @@ Parallel Seq Scan on query_filter_varchar
  _t_t_t_
 (6 rows)
 
+SELECT a FROM query_filter_varchar WHERE upper(a) BETWEEN 'BAA' AND 'BXX';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+
+  a  
+-----
+ btt
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) NOT BETWEEN 'BAA' AND 'BXX';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) < 'BAA') OR (upper(a) > 'BXX'))
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((upper((a)::text) < 'BAA'::text) OR (upper((a)::text) > 'BXX'::text))
+
+    a    
+---------
+ t1
+ t2
+ t1
+ at1
+ %t%t%t%
+ _t_t_t_
+(6 rows)
+
+-- BUG: Why doesn't this get pushed down????
 SELECT a FROM query_filter_varchar WHERE lower(a) > 'b';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
@@ -853,6 +886,38 @@ Parallel Seq Scan on query_filter_varchar
  t1
  t2
 (2 rows)
+
+-- Not pushed because DuckDB transforms this into a hash join.
+SELECT a FROM query_filter_varchar WHERE upper(a) IN ('BTT', 'CTT');
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+
+  a  
+-----
+ btt
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) NOT IN ('BTT', 'CTT');
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+
+    a    
+---------
+ t1
+ t2
+ t1
+ at1
+ %t%t%t%
+ _t_t_t_
+(6 rows)
 
 DROP TABLE query_filter_varchar;
 CREATE TABLE query_filter_output_column(a INT, b VARCHAR, c FLOAT8);
