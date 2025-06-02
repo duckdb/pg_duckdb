@@ -780,28 +780,30 @@ Parallel Seq Scan on query_filter_varchar
 SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '_') $$);
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\\_%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\_%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: ((a)::text ~~ '%\\_%'::text)
+  Filter: ((a)::text ~~ '%\_%'::text)
 
- a 
----
-(0 rows)
+    a    
+---------
+ _t_t_t_
+(1 row)
 
 SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '%') $$);
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\\%%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\%%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: ((a)::text ~~ '%\\%%'::text)
+  Filter: ((a)::text ~~ '%\%%'::text)
 
- a 
----
-(0 rows)
+    a    
+---------
+ %t%t%t%
+(1 row)
 
 SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '\') $$);
 NOTICE:  (PGDuckDB/PostgresTableReader)

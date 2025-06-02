@@ -52,9 +52,9 @@ FuncArgToLikeString(const duckdb::string &func_name, const duckdb::Expression &e
 	}
 
 	auto str_val = duckdb::StringUtil::Replace(value.ToString(), "'", "''");
+	str_val = duckdb::StringUtil::Replace(str_val, "\\", "\\\\");
 	str_val = duckdb::StringUtil::Replace(str_val, "%", "\\%");
 	str_val = duckdb::StringUtil::Replace(str_val, "_", "\\_");
-	str_val = duckdb::StringUtil::Replace(str_val, "\\", "\\\\");
 	if (func_name == "contains") {
 		return "'%" + str_val + "%'";
 	} else if (func_name == "suffix") {
