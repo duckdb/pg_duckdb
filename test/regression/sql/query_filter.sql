@@ -1,3 +1,4 @@
+SET duckdb.log_pg_explain = true;
 CREATE TABLE query_filter_int(a INT);
 INSERT INTO query_filter_int SELECT g FROM generate_series(1,100) g;
 SELECT COUNT(*) FROM query_filter_int WHERE a  <= 50;
@@ -10,24 +11,54 @@ SELECT COUNT(*) FROM query_filter_float WHERE a <= 1.0;
 SELECT COUNT(*) FROM query_filter_float WHERE a < 1.1;
 DROP TABLE query_filter_float;
 
-CREATE TABLE query_filter_varchar(a VARCHAR);
-INSERT INTO query_filter_varchar VALUES ('t1'), ('t2'), ('t1');
+CREATE TABLE query_filter_varchar(a VARCHAR, b VARCHAR);
+INSERT INTO query_filter_varchar VALUES ('t1', 't%'), ('t2', '%%'), ('t1', '');
 SELECT COUNT(*)FROM query_filter_varchar WHERE a = 't1';
 SELECT COUNT(a) FROM query_filter_varchar WHERE a = 't1';
 SELECT a, COUNT(*) FROM query_filter_varchar WHERE a = 't1' GROUP BY a;
 
-INSERT INTO query_filter_varchar VALUES ('at1'), ('btt'), ('ttt');
-SET duckdb.log_pg_explain = true;
+INSERT INTO query_filter_varchar VALUES ('at1'), ('btt'), ('%t%t%t%'), ('_t_t_t_');
 -- Pushed down to PG executor
-SELECT * FROM query_filter_varchar WHERE a LIKE '%t%';
-SELECT * FROM query_filter_varchar WHERE a LIKE 't%';
-SELECT * FROM query_filter_varchar WHERE a LIKE '%t';
-RESET duckdb.log_pg_explain;
+SELECT a FROM query_filter_varchar WHERE a LIKE '%t%';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%t%';
+SELECT a FROM query_filter_varchar WHERE a LIKE 't%';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't%';
+SELECT a FROM query_filter_varchar WHERE a LIKE '%t';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%t';
+SELECT a FROM query_filter_varchar WHERE a LIKE '_t_';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '_t_';
+SELECT a FROM query_filter_varchar WHERE a LIKE 't_';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't_';
+SELECT a FROM query_filter_varchar WHERE a LIKE '_t';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '_t';
+SELECT a FROM query_filter_varchar WHERE a LIKE a;
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE a;
+SELECT a FROM query_filter_varchar WHERE 'txxx' LIKE b;
+SELECT a FROM query_filter_varchar WHERE 'txxx' NOT LIKE b;
+-- test
+SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t\%%';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\%t\%%';
+SELECT a FROM query_filter_varchar WHERE a LIKE 't\%%';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't\%\%';
+SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\%t';
+SELECT a FROM query_filter_varchar WHERE a LIKE '%\_t\_%';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\_t\_%';
+SELECT a FROM query_filter_varchar WHERE a LIKE 't\_%';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't\_%';
+SELECT a FROM query_filter_varchar WHERE a LIKE '%\_t';
+SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\_t';
+SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '_') $$);
+SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '%') $$);
+SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '\') $$);
 
--- Not pushed down but making sure nothing's broken
-SELECT * FROM query_filter_varchar WHERE a LIKE NULL;
-SELECT * FROM query_filter_varchar WHERE NULL LIKE a;
-SELECT * FROM query_filter_varchar WHERE a LIKE a;
+-- Not pushed down because they are constant filters.
+SELECT a FROM query_filter_varchar WHERE a LIKE NULL;
+SELECT a FROM query_filter_varchar WHERE NULL LIKE a;
+SELECT a FROM query_filter_varchar WHERE a LIKE NULL;
+SELECT a FROM query_filter_varchar WHERE NULL LIKE b;
+-- Not pushed down because filter involves multiple columns
+SELECT a FROM query_filter_varchar WHERE a LIKE b;
 
 DROP TABLE query_filter_varchar;
 

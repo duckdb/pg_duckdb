@@ -1,7 +1,9 @@
+#include <duckdb/common/types.hpp>
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
+#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include <duckdb/planner/expression/bound_operator_expression.hpp>
 
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
@@ -14,6 +16,7 @@
 #include "pgduckdb/logger.hpp"
 
 #include <numeric> // std::accumulate
+#include <optional>
 
 namespace pgduckdb {
 
@@ -21,67 +24,142 @@ namespace pgduckdb {
 // PostgresScanGlobalState
 //
 
-static duckdb::string
+namespace {
+std::optional<duckdb::string> ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_name);
+
+duckdb::string
 FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) {
 	return std::accumulate(filters.begin() + 1, filters.end(), filters[0],
 	                       [&delimiter](duckdb::string l, duckdb::string r) { return l + delimiter + r; });
 }
 
-bool
-IsSupportedExpressionChild(const duckdb::Expression &expr) {
+std::optional<duckdb::string>
+FuncArgToLikeString(const duckdb::string &func_name, const duckdb::Expression &expr) {
+	if (expr.GetExpressionType() != duckdb::ExpressionType::VALUE_CONSTANT) {
+		// We only support literal VARCHARs for the needle argument, because we
+		// need to append the '%' wildcard for postgres to understand it as a
+		// LIKE pattern.
+		return std::nullopt;
+	}
+
+	auto &value = expr.Cast<duckdb::BoundConstantExpression>().value;
+	if (value.IsNull()) {
+		return "NULL";
+	} else if (value.type().id() != duckdb::LogicalTypeId::VARCHAR) {
+		return std::nullopt; // Unsupported type for needle
+	}
+
+	auto str_val = duckdb::StringUtil::Replace(value.ToString(), "'", "''");
+	str_val = duckdb::StringUtil::Replace(str_val, "%", "\\%");
+	str_val = duckdb::StringUtil::Replace(str_val, "_", "\\_");
+	str_val = duckdb::StringUtil::Replace(str_val, "\\", "\\\\");
+	if (func_name == "contains") {
+		return "'%" + str_val + "%'";
+	} else if (func_name == "suffix") {
+		return "'%" + str_val + "'";
+	} else if (func_name == "prefix") {
+		return "'" + str_val + "%'";
+	} else {
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Unsupported function: '" + func_name + "'");
+	}
+}
+
+std::optional<duckdb::string>
+FuncToLikeString(const duckdb::string &func_name, const duckdb::BoundFunctionExpression &func_expr,
+                 const duckdb::string &column_name) {
+	if (func_expr.children.size() != 2) {
+		return std::nullopt; // Unsupported function
+	}
+
+	auto &haystack = *func_expr.children[0];
+	auto &needle = *func_expr.children[1];
+
+	if (haystack.return_type != duckdb::LogicalTypeId::VARCHAR) {
+		return std::nullopt; // Unsupported type for haystack
+	}
+
+	auto haystack_str = ExpressionToString(haystack, column_name);
+	if (!haystack_str) {
+		return std::nullopt; // Unsupported haystack expression
+	}
+
+	auto needle_str = FuncArgToLikeString(func_name, needle);
+	if (!needle_str) {
+		return std::nullopt; // Unsupported needle expression
+	}
+
+	return *haystack_str + " LIKE " + *needle_str; // Return the complete LIKE expression as a string
+}
+
+std::optional<duckdb::string>
+ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_name) {
 	switch (expr.GetExpressionType()) {
+	case duckdb::ExpressionType::OPERATOR_NOT: {
+		auto &not_expr = expr.Cast<duckdb::BoundOperatorExpression>();
+		auto arg_str = ExpressionToString(*not_expr.children[0], column_name);
+		if (!arg_str) {
+			return std::nullopt; // Unsupported child expression
+		}
+		return "NOT (" + *arg_str + ")";
+	}
+	case duckdb::ExpressionType::BOUND_FUNCTION: {
+		auto &func_expr = expr.Cast<duckdb::BoundFunctionExpression>();
+		const auto &func_name = func_expr.function.name;
+		if (func_name == "contains" || func_name == "suffix" || func_name == "prefix") {
+			return FuncToLikeString(func_name, func_expr, column_name);
+		}
+
+		if (func_name == "lower" || func_name == "upper") {
+			// For lower and upper functions, we can just return the column name
+			// with the function applied, as Postgres will handle it correctly.
+			auto child_str = ExpressionToString(*func_expr.children[0], column_name);
+			if (!child_str) {
+				return std::nullopt; // Unsupported child expression
+			}
+			return func_name + "(" + *child_str + ")";
+		}
+
+		if ((func_name == "~~" || func_name == "!~~") && func_expr.children.size() == 2 && func_expr.is_operator) {
+			auto &haystack = *func_expr.children[0];
+			if (haystack.return_type != duckdb::LogicalTypeId::VARCHAR) {
+				return std::nullopt; // Unsupported type for haystack
+			}
+			auto child_str0 = ExpressionToString(*func_expr.children[0], column_name);
+			auto child_str1 = ExpressionToString(*func_expr.children[1], column_name);
+			if (!child_str0 || !child_str1) {
+				return std::nullopt; // Unsupported child expression
+			}
+			return child_str0->append(" OPERATOR(pg_catalog." + func_name + ") ").append(*child_str1);
+		}
+
+		return std::nullopt; // Unsupported function
+	}
+
 	case duckdb::ExpressionType::BOUND_REF:
 	case duckdb::ExpressionType::BOUND_COLUMN_REF:
-		return true;
-	case duckdb::ExpressionType::VALUE_CONSTANT: {
-		auto &value = expr.Cast<duckdb::BoundConstantExpression>().value;
-		return value.type().id() == duckdb::LogicalTypeId::VARCHAR;
-	}
-	default:
-		return false;
-	}
-}
-
-bool
-IsSupportedExpression(const duckdb::BoundFunctionExpression &expr) {
-	if (expr.function.name != "contains" && expr.function.name != "suffix") {
-		return false;
-	}
-	if (expr.children.size() != 2) {
-		return false;
-	}
-	return IsSupportedExpressionChild(*expr.children[0]) && IsSupportedExpressionChild(*expr.children[1]);
-}
-
-duckdb::string
-ExpressionToString(const duckdb::string &func_name, const duckdb::Expression &expr, const duckdb::string &column_name) {
-	switch (expr.GetExpressionType()) {
-	case duckdb::ExpressionType::BOUND_REF:
 		return column_name;
+
 	case duckdb::ExpressionType::VALUE_CONSTANT: {
 		auto &value = expr.Cast<duckdb::BoundConstantExpression>().value;
 		if (value.IsNull()) {
 			return "NULL";
-		} else if (value.type().id() != duckdb::LogicalTypeId::VARCHAR) {
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-			                        "Unsupported Value Type in Expression: " + value.type().ToString());
-		}
-
-		auto str_val = duckdb::StringUtil::Replace(value.ToString(), "'", "''");
-		if (func_name == "contains") {
-			return "'%" + str_val + "%'";
-		} else if (func_name == "suffix") {
-			return "'%" + str_val + "'";
+		} else if (value.type().id() == duckdb::LogicalTypeId::VARCHAR) {
+			return value.ToSQLString();
 		} else {
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Unsupported function: '" + func_name + "'");
+			// For now we only support VARCHAR constants, we could probably
+			// easily support more types, but since we currently only
+			// intend to push down LIKE expressions, there's no need to do
+			// so.
+			return std::nullopt;
 		}
 	}
+
 	default:
-		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-		                        "Unsupported Expression Type: " +
-		                            duckdb::ExpressionTypeToString(expr.GetExpressionType()));
+		return std::nullopt; // Unsupported expression type
 	}
 }
+
+} // namespace
 
 int
 PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
@@ -118,23 +196,7 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 	}
 	case duckdb::TableFilterType::EXPRESSION_FILTER: {
 		auto &expression_filter = filter->Cast<duckdb::ExpressionFilter>();
-		if (expression_filter.expr->GetExpressionType() != duckdb::ExpressionType::BOUND_FUNCTION) {
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-			                        "Unsupported Expression Filter Type: " + expression_filter.ToString(column_name));
-		}
-
-		auto &func_expr = expression_filter.expr->Cast<duckdb::BoundFunctionExpression>();
-		if (!IsSupportedExpression(func_expr)) {
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-			                        "Unsupported Function in Expression Filter: " + func_expr.function.name);
-		} else if (func_expr.children.size() != 2) {
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-			                        "Unexpected child numbers: " + std::to_string(func_expr.children.size()));
-		}
-
-		const auto &func_name = func_expr.function.name;
-		query_filters += ExpressionToString(func_name, *func_expr.children[0], column_name) + " LIKE " +
-		                 ExpressionToString(func_name, *func_expr.children[1], column_name);
+		query_filters += *ExpressionToString(*expression_filter.expr, column_name);
 		return 1;
 	}
 	/* DYNAMIC_FILTER is push down filter from topN execution. STRUCT_EXTRACT is
@@ -287,12 +349,7 @@ PostgresScanFunctionData::~PostgresScanFunctionData() {
 
 static bool
 PostgresScanPushdownExpression(duckdb::ClientContext &, const duckdb::LogicalGet &, duckdb::Expression &expr) {
-	if (expr.GetExpressionType() != duckdb::ExpressionType::BOUND_FUNCTION) {
-		return false;
-	}
-
-	auto &func_expr = expr.Cast<duckdb::BoundFunctionExpression>();
-	return IsSupportedExpression(func_expr);
+	return ExpressionToString(expr, "dummy") != std::nullopt;
 }
 
 PostgresScanTableFunction::PostgresScanTableFunction()
@@ -382,3 +439,5 @@ PostgresScanTableFunction::PostgresScanCardinality(duckdb::ClientContext &, cons
 }
 
 } // namespace pgduckdb
+#include "duckdb/planner/filter/optional_filter.hpp"
+#include "duckdb/planner/filter/expression_filter.hpp"
