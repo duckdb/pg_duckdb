@@ -35,7 +35,21 @@ SELECT a FROM query_filter_varchar WHERE a LIKE a;
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE a;
 SELECT a FROM query_filter_varchar WHERE 'txxx' LIKE b;
 SELECT a FROM query_filter_varchar WHERE 'txxx' NOT LIKE b;
--- test
+SELECT a FROM query_filter_varchar WHERE upper(a) = 'BTT';
+SELECT a FROM query_filter_varchar WHERE upper(a) != 'BTT';
+SELECT a FROM query_filter_varchar WHERE upper(a) < 'B';
+SELECT a FROM query_filter_varchar WHERE upper(a) > 'B';
+SELECT a FROM query_filter_varchar WHERE upper(a) <= 'B';
+SELECT a FROM query_filter_varchar WHERE upper(a) >= 'B';
+SELECT a FROM query_filter_varchar WHERE lower(a) > 'b';
+SELECT a FROM query_filter_varchar WHERE upper(a) IS DISTINCT FROM 'BTT';
+SELECT a FROM query_filter_varchar WHERE upper(a) IS NOT DISTINCT FROM 'BTT';
+SELECT a FROM query_filter_varchar WHERE upper(a) = 'BTT' OR upper(a) = '_T_T_T_' OR (upper(a) >= 'T2' AND upper(a) < 'T8' AND upper(a) != 'T5');
+SELECT a FROM query_filter_varchar WHERE upper(a) LIKE '%T%';
+SELECT a FROM query_filter_varchar WHERE upper(a) LIKE '%T%';
+-- test escaping
+-- TODO: This is actually broken, because PG uses \ as default escape
+-- character, but DuckDB has no default escape character.
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t\%%';
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\%t\%%';
 SELECT a FROM query_filter_varchar WHERE a LIKE 't\%%';
@@ -52,12 +66,12 @@ SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar
 SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '%') $$);
 SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '\') $$);
 
--- Not pushed down because they are constant filters.
+-- Not pushed down because they are constant filters. Should not crash.
 SELECT a FROM query_filter_varchar WHERE a LIKE NULL;
 SELECT a FROM query_filter_varchar WHERE NULL LIKE a;
 SELECT a FROM query_filter_varchar WHERE a LIKE NULL;
 SELECT a FROM query_filter_varchar WHERE NULL LIKE b;
--- Not pushed down because filter involves multiple columns
+-- Not pushed down because filter involves multiple columns. Should not crash.
 SELECT a FROM query_filter_varchar WHERE a LIKE b;
 
 DROP TABLE query_filter_varchar;

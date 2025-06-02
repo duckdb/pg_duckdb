@@ -369,7 +369,216 @@ Parallel Seq Scan on query_filter_varchar
  t1
 (1 row)
 
--- test
+SELECT a FROM query_filter_varchar WHERE upper(a) = 'BTT';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) = 'BTT')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) = 'BTT'::text)
+
+  a  
+-----
+ btt
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) != 'BTT';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) != 'BTT')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) <> 'BTT'::text)
+
+    a    
+---------
+ t1
+ t2
+ t1
+ at1
+ %t%t%t%
+ _t_t_t_
+(6 rows)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) < 'B';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) < 'B')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) < 'B'::text)
+
+  a  
+-----
+ at1
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) > 'B';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) > 'B')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) > 'B'::text)
+
+    a    
+---------
+ t1
+ t2
+ t1
+ btt
+ %t%t%t%
+ _t_t_t_
+(6 rows)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) <= 'B';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) <= 'B')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) <= 'B'::text)
+
+  a  
+-----
+ at1
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) >= 'B';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) >= 'B')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) >= 'B'::text)
+
+    a    
+---------
+ t1
+ t2
+ t1
+ btt
+ %t%t%t%
+ _t_t_t_
+(6 rows)
+
+SELECT a FROM query_filter_varchar WHERE lower(a) > 'b';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (lower(a) > 'b')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (lower((a)::text) > 'b'::text)
+
+    a    
+---------
+ t1
+ t2
+ t1
+ btt
+ %t%t%t%
+ _t_t_t_
+(6 rows)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) IS DISTINCT FROM 'BTT';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) IS DISTINCT FROM 'BTT')
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) IS DISTINCT FROM 'BTT'::text)
+
+    a    
+---------
+ t1
+ t2
+ t1
+ at1
+ %t%t%t%
+ _t_t_t_
+(6 rows)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) IS NOT DISTINCT FROM 'BTT';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT ((upper(a) IS DISTINCT FROM 'BTT'))
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (NOT (upper((a)::text) IS DISTINCT FROM 'BTT'::text))
+
+  a  
+-----
+ btt
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) = 'BTT' OR upper(a) = '_T_T_T_' OR (upper(a) >= 'T2' AND upper(a) < 'T8' AND upper(a) != 'T5');
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) = 'BTT') OR (upper(a) = '_T_T_T_') OR ((upper(a) >= 'T2') AND (upper(a) < 'T8') AND (upper(a) != 'T5')))
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((upper((a)::text) = 'BTT'::text) OR (upper((a)::text) = '_T_T_T_'::text) OR ((upper((a)::text) >= 'T2'::text) AND (upper((a)::text) < 'T8'::text) AND (upper((a)::text) <> 'T5'::text)))
+
+    a    
+---------
+ t2
+ btt
+ _t_t_t_
+(3 rows)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) LIKE '%T%';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE upper(a) LIKE '%T%'
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) ~~ '%T%'::text)
+
+    a    
+---------
+ t1
+ t2
+ t1
+ at1
+ btt
+ %t%t%t%
+ _t_t_t_
+(7 rows)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) LIKE '%T%';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE upper(a) LIKE '%T%'
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: (upper((a)::text) ~~ '%T%'::text)
+
+    a    
+---------
+ t1
+ t2
+ t1
+ at1
+ btt
+ %t%t%t%
+ _t_t_t_
+(7 rows)
+
+-- test escaping
+-- TODO: This is actually broken, because PG uses \ as default escape
+-- character, but DuckDB has no default escape character.
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t\%%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
@@ -571,32 +780,43 @@ Parallel Seq Scan on query_filter_varchar
 SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '_') $$);
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\_%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\\_%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: ((a)::text ~~ '%\_%'::text)
+  Filter: ((a)::text ~~ '%\\_%'::text)
 
-    a    
----------
- _t_t_t_
-(1 row)
+ a 
+---
+(0 rows)
 
 SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '%') $$);
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\%%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\\%%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: ((a)::text ~~ '%\%%'::text)
+  Filter: ((a)::text ~~ '%\\%%'::text)
 
-    a    
----------
- %t%t%t%
-(1 row)
+ a 
+---
+(0 rows)
 
--- Not pushed down because they are constant filters.
+SELECT * FROM duckdb.query($$ SELECT a FROM pgduckdb.public.query_filter_varchar WHERE contains(a, '\') $$);
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\\%'
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((a)::text ~~ '%\\%'::text)
+
+ a 
+---
+(0 rows)
+
+-- Not pushed down because they are constant filters. Should not crash.
 SELECT a FROM query_filter_varchar WHERE a LIKE NULL;
  a 
 ---
@@ -617,7 +837,7 @@ SELECT a FROM query_filter_varchar WHERE NULL LIKE b;
 ---
 (0 rows)
 
--- Not pushed down because filter involves multiple columns
+-- Not pushed down because filter involves multiple columns. Should not crash.
 SELECT a FROM query_filter_varchar WHERE a LIKE b;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 

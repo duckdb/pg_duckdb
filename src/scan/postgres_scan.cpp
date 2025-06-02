@@ -1,8 +1,10 @@
 #include <duckdb/common/types.hpp>
 #include "duckdb/planner/filter/optional_filter.hpp"
 #include "duckdb/planner/filter/expression_filter.hpp"
+#include "duckdb/planner/expression/bound_comparison_expression.hpp"
 #include "duckdb/planner/expression/bound_constant_expression.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
+#include <duckdb/planner/expression/bound_conjunction_expression.hpp>
 #include <duckdb/planner/expression/bound_operator_expression.hpp>
 
 #include "pgduckdb/scan/postgres_scan.hpp"
@@ -35,7 +37,7 @@ FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) 
 
 std::optional<duckdb::string>
 FuncArgToLikeString(const duckdb::string &func_name, const duckdb::Expression &expr) {
-	if (expr.GetExpressionType() != duckdb::ExpressionType::VALUE_CONSTANT) {
+	if (expr.type != duckdb::ExpressionType::VALUE_CONSTANT) {
 		// We only support literal VARCHARs for the needle argument, because we
 		// need to append the '%' wildcard for postgres to understand it as a
 		// LIKE pattern.
@@ -93,7 +95,7 @@ FuncToLikeString(const duckdb::string &func_name, const duckdb::BoundFunctionExp
 
 std::optional<duckdb::string>
 ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_name) {
-	switch (expr.GetExpressionType()) {
+	switch (expr.type) {
 	case duckdb::ExpressionType::OPERATOR_NOT: {
 		auto &not_expr = expr.Cast<duckdb::BoundOperatorExpression>();
 		auto arg_str = ExpressionToString(*not_expr.children[0], column_name);
@@ -102,6 +104,53 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 		}
 		return "NOT (" + *arg_str + ")";
 	}
+
+	case duckdb::ExpressionType::OPERATOR_IS_NULL:
+	case duckdb::ExpressionType::OPERATOR_IS_NOT_NULL: {
+		auto &is_null_expr = expr.Cast<duckdb::BoundOperatorExpression>();
+		auto arg_str = ExpressionToString(*is_null_expr.children[0], column_name);
+		if (!arg_str) {
+			return std::nullopt; // Unsupported child expression
+		}
+		auto operator_str = (expr.type == duckdb::ExpressionType::OPERATOR_IS_NULL ? "IS NULL" : "IS NOT NULL");
+		return "(" + *arg_str + ") " + operator_str;
+	}
+
+	case duckdb::ExpressionType::COMPARE_EQUAL:
+	case duckdb::ExpressionType::COMPARE_NOTEQUAL:
+	case duckdb::ExpressionType::COMPARE_LESSTHAN:
+	case duckdb::ExpressionType::COMPARE_GREATERTHAN:
+	case duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO:
+	case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
+	case duckdb::ExpressionType::COMPARE_DISTINCT_FROM:
+	case duckdb::ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
+		auto &comp_expr = expr.Cast<duckdb::BoundComparisonExpression>();
+		auto arg0_str = ExpressionToString(*comp_expr.left, column_name);
+		auto arg1_str = ExpressionToString(*comp_expr.right, column_name);
+		if (!arg0_str || !arg1_str) {
+			return std::nullopt; // Unsupported child expression
+		}
+		return "(" + *arg0_str + " " + duckdb::ExpressionTypeToOperator(expr.type) + " " + *arg1_str + ")";
+	}
+
+	case duckdb::ExpressionType::CONJUNCTION_AND:
+	case duckdb::ExpressionType::CONJUNCTION_OR: {
+		auto &comp_expr = expr.Cast<duckdb::BoundConjunctionExpression>();
+		std::string query_filters;
+
+		for (auto &child : comp_expr.children) {
+			auto child_str = ExpressionToString(*child, column_name);
+			if (!child_str) {
+				return std::nullopt; // Unsupported child expression
+			}
+			if (!query_filters.empty()) {
+				query_filters += " " + duckdb::ExpressionTypeToOperator(expr.type) + " ";
+			}
+			query_filters += *child_str;
+		}
+		return "(" + query_filters + ")";
+	}
+
 	case duckdb::ExpressionType::BOUND_FUNCTION: {
 		auto &func_expr = expr.Cast<duckdb::BoundFunctionExpression>();
 		const auto &func_name = func_expr.function.name;
@@ -147,9 +196,9 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 			return value.ToSQLString();
 		} else {
 			// For now we only support VARCHAR constants, we could probably
-			// easily support more types, but since we currently only
-			// intend to push down LIKE expressions, there's no need to do
-			// so.
+			// easily support more types. Currently we only to push down LIKE
+			// expressions and lower/upper calls though. So there's no need to
+			// complicate things for now.
 			return std::nullopt;
 		}
 	}
