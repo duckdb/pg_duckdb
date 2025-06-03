@@ -38,7 +38,7 @@ public:
 	std::ostringstream scan_query;
 	duckdb::shared_ptr<PostgresTableReader> table_reader_global_state;
 	MemoryContext duckdb_scan_memory_ctx;
-	int max_threads;
+	idx_t max_threads;
 };
 
 // Local State

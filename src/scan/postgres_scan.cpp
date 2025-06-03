@@ -433,9 +433,11 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	//   1. The Postgres table_reader may launch parallel worker processes to scan the table.
 	//   2. DuckDB can use multiple threads (controlled by max_threads) to consume results from the table_reader.
 	//
-	// By default, we restrict DuckDB to a single thread (max_threads = 1) in the following cases:
-	//   - The scan is a count-only query (count_tuples_only).
-	//   - The table_reader does not launch any parallel Postgres workers, so scanning is done in the current process.
+	// We restrict DuckDB to a single thread (max_threads = 1) in the following cases:
+	//   - The scan is a count-only query (count_tuples_only), as result processing typically isn't the performance
+	//     bottleneck.
+	//   - The table_reader does not launch any parallel Postgres workers, indicating a small scan that executes in the
+	//     current process.
 	//   - The scan includes JSON or LIST columns, since parallelism is inefficient for these types. This is because
 	//     converting these types requires calling Postgres functions, which use the Postgres memory context and
 	//     require holding the global lock, limiting parallel efficiency.
@@ -549,7 +551,7 @@ ScanSingleTuple(duckdb::DataChunk &output, PostgresScanLocalState &local_state) 
 	}
 
 	SlotGetAllAttrs(slot);
-	// This memory context is use as a scratchpad space for any allocation required to add the tuple
+	// This memory context is used as a scratchpad space for any allocation required to add the tuple
 	// into the chunk, such as decoding jsonb columns to their json string representation. We need to
 	// only use this memory context here, and not for the full loop, because GetNextTuple() needs the
 	// actual tuple to survive until the next call to GetNextTuple(), to be able to do index scans.
