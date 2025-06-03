@@ -128,6 +128,7 @@ bool duckdb_autoload_known_extensions = true;
 char *duckdb_temporary_directory = MakeDirName("temp");
 char *duckdb_extension_directory = MakeDirName("extensions");
 char *duckdb_max_temp_directory_size = strdup("");
+char *duckdb_default_collation = strdup("C");
 
 void
 InitGUC() {
@@ -202,6 +203,10 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.worker_threads",
 	                           "Maximum number of DuckDB threads per Postgres backend, alias for duckdb.threads",
 	                           &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
+
+	DefineCustomDuckDBVariable("duckdb.default_collation",
+	                           "The default collation to use for DuckDB queries, e.g., 'en_us'",
+	                           &duckdb_default_collation, PGC_SUSET);
 
 	DefineCustomDuckDBVariable("duckdb.motherduck_session_hint", "The session hint to use for MotherDuck connections",
 	                           &duckdb_motherduck_session_hint);

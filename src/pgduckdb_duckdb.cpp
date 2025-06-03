@@ -177,6 +177,8 @@ DuckDBManager::Initialize() {
 	auto &db_manager = duckdb::DatabaseManager::Get(context);
 	default_dbname = db_manager.GetDefaultDatabase(context);
 	pgduckdb::DuckDBQueryOrThrow(context, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(pg_time_zone));
+	pgduckdb::DuckDBQueryOrThrow(context, "SET default_collation =" +
+	                                          duckdb::KeywordHelper::WriteQuoted(duckdb_default_collation));
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
