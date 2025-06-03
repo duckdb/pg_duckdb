@@ -310,6 +310,22 @@ ERROR:  a column definition list is only allowed for functions returning "record
 LINE 1: ... FROM read_parquet('../../data/iris.parquet') AS ("sepal.len...
                                                              ^
 HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax introduced in pg_duckdb 0.3.0. It seems like you might be using the outdated "AS (colname coltype, ...)" syntax
+-- But we don't show that hint for queries that don't use these functions.
+SELECT count("sepal.length") FROM generate_series(1, 100) AS ("sepal.length" FLOAT);
+ERROR:  a column definition list is only allowed for functions returning "record"
+LINE 1: ...("sepal.length") FROM generate_series(1, 100) AS ("sepal.len...
+                                                             ^
+-- Show a hint for users trying to use columns as normal instead of using r['column_name']
+SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet');
+ERROR:  column "sepal.length" does not exist
+LINE 1: SELECT count("sepal.length") FROM read_parquet('../../data/i...
+                     ^
+HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to to give the function the r alias.
+-- But again only show it when we use functions that return duckdb.rows
+SELECT count("sepal.length") FROM generate_series(1, 100) a(x);
+ERROR:  column "sepal.length" does not exist
+LINE 1: SELECT count("sepal.length") FROM generate_series(1, 100) a(...
+                     ^
 -- read_csv
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
  count 
