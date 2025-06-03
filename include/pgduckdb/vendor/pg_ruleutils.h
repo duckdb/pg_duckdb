@@ -51,4 +51,6 @@ extern char *pgduckdb_pg_get_statisticsobjdef_string(Oid statextid);
 
 extern char *pgduckdb_get_list_partvalue_string(Const *val);
 
+extern const char* pg_duckdb_op_to_duckdb_func_name(const char*);
+
 #endif							/* RULEUTILS_H */

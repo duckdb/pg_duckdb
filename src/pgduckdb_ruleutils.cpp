@@ -1148,4 +1148,19 @@ pgduckdb_add_tablesample_percent(const char *tsm_name, StringInfo buf, int num_a
 	}
 	appendStringInfoChar(buf, '%');
 }
+
+const char *
+pg_duckdb_op_to_duckdb_func_name(const char *op_name) {
+	if (AreStringEqual(op_name, "~~")) {
+		return "like_escape";
+	} else if (AreStringEqual(op_name, "!~~")) {
+		return "NOT like_escape";
+	} else if (AreStringEqual(op_name, "~~*")) {
+		return "ilike_escape";
+	} else if (AreStringEqual(op_name, "!~~*")) {
+		return "NOT ilike_escape";
+	}
+
+	return nullptr;
+}
 }
