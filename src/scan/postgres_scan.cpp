@@ -1,9 +1,9 @@
 #include <duckdb/common/types.hpp>
-#include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"
-#include "duckdb/planner/expression/bound_comparison_expression.hpp"
-#include "duckdb/planner/expression/bound_constant_expression.hpp"
-#include "duckdb/planner/expression/bound_function_expression.hpp"
+#include <duckdb/planner/filter/optional_filter.hpp>
+#include <duckdb/planner/filter/expression_filter.hpp>
+#include <duckdb/planner/expression/bound_comparison_expression.hpp>
+#include <duckdb/planner/expression/bound_constant_expression.hpp>
+#include <duckdb/planner/expression/bound_function_expression.hpp>
 #include <duckdb/planner/expression/bound_conjunction_expression.hpp>
 #include <duckdb/planner/expression/bound_operator_expression.hpp>
 
@@ -494,5 +494,3 @@ PostgresScanTableFunction::PostgresScanCardinality(duckdb::ClientContext &, cons
 }
 
 } // namespace pgduckdb
-#include "duckdb/planner/filter/optional_filter.hpp"
-#include "duckdb/planner/filter/expression_filter.hpp"

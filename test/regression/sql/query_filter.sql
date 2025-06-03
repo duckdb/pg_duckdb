@@ -43,16 +43,17 @@ SELECT a FROM query_filter_varchar WHERE upper(a) <= 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) >= 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) BETWEEN 'BAA' AND 'BXX';
 SELECT a FROM query_filter_varchar WHERE upper(a) NOT BETWEEN 'BAA' AND 'BXX';
--- BUG: Why doesn't this get pushed down????
 SELECT a FROM query_filter_varchar WHERE lower(a) > 'b';
 SELECT a FROM query_filter_varchar WHERE upper(a) IS DISTINCT FROM 'BTT';
 SELECT a FROM query_filter_varchar WHERE upper(a) IS NOT DISTINCT FROM 'BTT';
 SELECT a FROM query_filter_varchar WHERE upper(a) = 'BTT' OR upper(a) = '_T_T_T_' OR (upper(a) >= 'T2' AND upper(a) < 'T8' AND upper(a) != 'T5');
 SELECT a FROM query_filter_varchar WHERE upper(a) LIKE '%T%';
 SELECT a FROM query_filter_varchar WHERE upper(a) LIKE '%T%';
+
 -- test escaping
--- TODO: This is actually broken, because PG uses \ as default escape
--- character, but DuckDB has no default escape character.
+
+-- PG uses \ as default escape character, but DuckDB has
+-- no default escape character, so this might fail in some cases.
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t\%%';
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\%t\%%';
 SELECT a FROM query_filter_varchar WHERE a LIKE 't\%%';

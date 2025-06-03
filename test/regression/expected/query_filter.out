@@ -498,7 +498,6 @@ Parallel Seq Scan on query_filter_varchar
  _t_t_t_
 (6 rows)
 
--- BUG: Why doesn't this get pushed down????
 SELECT a FROM query_filter_varchar WHERE lower(a) > 'b';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
@@ -606,8 +605,8 @@ Parallel Seq Scan on query_filter_varchar
 (7 rows)
 
 -- test escaping
--- TODO: This is actually broken, because PG uses \ as default escape
--- character, but DuckDB has no default escape character.
+-- PG uses \ as default escape character, but DuckDB has
+-- no default escape character, so this might fail in some cases.
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t\%%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
