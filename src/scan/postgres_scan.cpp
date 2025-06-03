@@ -4,6 +4,7 @@
 #include <duckdb/planner/expression/bound_comparison_expression.hpp>
 #include <duckdb/planner/expression/bound_constant_expression.hpp>
 #include <duckdb/planner/expression/bound_function_expression.hpp>
+#include <duckdb/planner/expression/bound_between_expression.hpp>
 #include <duckdb/planner/expression/bound_conjunction_expression.hpp>
 #include <duckdb/planner/expression/bound_operator_expression.hpp>
 
@@ -131,6 +132,30 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 			return std::nullopt; // Unsupported child expression
 		}
 		return "(" + *arg0_str + " " + duckdb::ExpressionTypeToOperator(expr.type) + " " + *arg1_str + ")";
+	}
+
+	case duckdb::ExpressionType::COMPARE_BETWEEN: {
+		auto &between_expr = expr.Cast<duckdb::BoundBetweenExpression>();
+		auto input_str = ExpressionToString(*between_expr.input, column_name);
+		auto lower_str = ExpressionToString(*between_expr.lower, column_name);
+		auto upper_str = ExpressionToString(*between_expr.upper, column_name);
+		if (!input_str || !lower_str || !upper_str) {
+			return std::nullopt; // Unsupported child expression
+		}
+
+		/*
+		 * Would be nice to use the existing on BoundBetweenExpression for
+		 * this, but those are not const. Once following PR is marged and
+		 * released, feel free to use it:
+		 * https://github.com/duckdb/duckdb/pull/17773
+		 */
+		auto lower_comp = between_expr.lower_inclusive ? duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO
+		                                               : duckdb::ExpressionType::COMPARE_GREATERTHAN;
+		auto upper_comp = between_expr.upper_inclusive ? duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO
+		                                               : duckdb::ExpressionType::COMPARE_LESSTHAN;
+
+		return "((" + *input_str + " " + duckdb::ExpressionTypeToOperator(lower_comp) + " " + *lower_str + ") AND (" +
+		       *input_str + " " + duckdb::ExpressionTypeToOperator(upper_comp) + " " + *upper_str + "))";
 	}
 
 		// XXX: IN and NOT IN are not listed here on purpose. DuckDB transforms a 2

@@ -469,10 +469,53 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE upper(a) BETWEEN 'BAA' AND 'BXX';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar
+QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) >= 'BAA') AND (upper(a) <= 'BXX'))
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
+  Filter: ((upper((a)::text) >= 'BAA'::text) AND (upper((a)::text) <= 'BXX'::text))
+
+  a  
+-----
+ btt
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) >= 'BAA' AND upper(a) <= 'BXX';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) >= 'BAA') AND (upper(a) <= 'BXX'))
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((upper((a)::text) >= 'BAA'::text) AND (upper((a)::text) <= 'BXX'::text))
+
+  a  
+-----
+ btt
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) >= 'BAA' AND upper(a) < 'BXX';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) >= 'BAA') AND (upper(a) < 'BXX'))
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((upper((a)::text) >= 'BAA'::text) AND (upper((a)::text) < 'BXX'::text))
+
+  a  
+-----
+ btt
+(1 row)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) > 'BAA' AND upper(a) < 'BXX';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) > 'BAA') AND (upper(a) < 'BXX'))
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((upper((a)::text) > 'BAA'::text) AND (upper((a)::text) < 'BXX'::text))
 
   a  
 -----
@@ -480,6 +523,25 @@ Parallel Seq Scan on query_filter_varchar
 (1 row)
 
 SELECT a FROM query_filter_varchar WHERE upper(a) NOT BETWEEN 'BAA' AND 'BXX';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) < 'BAA') OR (upper(a) > 'BXX'))
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_varchar
+  Filter: ((upper((a)::text) < 'BAA'::text) OR (upper((a)::text) > 'BXX'::text))
+
+    a    
+---------
+ t1
+ t2
+ t1
+ at1
+ %t%t%t%
+ _t_t_t_
+(6 rows)
+
+SELECT a FROM query_filter_varchar WHERE upper(a) NOT BETWEEN upper('baa') AND upper('bxx');
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
 QUERY: SELECT a FROM public.query_filter_varchar WHERE ((upper(a) < 'BAA') OR (upper(a) > 'BXX'))
