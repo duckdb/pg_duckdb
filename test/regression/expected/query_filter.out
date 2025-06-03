@@ -149,14 +149,12 @@ EXECUTING:
 Parallel Seq Scan on query_filter_varchar
   Filter: (((a)::text >= 't'::text) AND ((a)::text < 'u'::text))
 
-    a    
----------
+ a  
+----
  t1
  t2
  t1
- %t%t%t%
- _t_t_t_
-(5 rows)
+(3 rows)
 
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
@@ -411,10 +409,11 @@ EXECUTING:
 Parallel Seq Scan on query_filter_varchar
   Filter: (upper((a)::text) < 'B'::text)
 
-  a  
------
+    a    
+---------
  at1
-(1 row)
+ %t%t%t%
+(2 rows)
 
 SELECT a FROM query_filter_varchar WHERE upper(a) > 'B';
 NOTICE:  (PGDuckDB/PostgresTableReader)
@@ -431,9 +430,8 @@ Parallel Seq Scan on query_filter_varchar
  t2
  t1
  btt
- %t%t%t%
  _t_t_t_
-(6 rows)
+(5 rows)
 
 SELECT a FROM query_filter_varchar WHERE upper(a) <= 'B';
 NOTICE:  (PGDuckDB/PostgresTableReader)
@@ -444,10 +442,11 @@ EXECUTING:
 Parallel Seq Scan on query_filter_varchar
   Filter: (upper((a)::text) <= 'B'::text)
 
-  a  
------
+    a    
+---------
  at1
-(1 row)
+ %t%t%t%
+(2 rows)
 
 SELECT a FROM query_filter_varchar WHERE upper(a) >= 'B';
 NOTICE:  (PGDuckDB/PostgresTableReader)
@@ -464,9 +463,8 @@ Parallel Seq Scan on query_filter_varchar
  t2
  t1
  btt
- %t%t%t%
  _t_t_t_
-(6 rows)
+(5 rows)
 
 SELECT a FROM query_filter_varchar WHERE upper(a) BETWEEN 'BAA' AND 'BXX';
 NOTICE:  (PGDuckDB/PostgresTableReader)
@@ -510,15 +508,13 @@ EXECUTING:
 Parallel Seq Scan on query_filter_varchar
   Filter: (lower((a)::text) > 'b'::text)
 
-    a    
----------
+  a  
+-----
  t1
  t2
  t1
  btt
- %t%t%t%
- _t_t_t_
-(6 rows)
+(4 rows)
 
 SELECT a FROM query_filter_varchar WHERE upper(a) IS DISTINCT FROM 'BTT';
 NOTICE:  (PGDuckDB/PostgresTableReader)

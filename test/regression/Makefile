@@ -11,6 +11,7 @@ unexport motherduck_token
 check-regression-duckdb:
 	TEST_DIR=$(CURDIR) $(pg_regress_installcheck) \
 	--encoding=UTF8 \
+	--no-locale \
 	--temp-instance=./tmp_check \
 	--temp-config regression.conf \
 	--load-extension=pg_duckdb \
