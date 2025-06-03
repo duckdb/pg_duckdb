@@ -480,6 +480,9 @@ Parallel Seq Scan on query_filter_varchar
  btt
 (1 row)
 
+-- Interestingly the three below get converted to a COMPARE_BETWEEN operation
+-- by duckdb, eventhough ther's no valid way of representing exclusive ranges
+-- in SQL.
 SELECT a FROM query_filter_varchar WHERE upper(a) >= 'BAA' AND upper(a) <= 'BXX';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 

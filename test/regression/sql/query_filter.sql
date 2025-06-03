@@ -42,6 +42,9 @@ SELECT a FROM query_filter_varchar WHERE upper(a) > 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) <= 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) >= 'B';
 SELECT a FROM query_filter_varchar WHERE upper(a) BETWEEN 'BAA' AND 'BXX';
+-- Interestingly the three below get converted to a COMPARE_BETWEEN operation
+-- by duckdb, eventhough ther's no valid way of representing exclusive ranges
+-- in SQL.
 SELECT a FROM query_filter_varchar WHERE upper(a) >= 'BAA' AND upper(a) <= 'BXX';
 SELECT a FROM query_filter_varchar WHERE upper(a) >= 'BAA' AND upper(a) < 'BXX';
 SELECT a FROM query_filter_varchar WHERE upper(a) > 'BAA' AND upper(a) < 'BXX';
