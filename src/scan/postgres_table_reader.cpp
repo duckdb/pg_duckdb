@@ -121,6 +121,8 @@ PostgresTableReader::PostgresTableReader(const char *table_scan_query, bool coun
 // The caller should hold GlobalProcessLock to ensure thread-safety
 TupleTableSlot *
 PostgresTableReader::InitTupleSlot() {
+	// Return NULL if the table reader has already been cleaned up, which can occur if concurrent threads have completed
+	// the scan.
 	if (cleaned_up) {
 		return NULL;
 	}
@@ -322,6 +324,8 @@ PostgresTableReader::GetNextWorkerTuple() {
 	TupleQueueReader *reader = NULL;
 	MinimalTuple minimal_tuple = NULL;
 	bool readerdone = false;
+	// The loop's stop condition acts as a safeguard in multithreaded scans, ensuring that if one thread calls this
+	// function after another thread has already completed the scan, we do not access invalid readers.
 	for (; next_parallel_reader < nreaders;) {
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
 
