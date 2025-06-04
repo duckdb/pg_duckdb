@@ -101,7 +101,15 @@ FuncToLikeString(const duckdb::string &func_name, const duckdb::BoundFunctionExp
 	}
 
 	std::ostringstream oss;
-	oss << *haystack_str << " LIKE " << *needle_str;
+	oss << *haystack_str;
+	if (func_name == "ilike_escape") {
+		oss << " ILIKE ";
+	} else {
+		oss << " LIKE ";
+	}
+
+	oss << *needle_str;
+
 	if (func_expr.children.size() == 3) {
 		// If there's a third argument, it should be the escape character
 		auto &escape_char = *func_expr.children[2];

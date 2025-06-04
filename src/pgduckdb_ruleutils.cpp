@@ -1161,14 +1161,18 @@ character (`\`) using the `xxx_escape` functions
 struct PGDuckDBGetOperExprContext {
 	const char *pg_op_name;
 	const char *duckdb_op_name;
+	const char *escape_pattern;
 	bool is_likeish_op;
 	bool is_negated;
 };
 
 void *
-pg_duckdb_get_oper_expr_make_ctx(const char *op_name) {
+pg_duckdb_get_oper_expr_make_ctx(const char *op_name, Node **, Node **arg2) {
 	auto ctx = (PGDuckDBGetOperExprContext *)palloc0(sizeof(PGDuckDBGetOperExprContext));
 	ctx->pg_op_name = op_name;
+	ctx->is_likeish_op = false;
+	ctx->is_negated = false;
+	ctx->escape_pattern = "'\\'";
 
 	if (AreStringEqual(op_name, "~~")) {
 		ctx->duckdb_op_name = "LIKE";
@@ -1186,10 +1190,19 @@ pg_duckdb_get_oper_expr_make_ctx(const char *op_name) {
 		ctx->duckdb_op_name = "ILIKE";
 		ctx->is_likeish_op = true;
 		ctx->is_negated = true;
-	} else {
-		ctx->is_likeish_op = false;
-		ctx->is_negated = false;
 	}
+
+	if (ctx->is_likeish_op && IsA(*arg2, FuncExpr)) {
+		auto arg2_func = (FuncExpr *)*arg2;
+		auto func_name = get_func_name(arg2_func->funcid);
+		if (!AreStringEqual(func_name, "like_escape") && !AreStringEqual(func_name, "ilike_escape")) {
+			elog(ERROR, "Unexpected function in LIKE expression: '%s'", func_name);
+		}
+
+		*arg2 = (Node *)linitial(arg2_func->args);
+		ctx->escape_pattern = pgduckdb_deparse_expression((Node *)lsecond(arg2_func->args), nullptr, false, false);
+	}
+
 	return ctx;
 }
 
@@ -1212,7 +1225,7 @@ void
 pg_duckdb_get_oper_expr_suffix(StringInfo buf, void *vctx) {
 	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
 	if (ctx->is_likeish_op) {
-		appendStringInfo(buf, " ESCAPE '\\'");
+		appendStringInfo(buf, " ESCAPE %s", ctx->escape_pattern);
 
 		if (ctx->is_negated) {
 			appendStringInfo(buf, ")");

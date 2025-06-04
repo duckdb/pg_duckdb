@@ -10025,7 +10025,7 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 		Node	   *arg2 = (Node *) lsecond(args);
 
 		char* op_name = generate_operator_name(opno, exprType(arg1), exprType(arg2));
-		void* ctx = pg_duckdb_get_oper_expr_make_ctx(op_name);
+		void* ctx = pg_duckdb_get_oper_expr_make_ctx(op_name, &arg1, &arg2);
 		pg_duckdb_get_oper_expr_prefix(buf, ctx);
 		get_rule_expr_paren(arg1, context, true, (Node *) expr);
 		pg_duckdb_get_oper_expr_middle(buf, ctx);

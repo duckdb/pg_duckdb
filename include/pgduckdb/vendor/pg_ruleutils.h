@@ -51,7 +51,7 @@ extern char *pgduckdb_pg_get_statisticsobjdef_string(Oid statextid);
 
 extern char *pgduckdb_get_list_partvalue_string(Const *val);
 
-extern void* pg_duckdb_get_oper_expr_make_ctx(const char* op_name);
+extern void* pg_duckdb_get_oper_expr_make_ctx(const char*, Node**, Node**);
 extern void pg_duckdb_get_oper_expr_prefix(StringInfo buf, void* ctx);
 extern void pg_duckdb_get_oper_expr_middle(StringInfo buf, void* ctx);
 extern void pg_duckdb_get_oper_expr_suffix(StringInfo buf, void* ctx);
