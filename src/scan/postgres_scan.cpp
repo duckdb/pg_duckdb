@@ -108,8 +108,9 @@ FuncToLikeString(const duckdb::string &func_name, const duckdb::BoundFunctionExp
 		auto escape_str = ExpressionToString(escape_char, column_name);
 		if (!escape_str) {
 			return UnsupportedExpression("escape character expression", escape_char);
+		} else if (*escape_str != "'\\'") {
+			oss << " ESCAPE " << *escape_str;
 		}
-		oss << " ESCAPE " << *escape_str;
 	}
 	return oss.str(); // Return the complete LIKE expression as a string
 }
