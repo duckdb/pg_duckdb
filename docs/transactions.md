@@ -4,7 +4,7 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
 
 ## Transaction Rules
 
-### ✅ Allowed Operations
+### Allowed Operations
 
 **Within the same transaction, you can:**
 
@@ -45,7 +45,7 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
    COMMIT;
    ```
 
-### ❌ Restricted Operations
+### Restricted Operations
 
 **The following is NOT allowed in the same transaction:**
 
@@ -79,7 +79,7 @@ INSERT INTO duckdb_table VALUES (2, 'more_data');
 COMMIT;
 ```
 
-### ⚠️ Warning: Data Consistency Risks
+### Warning: Data Consistency Risks
 
 **This setting is dangerous** and can lead to:
 - **Partial commits**: DuckDB operations might succeed while PostgreSQL operations fail
