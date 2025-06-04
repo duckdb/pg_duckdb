@@ -26,19 +26,35 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | :--- | :---------- |
 |[`approx_count_distinct`](https://duckdb.org/docs/sql/functions/aggregates.html#approximate-aggregates)|Gives the approximate count of distinct elements using HyperLogLog|
 
+## Time Functions
+
+|Name|Description|
+| :--- | :---------- |
+|[`time_bucket`](#time_bucket)|Bucket timestamps into time intervals for time-series analysis|
+
 ## DuckDB Administration Functions
 
 | Name | Description |
 | :--- | :---------- |
 | [`duckdb.install_extension`](#install_extension) | Installs a DuckDB extension |
+| [`duckdb.load_extension`](#load_extension) | Loads a DuckDB extension for the current session |
+| [`duckdb.autoload_extension`](#autoload_extension) | Configures whether an extension should be auto-loaded |
 | [`duckdb.query`](#query) | Runs a SELECT query directly against DuckDB |
 | [`duckdb.raw_query`](#raw_query) | Runs any query directly against DuckDB (meant for debugging)|
 | [`duckdb.recycle_ddb`](#recycle_ddb) | Force a reset the DuckDB instance in the current connection (meant for debugging) |
+
+## Secrets Management Functions
+
+| Name | Description |
+| :--- | :---------- |
+| [`duckdb.create_simple_secret`](#create_simple_secret) | Creates a simple secret for cloud storage access |
 
 ## Motherduck Functions
 
 | Name | Description |
 | :--- | :---------- |
+| [`duckdb.enable_motherduck`](#enable_motherduck) | Enables MotherDuck integration with a token |
+| [`duckdb.is_motherduck_enabled`](#is_motherduck_enabled) | Checks if MotherDuck integration is enabled |
 | [`duckdb.force_motherduck_sync`](#force_motherduck_sync) | Forces a full resync of Motherduck databases and schemas to Postgres (meant for debugging) |
 
 ## Detailed Descriptions
@@ -109,9 +125,9 @@ Reads a JSON file, either from a remote location (via httpfs) or a local file.
 This returns DuckDB rows, you can expand them using `*` or you can select specific columns using the `r['mycol']` syntax. If you want to select specific columns you should give the function call an easy alias, like `r`. For example:
 
 ```sql
-SELECT * FROM read_parquet('file.parquet');
-SELECT r['id'], r['name'] FROM read_parquet('file.parquet') r WHERE r['age'] > 21;
-SELECT COUNT(*) FROM read_parquet('file.parquet');
+SELECT * FROM read_json('file.json');
+SELECT r['id'], r['name'] FROM read_json('file.json') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM read_json('file.json');
 ```
 
 Further information:
@@ -216,9 +232,42 @@ Optional parameters mirror DuckDB's `iceberg_metadata` function based on the Duc
 | version | text | `'version-hint.text'` | |
 | version_name_format | text | `'v%s%s.metadata.json,%s%s.metadata.json'` | |
 
-#### <a name="iceberg_snapshots"></a>`iceberg_snapshots(path TEXT, /* optional parameters */) -> TODO`
+#### <a name="iceberg_snapshots"></a>`iceberg_snapshots(path TEXT, /* optional parameters */) -> SETOF iceberg_snapshot_record`
 
-TODO
+Reads Iceberg snapshot information from an Iceberg table.
+
+To use `iceberg_snapshots`, you must enable the `iceberg` extension:
+
+```sql
+SELECT duckdb.install_extension('iceberg');
+```
+
+This function returns snapshot metadata for an Iceberg table, which can be useful for time travel queries and understanding table history.
+
+```sql
+SELECT * FROM iceberg_snapshots('data/iceberg/table');
+```
+
+Further information:
+
+* [DuckDB Iceberg extension documentation](https://duckdb.org/docs/extensions/iceberg.html)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text | The path, either to a remote httpfs location or a local location (if enabled), of the Iceberg table to read. |
+
+##### Optional Arguments
+
+Optional parameters mirror DuckDB's `iceberg_snapshots` function. To specify optional parameters, use `parameter := 'value'`.
+
+| Name | Type | Default | Description |
+| :--- | :--- | :------ | :---------- |
+| metadata_compression_codec | text | `'none'` | |
+| skip_schema_inference | boolean | false | |
+| version | text | `'version-hint.text'` | |
+| version_name_format | text | `'v%s%s.metadata.json,%s%s.metadata.json'` | |
 
 #### <a name="delta_scan"></a>`delta_scan(path TEXT) -> SETOF duckdb.row`
 
@@ -276,6 +325,39 @@ GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO my_admin;
 | :--- | :--- | :---------- |
 | extension_name | text | The name of the extension to install |
 
+#### <a name="load_extension"></a>`duckdb.load_extension(extension_name TEXT) -> void`
+
+Loads a DuckDB extension for the current session only. Unlike `install_extension`, this doesn't configure the extension to be loaded automatically in future sessions.
+
+```sql
+SELECT duckdb.load_extension('spatial');
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| extension_name | text | The name of the extension to load |
+
+#### <a name="autoload_extension"></a>`duckdb.autoload_extension(extension_name TEXT, autoload BOOLEAN) -> void`
+
+Configures whether an installed extension should be automatically loaded in new sessions.
+
+```sql
+-- Disable auto-loading for an extension
+SELECT duckdb.autoload_extension('spatial', false);
+
+-- Enable auto-loading for an extension
+SELECT duckdb.autoload_extension('spatial', true);
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| extension_name | text | The name of the extension to configure |
+| autoload | boolean | Whether the extension should be auto-loaded |
+
 #### <a name="query"></a>`duckdb.query(query TEXT) -> SETOF duckdb.row`
 
 Executes the given SELECT query directly against DuckDB. This can be useful if DuckDB syntax makes the query easier to write or if you want to use a function that is not exposed by pg_duckdb yet. If you use it because of a missing function in pg_duckdb, please also open an issue on the GitHub repository so that we can add support. For example the below query shows a query that puts `FROM` before `SELECT` and uses a list comprehension. Both of those features are not supported in Postgres.
@@ -284,7 +366,7 @@ Executes the given SELECT query directly against DuckDB. This can be useful if D
 SELECT * FROM duckdb.query('FROM range(10) as a(a) SELECT [a for i in generate_series(0, a)] as arr');
 ```
 
-#### <a name="raw_query"></a>`duckdb.raw_query(extension_name TEXT) -> void`
+#### <a name="raw_query"></a>`duckdb.raw_query(query TEXT) -> void`
 
 Runs an arbitrary query directly against DuckDB. Compared to `duckdb.query`, this function can execute any query, not just SELECT queries. The main downside is that it doesn't return its result as rows, but instead sends the query result to the logs. So the recommendation is to use `duckdb.query` when possible, but if you need to run e.g. some DDL you can use this function.
 
@@ -298,6 +380,79 @@ open DuckDB instance using:
 ```sql
 CALL duckdb.recycle_ddb();
 ```
+
+#### <a name="enable_motherduck"></a>`duckdb.enable_motherduck(token TEXT [, database_name TEXT]) -> void`
+
+Enables MotherDuck integration with the provided authentication token.
+
+```sql
+-- Enable MotherDuck with default database
+SELECT duckdb.enable_motherduck('your_token_here');
+
+-- Enable MotherDuck with specific database
+SELECT duckdb.enable_motherduck('your_token_here', 'my_database');
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| token | text | Your MotherDuck authentication token |
+
+##### Optional Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| database_name | text | Specific MotherDuck database to connect to |
+
+#### <a name="is_motherduck_enabled"></a>`duckdb.is_motherduck_enabled() -> boolean`
+
+Checks whether MotherDuck integration is currently enabled for this session.
+
+```sql
+SELECT duckdb.is_motherduck_enabled();
+```
+
+#### <a name="create_simple_secret"></a>`duckdb.create_simple_secret(type TEXT, key_id TEXT, secret TEXT, region TEXT [, session_token TEXT, endpoint TEXT, url_style TEXT, use_ssl TEXT]) -> void`
+
+Creates a simple secret for accessing cloud storage services like S3, GCS, or R2.
+
+```sql
+-- Create an S3 secret
+SELECT duckdb.create_simple_secret(
+    type := 'S3',
+    key_id := 'your_access_key',
+    secret := 'your_secret_key',
+    region := 'us-east-1'
+);
+
+-- Create an S3 secret with session token
+SELECT duckdb.create_simple_secret(
+    type := 'S3',
+    key_id := 'your_access_key',
+    secret := 'your_secret_key',
+    region := 'us-east-1',
+    session_token := 'your_session_token'
+);
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| type | text | The type of secret ('S3', 'GCS', 'R2', etc.) |
+| key_id | text | The access key ID or equivalent |
+| secret | text | The secret key or equivalent |
+| region | text | The region for the service |
+
+##### Optional Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| session_token | text | Session token for temporary credentials |
+| endpoint | text | Custom endpoint URL |
+| url_style | text | URL style ('vhost' or 'path') |
+| use_ssl | text | Whether to use SSL ('true' or 'false') |
 
 #### <a name="force_motherduck_sync"></a>`duckdb.force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)`
 
@@ -327,3 +482,41 @@ CALL duckdb.force_motherduck_sync(drop_with_cascade := true);
 ```
 
 NOTE: Dropping with cascade will drop all objects that depend on the MotherDuck tables. This includes all views, functions, and tables that depend on the MotherDuck tables. This can be a destructive operation, so use with caution.
+
+#### <a name="time_bucket"></a>`time_bucket(bucket_width INTERVAL, timestamp_col TIMESTAMP [, origin TIMESTAMP]) -> TIMESTAMP`
+
+Buckets timestamps into time intervals for time-series analysis. This function is compatible with TimescaleDB's `time_bucket` function, allowing for easier migration and interoperability.
+
+```sql
+-- Group events by hour
+SELECT time_bucket(INTERVAL '1 hour', created_at) as hour_bucket, COUNT(*)
+FROM events
+GROUP BY hour_bucket
+ORDER BY hour_bucket;
+
+-- Group by 15-minute intervals
+SELECT time_bucket(INTERVAL '15 minutes', timestamp_col), AVG(value)
+FROM sensor_data
+WHERE timestamp_col >= '2024-01-01'
+GROUP BY 1
+ORDER BY 1;
+```
+
+Further information:
+* [DuckDB date_trunc function](https://duckdb.org/docs/sql/functions/dateformat.html#date_trunc)
+* [TimescaleDB time_bucket function](https://docs.timescale.com/api/latest/hyperfunctions/time_bucket/)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| bucket_width | interval | The interval size for bucketing (e.g., '1 hour', '15 minutes') |
+| timestamp_col | timestamp | The timestamp column to bucket |
+
+##### Optional Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| origin | timestamp | The origin point for bucketing. Buckets are aligned to this timestamp. |
+
+**Note**: The `time_bucket` function also supports timezone and time offset parameters for more advanced time bucketing scenarios.

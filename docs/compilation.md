@@ -1,32 +1,43 @@
-# Compilation
+# Compiling pg_duckdb from Source
 
-To build pg_duckdb, you need:
+This guide provides detailed instructions for building pg_duckdb from source on different platforms.
 
-* Postgres 14-17
-* Ubuntu 22.04-24.04 or MacOS
-* Standard set of build tools for building Postgres extensions
-* [Build tools that are required to build DuckDB](https://duckdb.org/docs/dev/building/build_instructions)
-* For full details on required dependencies you can check out our [Github Action](../.github/workflows/build_and_test.yaml).
+## Requirements
 
-To build and install, run:
+- **PostgreSQL**: 14, 15, 16, or 17
+- **Operating Systems**: Ubuntu 22.04-24.04, macOS, or other UNIX-like systems
+- **Build Tools**: Standard PostgreSQL extension build tools
+- **DuckDB Dependencies**: [DuckDB build requirements](https://duckdb.org/docs/dev/building/build_instructions)
 
-```sh
+For full dependency details, see our [GitHub Actions workflow](../.github/workflows/build_and_test.yaml).
+
+## Quick Build
+
+For experienced users with dependencies already installed:
+
+```bash
+git clone https://github.com/duckdb/pg_duckdb
+cd pg_duckdb
 make install
 ```
 
-If you want to link `libduckdb` statically, set `DUCKDB_BUILD=ReleaseStatic` when interacting with `make(1)`.
+**Build Options:**
+- Static linking: `DUCKDB_BUILD=ReleaseStatic make install`
+- Parallel build: `make -j$(nproc) install`
+- Specific PostgreSQL version: `PG_CONFIG=/path/to/pg_config make install`
 
-Add `pg_duckdb` to the `shared_preload_libraries` in your `postgresql.conf` file:
+## Post-Installation Setup
 
-```ini
-shared_preload_libraries = 'pg_duckdb'
-```
+1. **Configure PostgreSQL:**
+   ```ini
+   # Add to postgresql.conf
+   shared_preload_libraries = 'pg_duckdb'
+   ```
 
-Next, create the `pg_duckdb` extension:
-
-```sql
-CREATE EXTENSION pg_duckdb;
-```
+2. **Restart PostgreSQL and create extension:**
+   ```sql
+   CREATE EXTENSION pg_duckdb;
+   ```
 
 # Ubuntu 24.04
 
@@ -95,9 +106,79 @@ $ sudo -u postgres psql
 postgres=# CREATE EXTENSION pg_duckdb;
 ```
 
-# MacOS
+# macOS
 
-TODO
+## Prerequisites
+
+1. **Install Xcode Command Line Tools:**
+   ```bash
+   xcode-select --install
+   ```
+
+2. **Install Homebrew** (if not already installed):
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   ```
+
+3. **Install PostgreSQL:**
+   ```bash
+   # Install PostgreSQL (latest version)
+   brew install postgresql@17
+   
+   # Start PostgreSQL service
+   brew services start postgresql@17
+   
+   # Add PostgreSQL to PATH (add to ~/.zshrc or ~/.bash_profile)
+   export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
+   ```
+
+## Install Build Dependencies
+
+```bash
+# Install required build tools
+brew install cmake ninja pkg-config
+
+# Install additional dependencies for DuckDB
+brew install lz4
+```
+
+## Build and Install
+
+1. **Clone and build:**
+   ```bash
+   git clone https://github.com/duckdb/pg_duckdb
+   cd pg_duckdb
+   make -j$(sysctl -n hw.ncpu)
+   sudo make install
+   ```
+
+2. **Configure PostgreSQL:**
+   ```bash
+   # Find PostgreSQL config directory
+   postgres --help-config
+   
+   # Edit postgresql.conf (adjust path as needed)
+   echo "shared_preload_libraries = 'pg_duckdb'" >> /opt/homebrew/var/postgresql@17/postgresql.conf
+   ```
+
+3. **Restart PostgreSQL:**
+   ```bash
+   brew services restart postgresql@17
+   ```
+
+4. **Create extension:**
+   ```bash
+   psql -d postgres -c "CREATE EXTENSION pg_duckdb;"
+   ```
+
+## Troubleshooting macOS
+
+- **Permission issues**: Use `sudo` for `make install`
+- **Multiple PostgreSQL versions**: Set `PG_CONFIG` to the correct version:
+  ```bash
+  export PG_CONFIG=/opt/homebrew/opt/postgresql@17/bin/pg_config
+  ```
+- **Apple Silicon**: All dependencies should install natively via Homebrew
 
 # FAQ
 

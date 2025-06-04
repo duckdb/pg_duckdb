@@ -1,19 +1,50 @@
 # Types
 
-Able to read many [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are currently supported for use in queries:
+pg_duckdb supports many [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are currently supported for use in queries:
 
-- Integer types (`integer`, `bigint`, etc.)
-- Floating point types (`real`, `double precision`)
-- `numeric` (might get converted to `double precision` internally see known limitations below for details)
-- `text`/`varchar`/`bpchar`
-- `bit` related types, including both fixed and varied sized bit array
-- `bytea`/`blob`
-- `timestamp`/`timstampz`/`date`/`interval`/`timestamp_ns`/`timestamp_ms`/`timestamp_s`
-- `boolean`
-- `uuid`
-- `json`/`jsonb`
-- `domain`
-- `arrays` for all of the above types, but see limitations below about multi-dimensional arrays
+## Basic Types
+
+- **Integer types**: `smallint`, `integer`, `bigint`, `tinyint` (DuckDB)
+- **Floating point types**: `real`, `double precision`
+- **Numeric types**: `numeric`/`decimal` (with limitations, see below)
+- **String types**: `text`, `varchar`, `char`, `bpchar`
+- **Binary types**: `bytea`, `blob`
+- **Boolean**: `boolean`
+- **UUID**: `uuid`
+
+## Date/Time Types
+
+- **Date**: `date`
+- **Time**: `time`, `timetz`
+- **Timestamp**: `timestamp`, `timestamptz`
+- **Interval**: `interval`
+- **High-precision timestamps**: `timestamp_ns`, `timestamp_ms`, `timestamp_s`
+
+## Complex Types
+
+- **JSON**: `json`, `jsonb`
+- **Arrays**: Single and multi-dimensional arrays for all basic types
+- **Bit strings**: `bit`, `varbit` (fixed and variable-length bit arrays)
+- **Domain types**: Custom domain types based on supported base types
+
+## Advanced DuckDB Types (1.0.0+)
+
+- **STRUCT**: Structured data with named fields
+  ```sql
+  SELECT {'name': 'Alice', 'age': 30}::STRUCT(name VARCHAR, age INTEGER);
+  ```
+
+- **MAP**: Key-value pairs
+  ```sql
+  SELECT MAP(['key1', 'key2'], ['value1', 'value2']);
+  ```
+
+- **UNION**: Tagged union types for variant data
+  ```sql
+  SELECT UNION_VALUE(tag := 'string', value := 'hello');
+  ```
+
+- **LIST**: DuckDB's native list type (converted to PostgreSQL arrays)
 
 ## Known limitations
 
@@ -21,19 +52,18 @@ The type support in `pg_duckdb` is not yet complete (and might never be). The
 following are known issues that you might run into. Feel free to contribute PRs
 to fix these limitations:
 
-1. `enum` types are not supported (PR is progress)
+1. `enum` types are not supported (PR in progress)
 2. The DuckDB `decimal` type doesn't support the wide range of values that the Postgres `numeric` type does. To avoid errors when converting between the two, `numeric` is converted to `double precision` internally if `DuckDB` does not support the required precision. Obviously this might cause precision loss of the values.
-3. The DuckDB `STRUCT` type is not supported
-4. The DuckDB `timestamp_ns` type gets truncated to microseconds when it is converted to the Postgres `timestamp` type, which loses precision in the output. Operations on a `timestamp_ns` value, such as sorting/grouping/comparing, will use the full precision.
-5. `jsonb` columns are converted to `json` columns when reading from DuckDB. This is because DuckDB does not have a `jsonb` type.
-6. Many Postgres `json` and `jsonb` functions and operators are not implemented in DuckDB. Instead you can use DuckDB json functions and operators. See the [DuckDB documentation](https://duckdb.org/docs/data/json/json_functions) for more information on these functions.
-7. The DuckDB `tinyint` type is converted to a `char` type in Postgres. This is because Postgres does not have a `tinyint` type. This causes it to be displayed as a hex code instead of a regular number.
-8. Conversion between in Postgres multi-dimensional arrays and DuckDB nested `LIST`s in DuckDB can run into various problems, because neither database supports the thing that the other supports exactly. Specifically in Postgres it's allowed for different arrays in a column to have a different number of dimensions, e.g. `[1]` and `[[1], [2]]` can both occur in the same column. In DuckDB that's not allowed, i.e. the amount of nesting should always be the same. On the other hand, in DuckDB it's valid for different lists at the same nest-level to contain a different number of elements, e.g. `[[1], [1, 2]]`. This is not allowed in Postgres. So conversion between these types is only possible when the arrays follow the subset. Another possible problem that you can run into is that pg_duckdb uses the Postgres column metadata to determine the number of dimensions that an array has. Since Postgres doesn't complain when you add arrays of different dimensions, it's possible that the number of dimensions in the column metadata does not match the actual number of dimensions. To solve this you need to alter the column type:
+3. The DuckDB `timestamp_ns` type gets truncated to microseconds when it is converted to the Postgres `timestamp` type, which loses precision in the output. Operations on a `timestamp_ns` value, such as sorting/grouping/comparing, will use the full precision.
+4. `jsonb` columns are converted to `json` columns when reading from DuckDB. This is because DuckDB does not have a `jsonb` type.
+5. Many Postgres `json` and `jsonb` functions and operators are not implemented in DuckDB. Instead you can use DuckDB json functions and operators. See the [DuckDB documentation](https://duckdb.org/docs/data/json/json_functions) for more information on these functions.
+6. The DuckDB `tinyint` type is converted to a `smallint` type in Postgres (as of recent versions) for better compatibility.
+7. Conversion between in Postgres multi-dimensional arrays and DuckDB nested `LIST`s in DuckDB can run into various problems, because neither database supports the thing that the other supports exactly. Specifically in Postgres it's allowed for different arrays in a column to have a different number of dimensions, e.g. `[1]` and `[[1], [2]]` can both occur in the same column. In DuckDB that's not allowed, i.e. the amount of nesting should always be the same. On the other hand, in DuckDB it's valid for different lists at the same nest-level to contain a different number of elements, e.g. `[[1], [1, 2]]`. This is not allowed in Postgres. So conversion between these types is only possible when the arrays follow the subset. Another possible problem that you can run into is that pg_duckdb uses the Postgres column metadata to determine the number of dimensions that an array has. Since Postgres doesn't complain when you add arrays of different dimensions, it's possible that the number of dimensions in the column metadata does not match the actual number of dimensions. To solve this you need to alter the column type:
     ```sql
     -- This configures the column to be a 3-dimensional array of text
     ALTER TABLE s ALTER COLUMN a SET DATA TYPE text[][][];
     ```
-9. For the `domain` actually, during the execution of the INSERT operation, the check regarding `domain` is conducted by PostgreSQL rather than DuckDB. When we execute the SELECT operation and the type of the queried field is a `domain`, we will convert it to the corresponding base type and let DuckDB handle it.
+8. For the `domain` type, during INSERT operations, the domain constraints are validated by PostgreSQL rather than DuckDB. When executing SELECT operations on `domain` type fields, the type is converted to its corresponding base type for DuckDB processing.
 
 ## Special types
 

@@ -5,12 +5,15 @@ The following extensions are installed by default:
 * httpfs
 * json
 
-Supported extensions for installation are:
+Supported core extensions for installation are:
 
-* iceberg
-* delta
+* **iceberg** - Apache Iceberg support
+* **delta** - Delta Lake support
+* **azure** - Azure Blob Storage connectivity
+* **spatial** - Geospatial functions and types
+* **httpfs** - HTTP/S3 file system support
 
-Installing other extensions may work, but is at your own risk.
+Community extensions are also supported (requires configuration). Installing other extensions may work, but is at your own risk.
 
 ## Installing an extension
 
@@ -20,6 +23,24 @@ It's also possible to manually install an extension. This can be useful when thi
 
 ```sql
 SELECT duckdb.install_extension('extname');
+```
+
+## Community Extensions
+
+Community extensions can be installed when `duckdb.allow_community_extensions` is enabled. This requires superuser privileges to configure for security reasons.
+
+```sql
+-- Enable community extensions (superuser required)
+SET duckdb.allow_community_extensions = true;
+
+-- Install a community extension
+SELECT duckdb.install_extension('prql', 'community');
+```
+
+**Note**: In some environments, you may also need to enable unsigned extensions:
+
+```sql
+SET duckdb.allow_unsigned_extensions = true;
 ```
 
 ## Implementation
@@ -32,7 +53,7 @@ SELECT duckdb.install_extension('iceberg');
 -- view currently installed extensions
 SELECT * FROM duckdb.extensions;
 -- Change an extension to stop being automatically loaded in new connections
-SELECT duckdb.auotoload_extension('iceberg', false);
+SELECT duckdb.autoload_extension('iceberg', false);
 -- For such extensions, you can still load them manually in a session
 SELECT duckdb.load_extension('iceberg');
 -- You can also install community extensions
@@ -41,19 +62,43 @@ SELECT duckdb.install_extension('prql', 'community');
 
 ## Supported Extensions
 
-You can install any extension DuckDB extension, but you might run into various issues when trying to use them from Postgres. Often you should be able to work around such issues by using `duckdb.query` or `duckdb.raw_query`. For some extensions pg_duckdb has added dedicated support to Postgres. These extensions are listed below.
+You can install any DuckDB extension, but you might run into various issues when trying to use them from PostgreSQL. Often you should be able to work around such issues by using `duckdb.query` or `duckdb.raw_query`. For some extensions pg_duckdb has added dedicated support to PostgreSQL. These extensions are listed below.
 
-### `azure`
+### Core Extensions
 
-Allows reading files from Azure Blob Storage by using `az://...` filepaths.
+#### `httpfs`
+Enables reading from HTTP/HTTPS URLs and cloud storage (S3, GCS, R2). Pre-installed by default.
 
-### `iceberg`
+#### `json` 
+Provides DuckDB JSON functions and operators. Pre-installed by default.
 
-Iceberg support adds functions to read Iceberg tables and metadata. For a list of iceberg functions, see [pg_duckdb Functions](functions.md).
+#### `azure`
+Allows reading files from Azure Blob Storage using `az://...` filepaths.
 
-### `delta`
+#### `iceberg`
+Apache Iceberg support adds functions to read Iceberg tables and metadata. For a complete list of iceberg functions, see [pg_duckdb Functions](functions.md).
 
-Delta support adds the ability to read Delta Lake files via [delta_scan](functions.md#delta_scan).
+#### `delta`
+Delta Lake support adds the ability to read Delta Lake files via [delta_scan](functions.md#delta_scan).
+
+#### `spatial`
+Geospatial functions and data types for working with geometric data.
+
+### Extension Usage Examples
+
+```sql
+-- Install and use Iceberg
+SELECT duckdb.install_extension('iceberg');
+SELECT * FROM iceberg_scan('s3://bucket/iceberg-table/');
+
+-- Install and use Delta
+SELECT duckdb.install_extension('delta');
+SELECT * FROM delta_scan('s3://bucket/delta-table/');
+
+-- Install spatial extension for geospatial queries
+SELECT duckdb.install_extension('spatial');
+SELECT ST_Distance(point1, point2) FROM locations;
+```
 
 ## Security considerations
 

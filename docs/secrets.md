@@ -1,63 +1,154 @@
-# Secrets
+# Data Lake Secrets Management
 
-DuckDB secrets can be configured either using utility functions or with a Foreign Data Wrapper for more advanced cases.
+pg_duckdb provides secure credential management for accessing cloud storage and data lakes. Secrets can be configured using simple utility functions or advanced Foreign Data Wrapper configurations.
 
-## Simple secrets
+## Quick Start: Simple Secrets
 
-For example with utility functions:
+The easiest way to configure credentials is using the utility functions:
+
+### AWS S3 / Compatible Storage
 
 ```sql
 SELECT duckdb.create_simple_secret(
-    type          := 'S3',          -- Type: one of (S3, GCS, R2)
-    key_id        := 'access_key_id',
-    secret        := 'xxx',
-    session_token := 'yyy',         -- (optional)
-    region        := 'us-east-1',   -- (optional)
-    url_style     := 'xxx',         -- (optional)
-    provider      := 'xxx',         -- (optional)
-    endpoint      := 'xxx'          -- (optional)
-)
+    type          := 'S3',                    -- Type: S3, GCS, or R2
+    key_id        := 'your_access_key_id',
+    secret        := 'your_secret_access_key',
+    session_token := 'session_token',         -- (optional, for temporary credentials)
+    region        := 'us-east-1',             -- (optional, AWS region)
+    endpoint      := 'https://s3.amazonaws.com', -- (optional, for S3-compatible storage)
+    url_style     := 'path'                   -- (optional, 'path' or 'vhost')
+);
 ```
 
-For Azure secrets you may use:
+### Google Cloud Storage
+
 ```sql
-SELECT duckdb.create_azure_secret('< connection string >');
+SELECT duckdb.create_simple_secret(
+    type     := 'GCS',
+    key_id   := 'your_access_key_id',
+    secret   := 'your_secret_access_key'
+);
 ```
 
-## Secrets with `credential_chain` provider:
-
-For more advanced use-cases, one can define secrets with a `SERVER` (and `USER MAPPING`) on `duckdb` Foreign Data Wrapper:
+### Cloudflare R2
 
 ```sql
-CREATE SERVER my_s3_secret
+SELECT duckdb.create_simple_secret(
+    type     := 'R2',
+    key_id   := 'your_access_key_id',
+    secret   := 'your_secret_access_key',
+    endpoint := 'https://your-account.r2.cloudflarestorage.com'
+);
+```
+
+### Azure Blob Storage
+
+```sql
+SELECT duckdb.create_azure_secret('<your_connection_string>');
+```
+
+**Note**: Azure write operations are not yet supported. See the [current discussion](https://github.com/duckdb/duckdb-azure/issues/44) for updates.
+
+## Advanced Configuration: Foreign Data Wrapper
+
+For advanced use cases, you can define secrets using PostgreSQL's Foreign Data Wrapper system:
+
+### Using Credential Chain (AWS)
+
+For AWS environments with IAM roles or instance profiles:
+
+```sql
+CREATE SERVER aws_s3_secret
 TYPE 's3'
 FOREIGN DATA WRAPPER duckdb
 OPTIONS (PROVIDER 'credential_chain');
 ```
 
-## Secrets with `secret_access_key`:
+This automatically uses AWS credential chain (environment variables, instance profile, etc.).
 
-When your secret contains sensitive information, you need to create an additional `USER MAPPING` like this:
+### Using Explicit Credentials
+
+For explicit credential management with separate sensitive information:
 
 ```sql
-CREATE SERVER my_s3_secret TYPE 's3' FOREIGN DATA WRAPPER duckdb;
+-- Create server with non-sensitive options
+CREATE SERVER my_s3_secret 
+TYPE 's3' 
+FOREIGN DATA WRAPPER duckdb
+OPTIONS (
+    region 'us-west-2',
+    endpoint 'https://s3.amazonaws.com'
+);
 
-CREATE USER MAPPING FOR CURRENT_USER SERVER my_s3_secret
-OPTIONS (KEY_ID 'my_secret_key', SECRET 'my_secret_value');
+-- Create user mapping with sensitive credentials
+CREATE USER MAPPING FOR CURRENT_USER 
+SERVER my_s3_secret
+OPTIONS (
+    key_id 'your_access_key_id', 
+    secret 'your_secret_access_key'
+);
 ```
 
-You may use any of the supported DuckDB secret type as long as the related extension is installed.
-Please refer to this page for more: https://duckdb.org/docs/stable/configuration/secrets_manager.html
+### Environment Variables
 
-## How it works
+Credentials can also be read from environment variables:
 
-Secrets are stored in a combination of `SERVER` and `USER MAPPING` on `duckdb` Foreign Data Wrapper. The `USER MAPPING` hosts the sensitive elements like `token`, `session_token` and `secret`.
-Each time a DuckDB instance is created by pg_duckdb, and when a secret is modified, the secrets are loaded into the DuckDB secrets manager as non-persistent secrets.
+```sql
+-- Use ::FROM_ENV:: to read from environment variables
+CREATE USER MAPPING FOR CURRENT_USER 
+SERVER my_s3_secret
+OPTIONS (
+    key_id '::FROM_ENV::',     -- Reads from AWS_ACCESS_KEY_ID
+    secret '::FROM_ENV::'      -- Reads from AWS_SECRET_ACCESS_KEY
+);
+```
 
-## Further reading
+## Supported Secret Types
 
-* [DuckDB Secrets Manager](https://duckdb.org/docs/configuration/secrets_manager.html)
-* [S3 API Support](https://duckdb.org/docs/extensions/httpfs/s3api.html)
-* [Google Cloud Storage Import](https://duckdb.org/docs/guides/network_cloud_storage/gcs_import.html)
-* [Cloudflare R2 Import](https://duckdb.org/docs/guides/network_cloud_storage/cloudflare_r2_import.html)
-* [Azure Extension](https://duckdb.org/docs/extensions/azure)
+You can use any DuckDB secret type, provided the related extension is installed. See the [DuckDB Secrets Manager documentation](https://duckdb.org/docs/configuration/secrets_manager.html) for complete details.
+
+## How Secrets Work
+
+Secrets are stored using PostgreSQL's Foreign Data Wrapper system:
+
+- **SERVER**: Stores non-sensitive configuration (endpoints, regions, providers)
+- **USER MAPPING**: Stores sensitive credentials (access keys, secrets, tokens)
+
+When a DuckDB instance is created or when secrets are modified, pg_duckdb automatically loads the secrets into DuckDB's secrets manager as non-persistent secrets.
+
+## Complete Example
+
+Here's a complete workflow for setting up S3 access:
+
+```sql
+-- 1. Create simple secret (recommended for most users)
+SELECT duckdb.create_simple_secret(
+    type   := 'S3',
+    key_id := 'AKIAIOSFODNN7EXAMPLE',
+    secret := 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+    region := 'us-east-1'
+);
+
+-- 2. Test the secret by reading a file
+SELECT COUNT(*) FROM read_parquet('s3://your-bucket/data.parquet');
+
+-- 3. Write data to S3
+COPY (SELECT * FROM my_table) TO 's3://your-bucket/export.parquet';
+```
+
+## Troubleshooting
+
+**Common Issues:**
+
+- **Permission denied**: Verify your credentials and bucket permissions
+- **Region mismatch**: Ensure the region matches your bucket's location
+- **Endpoint issues**: For S3-compatible storage, verify the endpoint URL
+- **Network access**: Ensure your PostgreSQL server can reach the storage endpoints
+
+## Further Reading
+
+- [DuckDB Secrets Manager](https://duckdb.org/docs/configuration/secrets_manager.html)
+- [S3 API Support](https://duckdb.org/docs/extensions/httpfs/s3api.html)
+- [Google Cloud Storage Import](https://duckdb.org/docs/guides/network_cloud_storage/gcs_import.html)
+- [Cloudflare R2 Import](https://duckdb.org/docs/guides/network_cloud_storage/cloudflare_r2_import.html)
+- [Azure Extension](https://duckdb.org/docs/extensions/azure)

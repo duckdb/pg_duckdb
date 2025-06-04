@@ -1,15 +1,163 @@
 # Transactions in pg_duckdb
 
-Multi-statement transactions are supported in pg_duckdb. There is one important restriction on this though, which is is currently necessary to ensure the expected ACID guarantees: You cannot write to both a Postgres table and a DuckDB table in the same transaction.
+pg_duckdb supports multi-statement transactions with specific rules to ensure ACID guarantees and data consistency.
 
-Similarly you are allowed to do DDL (like `CREATE`/`DROP TABLE`) on DuckDB tables inside a transaction, but it's not allowed to combine such statements with DDL involving Postgres objects.
+## Transaction Rules
 
-Finally it's possible to disable this restriction completely, and allow writes to both DuckDB and Postgres in the same transaction by setting `duckdb.unsafe_allow_mixed_transactions` to `true`. **This is at your own risk** and can result in the transaction being committed only in DuckDB, but not in Postgres. This can lead to inconsistencies and even data loss. For example the following code might result in deleting the `duckdb_table`, while not copying its contents to `pg_table`:
+### ✅ Allowed Operations
+
+**Within the same transaction, you can:**
+
+1. **Read from both PostgreSQL and DuckDB tables:**
+   ```sql
+   BEGIN;
+   SELECT COUNT(*) FROM postgres_table;
+   SELECT COUNT(*) FROM duckdb_table;
+   SELECT * FROM read_parquet('s3://bucket/file.parquet');
+   COMMIT;
+   ```
+
+2. **Write to PostgreSQL tables only:**
+   ```sql
+   BEGIN;
+   INSERT INTO postgres_table SELECT * FROM another_postgres_table;
+   UPDATE postgres_table SET status = 'processed';
+   COMMIT;
+   ```
+
+3. **Write to DuckDB tables only:**
+   ```sql
+   BEGIN;
+   CREATE TABLE duckdb_table_new USING duckdb AS SELECT * FROM read_parquet('s3://data.parquet');
+   INSERT INTO duckdb_table_new VALUES (1, 'test');
+   DROP TABLE duckdb_table_old;
+   COMMIT;
+   ```
+
+4. **DuckDB DDL operations:**
+   ```sql
+   BEGIN;
+   CREATE TABLE analytics USING duckdb AS 
+     SELECT region, COUNT(*) as sales_count 
+     FROM read_csv('s3://sales/*.csv') 
+     GROUP BY region;
+   ALTER TABLE analytics ADD COLUMN created_at TIMESTAMP DEFAULT NOW();
+   COMMIT;
+   ```
+
+### ❌ Restricted Operations
+
+**The following is NOT allowed in the same transaction:**
+
+```sql
+-- This will fail:
+BEGIN;
+INSERT INTO postgres_table VALUES (1, 'data');
+INSERT INTO duckdb_table VALUES (2, 'more_data');  -- Error!
+COMMIT;
+```
+
+**Mixed DDL operations:**
+```sql
+-- This will fail:
+BEGIN;
+CREATE TABLE postgres_table (id int);
+CREATE TABLE duckdb_table USING duckdb (id int, name text);  -- Error!
+COMMIT;
+```
+
+## Advanced: Unsafe Mixed Transactions
+
+For advanced users who understand the risks, mixed transactions can be enabled:
 
 ```sql
 BEGIN;
 SET LOCAL duckdb.unsafe_allow_mixed_transactions TO true;
-CREATE TABLE pg_table AS SELECT * FROM duckdb_table;
-DROP TABLE duckdb_table;
+-- Now mixed operations are allowed (at your own risk)
+INSERT INTO postgres_table VALUES (1, 'data');
+INSERT INTO duckdb_table VALUES (2, 'more_data');
 COMMIT;
 ```
+
+### ⚠️ Warning: Data Consistency Risks
+
+**This setting is dangerous** and can lead to:
+- **Partial commits**: DuckDB operations might succeed while PostgreSQL operations fail
+- **Data loss**: Operations might be committed in one system but not the other
+- **Inconsistent state**: Your application might see inconsistent data
+
+**Example of potential data loss:**
+```sql
+BEGIN;
+SET LOCAL duckdb.unsafe_allow_mixed_transactions TO true;
+-- This could delete the DuckDB table but fail to create the PostgreSQL table
+CREATE TABLE pg_backup AS SELECT * FROM duckdb_table;  -- Might fail
+DROP TABLE duckdb_table;                               -- Might succeed
+COMMIT;
+-- Result: Data lost if pg_backup creation failed!
+```
+
+## Best Practices
+
+1. **Separate transactions**: Use separate transactions for PostgreSQL and DuckDB writes
+   ```sql
+   -- Good: Separate transactions
+   BEGIN;
+   INSERT INTO postgres_table SELECT * FROM source_table;
+   COMMIT;
+   
+   BEGIN;
+   INSERT INTO duckdb_table SELECT * FROM read_parquet('s3://data.parquet');
+   COMMIT;
+   ```
+
+2. **Use CTEs for complex operations:**
+   ```sql
+   -- Good: Single read transaction with CTE
+   BEGIN;
+   WITH combined_data AS (
+       SELECT * FROM postgres_table
+       UNION ALL
+       SELECT * FROM read_parquet('s3://external.parquet')
+   )
+   SELECT region, SUM(amount) 
+   FROM combined_data 
+   GROUP BY region;
+   COMMIT;
+   ```
+
+3. **Leverage DuckDB for ETL:**
+   ```sql
+   -- Good: DuckDB-only ETL transaction
+   BEGIN;
+   CREATE TEMP TABLE processed_data USING duckdb AS
+   SELECT 
+       customer_id,
+       SUM(amount) as total_spend,
+       COUNT(*) as order_count
+   FROM read_parquet('s3://raw-data/*.parquet')
+   WHERE date >= '2024-01-01'
+   GROUP BY customer_id;
+   
+   -- Export results
+   COPY processed_data TO 's3://processed/customer_summary.parquet';
+   COMMIT;
+   ```
+
+## Transaction Isolation
+
+- **PostgreSQL tables**: Follow standard PostgreSQL isolation levels
+- **DuckDB tables**: Use DuckDB's transaction semantics
+- **Mixed reads**: Snapshot isolation applied per system
+
+## Troubleshooting
+
+**Common error messages:**
+
+- `"cannot write to both DuckDB and PostgreSQL in the same transaction"`: Separate your writes into different transactions
+- `"DDL operations cannot be mixed"`: Avoid mixing DDL operations across systems
+
+**Performance tips:**
+- Use `COPY` for bulk data movement between systems
+- Leverage temporary tables for intermediate results
+- Consider materializing complex joins in DuckDB tables
