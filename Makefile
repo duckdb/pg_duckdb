@@ -104,7 +104,10 @@ installcheck: all install
 pycheck: all install
 	LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH} pytest -n $(PYTEST_CONCURRENCY)
 
-check: installcheck pycheck
+check: installcheck pycheck schedulecheck
+
+schedulecheck:
+	./scripts/schedule-check.sh
 
 duckdb: $(FULL_DUCKDB_LIB)
 
