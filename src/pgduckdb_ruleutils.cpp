@@ -1149,8 +1149,23 @@ pgduckdb_add_tablesample_percent(const char *tsm_name, StringInfo buf, int num_a
 	appendStringInfoChar(buf, '%');
 }
 
+/*
+DuckDB doesn't use an escape character in LIKE expressions by default.
+Cf.
+https://github.com/duckdb/duckdb/blob/12183c444dd729daad5cb463e59f3112a806a88b/src/function/scalar/string/like.cpp#L152
+
+So when converting the PG Query to string, we force the escape
+character (`\`) using the `xxx_escape` functions
+*/
+
+struct PGDuckDBGetOperExprContext {
+	const char *pg_op_name;
+	const char *duckdb_op_name;
+	bool is_duckdb_op;
+};
+
 const char *
-pg_duckdb_op_to_duckdb_func_name(const char *op_name) {
+operator_to_duckdb_func_name(const char *op_name) {
 	if (AreStringEqual(op_name, "~~")) {
 		return "like_escape";
 	} else if (AreStringEqual(op_name, "!~~")) {
@@ -1162,5 +1177,40 @@ pg_duckdb_op_to_duckdb_func_name(const char *op_name) {
 	}
 
 	return nullptr;
+}
+
+void *
+pg_duckdb_get_oper_expr_make_ctx(const char *op_name) {
+	auto ctx = (PGDuckDBGetOperExprContext *)palloc0(sizeof(PGDuckDBGetOperExprContext));
+	ctx->pg_op_name = op_name;
+	ctx->duckdb_op_name = operator_to_duckdb_func_name(op_name);
+	ctx->is_duckdb_op = ctx->duckdb_op_name != nullptr;
+	return ctx;
+}
+
+void
+pg_duckdb_get_oper_expr_prefix(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_duckdb_op) {
+		appendStringInfo(buf, "%s(", ctx->duckdb_op_name);
+	}
+}
+
+void
+pg_duckdb_get_oper_expr_middle(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_duckdb_op) {
+		appendStringInfo(buf, ", ");
+	} else {
+		appendStringInfo(buf, " %s ", ctx->pg_op_name);
+	}
+}
+
+void
+pg_duckdb_get_oper_expr_suffix(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_duckdb_op) {
+		appendStringInfo(buf, ", '\\')");
+	}
 }
 }

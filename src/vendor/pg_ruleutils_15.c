@@ -10034,22 +10034,12 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 		Node	   *arg2 = (Node *) lsecond(args);
 
 		char* op_name = generate_operator_name(opno, exprType(arg1), exprType(arg2));
-		const char* duckdb_func_name = pg_duckdb_op_to_duckdb_func_name(op_name);
-		if (duckdb_func_name)
-		{
-			appendStringInfo(buf, "%s(", duckdb_func_name);
-			get_rule_expr_paren(arg1, context, true, (Node *) expr);
-			appendStringInfo(buf, ", ");
-			get_rule_expr_paren(arg2, context, true, (Node *) expr);
-			appendStringInfo(buf, ", '\\')");
-		}
-		else
-		{
-			// Fall back to the original behavior
-			get_rule_expr_paren(arg1, context, true, (Node *) expr);
-			appendStringInfo(buf, " %s ", op_name);
-			get_rule_expr_paren(arg2, context, true, (Node *) expr);
-		}
+		void* ctx = pg_duckdb_get_oper_expr_make_ctx(op_name);
+		pg_duckdb_get_oper_expr_prefix(buf, ctx);
+		get_rule_expr_paren(arg1, context, true, (Node *) expr);
+		pg_duckdb_get_oper_expr_middle(buf, ctx);
+		get_rule_expr_paren(arg2, context, true, (Node *) expr);
+		pg_duckdb_get_oper_expr_suffix(buf, ctx);
 	}
 	else
 	{
