@@ -1161,56 +1161,62 @@ character (`\`) using the `xxx_escape` functions
 struct PGDuckDBGetOperExprContext {
 	const char *pg_op_name;
 	const char *duckdb_op_name;
-	bool is_duckdb_op;
+	bool is_likeish_op;
+	bool is_negated;
 };
-
-const char *
-operator_to_duckdb_func_name(const char *op_name) {
-	if (AreStringEqual(op_name, "~~")) {
-		return "like_escape";
-	} else if (AreStringEqual(op_name, "!~~")) {
-		return "NOT like_escape";
-	} else if (AreStringEqual(op_name, "~~*")) {
-		return "ilike_escape";
-	} else if (AreStringEqual(op_name, "!~~*")) {
-		return "NOT ilike_escape";
-	}
-
-	return nullptr;
-}
 
 void *
 pg_duckdb_get_oper_expr_make_ctx(const char *op_name) {
 	auto ctx = (PGDuckDBGetOperExprContext *)palloc0(sizeof(PGDuckDBGetOperExprContext));
 	ctx->pg_op_name = op_name;
-	ctx->duckdb_op_name = operator_to_duckdb_func_name(op_name);
-	ctx->is_duckdb_op = ctx->duckdb_op_name != nullptr;
+
+	if (AreStringEqual(op_name, "~~")) {
+		ctx->duckdb_op_name = "LIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = false;
+	} else if (AreStringEqual(op_name, "~~*")) {
+		ctx->duckdb_op_name = "ILIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = false;
+	} else if (AreStringEqual(op_name, "!~~")) {
+		ctx->duckdb_op_name = "LIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = true;
+	} else if (AreStringEqual(op_name, "!~~*")) {
+		ctx->duckdb_op_name = "ILIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = true;
+	} else {
+		ctx->is_likeish_op = false;
+		ctx->is_negated = false;
+	}
 	return ctx;
 }
 
 void
 pg_duckdb_get_oper_expr_prefix(StringInfo buf, void *vctx) {
 	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
-	if (ctx->is_duckdb_op) {
-		appendStringInfo(buf, "%s(", ctx->duckdb_op_name);
+	if (ctx->is_likeish_op && ctx->is_negated) {
+		appendStringInfo(buf, "NOT (");
 	}
 }
 
 void
 pg_duckdb_get_oper_expr_middle(StringInfo buf, void *vctx) {
 	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
-	if (ctx->is_duckdb_op) {
-		appendStringInfo(buf, ", ");
-	} else {
-		appendStringInfo(buf, " %s ", ctx->pg_op_name);
-	}
+	auto op = ctx->duckdb_op_name ? ctx->duckdb_op_name : ctx->pg_op_name;
+	appendStringInfo(buf, " %s ", op);
 }
 
 void
 pg_duckdb_get_oper_expr_suffix(StringInfo buf, void *vctx) {
 	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
-	if (ctx->is_duckdb_op) {
-		appendStringInfo(buf, ", '\\')");
+	if (ctx->is_likeish_op) {
+		appendStringInfo(buf, " ESCAPE '\\'");
+
+		if (ctx->is_negated) {
+			appendStringInfo(buf, ")");
+		}
 	}
 }
 }
