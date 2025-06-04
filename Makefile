@@ -5,6 +5,8 @@ EXTENSION = pg_duckdb
 DATA = pg_duckdb.control $(wildcard sql/pg_duckdb--*.sql)
 
 SRCS = $(wildcard src/*.cpp src/*/*.cpp)
+DUCKLAKE_SRCS_DIR = third_party/ducklake/src
+SRCS += $(wildcard $(DUCKLAKE_SRCS_DIR)/common/*.cpp $(DUCKLAKE_SRCS_DIR)/functions/*.cpp $(DUCKLAKE_SRCS_DIR)/storage/*.cpp $(DUCKLAKE_SRCS_DIR)/metadata_manager/*.cpp)
 OBJS = $(subst .cpp,.o, $(SRCS))
 
 C_SRCS = $(wildcard src/*.c src/*/*.c)
@@ -60,7 +62,7 @@ endif
 
 COMPILER_FLAGS=-Wno-sign-compare -Wshadow -Wswitch -Wunused-parameter -Wunreachable-code -Wno-unknown-pragmas -Wall -Wextra ${ERROR_ON_WARNING}
 
-override PG_CPPFLAGS += -Iinclude -isystem third_party/duckdb/src/include -isystem third_party/duckdb/third_party/re2 -isystem $(INCLUDEDIR_SERVER) ${COMPILER_FLAGS}
+override PG_CPPFLAGS += -Iinclude -I$(DUCKLAKE_SRCS_DIR)/include -isystem third_party/duckdb/src/include -isystem third_party/duckdb/third_party/re2 -isystem $(INCLUDEDIR_SERVER) ${COMPILER_FLAGS}
 override PG_CXXFLAGS += -std=c++17 ${DUCKDB_BUILD_CXX_FLAGS} ${COMPILER_FLAGS} -Wno-register -Weffc++
 # Ignore declaration-after-statement warnings in our code. Postgres enforces
 # this because their ancient style guide requires it, but we don't care. It

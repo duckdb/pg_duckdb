@@ -23,6 +23,8 @@
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 
+#include "pgducklake/pgducklake_storage.hpp"
+
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
@@ -167,8 +169,10 @@ DuckDBManager::Initialize() {
 
 	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
 	dbconfig.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>();
+	dbconfig.storage_extensions["pgducklake"] = duckdb::make_uniq<PgDuckLakeStorageExtension>();
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
+	database->instance->SetExtensionLoaded("pgducklake", extension_install_info);
 
 	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
@@ -180,6 +184,7 @@ DuckDBManager::Initialize() {
 	pgduckdb::DuckDBQueryOrThrow(context, "SET default_collation =" +
 	                                          duckdb::KeywordHelper::WriteQuoted(duckdb_default_collation));
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
+	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgducklake' (TYPE pgducklake)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
 	if (pgduckdb::IsMotherDuckEnabled()) {

@@ -35,6 +35,7 @@ typedef struct DuckdbScanState {
 	CustomScanState css; /* must be first field */
 	const CustomScan *custom_scan;
 	const Query *query;
+	EState *estate;
 	ParamListInfo params;
 	duckdb::Connection *duckdb_connection;
 	duckdb::PreparedStatement *prepared_statement;
@@ -145,6 +146,7 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 
 	duckdb_scan_state->duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
 	duckdb_scan_state->prepared_statement = prepared_query.release();
+	duckdb_scan_state->estate = estate;
 	duckdb_scan_state->params = estate->es_param_list_info;
 	duckdb_scan_state->is_executed = false;
 	duckdb_scan_state->fetch_next = true;
@@ -269,6 +271,11 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 				ExecClearTuple(slot);
 				return slot;
 			}
+		}
+
+		if (duckdb_scan_state->query_results->properties.return_type == duckdb::StatementReturnType::CHANGED_ROWS) {
+			duckdb_scan_state->estate->es_processed =
+			    duckdb_scan_state->current_data_chunk->GetValue(0, 0).GetValue<int64_t>();
 		}
 
 		MemoryContextReset(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
