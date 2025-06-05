@@ -25,6 +25,8 @@ struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 private:
 	int ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name, duckdb::string &filters,
 	                        bool is_optional_filter_parent);
+	PostgresScanGlobalState(const PostgresScanGlobalState &) = delete;
+	PostgresScanGlobalState &operator=(const PostgresScanGlobalState &) = delete;
 
 public:
 	Snapshot snapshot;
@@ -48,6 +50,10 @@ struct PostgresScanLocalState : public duckdb::LocalTableFunctionState {
 
 	size_t output_vector_size;
 	bool exhausted_scan;
+
+private:
+	PostgresScanLocalState(const PostgresScanLocalState &) = delete;
+	PostgresScanLocalState &operator=(const PostgresScanLocalState &) = delete;
 };
 
 // PostgresScanFunctionData
@@ -59,6 +65,10 @@ struct PostgresScanFunctionData : public duckdb::TableFunctionData {
 	Relation rel;
 	uint64_t cardinality;
 	Snapshot snapshot;
+
+private:
+	PostgresScanFunctionData(const PostgresScanFunctionData &) = delete;
+	PostgresScanFunctionData &operator=(const PostgresScanFunctionData &) = delete;
 };
 
 // PostgresScanTableFunction

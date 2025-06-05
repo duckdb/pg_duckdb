@@ -11,7 +11,7 @@
 namespace pgduckdb {
 
 PostgresTransactionManager::PostgresTransactionManager(duckdb::AttachedDatabase &_db_p, PostgresCatalog &_catalog)
-    : TransactionManager(_db_p), catalog(_catalog) {
+    : TransactionManager(_db_p), catalog(_catalog), transaction_lock(), transactions() {
 }
 
 duckdb::Transaction &

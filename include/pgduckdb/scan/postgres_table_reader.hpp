@@ -15,6 +15,9 @@ public:
 	void Cleanup();
 
 private:
+	PostgresTableReader(const PostgresTableReader &) = delete;
+	PostgresTableReader &operator=(const PostgresTableReader &) = delete;
+
 	void InitUnsafe(const char *table_scan_query, bool count_tuples_only);
 	void InitRunWithParallelScan(PlannedStmt *, bool);
 	void CleanupUnsafe();
