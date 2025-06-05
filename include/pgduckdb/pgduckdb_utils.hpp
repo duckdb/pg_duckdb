@@ -41,6 +41,10 @@ struct PgExceptionGuard {
 
 	sigjmp_buf *_save_exception_stack;
 	ErrorContextCallback *_save_context_stack;
+
+private:
+	PgExceptionGuard(const PgExceptionGuard &) = delete;
+	PgExceptionGuard &operator=(const PgExceptionGuard &) = delete;
 };
 
 /*
@@ -61,13 +65,17 @@ struct PgExceptionGuard {
  * bit of extra stack space.
  */
 struct PostgresScopedStackReset {
-	PostgresScopedStackReset() {
-		saved_current_stack = set_stack_base();
+	PostgresScopedStackReset() : saved_current_stack(set_stack_base()) {
 	}
+
 	~PostgresScopedStackReset() {
 		restore_stack_base(saved_current_stack);
 	}
 	pg_stack_base_t saved_current_stack;
+
+private:
+	PostgresScopedStackReset(const PostgresScopedStackReset &) = delete;
+	PostgresScopedStackReset &operator=(const PostgresScopedStackReset &) = delete;
 };
 
 /*

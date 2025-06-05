@@ -884,7 +884,9 @@ namespace {
 template <class OP>
 struct PostgresArrayAppendState {
 public:
-	PostgresArrayAppendState(idx_t _number_of_dimensions) : number_of_dimensions(_number_of_dimensions) {
+	PostgresArrayAppendState(idx_t _number_of_dimensions)
+	    : count(0), expected_values(1), datums(nullptr), nulls(nullptr), dimensions(nullptr), lower_bounds(nullptr),
+	      number_of_dimensions(_number_of_dimensions) {
 		dimensions = (int *)palloc(number_of_dimensions * sizeof(int));
 		lower_bounds = (int *)palloc(number_of_dimensions * sizeof(int));
 		for (idx_t i = 0; i < number_of_dimensions; i++) {

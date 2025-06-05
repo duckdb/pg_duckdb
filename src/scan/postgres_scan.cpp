@@ -419,7 +419,8 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _rel,
                                                  const duckdb::TableFunctionInitInput &input)
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
-      total_row_count(0) {
+      output_columns(), total_row_count(0), scan_query(), table_reader_global_state(nullptr),
+      duckdb_scan_memory_ctx(nullptr) {
 	ConstructTableScanQuery(input);
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
 	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
@@ -436,7 +437,7 @@ PostgresScanGlobalState::~PostgresScanGlobalState() {
 //
 
 PostgresScanLocalState::PostgresScanLocalState(PostgresScanGlobalState *_global_state)
-    : global_state(_global_state), exhausted_scan(false) {
+    : global_state(_global_state), output_vector_size(0), exhausted_scan(false) {
 }
 
 PostgresScanLocalState::~PostgresScanLocalState() {
@@ -447,7 +448,7 @@ PostgresScanLocalState::~PostgresScanLocalState() {
 //
 
 PostgresScanFunctionData::PostgresScanFunctionData(Relation _rel, uint64_t _cardinality, Snapshot _snapshot)
-    : rel(_rel), cardinality(_cardinality), snapshot(_snapshot) {
+    : complex_filters(), rel(_rel), cardinality(_cardinality), snapshot(_snapshot) {
 }
 
 PostgresScanFunctionData::~PostgresScanFunctionData() {

@@ -32,6 +32,7 @@ private:
 
 class PostgresContextState : public duckdb::ClientContextState {
 public:
+	PostgresContextState();
 	duckdb::unordered_map<duckdb::string, SchemaItems> schemas;
 	void QueryEnd() override;
 };
@@ -46,6 +47,9 @@ public:
 	                                                           const duckdb::string &name);
 
 private:
+	PostgresTransaction(const PostgresTransaction &) = delete;
+	PostgresTransaction &operator=(const PostgresTransaction &) = delete;
+
 	duckdb::optional_ptr<duckdb::CatalogEntry> GetSchema(const duckdb::string &name);
 
 	PostgresCatalog &catalog;

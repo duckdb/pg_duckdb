@@ -11,7 +11,7 @@ namespace pgduckdb {
 
 PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &_db, const duckdb::string &connection_string,
                                  duckdb::AccessMode _access_mode)
-    : Catalog(_db), path(connection_string), access_mode(_access_mode) {
+    : Catalog(_db), path(connection_string), access_mode(_access_mode), schemas() {
 }
 
 duckdb::unique_ptr<duckdb::Catalog>

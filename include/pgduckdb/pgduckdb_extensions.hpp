@@ -11,11 +11,14 @@ namespace pgduckdb {
 #define Anum_duckdb_extension_autoload   2
 #define Anum_duckdb_extension_repository 3
 
-typedef struct DuckdbExension {
+struct DuckdbExtension {
+	DuckdbExtension() : name(), repository(), autoload(false) {
+	}
+
 	std::string name;
-	bool autoload;
 	std::string repository;
-} DuckdbExtension;
+	bool autoload;
+};
 
 extern std::vector<DuckdbExtension> ReadDuckdbExtensions();
 
