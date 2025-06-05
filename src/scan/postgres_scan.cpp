@@ -421,8 +421,8 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       total_row_count(0) {
 	ConstructTableScanQuery(input);
-	table_reader_global_state =
-	    duckdb::make_shared_ptr<PostgresTableReader>(scan_query.str().c_str(), count_tuples_only);
+	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
+	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
 	duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
 	pd_log(DEBUG1, "(DuckDB/PostgresSeqScanGlobalState) Running %" PRIu64 " threads: '%s'", (uint64_t)MaxThreads(),
 	       scan_query.str().c_str());
@@ -521,7 +521,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 	for (size_t i = 0; i < STANDARD_VECTOR_SIZE; i++) {
 		TupleTableSlot *slot = local_state.global_state->table_reader_global_state->GetNextTuple();
 		if (pgduckdb::TupleIsNull(slot)) {
-			local_state.global_state->table_reader_global_state->PostgresTableReaderCleanup();
+			local_state.global_state->table_reader_global_state->Cleanup();
 			local_state.exhausted_scan = true;
 			break;
 		}
