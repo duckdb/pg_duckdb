@@ -66,7 +66,18 @@ TupleIsNull(TupleTableSlot *slot) {
 
 void
 SlotGetAllAttrs(TupleTableSlot *slot) {
-	PostgresFunctionGuard(slot_getallattrs, slot);
+	// It is safe to call slot_getallattrs directly without the PostgresFunctionGuard because the function doesn't
+	// perform any memory allocations. Assertions or errors are guaranteed not to occur for minimal slots.
+	slot_getallattrs(slot);
+}
+
+TupleTableSlot *
+ExecStoreMinimalTupleUnsafe(MinimalTuple minmal_tuple, TupleTableSlot *slot, bool shouldFree) {
+	// It's safe to call ExecStoreMinimalTuple without the PostgresFunctionGuard as long as the slot is not "owned" by
+	// the tuple, i.e., TTS_SHOULDFREE(slot) is false. This is because it does not allocate in memory contexts and the
+	// only error it can throw is when the slot is not a minimal slot. That error is an obvious programming error so we
+	// can ignore it here.
+	return ::ExecStoreMinimalTuple(minmal_tuple, slot, shouldFree);
 }
 
 Relation

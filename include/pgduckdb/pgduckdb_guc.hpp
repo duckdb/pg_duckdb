@@ -15,6 +15,7 @@ extern bool duckdb_allow_community_extensions;
 extern bool duckdb_allow_unsigned_extensions;
 extern bool duckdb_autoinstall_known_extensions;
 extern bool duckdb_autoload_known_extensions;
+extern int duckdb_threads_for_postgres_scan;
 extern int duckdb_max_workers_per_postgres_scan;
 extern char *duckdb_postgres_role;
 extern char *duckdb_motherduck_session_hint;

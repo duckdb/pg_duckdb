@@ -22,6 +22,8 @@ bool TupleIsNull(TupleTableSlot *slot);
 
 void SlotGetAllAttrs(TupleTableSlot *slot);
 
+TupleTableSlot *ExecStoreMinimalTupleUnsafe(MinimalTuple minmal_tuple, TupleTableSlot *slot, bool shouldFree);
+
 double EstimateRelSize(Relation rel);
 
 Oid GetRelidFromSchemaAndTable(const char *, const char *);
