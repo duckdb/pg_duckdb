@@ -143,11 +143,11 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE 't%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE (a>='t' AND a<'u')
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE 't%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: (((a)::text >= 't'::text) AND ((a)::text < 'u'::text))
+  Filter: ((a)::text ~~ 't%'::text)
 
  a  
 ----
@@ -209,7 +209,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE '_t_';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.~~) '_t_'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '_t_'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -224,7 +224,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '_t_';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) '_t_'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE '_t_')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -242,11 +242,11 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE 't_';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE (a>='t' AND a<'u')
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE 't_'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: (((a)::text >= 't'::text) AND ((a)::text < 'u'::text))
+  Filter: ((a)::text ~~ 't_'::text)
 
  a  
 ----
@@ -258,7 +258,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't_';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) 't_'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE 't_')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -275,7 +275,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE '_t';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.~~) '_t'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '_t'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -288,7 +288,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '_t';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) '_t'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE '_t')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -308,7 +308,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE a;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.~~) a
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE a
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -328,7 +328,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE a;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) a
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE a)
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -341,7 +341,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE 'txxx' LIKE b;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE 'txxx' OPERATOR(pg_catalog.~~) b
+QUERY: SELECT a FROM public.query_filter_varchar WHERE 'txxx' LIKE b
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -356,7 +356,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE 'txxx' NOT LIKE b;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE 'txxx' OPERATOR(pg_catalog.!~~) b
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT ('txxx' LIKE b)
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -675,7 +675,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t\%%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.~~) '%\%t\%%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\%t\%%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -689,7 +689,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\%t\%%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) '%\%t\%%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE '%\%t\%%')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -708,11 +708,11 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE 't\%%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE (a>='t\' AND a<'t]')
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE 't\%%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: (((a)::text >= 't\'::text) AND ((a)::text < 't]'::text))
+  Filter: ((a)::text ~~ 't\%%'::text)
 
  a 
 ---
@@ -721,7 +721,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't\%\%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) 't\%\%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE 't\%\%')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -741,7 +741,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\%t';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.~~) '%\%t'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\%t'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -754,7 +754,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\%t';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) '%\%t'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE '%\%t')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -774,7 +774,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\_t\_%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.~~) '%\_t\_%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\_t\_%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -788,7 +788,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\_t\_%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) '%\_t\_%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE '%\_t\_%')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -807,11 +807,11 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE 't\_%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE (a>='t\' AND a<'t]')
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE 't\_%'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
-  Filter: (((a)::text >= 't\'::text) AND ((a)::text < 't]'::text))
+  Filter: ((a)::text ~~ 't\_%'::text)
 
  a 
 ---
@@ -820,7 +820,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE 't\_%';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) 't\_%'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE 't\_%')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -840,7 +840,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a LIKE '%\_t';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.~~) '%\_t'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE a LIKE '%\_t'
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
@@ -853,7 +853,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE a NOT LIKE '%\_t';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE a OPERATOR(pg_catalog.!~~) '%\_t'
+QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT (a LIKE '%\_t')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar
