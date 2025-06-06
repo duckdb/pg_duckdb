@@ -26,6 +26,12 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | :--- | :---------- |
 |[`approx_count_distinct`](https://duckdb.org/docs/sql/functions/aggregates.html#approximate-aggregates)|Gives the approximate count of distinct elements using HyperLogLog|
 
+## Sampling Functions (1.0.0+)
+
+|Name|Description|
+| :--- | :---------- |
+|[`TABLESAMPLE`](#tablesample)|Sample a subset of rows from a table or query result|
+
 ## Time Functions (1.0.0+)
 
 |Name|Description|
@@ -676,3 +682,69 @@ SELECT epoch_ns(NOW()) AS timestamp_ns;
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | timestamp_expr | timestamp | The timestamp to convert to epoch nanoseconds |
+
+#### <a name="tablesample"></a>`TABLESAMPLE (sampling_method(percentage) | sampling_method(rows ROWS))`
+
+Samples a subset of rows from a table or query result. This is useful for analyzing large datasets by working with representative samples, improving query performance for exploratory data analysis.
+
+```sql
+-- Sample 10% of rows from a table
+SELECT * FROM large_table TABLESAMPLE SYSTEM(10);
+
+-- Sample approximately 1000 rows
+SELECT * FROM events TABLESAMPLE SYSTEM(1000 ROWS);
+
+-- Sample from data lake files
+SELECT * FROM read_parquet('s3://datalake/**/*.parquet') TABLESAMPLE SYSTEM(5);
+
+-- Use sampling for quick data profiling
+SELECT 
+    region,
+    COUNT(*) as sample_count,
+    AVG(revenue) as avg_revenue
+FROM sales_data TABLESAMPLE SYSTEM(2)
+GROUP BY region;
+
+-- Sample from joins for performance
+SELECT c.name, COUNT(o.id) as order_count
+FROM customers c
+JOIN orders o TABLESAMPLE SYSTEM(10) ON c.id = o.customer_id  
+GROUP BY c.name;
+```
+
+**Sampling Methods:**
+
+- **SYSTEM**: Random sampling at the storage level (faster, approximate percentage)
+- **BERNOULLI**: Row-by-row random sampling (slower, exact percentage)
+
+```sql
+-- System sampling (recommended for large tables)
+SELECT * FROM huge_table TABLESAMPLE SYSTEM(1);
+
+-- Bernoulli sampling (exact percentage)
+SELECT * FROM medium_table TABLESAMPLE BERNOULLI(5);
+```
+
+**Use Cases:**
+
+- **Data exploration**: Quick analysis of large datasets
+- **Performance testing**: Test queries on sample data
+- **Data profiling**: Understand data distribution patterns  
+- **ETL development**: Develop pipelines on sample data
+- **Quality checks**: Validate data quality on samples
+
+Further information:
+* [DuckDB TABLESAMPLE documentation](https://duckdb.org/docs/sql/query_syntax/sample.html)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| sampling_method | keyword | Either `SYSTEM` or `BERNOULLI` |
+| percentage | numeric | Percentage of rows to sample (0-100) |
+
+##### Optional Arguments  
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| rows | integer | Approximate number of rows to sample (use with `ROWS` keyword) |
