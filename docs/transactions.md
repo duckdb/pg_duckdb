@@ -118,14 +118,16 @@ DuckDB tables now support comprehensive DDL operations within transactions:
 
 ```sql
 BEGIN;
--- Create table with complex types
-CREATE TABLE user_profiles USING duckdb AS
-SELECT 
-    user_id,
-    {'name': first_name, 'email': email} AS profile,
-    ARRAY[interest1, interest2, interest3] AS interests,
-    MAP(['last_login', 'signup_date'], [last_seen, created_at]) AS timestamps
-FROM user_data;
+-- Create table with complex types (requires DuckDB execution context)
+CREATE TEMP TABLE user_profiles USING duckdb AS
+SELECT * FROM duckdb.query($$
+  SELECT 
+      user_id,
+      {'name': first_name, 'email': email} AS profile,
+      ARRAY[interest1, interest2, interest3] AS interests,
+      MAP(['last_login', 'signup_date'], [last_seen, created_at]) AS timestamps
+  FROM user_data
+$$);
 
 -- Add and modify columns
 ALTER TABLE user_profiles ADD COLUMN status VARCHAR DEFAULT 'active';

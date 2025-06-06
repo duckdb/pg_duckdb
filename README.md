@@ -98,15 +98,17 @@ SELECT * FROM delta_scan('s3://lakehouse/user_events')
 Build powerful data pipelines that scale:
 
 ```sql
--- Transform and export analytics-ready data
-CREATE TABLE customer_metrics USING duckdb AS
-SELECT 
-    customer_id,
-    {'total_orders': COUNT(*), 'avg_order_value': AVG(amount)} as metrics,
-    MAP(['last_order', 'first_order'], [MAX(order_date), MIN(order_date)]) as dates,
-    array_agg(DISTINCT product_category) as purchased_categories
-FROM read_parquet('s3://raw/orders/**/*.parquet')
-GROUP BY customer_id;
+-- Transform and export analytics-ready data with complex types
+CREATE TEMP TABLE customer_metrics USING duckdb AS
+SELECT * FROM duckdb.query($$
+  SELECT 
+      customer_id,
+      {'total_orders': COUNT(*), 'avg_order_value': AVG(amount)} as metrics,
+      MAP(['last_order', 'first_order'], [MAX(order_date), MIN(order_date)]) as dates,
+      array_agg(DISTINCT product_category) as purchased_categories
+  FROM read_parquet('s3://raw/orders/**/*.parquet')
+  GROUP BY customer_id
+$$);
 
 -- Export processed results back to data lake
 COPY customer_metrics TO 's3://processed/customer_360/data.parquet';
@@ -184,12 +186,14 @@ See [settings documentation](docs/settings.md) for complete configuration option
 | Topic | Description |
 |-------|-------------|
 | [Functions](docs/functions.md) | Complete function reference |
-| [Types](docs/types.md) | Supported data types |
+| [Types](docs/types.md) | Supported data types and advanced types usage |
 | [MotherDuck](docs/motherduck.md) | Cloud integration guide |
 | [Secrets](docs/secrets.md) | Credential management |
 | [Extensions](docs/extensions.md) | DuckDB extension usage |
 | [Transactions](docs/transactions.md) | Transaction behavior |
 | [Compilation](docs/compilation.md) | Build from source |
+
+**Note**: Advanced DuckDB types (STRUCT, MAP, UNION) require DuckDB execution context. Use `duckdb.query()` for complex type operations and `TEMP` tables for DuckDB table creation in most cases. See [Types documentation](docs/types.md) for details.
 
 ## Performance
 

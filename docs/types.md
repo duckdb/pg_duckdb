@@ -22,16 +22,20 @@ pg_duckdb supports many [data types](https://www.postgresql.org/docs/current/dat
 
 ## Bit String Types (1.0.0+)
 
-- **Fixed-length bit strings**: `bit(n)` - stores exactly n bits
+- **Fixed-length bit strings**: `bit(n)` - stores exactly n bits (PostgreSQL only)
   ```sql
+  -- PostgreSQL bit strings (not supported in DuckDB context)
   SELECT '101'::bit(3);
   ```
 
-- **Variable-length bit strings**: `varbit(n)` or `bit varying(n)` - stores up to n bits
+- **Variable-length bit strings**: `varbit(n)` or `bit varying(n)` - stores up to n bits (PostgreSQL only)
   ```sql
+  -- PostgreSQL variable bit strings (not supported in DuckDB context)
   SELECT '10110'::varbit(10);
   SELECT '1010'::bit varying;
   ```
+
+**Note**: Bit string types are PostgreSQL-specific and not available in DuckDB execution context. Use them only in PostgreSQL tables or queries that don't involve DuckDB.
 
 ## Complex Types
 
@@ -41,19 +45,33 @@ pg_duckdb supports many [data types](https://www.postgresql.org/docs/current/dat
 
 ## Advanced DuckDB Types (1.0.0+)
 
+**Important**: Advanced DuckDB types (STRUCT, MAP, UNION, VARINT) require DuckDB execution context. Use them within `duckdb.query()` function calls or in DuckDB table operations. Direct usage in PostgreSQL CREATE TABLE statements or regular SELECT queries may not work.
+
+**Usage Patterns:**
+- ✅ `SELECT * FROM duckdb.query('SELECT {''key'': ''value''} AS my_struct')`
+- ✅ `CREATE TEMP TABLE foo USING duckdb AS SELECT * FROM duckdb.query('...')`
+- ❌ `SELECT {'key': 'value'} AS my_struct` (PostgreSQL context)
+- ❌ `CREATE TABLE foo AS SELECT {'key': 'value'}` (PostgreSQL context)
+
 ### VARINT Type
 
 Variable-precision integers that can store arbitrarily large numbers without overflow:
 
 ```sql
--- Store very large integers
-SELECT 123456789012345678901234567890::VARINT;
+-- Store very large integers (requires DuckDB execution context)
+SELECT * FROM duckdb.query($$
+  SELECT 123456789012345678901234567890::VARINT
+$$);
 
 -- Automatic conversion from string
-SELECT '999999999999999999999999999999'::VARINT;
+SELECT * FROM duckdb.query($$
+  SELECT '999999999999999999999999999999'::VARINT
+$$);
 
 -- Arithmetic operations maintain precision
-SELECT (10::VARINT ^ 50);
+SELECT * FROM duckdb.query($$
+  SELECT (10::VARINT ^ 50)
+$$);
 ```
 
 **PostgreSQL Mapping**: VARINT values are converted to PostgreSQL `NUMERIC` type for compatibility.
@@ -63,16 +81,22 @@ SELECT (10::VARINT ^ 50);
 Structured data with named fields, similar to JSON objects but with type safety:
 
 ```sql
--- Create STRUCT with named fields
-SELECT {'name': 'Alice', 'age': 30, 'active': true}::STRUCT(name VARCHAR, age INTEGER, active BOOLEAN);
+-- Create STRUCT with named fields (requires DuckDB execution context)
+SELECT * FROM duckdb.query($$
+  SELECT {'name': 'Alice', 'age': 30, 'active': true}::STRUCT(name VARCHAR, age INTEGER, active BOOLEAN)
+$$);
 
 -- Access STRUCT fields
-SELECT person.name, person.age 
-FROM (SELECT {'name': 'Bob', 'age': 25} AS person) t;
+SELECT * FROM duckdb.query($$
+  SELECT person.name, person.age 
+  FROM (SELECT {'name': 'Bob', 'age': 25} AS person) t
+$$);
 
--- STRUCT in table creation
-CREATE TABLE employees USING duckdb AS
-SELECT {'id': 1, 'info': {'name': 'John', 'dept': 'Engineering'}} AS employee_data;
+-- STRUCT in table creation (requires DuckDB context)
+CREATE TEMP TABLE employees USING duckdb AS
+SELECT * FROM duckdb.query($$
+  SELECT {'id': 1, 'info': {'name': 'John', 'dept': 'Engineering'}} AS employee_data
+$$);
 ```
 
 **PostgreSQL Mapping**: STRUCT values are converted to PostgreSQL text representation for storage and display.
@@ -82,18 +106,26 @@ SELECT {'id': 1, 'info': {'name': 'John', 'dept': 'Engineering'}} AS employee_da
 Key-value mappings with type safety for both keys and values:
 
 ```sql
--- Create MAP with string keys and integer values
-SELECT MAP(['key1', 'key2', 'key3'], [10, 20, 30]);
+-- Create MAP with string keys and integer values (requires DuckDB execution context)
+SELECT * FROM duckdb.query($$
+  SELECT MAP(['key1', 'key2', 'key3'], [10, 20, 30])
+$$);
 
 -- Access MAP values
-SELECT my_map['key1'] FROM (SELECT MAP(['key1', 'key2'], [100, 200]) AS my_map) t;
+SELECT * FROM duckdb.query($$
+  SELECT my_map['key1'] FROM (SELECT MAP(['key1', 'key2'], [100, 200]) AS my_map) t
+$$);
 
 -- MAP with complex types
-SELECT MAP(['config', 'data'], [{'enabled': true}, {'count': 42}]);
+SELECT * FROM duckdb.query($$
+  SELECT MAP(['config', 'data'], [{'enabled': true}, {'count': 42}])
+$$);
 
 -- Create table with MAP column
-CREATE TABLE settings USING duckdb AS
-SELECT MAP(['theme', 'language'], ['dark', 'en']) AS user_preferences;
+CREATE TEMP TABLE settings USING duckdb AS
+SELECT * FROM duckdb.query($$
+  SELECT MAP(['theme', 'language'], ['dark', 'en']) AS user_preferences
+$$);
 ```
 
 **PostgreSQL Mapping**: MAP values are converted to PostgreSQL text representation.
@@ -103,19 +135,27 @@ SELECT MAP(['theme', 'language'], ['dark', 'en']) AS user_preferences;
 Tagged union types for storing values of different types in a single column:
 
 ```sql
--- Create UNION values with explicit tags
-SELECT UNION_VALUE(tag := 'string', value := 'hello');
-SELECT UNION_VALUE(tag := 'number', value := 42);
-SELECT UNION_VALUE(tag := 'flag', value := true);
+-- Create UNION values using built-in functions (requires DuckDB execution context)
+SELECT * FROM duckdb.query($$
+  SELECT union_value(string := 'hello') AS text_union,
+         union_value(number := 42) AS number_union,
+         union_value(flag := true) AS boolean_union
+$$);
 
 -- Extract values from UNION
-SELECT UNION_EXTRACT(my_union, 'string') AS text_value
-FROM (SELECT UNION_VALUE(tag := 'string', value := 'world') AS my_union) t;
+SELECT * FROM duckdb.query($$
+  SELECT union_extract(my_union, 'string') AS text_value
+  FROM (SELECT union_value(string := 'world') AS my_union) t
+$$);
 
 -- Check UNION tag
-SELECT UNION_TAG(my_union) AS value_type
-FROM (SELECT UNION_VALUE(tag := 'number', value := 123) AS my_union) t;
+SELECT * FROM duckdb.query($$
+  SELECT union_tag(my_union) AS value_type
+  FROM (SELECT union_value(number := 123) AS my_union) t
+$$);
 ```
+
+**Note**: UNION functions have specific parameter requirements. Use `union_value(tag_name := value)` syntax rather than separate tag and value parameters.
 
 **PostgreSQL Mapping**: UNION values are converted to PostgreSQL text representation showing the tag and value.
 
@@ -132,19 +172,23 @@ FROM (SELECT UNION_VALUE(tag := 'number', value := 123) AS my_union) t;
 - Integrates with PostgreSQL array operators
 
 ```sql
--- DuckDB LIST (flexible nesting)
-SELECT [1, 2, 3] AS my_list;
-SELECT [[1, 2], [3, 4, 5]] AS nested_list;  -- Different sub-list sizes OK
+-- DuckDB LIST (flexible nesting) - requires DuckDB execution context
+SELECT * FROM duckdb.query($$
+  SELECT [1, 2, 3] AS my_list,
+         [[1, 2], [3, 4, 5]] AS nested_list  -- Different sub-list sizes OK
+$$);
 
--- PostgreSQL ARRAY (rectangular structure)
-SELECT ARRAY[1, 2, 3] AS my_array;
-SELECT ARRAY[ARRAY[1, 2], ARRAY[3, 4]] AS matrix;  -- Must be rectangular
+-- PostgreSQL ARRAY (rectangular structure) - works in PostgreSQL context
+SELECT ARRAY[1, 2, 3] AS my_array,
+       ARRAY[ARRAY[1, 2], ARRAY[3, 4]] AS matrix;  -- Must be rectangular
 
 -- Both are supported and automatically converted between systems
-CREATE TABLE mixed_arrays USING duckdb AS
-SELECT 
-    [1, 2, 3] AS duckdb_list,
-    ARRAY[1, 2, 3] AS postgres_array;
+CREATE TEMP TABLE mixed_arrays USING duckdb AS
+SELECT * FROM duckdb.query($$
+  SELECT [1, 2, 3] AS duckdb_list
+$$)
+UNION ALL
+SELECT ARRAY[1, 2, 3]::TEXT AS duckdb_list;  -- Convert PostgreSQL array for compatibility
 ```
 
 **Conversion Notes**: 
