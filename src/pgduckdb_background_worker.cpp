@@ -1249,7 +1249,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 					return;
 				}
 
-				elog(WARNING, "AAAA: %s", create_query.c_str());
 				if (!CreateView(postgres_schema_name.c_str(), view.name.c_str(), create_query.c_str(),
 				                drop_with_cascade)) {
 					all_tables_synced_successfully = false;

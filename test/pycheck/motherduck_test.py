@@ -312,3 +312,15 @@ def test_md_duckdb_only_types(md_cur: Cursor, ddb: Duckdb):
         datetime.date(2023, 10, 1),
     ]
     assert md_cur.sql("""select union_tag(u) from t1""") == ["t", "d"]
+
+
+def test_md_views(md_cur: Cursor, ddb: Duckdb):
+    ddb.sql("CREATE TABLE t1(a int, b varchar)")
+    ddb.sql("CREATE VIEW v1(one) AS FROM t1 select 1, a + 10 as a_plus_ten")
+    ddb.sql("INSERT INTO t1 VALUES (1, 'abc'), (2, 'def')")
+    md_cur.wait_until_table_exists("v1")
+    assert md_cur.sql("SELECT * FROM v1") == [(1, 11), (1, 12)]
+    assert md_cur.sql("SELECT a_plus_ten, one FROM v1 ORDER BY a_plus_ten LIMIT 1") == [
+        (1, 11),
+        (1, 12),
+    ]
