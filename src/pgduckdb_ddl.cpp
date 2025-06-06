@@ -64,6 +64,7 @@ IsMotherDuckView(Form_pg_class relation) {
 	int sec_context;
 	auto save_nestlevel = NewGUCNestLevel();
 	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
 	GetUserIdAndSecContext(&saved_userid, &sec_context);
 	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
 	Oid arg_types[] = {OIDOID};
@@ -288,7 +289,7 @@ DropViewPreCheck(DropStmt *stmt) {
 	bool dropping_duckdb_views = false;
 	bool dropping_postgres_views = false;
 	foreach_node(List, obj, stmt->objects) {
-		/* check if table is duckdb view */
+		/* check if view is duckdb view */
 		RangeVar *rel = makeRangeVarFromNameList(obj);
 		Oid relid = RangeVarGetRelid(rel, AccessShareLock, true);
 		if (!OidIsValid(relid)) {
@@ -299,7 +300,7 @@ DropViewPreCheck(DropStmt *stmt) {
 
 		Relation relation = relation_open(relid, AccessShareLock);
 
-		if (pgduckdb::IsDuckdbTable(relation)) {
+		if (pgduckdb::IsMotherDuckView(relation->rd_rel)) {
 			if (!dropping_duckdb_views) {
 				pgduckdb::ClaimCurrentCommandId();
 				dropping_duckdb_views = true;
@@ -1213,7 +1214,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	int ret = SPI_exec(R"(
 		SELECT count(*)::bigint, (count(*) FILTER (WHERE object_type IN ('table', 'view')))::bigint
 		FROM pg_catalog.pg_event_trigger_dropped_objects()
-		WHERE object_type NOT IN ('type', 'sequence', 'table constraint', 'index', 'default value', 'trigger', 'toast table')
+		WHERE object_type NOT IN ('type', 'sequence', 'table constraint', 'index', 'default value', 'trigger', 'toast table', 'rule')
 	)",
 	                   0);
 	if (ret != SPI_OK_SELECT) {
@@ -1383,11 +1384,13 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 
 	if (!pgduckdb::MixedWritesAllowed() && deleted_duckdb_relations > 0) {
 		if (deleted_duckdb_relations < deleted_relations) {
-			elog(ERROR, "Dropping both DuckDB and non-DuckDB tables in the same transaction is not supported");
+			elog(ERROR, "Dropping both DuckDB and non-DuckDB relations in the same transaction is not supported");
 		}
 
 		if (deleted_duckdb_relations < total_deleted) {
-			elog(ERROR, "Dropping both DuckDB tables and non-DuckDB objects in the same transaction is not supported");
+			elog(ERROR,
+			     "Dropping both DuckDB relations and non-DuckDB objects in the same transaction is not supported",
+			     deleted_duckdb_relations, total_deleted);
 		}
 	}
 
