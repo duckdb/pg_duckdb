@@ -25,6 +25,7 @@ test: issue_410
 test: issue_730
 test: issue_748
 test: issue_749
+test: issue_761
 test: issue_789
 test: issue_796
 test: issue_802
