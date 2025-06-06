@@ -22,9 +22,10 @@ make install
 ```
 
 **Build Options:**
-- Static linking: `DUCKDB_BUILD=ReleaseStatic make install`
-- Parallel build: `make -j$(nproc) install`
-- Specific PostgreSQL version: `PG_CONFIG=/path/to/pg_config make install`
+- **Static linking**: `DUCKDB_BUILD=ReleaseStatic make install`
+- **Parallel build**: `make -j$(nproc) install`
+- **Debug build**: `DUCKDB_BUILD=Debug make install`
+- **Specific PostgreSQL version**: `PG_CONFIG=/path/to/pg_config make install`
 
 ## Post-Installation Setup
 
@@ -38,6 +39,60 @@ make install
    ```sql
    CREATE EXTENSION pg_duckdb;
    ```
+
+## Static Compilation (1.0.0+)
+
+Starting with version 1.0.0, pg_duckdb supports statically linking the DuckDB library into the extension. This can be beneficial for:
+
+- **Deployment simplicity**: Single binary with all dependencies included
+- **Version consistency**: Ensures specific DuckDB version regardless of system libraries
+- **Isolated environments**: Reduces runtime dependency requirements
+
+### Building with Static Linking
+
+```bash
+git clone https://github.com/duckdb/pg_duckdb
+cd pg_duckdb
+
+# Build with static linking
+DUCKDB_BUILD=ReleaseStatic make install
+```
+
+### Static vs Dynamic Linking
+
+| Aspect | Static (`ReleaseStatic`) | Dynamic (default) |
+|--------|-------------------------|------------------|
+| **Binary size** | Larger (~50MB+) | Smaller (~5MB) |
+| **Dependencies** | Self-contained | Requires libduckdb |
+| **Performance** | Slightly better | Standard |
+| **Memory usage** | Higher | Lower |
+| **Deployment** | Simpler | Requires library management |
+
+### When to Use Static Compilation
+
+Use static compilation when:
+- Deploying to environments without DuckDB libraries
+- Building Docker images from scratch
+- Need guaranteed DuckDB version consistency
+- Simplifying distribution and deployment
+
+Use dynamic compilation when:
+- Development and testing
+- System has shared DuckDB libraries
+- Memory usage is a concern
+- Building multiple extensions that use DuckDB
+
+### Build Artifacts
+
+Static compilation produces different build artifacts:
+
+```bash
+# Static build creates
+third_party/duckdb/build/release/libduckdb_bundle.a  # Static library
+
+# Dynamic build creates  
+third_party/duckdb/build/release/src/libduckdb.so    # Shared library
+```
 
 # Ubuntu 24.04
 

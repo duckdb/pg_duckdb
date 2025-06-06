@@ -34,14 +34,27 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
    COMMIT;
    ```
 
-4. **DuckDB DDL operations:**
+4. **DuckDB DDL operations (1.0.0+):**
    ```sql
    BEGIN;
+   -- Create DuckDB tables
    CREATE TABLE analytics USING duckdb AS 
      SELECT region, COUNT(*) as sales_count 
      FROM read_csv('s3://sales/*.csv') 
      GROUP BY region;
+   
+   -- ALTER TABLE operations on DuckDB tables
    ALTER TABLE analytics ADD COLUMN created_at TIMESTAMP DEFAULT NOW();
+   ALTER TABLE analytics RENAME COLUMN sales_count TO total_sales;
+   
+   -- COPY operations with DuckDB tables
+   COPY analytics TO 's3://output/analytics.parquet';
+   COPY analytics FROM 's3://backup/analytics_restore.parquet';
+   
+   -- Multiple DDL operations in sequence
+   CREATE TABLE temp_staging USING duckdb AS SELECT * FROM analytics WHERE total_sales > 100;
+   DROP TABLE analytics;
+   ALTER TABLE temp_staging RENAME TO analytics;
    COMMIT;
    ```
 
@@ -95,6 +108,75 @@ CREATE TABLE pg_backup AS SELECT * FROM duckdb_table;  -- Might fail
 DROP TABLE duckdb_table;                               -- Might succeed
 COMMIT;
 -- Result: Data lost if pg_backup creation failed!
+```
+
+## New Features in 1.0.0
+
+### Enhanced DDL Support
+
+DuckDB tables now support comprehensive DDL operations within transactions:
+
+```sql
+BEGIN;
+-- Create table with complex types
+CREATE TABLE user_profiles USING duckdb AS
+SELECT 
+    user_id,
+    {'name': first_name, 'email': email} AS profile,
+    ARRAY[interest1, interest2, interest3] AS interests,
+    MAP(['last_login', 'signup_date'], [last_seen, created_at]) AS timestamps
+FROM user_data;
+
+-- Add and modify columns
+ALTER TABLE user_profiles ADD COLUMN status VARCHAR DEFAULT 'active';
+ALTER TABLE user_profiles RENAME COLUMN profile TO user_info;
+ALTER TABLE user_profiles DROP COLUMN interests;
+COMMIT;
+```
+
+### COPY Operations with DuckDB Tables
+
+Copy data to and from DuckDB tables using various formats:
+
+```sql
+BEGIN;
+-- Create table from external data
+CREATE TABLE sales_data USING duckdb AS
+SELECT * FROM read_parquet('s3://data-lake/sales/**/*.parquet');
+
+-- Export to different formats
+COPY sales_data TO 's3://exports/sales_summary.parquet';
+COPY (SELECT region, SUM(amount) FROM sales_data GROUP BY region) 
+TO 's3://exports/regional_summary.csv' (FORMAT CSV, HEADER);
+
+-- Backup and restore operations
+COPY sales_data TO '/backup/sales_backup.parquet';
+COMMIT;
+
+-- Later: restore from backup
+BEGIN;
+CREATE TABLE sales_restored USING duckdb;
+COPY sales_restored FROM '/backup/sales_backup.parquet';
+COMMIT;
+```
+
+### EXPLAIN Support with JSON Format
+
+Analyze query execution plans with enhanced EXPLAIN capabilities:
+
+```sql
+-- Get execution plan in JSON format
+EXPLAIN (FORMAT JSON) 
+SELECT r['customer_id'], COUNT(*) as order_count
+FROM read_parquet('s3://orders/*.parquet') r
+GROUP BY r['customer_id'];
+
+-- Analyze complex joins
+EXPLAIN (FORMAT JSON)
+SELECT c.name, SUM(o.amount) as total
+FROM customers c
+JOIN (SELECT * FROM read_csv('s3://orders.csv')) o ON c.id = o.customer_id
+GROUP BY c.name;
 ```
 
 ## Best Practices

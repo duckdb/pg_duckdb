@@ -26,11 +26,17 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | :--- | :---------- |
 |[`approx_count_distinct`](https://duckdb.org/docs/sql/functions/aggregates.html#approximate-aggregates)|Gives the approximate count of distinct elements using HyperLogLog|
 
-## Time Functions
+## Time Functions (1.0.0+)
 
 |Name|Description|
 | :--- | :---------- |
 |[`time_bucket`](#time_bucket)|Bucket timestamps into time intervals for time-series analysis|
+|[`strftime`](#strftime)|Format timestamps as strings using format codes|
+|[`strptime`](#strptime)|Parse strings into timestamps using format codes|
+|[`epoch`](#epoch)|Convert timestamps to Unix epoch seconds|
+|[`epoch_ms`](#epoch_ms)|Convert timestamps to Unix epoch milliseconds|
+|[`epoch_us`](#epoch_us)|Convert timestamps to Unix epoch microseconds|
+|[`epoch_ns`](#epoch_ns)|Convert timestamps to Unix epoch nanoseconds|
 
 ## DuckDB Administration Functions
 
@@ -520,3 +526,153 @@ Further information:
 | origin | timestamp | The origin point for bucketing. Buckets are aligned to this timestamp. |
 
 **Note**: The `time_bucket` function also supports timezone and time offset parameters for more advanced time bucketing scenarios.
+
+#### <a name="strftime"></a>`strftime(timestamp_expr, format_string) -> TEXT`
+
+Formats timestamps as strings using standard format codes. This function provides flexible timestamp formatting for display and export purposes.
+
+```sql
+-- Format current timestamp
+SELECT strftime(NOW(), '%Y-%m-%d %H:%M:%S') AS formatted_time;
+
+-- Format timestamps in different formats
+SELECT 
+    order_id,
+    strftime(created_at, '%Y-%m-%d') AS order_date,
+    strftime(created_at, '%H:%M') AS order_time,
+    strftime(created_at, '%A, %B %d, %Y') AS readable_date
+FROM orders;
+
+-- Use for partitioning file exports
+COPY (SELECT * FROM events WHERE event_date = '2024-01-01')
+TO 's3://bucket/events/' || strftime('2024-01-01'::timestamp, '%Y/%m/%d') || '/events.parquet';
+```
+
+Common format codes:
+- `%Y` - 4-digit year (2024)
+- `%m` - Month as number (01-12)
+- `%d` - Day of month (01-31)
+- `%H` - Hour (00-23)
+- `%M` - Minute (00-59)
+- `%S` - Second (00-59)
+- `%A` - Full weekday name (Monday)
+- `%B` - Full month name (January)
+
+Further information:
+* [DuckDB strftime documentation](https://duckdb.org/docs/sql/functions/dateformat.html#strftime)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp value to format |
+| format_string | text | The format string with format codes |
+
+#### <a name="strptime"></a>`strptime(string_expr, format_string) -> TIMESTAMP`
+
+Parses strings into timestamps using format codes. This is the inverse of `strftime` and is useful for parsing timestamps from various string formats.
+
+```sql
+-- Parse date strings
+SELECT strptime('2024-01-15 14:30:00', '%Y-%m-%d %H:%M:%S') AS parsed_timestamp;
+
+-- Parse different formats
+SELECT 
+    strptime('Jan 15, 2024', '%b %d, %Y') AS date1,
+    strptime('15/01/2024', '%d/%m/%Y') AS date2,
+    strptime('2024-01-15T14:30:00Z', '%Y-%m-%dT%H:%M:%SZ') AS iso_date;
+
+-- Parse log timestamps
+SELECT 
+    log_id,
+    strptime(timestamp_string, '%Y-%m-%d %H:%M:%S') AS parsed_time,
+    message
+FROM raw_logs;
+```
+
+Further information:
+* [DuckDB strptime documentation](https://duckdb.org/docs/sql/functions/dateformat.html#strptime)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| string_expr | text | The string to parse as a timestamp |
+| format_string | text | The format string describing the input format |
+
+#### <a name="epoch"></a>`epoch(timestamp_expr) -> BIGINT`
+
+Converts timestamps to Unix epoch seconds (seconds since 1970-01-01 00:00:00 UTC).
+
+```sql
+-- Get current epoch time
+SELECT epoch(NOW()) AS current_epoch;
+
+-- Convert timestamps for API usage
+SELECT 
+    event_id,
+    epoch(event_timestamp) AS epoch_seconds
+FROM events;
+
+-- Filter using epoch time
+SELECT * FROM events 
+WHERE epoch(created_at) > 1640995200; -- After 2022-01-01
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch seconds |
+
+#### <a name="epoch_ms"></a>`epoch_ms(timestamp_expr) -> BIGINT`
+
+Converts timestamps to Unix epoch milliseconds.
+
+```sql
+-- High-precision timestamp for JavaScript
+SELECT epoch_ms(NOW()) AS timestamp_ms;
+
+-- For time-series data
+SELECT 
+    sensor_id,
+    epoch_ms(reading_time) AS timestamp_ms,
+    value
+FROM sensor_readings;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch milliseconds |
+
+#### <a name="epoch_us"></a>`epoch_us(timestamp_expr) -> BIGINT`
+
+Converts timestamps to Unix epoch microseconds.
+
+```sql
+-- Microsecond precision timestamps
+SELECT epoch_us(NOW()) AS timestamp_us;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch microseconds |
+
+#### <a name="epoch_ns"></a>`epoch_ns(timestamp_expr) -> BIGINT`
+
+Converts timestamps to Unix epoch nanoseconds.
+
+```sql
+-- Nanosecond precision timestamps
+SELECT epoch_ns(NOW()) AS timestamp_ns;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch nanoseconds |

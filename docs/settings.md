@@ -86,6 +86,47 @@ Default: `2`
 
 Access: General
 
+## Data Type Conversion
+
+### `duckdb.convert_unsupported_numeric_to_double`
+
+Convert NUMERIC types with unsupported precision/scale to DOUBLE instead of throwing an error. DuckDB supports NUMERIC/DECIMAL with precision 1-38 and scale 0-38 (where scale ≤ precision). For NUMERICs outside these limits, this setting controls the behavior.
+
+When `true`: Unsupported NUMERICs are converted to DOUBLE (may cause precision loss)
+When `false`: Unsupported NUMERICs cause an error
+
+Default: `false`
+
+Access: General
+
+## File System and Storage (1.0.0+)
+
+### `duckdb.temporary_directory`
+
+Set the directory to which DuckDB writes temporary files. By default, DuckDB uses a directory under the PostgreSQL data directory (`DataDir/pg_duckdb/temp`). This can be useful for pointing to faster storage (e.g., SSD) or managing disk space more effectively.
+
+Default: `"DataDir/pg_duckdb/temp"`
+
+Access: Superuser-only
+
+### `duckdb.max_temp_directory_size`
+
+The maximum amount of data that can be stored in DuckDB's temporary directory. This setting helps prevent runaway queries from consuming all available disk space. When set to an empty string, no limit is enforced.
+
+Examples: `"10GB"`, `"500MB"`, `"2TB"`
+
+Default: `""` (no limit)
+
+Access: Superuser-only
+
+### `duckdb.extension_directory`
+
+Set the directory where DuckDB stores its extensions. By default, extensions are stored under the PostgreSQL data directory (`DataDir/pg_duckdb/extensions`). This is useful for managing extension storage or sharing extensions across multiple PostgreSQL instances.
+
+Default: `"DataDir/pg_duckdb/extensions"`
+
+Access: Superuser-only
+
 ## Developer settings
 
 ### `duckdb.allow_unsigned_extensions`
