@@ -366,6 +366,11 @@ def test_md_views(md_cur: Cursor, ddb: Duckdb, default_db_name):
 
     md_cur.sql("SET duckdb.force_motherduck_views = false")
 
+    md_cur.sql("CREATE OR REPLACE VIEW v2 AS SELECT * FROM t1 WHERE a = 1")
+    assert md_cur.sql("SELECT * FROM v2") == (1, "abc")
+    assert ddb.sql("SELECT * FROM v2") == (1, "abc")
+
+    # Dropping views should work as expected
     with pytest.raises(
         psycopg.errors.InternalError,
         match="Dropping both DuckDB and non-DuckDB views in the same transaction is not supported",

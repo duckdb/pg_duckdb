@@ -1,6 +1,7 @@
 #include "duckdb.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pg/relations.hpp"
 
 extern "C" {
@@ -909,27 +910,33 @@ cookConstraint(ParseState *pstate, Node *raw_constraint, char *relname) {
 }
 
 char *
-pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
-	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_COLUMN) {
+pgduckdb_get_rename_relationdef(Oid relation_oid, RenameStmt *rename_stmt) {
+	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_VIEW &&
+	    rename_stmt->renameType != OBJECT_COLUMN) {
 		elog(ERROR, "Only renaming tables and columns is supported in DuckDB");
 	}
 
 	Relation relation = relation_open(relation_oid, AccessShareLock);
-	Assert(pgduckdb::IsDuckdbTable(relation));
+	Assert(pgduckdb::IsDuckdbTable(relation) || pgduckdb::IsMotherDuckView(relation));
 
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
 	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
 	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
 
+	const char *relation_type = "TABLE";
+	if (rename_stmt->renameType == OBJECT_VIEW) {
+		relation_type = "VIEW";
+	}
+
 	StringInfoData buffer;
 	initStringInfo(&buffer);
 
 	if (rename_stmt->subname) {
-		appendStringInfo(&buffer, "ALTER TABLE %s RENAME COLUMN %s TO %s;", old_table_name,
+		appendStringInfo(&buffer, "ALTER %s %s RENAME COLUMN %s TO %s;", relation_type, old_table_name,
 		                 quote_identifier(rename_stmt->subname), quote_identifier(rename_stmt->newname));
 
 	} else {
-		appendStringInfo(&buffer, "ALTER TABLE %s RENAME TO %s;", old_table_name,
+		appendStringInfo(&buffer, "ALTER %s %s RENAME TO %s;", relation_type, old_table_name,
 		                 quote_identifier(rename_stmt->newname));
 	}
 

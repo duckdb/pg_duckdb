@@ -87,6 +87,11 @@ IsMotherDuckView(Form_pg_class relation) {
 	return found;
 }
 
+bool
+IsMotherDuckView(Relation relation) {
+	return IsMotherDuckView(relation->rd_rel);
+}
+
 static bool
 ContainsMotherDuckRelation(Node *node, void *context) {
 	if (node == NULL)
@@ -99,7 +104,7 @@ ContainsMotherDuckRelation(Node *node, void *context) {
 			Relation rel = relation_open(relid, AccessShareLock);
 			if (rel->rd_rel->relkind == RELKIND_VIEW || rel->rd_rel->relkind == RELKIND_RELATION) {
 				/* Check if the relation is a MotherDuck view or table */
-				if (pgduckdb::IsMotherDuckView(rel->rd_rel) || pgduckdb::IsDuckdbTable(rel)) {
+				if (pgduckdb::IsMotherDuckView(rel) || pgduckdb::IsDuckdbTable(rel)) {
 					elog(NOTICE, "Found MotherDuck view or table: %s", range_var->relname);
 					relation_close(rel, NoLock);
 					return true;
@@ -300,7 +305,7 @@ DropViewPreCheck(DropStmt *stmt) {
 
 		Relation relation = relation_open(relid, AccessShareLock);
 
-		if (pgduckdb::IsMotherDuckView(relation->rd_rel)) {
+		if (pgduckdb::IsMotherDuckView(relation)) {
 			if (!dropping_duckdb_views) {
 				pgduckdb::ClaimCurrentCommandId();
 				dropping_duckdb_views = true;
@@ -334,7 +339,6 @@ DuckdbHandleDDLPost(PlannedStmt *pstmt) {
 		 * duckdb.query(...) call.
 		 */
 		DuckdbHandleViewStmtPost(parsetree);
-		return;
 	}
 }
 
@@ -549,8 +553,14 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 			if (pgduckdb::IsDuckdbSchemaName(stmt->newname)) {
 				elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
 			}
-		} else if (stmt->renameType == OBJECT_TABLE || stmt->renameType == OBJECT_COLUMN) {
-			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
+		} else if (stmt->renameType == OBJECT_TABLE ||
+		           (stmt->renameType == OBJECT_COLUMN && stmt->relationType == OBJECT_TABLE)) {
+			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, true);
+			if (relation_oid == InvalidOid) {
+				/* Let postgres deal with this. It's possible that this is fine in
+				 * case of RENAME ... IF EXISTS */
+				return false;
+			}
 			Relation rel = RelationIdGetRelation(relation_oid);
 
 			if (pgduckdb::IsDuckdbTable(rel)) {
@@ -563,6 +573,32 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 				pgduckdb::ClaimCurrentCommandId();
 			}
 			RelationClose(rel);
+		} else if (stmt->renameType == OBJECT_VIEW ||
+		           (stmt->renameType == OBJECT_COLUMN && stmt->relationType == OBJECT_VIEW)) {
+			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, true);
+			if (relation_oid == InvalidOid) {
+				/* Let postgres deal with this. It's possible that this is fine in
+				 * case of RENAME ... IF EXISTS */
+				return false;
+			}
+			Relation rel = RelationIdGetRelation(relation_oid);
+			if (!pgduckdb::IsMotherDuckView(rel)) {
+				RelationClose(rel);
+				return false; // Not a MotherDuck view, let Postgres handle it
+			}
+
+			if (stmt->renameType == OBJECT_COLUMN) {
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				                errmsg("Renaming columns in MotherDuck views is not supported")));
+			}
+
+			pgduckdb::ClaimCurrentCommandId();
+
+			auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+			pgduckdb::DuckDBQueryOrThrow(*connection, pgduckdb_get_rename_relationdef(relation_oid, stmt));
+			RelationClose(rel);
+
+			return false;
 		}
 
 		return false;
@@ -593,6 +629,11 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 		if (pgduckdb::IsDuckdbTable(relation) && pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::NONE) {
 			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::ALTER_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
+		}
+
+		if (pgduckdb::IsMotherDuckView(relation)) {
+			ereport(ERROR,
+			        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Altering a MotherDuck view is not supported")));
 		}
 		RelationClose(relation);
 	} else if (IsA(parsetree, AlterObjectSchemaStmt)) {
@@ -1389,8 +1430,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 
 		if (deleted_duckdb_relations < total_deleted) {
 			elog(ERROR,
-			     "Dropping both DuckDB relations and non-DuckDB objects in the same transaction is not supported",
-			     deleted_duckdb_relations, total_deleted);
+			     "Dropping both DuckDB relations and non-DuckDB objects in the same transaction is not supported");
 		}
 	}
 
@@ -1529,7 +1569,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		alter_table_stmt_string = pgduckdb_get_alter_tabledef(relid, alter_table_stmt);
 	} else if (IsA(trigdata->parsetree, RenameStmt)) {
 		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
-		alter_table_stmt_string = pgduckdb_get_rename_tabledef(relid, rename_stmt);
+		alter_table_stmt_string = pgduckdb_get_rename_relationdef(relid, rename_stmt);
 	} else {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
 	}
