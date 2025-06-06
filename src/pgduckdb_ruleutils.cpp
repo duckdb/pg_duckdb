@@ -1,6 +1,7 @@
 #include "duckdb.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pg/relations.hpp"
 
 extern "C" {
@@ -324,6 +325,75 @@ pgduckdb_function_needs_subquery(Oid function_oid) {
 		return true;
 	}
 	return false;
+}
+
+bool
+pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf) {
+	if (query->commandType != CMD_SELECT) {
+		return false;
+	}
+
+	if (list_length(query->rtable) != 1) {
+		return false;
+	}
+
+	RangeTblEntry *rte = (RangeTblEntry *)linitial(query->rtable);
+	if (rte->rtekind != RTE_FUNCTION) {
+		return false;
+	}
+
+	if (list_length(rte->functions) != 1) {
+		return false;
+	}
+
+	RangeTblFunction *rt_func = (RangeTblFunction *)linitial(rte->functions);
+
+	if (rt_func->funcexpr == NULL || !IsA(rt_func->funcexpr, FuncExpr)) {
+		return false;
+	}
+
+	FuncExpr *func_expr = (FuncExpr *)rt_func->funcexpr;
+
+	Oid function_oid = func_expr->funcid;
+
+	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
+		return false;
+	}
+
+	auto func_name = get_func_name(function_oid);
+	if (strcmp(func_name, "view") != 0) {
+		return false;
+	}
+
+	int i = 0;
+	foreach_ptr(Expr, expr, func_expr->args) {
+		if (i >= 3) {
+			break;
+		}
+
+		if (!IsA(expr, Const)) {
+			elog(ERROR, "Expected only constant argument to the view function");
+		}
+
+		Const *const_val = castNode(Const, expr);
+		if (const_val->consttype != TEXTOID) {
+			elog(ERROR, "Expected text arguments to the view function, got type %s",
+			     format_type_be(const_val->consttype));
+		}
+
+		if (const_val->constisnull) {
+			elog(ERROR, "Expected non-NULL arguments to the view function");
+		}
+
+		if (i > 0) {
+			appendStringInfoString(buf, ".");
+		}
+		appendStringInfoString(buf, quote_identifier(TextDatumGetCString(const_val->constvalue)));
+
+		i++;
+	}
+
+	return true;
 }
 
 /*
@@ -764,6 +834,42 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	return buffer.data;
 }
 
+char *
+pgduckdb_get_viewdef(const ViewStmt *stmt, const char *postgres_schema_name, const char *view_name,
+                     const char *duckdb_query_string) {
+	StringInfoData buffer;
+	initStringInfo(&buffer);
+
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
+	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
+
+	appendStringInfoString(&buffer, "CREATE ");
+	if (stmt->replace) {
+		appendStringInfoString(&buffer, "OR REPLACE ");
+	}
+	appendStringInfo(&buffer, "VIEW %s.%s", db_and_schema, quote_identifier(view_name));
+	if (stmt->aliases) {
+		appendStringInfoChar(&buffer, '(');
+		bool first = true;
+#if PG_VERSION_NUM >= 150000
+		foreach_node(String, alias, stmt->aliases) {
+#else
+		foreach_ptr(Value, alias, stmt->aliases) {
+#endif
+			if (!first) {
+				appendStringInfoString(&buffer, ", ");
+			} else {
+				first = false;
+			}
+
+			appendStringInfoString(&buffer, quote_identifier(strVal(alias)));
+		}
+		appendStringInfoChar(&buffer, ')');
+	}
+	appendStringInfo(&buffer, " AS %s;", duckdb_query_string);
+	return buffer.data;
+}
+
 /*
  * Take a raw CHECK constraint expression and convert it to a cooked format
  * ready for storage.
@@ -804,27 +910,33 @@ cookConstraint(ParseState *pstate, Node *raw_constraint, char *relname) {
 }
 
 char *
-pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
-	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_COLUMN) {
+pgduckdb_get_rename_relationdef(Oid relation_oid, RenameStmt *rename_stmt) {
+	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_VIEW &&
+	    rename_stmt->renameType != OBJECT_COLUMN) {
 		elog(ERROR, "Only renaming tables and columns is supported in DuckDB");
 	}
 
 	Relation relation = relation_open(relation_oid, AccessShareLock);
-	Assert(pgduckdb::IsDuckdbTable(relation));
+	Assert(pgduckdb::IsDuckdbTable(relation) || pgduckdb::IsMotherDuckView(relation));
 
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
 	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
 	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
 
+	const char *relation_type = "TABLE";
+	if (rename_stmt->renameType == OBJECT_VIEW) {
+		relation_type = "VIEW";
+	}
+
 	StringInfoData buffer;
 	initStringInfo(&buffer);
 
 	if (rename_stmt->subname) {
-		appendStringInfo(&buffer, "ALTER TABLE %s RENAME COLUMN %s TO %s;", old_table_name,
+		appendStringInfo(&buffer, "ALTER %s %s RENAME COLUMN %s TO %s;", relation_type, old_table_name,
 		                 quote_identifier(rename_stmt->subname), quote_identifier(rename_stmt->newname));
 
 	} else {
-		appendStringInfo(&buffer, "ALTER TABLE %s RENAME TO %s;", old_table_name,
+		appendStringInfo(&buffer, "ALTER %s %s RENAME TO %s;", relation_type, old_table_name,
 		                 quote_identifier(rename_stmt->newname));
 	}
 

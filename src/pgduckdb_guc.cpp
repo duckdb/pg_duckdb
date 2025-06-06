@@ -116,6 +116,7 @@ bool duckdb_log_pg_explain = false;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_postgres_role = strdup("");
+bool duckdb_force_motherduck_views = false;
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
@@ -154,6 +155,10 @@ InitGUC() {
 	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
 	                     "MotherDuck tables. Defaults to superusers only",
 	                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.force_motherduck_views",
+	                     "Force all views to be created in MotherDuck, even if they don't use MotherDuck tables",
+	                     &duckdb_force_motherduck_views);
 
 	/* GUCs acting on DuckDB instance */
 	DefineCustomDuckDBVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",

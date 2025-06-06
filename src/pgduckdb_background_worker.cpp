@@ -9,9 +9,12 @@
 #include "duckdb/catalog/catalog_entry/column_dependency_manager.hpp"
 #include "duckdb/parser/column_list.hpp"
 #include "duckdb/parser/parsed_data/create_table_info.hpp"
+#include "duckdb/parser/parsed_data/create_view_info.hpp"
 #include "duckdb/catalog/catalog_entry/table_catalog_entry.hpp"
+#include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -558,16 +561,72 @@ PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is
 }
 
 std::string
-DropPgTableString(const char *postgres_schema_name, const char *table_name, bool with_cascade) {
+DropPgRelationString(const char *postgres_schema_name, const char *relation_name, char relation_kind,
+                     bool with_cascade) {
 	std::ostringstream oss;
-	oss << "DROP TABLE ";
+	oss << "DROP ";
+	if (relation_kind == RELKIND_VIEW) {
+		oss << "VIEW ";
+	} else {
+		oss << "TABLE ";
+	}
 	oss << duckdb::KeywordHelper::WriteQuoted(postgres_schema_name, '"');
 	oss << ".";
-	oss << duckdb::KeywordHelper::WriteQuoted(table_name, '"');
+	oss << duckdb::KeywordHelper::WriteQuoted(relation_name, '"');
 	if (with_cascade) {
 		oss << " CASCADE";
 	}
 	oss << "; ";
+	return oss.str();
+}
+
+std::string
+CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
+	std::ostringstream oss;
+
+	oss << "CREATE VIEW ";
+	std::string schema_name = PgSchemaName(info.catalog, info.schema, is_default_db);
+	oss << duckdb::KeywordHelper::WriteQuoted(schema_name, '"');
+	oss << ".";
+	oss << duckdb::KeywordHelper::WriteQuoted(info.view_name, '"');
+	if (!info.aliases.empty()) {
+		oss << " (";
+		oss << duckdb::StringUtil::Join(info.aliases, info.aliases.size(), ", ", [](const std::string &name) {
+			return duckdb::KeywordHelper::WriteQuoted(name, '"');
+		});
+		oss << ")";
+	}
+	oss << " AS SELECT ";
+	auto it_names = info.names.begin();
+	auto it_types = info.types.begin();
+
+	bool first = true;
+
+	for (; it_names != info.names.end() && it_types != info.types.end(); it_names++, it_types++) {
+		Oid postgres_type = GetPostgresDuckDBType(*it_types);
+		if (postgres_type == InvalidOid) {
+			elog(WARNING, "Skipping column %s in table %s.%s.%s due to unsupported type", it_names->c_str(),
+			     info.catalog.c_str(), info.schema.c_str(), info.view_name.c_str());
+			continue;
+		}
+		if (!first) {
+			oss << ", ";
+		} else {
+			first = false;
+		}
+
+		oss << "r[" << duckdb::KeywordHelper::WriteQuoted(*it_names, '\'') << "]::";
+		int32_t typemod = GetPostgresDuckDBTypemod(*it_types);
+		oss << format_type_with_typemod(postgres_type, typemod);
+		oss << " AS " << duckdb::KeywordHelper::WriteQuoted(*it_names, '"');
+	}
+
+	oss << " FROM duckdb.view(";
+	oss << duckdb::KeywordHelper::WriteQuoted(info.catalog) << ", ";
+	oss << duckdb::KeywordHelper::WriteQuoted(info.schema) << ", ";
+	oss << duckdb::KeywordHelper::WriteQuoted(info.view_name) << ", ";
+	oss << duckdb::KeywordHelper::WriteQuoted(info.query->ToString(), '\'');
+	oss << ") r;";
 	return oss.str();
 }
 
@@ -586,8 +645,7 @@ CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 	for (auto &column : info.columns.Logical()) {
 		Oid postgres_type = GetPostgresDuckDBType(column.Type());
 		if (postgres_type == InvalidOid) {
-			elog(WARNING, "Skipping column %s in table %s.%s.%s due to unsupported type", column.Name().c_str(),
-			     info.catalog.c_str(), info.schema.c_str(), info.table.c_str());
+
 			continue;
 		}
 
@@ -699,6 +757,110 @@ SPI_run_utility_command(const char *query) {
 }
 
 static bool
+CreateView(const char *postgres_schema_name, const char *view_name, const char *create_view_query,
+           bool drop_with_cascade) {
+	/* -1 is for the NULL terminator */
+	if (strlen(view_name) > NAMEDATALEN - 1) {
+		ereport(WARNING, (errmsg("Skipping sync of MotherDuck view '%s' because its name is too long", view_name),
+		                  errhint("The maximum length of a view name is %d characters", NAMEDATALEN - 1)));
+		return false;
+	}
+
+	/*
+	 * We need to fetch this over-and-over again, because we commit the
+	 * transaction and thus release locks. So in theory the schema could be
+	 * deleted/renamed etc.
+	 */
+	Oid schema_oid = get_namespace_oid(postgres_schema_name, false);
+	HeapTuple tuple = SearchSysCache2(RELNAMENSP, CStringGetDatum(view_name), ObjectIdGetDatum(schema_oid));
+
+	bool did_delete_table = false;
+	if (HeapTupleIsValid(tuple)) {
+		Form_pg_class postgres_relation = (Form_pg_class)GETSTRUCT(tuple);
+		/* The table already exists in Postgres, so we cannot simply create it. */
+
+		if (!IsMotherDuckTable(postgres_relation) && !IsMotherDuckView(postgres_relation)) {
+			/*
+			 * Oops, we have a conflict. Let's notify the user, and
+			 * not do anything else
+			 */
+			elog(WARNING,
+			     "Skipping sync of MotherDuck view %s.%s because its name conflicts with an "
+			     "already existing table/view/index in Postgres",
+			     postgres_schema_name, view_name);
+			ReleaseSysCache(tuple);
+			return false;
+		}
+
+		char relation_kind = postgres_relation->relkind;
+
+		ReleaseSysCache(tuple);
+
+		/*
+		 * It's an old version of this DuckDB table, we can safely
+		 * drop it and recreate it.
+		 */
+		std::string drop_table_query =
+		    DropPgRelationString(postgres_schema_name, view_name, relation_kind, drop_with_cascade);
+
+		/* We use this to roll back the drop if the CREATE after fails */
+		BeginInternalSubTransaction(NULL);
+
+		/* Revert back to original privileges */
+		if (!SPI_run_utility_command(drop_table_query.c_str())) {
+
+			ereport(WARNING, (errmsg("Failed to sync MotherDuck view %s.%s", postgres_schema_name, view_name),
+
+			                  errdetail("While executing command: %s", create_view_query),
+			                  errhint("See previous WARNING for details")));
+			/*
+			 * Rollback the subtransaction to clean up the subtransaction
+			 * state. Even though there's nothing actually in it. So we could
+			 * we could just as well commit it, but rolling back seems more
+			 * sensible.
+			 */
+			RollbackAndReleaseCurrentSubTransaction();
+			return false;
+		}
+
+		did_delete_table = true;
+	}
+
+	Oid saved_userid;
+	int sec_context;
+	GetUserIdAndSecContext(&saved_userid, &sec_context);
+	SetUserIdAndSecContext(MotherDuckPostgresUser(), sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	bool create_table_succeeded = SPI_run_utility_command(create_view_query);
+	SetUserIdAndSecContext(saved_userid, sec_context);
+	/* Revert back to original privileges */
+	if (!create_table_succeeded) {
+
+		ereport(WARNING, (errmsg("Failed to sync MotherDuck view %s.%s", postgres_schema_name, view_name),
+
+		                  errdetail("While executing command: %s", create_view_query),
+		                  errhint("See previous WARNING for details")));
+		if (did_delete_table) {
+			/* Rollback the drop that succeeded */
+			RollbackAndReleaseCurrentSubTransaction();
+		}
+		return false;
+	}
+
+	if (did_delete_table) {
+		/*
+		 * Commit the subtransaction that contains both the drop and the create that
+		 * contains the actual table creation.
+		 */
+		ReleaseCurrentSubTransaction();
+	}
+
+	/* And then we also commit the actual transaction to release any locks that
+	 * were necessary to execute it. */
+	SPI_commit_that_works_in_bgworker();
+	return true;
+}
+
+static bool
 CreateTable(const char *postgres_schema_name, const char *table_name, const char *create_table_query,
             bool drop_with_cascade) {
 	/* -1 is for the NULL terminator */
@@ -721,7 +883,7 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 		Form_pg_class postgres_relation = (Form_pg_class)GETSTRUCT(tuple);
 		/* The table already exists in Postgres, so we cannot simply create it. */
 
-		if (!IsMotherDuckTable(postgres_relation)) {
+		if (!IsMotherDuckTable(postgres_relation) && !IsMotherDuckView(postgres_relation)) {
 			/*
 			 * Oops, we have a conflict. Let's notify the user, and
 			 * not do anything else
@@ -733,13 +895,17 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 			ReleaseSysCache(tuple);
 			return false;
 		}
+
+		char relation_kind = postgres_relation->relkind;
+
 		ReleaseSysCache(tuple);
 
 		/*
 		 * It's an old version of this DuckDB table, we can safely
 		 * drop it and recreate it.
 		 */
-		std::string drop_table_query = DropPgTableString(postgres_schema_name, table_name, drop_with_cascade);
+		std::string drop_table_query =
+		    DropPgRelationString(postgres_schema_name, table_name, relation_kind, drop_with_cascade);
 
 		/* We use this to roll back the drop if the CREATE after fails */
 		BeginInternalSubTransaction(NULL);
@@ -799,8 +965,13 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 }
 
 static bool
-DropTable(const char *fully_qualified_table, bool drop_with_cascade) {
-	const char *query = psprintf("DROP TABLE %s%s", fully_qualified_table, drop_with_cascade ? " CASCADE" : "");
+DropRelation(const char *fully_qualified_table, char relation_kind, bool drop_with_cascade) {
+	const char *relkind_string = "TABLE";
+	if (relation_kind == RELKIND_VIEW) {
+		relkind_string = "VIEW";
+	}
+	const char *query =
+	    psprintf("DROP %s %s%s", relkind_string, fully_qualified_table, drop_with_cascade ? " CASCADE" : "");
 
 	if (!SPI_run_utility_command(query)) {
 		ereport(WARNING,
@@ -1045,7 +1216,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 				}
 
 				auto &table = entry.Cast<duckdb::TableCatalogEntry>();
-				auto storage_info = table.GetStorageInfo(context);
 
 				auto table_info = duckdb::unique_ptr_cast<duckdb::CreateInfo, duckdb::CreateTableInfo>(table.GetInfo());
 				table_info->schema = table.schema.name;
@@ -1058,6 +1228,29 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 
 				if (!CreateTable(postgres_schema_name.c_str(), table.name.c_str(), create_query.c_str(),
 				                 drop_with_cascade)) {
+					all_tables_synced_successfully = false;
+					return;
+				}
+			});
+
+			schema.Scan(context, duckdb::CatalogType::VIEW_ENTRY, [&](duckdb::CatalogEntry &entry) {
+				if (entry.type != duckdb::CatalogType::VIEW_ENTRY) {
+					return;
+				}
+
+				auto &view = entry.Cast<duckdb::ViewCatalogEntry>();
+				auto view_info = duckdb::unique_ptr_cast<duckdb::CreateInfo, duckdb::CreateViewInfo>(view.GetInfo());
+
+				view_info->schema = view.schema.name;
+				view_info->catalog = motherduck_db;
+
+				auto create_query = CreatePgViewString(*view_info, is_default_db);
+				if (create_query.empty()) {
+					return;
+				}
+
+				if (!CreateView(postgres_schema_name.c_str(), view.name.c_str(), create_query.c_str(),
+				                drop_with_cascade)) {
 					all_tables_synced_successfully = false;
 					return;
 				}
@@ -1097,7 +1290,9 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 		 * necessary in most cases.
 		 */
 		auto query_tables = R"(
-			SELECT relid::text FROM duckdb.tables
+			SELECT relid::text, relkind
+			FROM duckdb.tables
+			JOIN pg_class ON oid = relid
 			WHERE duckdb_db = $1 AND (
 				motherduck_catalog_version != $2 OR
 				default_database != $3
@@ -1114,12 +1309,13 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 			for (auto i = 0; i < current_batch_size; i++) {
 				HeapTuple tuple = deleted_tables_batch->vals[i];
 				char *fully_qualified_table = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
+				char relkind = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2)[0];
 				/*
 				 * We need to create a new SPI context for the DROP command
 				 * otherwise our batch gets invalidated.
 				 */
 				SPI_connect();
-				DropTable(fully_qualified_table, drop_with_cascade);
+				DropRelation(fully_qualified_table, relkind, drop_with_cascade);
 				SPI_finish();
 			}
 		} while (current_batch_size == deleted_tables_batch_size);
