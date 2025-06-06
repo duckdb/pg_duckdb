@@ -881,6 +881,8 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 	};
 	pgduckdb::RecordDependencyOnMDServer(&table_address);
 	ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
+
+	pgduckdb::ClaimCurrentCommandId(true);
 }
 
 static void
