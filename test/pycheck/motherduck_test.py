@@ -314,13 +314,52 @@ def test_md_duckdb_only_types(md_cur: Cursor, ddb: Duckdb):
     assert md_cur.sql("""select union_tag(u) from t1""") == ["t", "d"]
 
 
-def test_md_views(md_cur: Cursor, ddb: Duckdb):
+def test_md_views(md_cur: Cursor, ddb: Duckdb, default_db_name):
+    # Cleanup anything in the main schema that exists from a previous run
+    ddb.sql(f"DROP SCHEMA IF EXISTS my_db.{default_db_name} CASCADE")
     ddb.sql("CREATE TABLE t1(a int, b varchar)")
+
+    # Views created in MotherDuck should be visible in Postgres
     ddb.sql("CREATE VIEW v1(one) AS FROM t1 select 1, a + 10 as a_plus_ten")
     ddb.sql("INSERT INTO t1 VALUES (1, 'abc'), (2, 'def')")
     md_cur.wait_until_table_exists("v1")
     assert md_cur.sql("SELECT * FROM v1") == [(1, 11), (1, 12)]
-    assert md_cur.sql("SELECT a_plus_ten, one FROM v1 ORDER BY a_plus_ten LIMIT 1") == [
-        (1, 11),
-        (1, 12),
-    ]
+    assert md_cur.sql("SELECT a_plus_ten, one FROM v1 ORDER BY a_plus_ten LIMIT 1") == (
+        11,
+        1,
+    )
+
+    # View should be created in MotherDuck if it's in a ddb$ schema and uses
+    # DuckDB tables.
+    md_cur.sql("CREATE VIEW v2 AS SELECT * FROM t1 WHERE a > 1")
+    assert md_cur.sql("SELECT * FROM v2") == (2, "def")
+    assert ddb.sql("SELECT * FROM v2") == (2, "def")
+
+    # View should be created in MotherDuck if it's in a ddb$ schema, even if it
+    # doesn't use MotherDuck tables.
+    md_cur.sql("CREATE VIEW v3 AS SELECT 1 AS col")
+    assert md_cur.sql("SELECT col FROM v3") == 1
+    assert ddb.sql("SELECT col FROM v3") == 1
+
+    # Views created in non-ddb$ schemas should not be visible in MotherDuck, if
+    # it doesn't use MotherDuck tables.
+    md_cur.sql("CREATE VIEW public.v4 AS SELECT 2 AS col")
+    with pytest.raises(
+        duckdb.CatalogException,
+        match="Table with name v4 does not exist!",
+    ):
+        ddb.sql("SELECT col FROM my_db.main.v4")
+
+    # Views created in non-ddb$ schemas should be visible in MotherDuck, if it
+    # uses MotherDuck tables.
+    md_cur.sql("CREATE TABLE t2(a int, b varchar)")
+    md_cur.sql(f"CREATE VIEW {default_db_name}.v5 AS SELECT * FROM t2")
+    assert md_cur.sql(f"SELECT * FROM {default_db_name}.v5") == []
+    assert ddb.sql(f"SELECT * FROM my_db.{default_db_name}.v5") == []
+
+    # Views created in non-ddb$ schemas should be visible in MotherDuck, if
+    # duckdb.force_motherduck_views is set to true.
+    md_cur.sql("SET duckdb.force_motherduck_views = true")
+    md_cur.sql(f"CREATE VIEW {default_db_name}.v6 AS SELECT 3 AS col")
+    assert md_cur.sql(f"SELECT col FROM {default_db_name}.v6") == 3
+    assert ddb.sql(f"SELECT col FROM my_db.{default_db_name}.v6") == 3

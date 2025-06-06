@@ -837,13 +837,16 @@ char *
 pgduckdb_get_viewdef(const ViewStmt *stmt, const char *postgres_schema_name, const char *view_name,
                      const char *duckdb_query_string) {
 	StringInfoData buffer;
-	const char *db_and_schema_string = pgduckdb_db_and_schema_string(postgres_schema_name, true);
 	initStringInfo(&buffer);
+
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
+	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
+
 	appendStringInfoString(&buffer, "CREATE ");
 	if (stmt->replace) {
 		appendStringInfoString(&buffer, "OR REPLACE ");
 	}
-	appendStringInfo(&buffer, "VIEW %s.%s", db_and_schema_string, quote_identifier(view_name));
+	appendStringInfo(&buffer, "VIEW %s.%s", db_and_schema, quote_identifier(view_name));
 	if (stmt->aliases) {
 		appendStringInfoChar(&buffer, '(');
 		bool first = true;
