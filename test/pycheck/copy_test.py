@@ -214,7 +214,7 @@ def test_copy_from_local(cur: Cursor, tmp_path: Path):
         )
 
     with pytest.raises(
-        psycopg.errors.InternalError,
+        psycopg.errors.FeatureNotSupported,
         match="DuckDB COPY only supports SELECT statement",
     ):
         cur.sql(
