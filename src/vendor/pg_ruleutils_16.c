@@ -11405,6 +11405,9 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				break;
 			case RTE_SUBQUERY:
 				/* Subquery RTE */
+				if (pgduckdb_replace_subquery_with_view(rte->subquery, buf)) {
+					break;
+				}
 				appendStringInfoChar(buf, '(');
 				get_query_def(rte->subquery, buf, context->namespaces, NULL,
 							  true,
