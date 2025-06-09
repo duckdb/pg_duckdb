@@ -21,7 +21,7 @@ struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 		return max_threads;
 	}
 	void ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input);
-	void RegisterLocalState();
+	bool RegisterLocalState();
 	void UnregisterLocalState();
 
 private:
@@ -37,7 +37,7 @@ public:
 	bool count_tuples_only;
 	duckdb::vector<AttrNumber> output_columns;
 	std::atomic<std::uint32_t> total_row_count;
-	std::atomic<std::uint32_t> registered_local_states;
+	std::atomic<std::int32_t> registered_local_states;
 	std::ostringstream scan_query;
 	duckdb::shared_ptr<PostgresTableReader> table_reader_global_state;
 	MemoryContext duckdb_scan_memory_ctx;

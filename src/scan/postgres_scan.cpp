@@ -447,7 +447,6 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 
 bool
 PostgresScanGlobalState::RegisterLocalState() {
-	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Registering local state");
 	if (registered_local_states < 0) {
 		return false;
 	}
@@ -457,7 +456,7 @@ PostgresScanGlobalState::RegisterLocalState() {
 
 void
 PostgresScanGlobalState::UnregisterLocalState() {
-	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Unregistering local state");
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	registered_local_states--;
 	// Cleanup up the table reader global state when all registered local states are gone.
 	// And set the flag to negative to indicate no more local states are allowed to be registered.
