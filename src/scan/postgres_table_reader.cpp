@@ -129,15 +129,20 @@ PostgresTableReader::InitRunWithParallelScan(PlannedStmt *planned_stmt, bool cou
 	}
 }
 
-// The caller should hold GlobalProcessLock to ensure thread-safety
+/*
+ * Initializes a tuple slot for the current query.
+ *
+ * The returned TupleTableSlot is allocated in the context of `table_scan_query_desc->estate`
+ * and will be automatically cleaned up when `table_scan_query_desc` is destroyed.
+ *
+ * Returns NULL if the table reader has already been cleaned up, e.g., if concurrent threads
+ * have finished the scan and triggered cleanup).
+ */
 TupleTableSlot *
 PostgresTableReader::InitTupleSlot() {
-	// Return NULL if the table reader has already been cleaned up, which can occur if concurrent threads have completed
-	// the scan.
-	if (cleaned_up) {
-		return NULL;
-	}
-	return PostgresFunctionGuard(MakeTupleTableSlot, table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
+	D_ASSERT(!cleaned_up);
+	return PostgresFunctionGuard(ExecInitExtraTupleSlot, table_scan_query_desc->estate,
+	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
 }
 
 PostgresTableReader::~PostgresTableReader() {

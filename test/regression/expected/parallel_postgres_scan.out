@@ -20,4 +20,16 @@ SELECT * FROM tbl ORDER BY id DESC LIMIT 3;
  499998 | {"a": 499998} | {499998}
 (3 rows)
 
-DROP TABLE tbl;
+CREATE TABLE tbl1 (id int, c jsonb, d text[]);
+INSERT INTO tbl1 SELECT i, jsonb_build_object('a', i), array_agg(i) FROM generate_series(1, 100000) i GROUP BY i;
+SELECT tbl.id, tbl.c, tbl.d, tbl1.c, tbl1.d FROM tbl JOIN tbl1 ON tbl.id = tbl1.id ORDER BY 1,2,3,4 LIMIT 5;
+ id |    c     |  d  |    c     |  d  
+----+----------+-----+----------+-----
+  1 | {"a": 1} | {1} | {"a": 1} | {1}
+  2 | {"a": 2} | {2} | {"a": 2} | {2}
+  3 | {"a": 3} | {3} | {"a": 3} | {3}
+  4 | {"a": 4} | {4} | {"a": 4} | {4}
+  5 | {"a": 5} | {5} | {"a": 5} | {5}
+(5 rows)
+
+DROP TABLE tbl, tbl1;
