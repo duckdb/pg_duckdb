@@ -146,6 +146,9 @@ PostgresTableReader::InitTupleSlot() {
 }
 
 PostgresTableReader::~PostgresTableReader() {
+	if (cleaned_up) {
+		return;
+	}
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	Cleanup();
 }
@@ -153,10 +156,7 @@ PostgresTableReader::~PostgresTableReader() {
 // The caller should hold GlobalProcessLock to ensure thread-safety
 void
 PostgresTableReader::Cleanup() {
-	if (cleaned_up) {
-		return;
-	}
-
+	D_ASSERT(!cleaned_up);
 	cleaned_up = true;
 	PostgresScopedStackReset scoped_stack_reset;
 	PostgresMemberGuard(PostgresTableReader::CleanupUnsafe);

@@ -16,7 +16,6 @@ public:
 	void Init(const char *table_scan_query, bool count_tuples_only);
 	void Cleanup();
 	bool GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer);
-	void PostgresTableReaderCleanup();
 	TupleTableSlot *InitTupleSlot();
 	int
 	NumWorkersLaunched() const {

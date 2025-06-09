@@ -420,8 +420,8 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _rel,
                                                  const duckdb::TableFunctionInitInput &input)
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
-      output_columns(), total_row_count(0), finished_threads(0), max_threads(1), scan_query(), table_reader_global_state(nullptr),
-      duckdb_scan_memory_ctx(nullptr) {
+      output_columns(), total_row_count(0), registered_local_states(0), scan_query(),
+      table_reader_global_state(nullptr), duckdb_scan_memory_ctx(nullptr), max_threads(1) {
 	ConstructTableScanQuery(input);
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
 	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
@@ -445,12 +445,25 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	       scan_query.str().c_str());
 }
 
+bool
+PostgresScanGlobalState::RegisterLocalState() {
+	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Registering local state");
+	if (registered_local_states < 0) {
+		return false;
+	}
+	registered_local_states++;
+	return true;
+}
+
 void
 PostgresScanGlobalState::UnregisterLocalState() {
-	finished_threads++;
-	// Cleanup up the table reader global state when all threads have finished.
-	if (finished_threads == MaxThreads()) {
-		table_reader_global_state->PostgresTableReaderCleanup();
+	pd_log(DEBUG2, "(DuckDB/PostgresSeqScanGlobalState) Unregistering local state");
+	registered_local_states--;
+	// Cleanup up the table reader global state when all registered local states are gone.
+	// And set the flag to negative to indicate no more local states are allowed to be registered.
+	if (registered_local_states == 0) {
+		registered_local_states = -1;
+		table_reader_global_state->Cleanup();
 	}
 }
 
@@ -464,7 +477,11 @@ PostgresScanGlobalState::~PostgresScanGlobalState() {
 PostgresScanLocalState::PostgresScanLocalState(PostgresScanGlobalState *_global_state)
     : global_state(_global_state), output_vector_size(0), exhausted_scan(false) {
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	for (int i = 0; global_state->MaxThreads() > 1 && i < LOCAL_STATE_SLOT_BATCH_SIZE; i++) {
+	bool registered = global_state->RegisterLocalState();
+	if (!registered || global_state->MaxThreads() <= 1) {
+		return;
+	}
+	for (int i = 0; i < LOCAL_STATE_SLOT_BATCH_SIZE; i++) {
 		slots[i] = global_state->table_reader_global_state->InitTupleSlot();
 	}
 }
