@@ -153,7 +153,6 @@ PostgresTableReader::~PostgresTableReader() {
 	Cleanup();
 }
 
-// The caller should hold GlobalProcessLock to ensure thread-safety
 void
 PostgresTableReader::Cleanup() {
 	D_ASSERT(!cleaned_up);
