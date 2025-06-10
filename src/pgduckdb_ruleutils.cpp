@@ -330,6 +330,10 @@ pgduckdb_function_needs_subquery(Oid function_oid) {
 bool
 pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf) {
 	FuncExpr *func_expr = pgduckdb::GetDuckdbViewExprFromQuery(query);
+	if (!func_expr) {
+		/* Not a duckdb.view query, so we don't need to do anything */
+		return false;
+	}
 
 	int i = 0;
 	foreach_ptr(Expr, expr, func_expr->args) {

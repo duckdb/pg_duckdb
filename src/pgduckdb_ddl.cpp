@@ -771,6 +771,7 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 
 static void
 UpdateDuckdbViewDefinition(Oid view_oid, const char *new_view_name) {
+#if PG_VERSION_NUM >= 150000
 	// Get the original view definition
 	Datum view_definition = DirectFunctionCall1(pg_get_viewdef, ObjectIdGetDatum(view_oid));
 	char *view_def_str = TextDatumGetCString(view_definition);
@@ -783,19 +784,19 @@ UpdateDuckdbViewDefinition(Oid view_oid, const char *new_view_name) {
 
 	RawStmt *raw_stmt = (RawStmt *)linitial(parsetree_list);
 
-#if PG_VERSION_NUM >= 150000
 	Query *query = parse_analyze_fixedparams(raw_stmt, view_def_str, NULL, 0, NULL);
-#else
-	Query *query = parse_analyze(raw_stmt, view_def_str, NULL, 0, NULL);
-#endif
 
-	FuncExpr *func_call = pgduckdb::GetDuckdbViewExprFromQuery(query);
+	FuncExpr *func_expr = pgduckdb::GetDuckdbViewExprFromQuery(query);
+	if (!func_expr) {
+		elog(ERROR, "Expected a duckdb.view function call in the view definition");
+	}
+
 	// Modify the third argument of the function call
-	if (list_length(func_call->args) < 4) {
+	if (list_length(func_expr->args) < 4) {
 		elog(ERROR, "duckdb.view function call does not have enough arguments");
 	}
 
-	Node *third_arg = (Node *)list_nth(func_call->args, 2);
+	Node *third_arg = (Node *)list_nth(func_expr->args, 2);
 	if (third_arg == NULL || !IsA(third_arg, Const)) {
 		elog(ERROR, "Expected the third argument of duckdb.view to be a constant");
 	}
@@ -825,6 +826,9 @@ UpdateDuckdbViewDefinition(Oid view_oid, const char *new_view_name) {
 	if (ret != SPI_OK_UTILITY) {
 		elog(ERROR, "Failed to execute CREATE OR REPLACE VIEW: %s", SPI_result_code_string(ret));
 	}
+#else
+	elog(ERROR, "Renaming DuckDB views is not supported in PostgreSQL versions older than 15.0");
+#endif
 }
 
 static bool
