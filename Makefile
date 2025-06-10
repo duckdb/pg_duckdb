@@ -114,7 +114,7 @@ schedulecheck:
 duckdb: $(FULL_DUCKDB_LIB)
 
 .git/modules/third_party/duckdb/HEAD:
-	git submodule update --init --recursive
+	git submodule update --init --recursive --depth 1
 
 $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_extensions.cmake
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \

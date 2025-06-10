@@ -64,12 +64,12 @@ Oid
 DuckLakeDataFileOid() {
 	return get_relname_relid("ducklake_data_file", DuckDbNamespace());
 }
-
+#if 0
 Oid
 DuckLakeDeleteFileOid() {
 	return get_relname_relid("ducklake_delete_file", DuckDbNamespace());
 }
-
+#endif
 } // namespace
 
 PgDuckLakeMetadataManager::PgDuckLakeMetadataManager(duckdb::DuckLakeTransaction &transaction)
@@ -261,7 +261,7 @@ PgDuckLakeMetadataManager::GetDuckLakeTableInfo(const duckdb::DuckLakeSnapshot &
 	}
 
 	if (count > 0) {
-		int ncolumns = GetDuckLakeTableDetails(snapshot, table_info);
+		GetDuckLakeTableDetails(snapshot, table_info);
 	}
 
 	systable_endscan(scan);
@@ -270,17 +270,18 @@ PgDuckLakeMetadataManager::GetDuckLakeTableInfo(const duckdb::DuckLakeSnapshot &
 }
 
 duckdb::DuckLakeCatalogInfo
-PgDuckLakeMetadataManager::GetCatalogForSnapshot(duckdb::DuckLakeSnapshot snapshot) {
+PgDuckLakeMetadataManager::GetCatalogForSnapshot(duckdb::DuckLakeSnapshot ducklake_snapshot) {
 	duckdb::DuckLakeCatalogInfo catalog_info;
 
 	// --- 1. Schemas ---
-	int nschemas = GetDuckLakeSchemas(snapshot, catalog_info);
+	int nschemas = GetDuckLakeSchemas(ducklake_snapshot, catalog_info);
 	pd_log(DEBUG2, "Read %d schemas", nschemas);
 
 	// --- 2. Tables ---
-	int ntables = GetDuckLakeTables(snapshot, catalog_info);
+	int ntables = GetDuckLakeTables(ducklake_snapshot, catalog_info);
+	pd_log(DEBUG2, "Read %d tables", ntables);
 	for (auto &table : catalog_info.tables) {
-		int ncolumns = GetDuckLakeTableDetails(snapshot, table);
+		int ncolumns = GetDuckLakeTableDetails(ducklake_snapshot, table);
 		pd_log(DEBUG2, "Read %d columns for table %s", ncolumns, table.name.c_str());
 	}
 
@@ -321,13 +322,15 @@ PgDuckLakeMetadataManager::GetSnapshot() {
 }
 
 duckdb::unique_ptr<duckdb::DuckLakeSnapshot>
-PgDuckLakeMetadataManager::GetSnapshot(duckdb::BoundAtClause &at_clause) {
+PgDuckLakeMetadataManager::GetSnapshot(duckdb::BoundAtClause & /* at_clause */) {
 	// TODO
+	return nullptr;
 }
 
 duckdb::vector<duckdb::DuckLakeFileListEntry>
-PgDuckLakeMetadataManager::GetFilesForTable(duckdb::DuckLakeTableEntry &table_entry, duckdb::DuckLakeSnapshot snapshot,
-                                            const duckdb::string &filter) {
+PgDuckLakeMetadataManager::GetFilesForTable(duckdb::DuckLakeTableEntry &table_entry,
+                                            duckdb::DuckLakeSnapshot ducklake_snapshot,
+                                            const duckdb::string & /*filter*/) {
 	duckdb::vector<duckdb::DuckLakeFileListEntry> files;
 	::Relation table = table_open(DuckLakeDataFileOid(), AccessShareLock);
 	TupleDesc desc = RelationGetDescr(table);
@@ -335,14 +338,14 @@ PgDuckLakeMetadataManager::GetFilesForTable(duckdb::DuckLakeTableEntry &table_en
 	ScanKeyInit(&key[0], 2 /*table_id*/, BTGreaterEqualStrategyNumber, F_INT8EQ,
 	            Int64GetDatum(table_entry.GetTableId().index));
 	ScanKeyInit(&key[1], 3 /*begin_snapshot*/, BTLessEqualStrategyNumber, F_INT8LE,
-	            Int64GetDatum(snapshot.snapshot_id));
+	            Int64GetDatum(ducklake_snapshot.snapshot_id));
 	SysScanDesc scan = systable_beginscan(table, InvalidOid, false, NULL, 1, key);
 	HeapTuple tuple;
 
 	while (HeapTupleIsValid(tuple = systable_getnext(scan))) {
 		bool isnull;
 		int64_t end_snapshot = DatumGetInt64(heap_getattr(tuple, 4 /*end_snapshot*/, desc, &isnull));
-		if (isnull || snapshot.snapshot_id < end_snapshot) {
+		if (isnull || ducklake_snapshot.snapshot_id < end_snapshot) {
 			duckdb::DuckLakeFileListEntry file_entry;
 			duckdb::DuckLakePath path;
 			path.path = TextDatumGetCString(heap_getattr(tuple, 6 /*path*/, desc, &isnull));
@@ -354,6 +357,7 @@ PgDuckLakeMetadataManager::GetFilesForTable(duckdb::DuckLakeTableEntry &table_en
 			file_entry.snapshot_id = DatumGetInt64(heap_getattr(tuple, 3 /*begin_snapshot*/, desc, &isnull));
 			Datum partial_file_info = heap_getattr(tuple, 13 /*partial_file_info*/, desc, &isnull);
 			if (!isnull) {
+				(void)partial_file_info;
 				// TODO handle partial file info
 			}
 
@@ -368,7 +372,7 @@ PgDuckLakeMetadataManager::GetFilesForTable(duckdb::DuckLakeTableEntry &table_en
 }
 
 duckdb::vector<duckdb::DuckLakeGlobalStatsInfo>
-PgDuckLakeMetadataManager::GetGlobalTableStats(duckdb::DuckLakeSnapshot snapshot) {
+PgDuckLakeMetadataManager::GetGlobalTableStats(duckdb::DuckLakeSnapshot /* snapshot */) {
 	duckdb::vector<duckdb::DuckLakeGlobalStatsInfo> global_stats;
 
 	// TODO: Implement
@@ -565,7 +569,7 @@ PgDuckLakeMetadataManager::WriteNewDataFiles(duckdb::DuckLakeSnapshot commit_sna
 }
 
 void
-PgDuckLakeMetadataManager::UpdateGlobalTableStats(const duckdb::DuckLakeGlobalStatsInfo &stats) {
+PgDuckLakeMetadataManager::UpdateGlobalTableStats(const duckdb::DuckLakeGlobalStatsInfo & /* stats */) {
 	// TODO: Implement
 }
 

@@ -6,8 +6,9 @@
 namespace pgduckdb {
 
 static duckdb::unique_ptr<duckdb::Catalog>
-DuckLakeAttach(duckdb::StorageExtensionInfo *storage_info, duckdb::ClientContext &context, duckdb::AttachedDatabase &db,
-               const duckdb::string &name, duckdb::AttachInfo &info, duckdb::AccessMode access_mode) {
+DuckLakeAttach(duckdb::StorageExtensionInfo * /* storage_info */, duckdb::ClientContext & /* context */,
+               duckdb::AttachedDatabase &db, const duckdb::string & /* name */, duckdb::AttachInfo &info,
+               duckdb::AccessMode access_mode) {
 	duckdb::DuckLakeOptions options;
 	options.metadata_path = info.path;
 	options.data_path = "/tmp/ducklake/";
@@ -18,7 +19,7 @@ DuckLakeAttach(duckdb::StorageExtensionInfo *storage_info, duckdb::ClientContext
 }
 
 static duckdb::unique_ptr<duckdb::TransactionManager>
-DuckLakeCreateTransactionManager(duckdb::StorageExtensionInfo *storage_info, duckdb::AttachedDatabase &db,
+DuckLakeCreateTransactionManager(duckdb::StorageExtensionInfo * /* storage_info */, duckdb::AttachedDatabase &db,
                                  duckdb::Catalog &catalog) {
 	auto &ducklake_catalog = catalog.Cast<PgDuckLakeCatalog>();
 	return duckdb::make_uniq<PgDuckLakeTransactionManager>(db, ducklake_catalog);

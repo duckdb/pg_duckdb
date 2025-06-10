@@ -197,7 +197,7 @@ ducklake_relation_set_new_filenode(Relation rel, const RelFileNode * /* newrnode
 }
 
 void
-ducklake_relation_nontransactional_truncate(Relation rel) {
+ducklake_relation_nontransactional_truncate(Relation /* rel */) {
 	elog(ERROR, "ducklake_relation_nontransactional_truncate not implemented");
 }
 
