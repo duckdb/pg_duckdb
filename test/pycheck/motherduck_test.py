@@ -370,6 +370,19 @@ def test_md_views(md_cur: Cursor, ddb: Duckdb, default_db_name):
     assert md_cur.sql("SELECT * FROM v2") == (1, "abc")
     assert ddb.sql("SELECT * FROM v2") == (1, "abc")
 
+    with pytest.raises(
+        psycopg.errors.FeatureNotSupported,
+        match="Renaming columns in MotherDuck views is not supported",
+    ):
+        md_cur.sql("ALTER VIEW v2 RENAME COLUMN one TO new_one")
+    md_cur.sql("ALTER VIEW v2 RENAME TO v7")
+
+    with md_cur.connection.transaction():
+        md_cur.sql("ALTER VIEW v3 RENAME TO v8")
+        md_cur.sql("ALTER VIEW v7 RENAME TO v9")
+        md_cur.sql("CREATE VIEW v10 AS SELECT * FROM t1")
+        md_cur.sql("CREATE VIEW v11 AS SELECT * FROM t1")
+
     # Dropping views should work as expected
     with pytest.raises(
         psycopg.errors.InternalError,
@@ -377,6 +390,14 @@ def test_md_views(md_cur: Cursor, ddb: Duckdb, default_db_name):
     ):
         md_cur.sql("DROP VIEW v1, v4")
 
-    md_cur.sql("DROP VIEW v1, v2, v3")
+    md_cur.sql("DROP VIEW v1, v8, v9, v10, v11")
     md_cur.sql("DROP VIEW v4")
     md_cur.sql(f"DROP VIEW {default_db_name}.v5, {default_db_name}.v6")
+
+    # Should be deleted from MotherDuck too. This is testing one of the views
+    # in the default database, since dropping was not propagating correctly
+    # there for an earlier version.
+    with pytest.raises(
+        duckdb.CatalogException, match="Table with name v5 does not exist!"
+    ):
+        ddb.sql("SELECT * FROM v5")

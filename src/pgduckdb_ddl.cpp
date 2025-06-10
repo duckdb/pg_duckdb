@@ -132,6 +132,10 @@ NeedsToBeMotherDuckView(ViewStmt *stmt, char *schema_name) {
 		return true;
 	}
 
+	if (pgduckdb::is_background_worker) {
+		return true;
+	}
+
 	if (pgduckdb::IsDuckdbSchemaName(schema_name)) {
 		return true;
 	}
@@ -339,6 +343,11 @@ DuckdbHandleDDLPost(PlannedStmt *pstmt) {
 		 * duckdb.query(...) call.
 		 */
 		DuckdbHandleViewStmtPost(parsetree);
+	} else {
+		/* For other DDL statements, we just need to claim any CommandId that
+		 * was used during the Postgres processing of the DDL statement.
+		 */
+		pgduckdb::ClaimCurrentCommandId(true);
 	}
 }
 
@@ -598,7 +607,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 			pgduckdb::DuckDBQueryOrThrow(*connection, pgduckdb_get_rename_relationdef(relation_oid, stmt));
 			RelationClose(rel);
 
-			return false;
+			return true;
 		}
 
 		return false;
@@ -829,9 +838,9 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 	Oid relid = rel->rd_id;
 	auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
 	char *postgres_schema_name = get_namespace_name(rel->rd_rel->relnamespace);
-	relation_close(rel, NoLock);
 
 	const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
+	relation_close(rel, NoLock);
 
 	Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
 	Datum values[] = {ObjectIdGetDatum(relid), CStringGetTextDatum(duckdb_db), 0,
@@ -874,12 +883,12 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 
 	SPI_finish();
 
-	ObjectAddress table_address = {
+	ObjectAddress view_address = {
 	    .classId = RelationRelationId,
 	    .objectId = relid,
 	    .objectSubId = 0,
 	};
-	pgduckdb::RecordDependencyOnMDServer(&table_address);
+	pgduckdb::RecordDependencyOnMDServer(&view_address);
 	ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
 
 	pgduckdb::ClaimCurrentCommandId(true);
