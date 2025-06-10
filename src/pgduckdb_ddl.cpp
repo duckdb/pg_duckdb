@@ -165,7 +165,6 @@ GetDuckdbViewExprFromQuery(Query *query) {
 				continue;
 
 			if (rte) {
-				elog(NOTICE, "Found multiple RTEs in the FROM clause of the query. This is not a duckdb.view query.");
 				/*
 				 * Found multiple RTEs in the FROM clause, which means it isn't
 				 * a duckdb.view query.
@@ -175,7 +174,6 @@ GetDuckdbViewExprFromQuery(Query *query) {
 
 			rte = rte_temp;
 		} else {
-			elog(NOTICE, "Found something else in the FROM clause of the query. This is not a duckdb.view query.");
 			/*
 			 * Found something else in the FROM clause, which means it isn't
 			 * a duckdb.view query.
