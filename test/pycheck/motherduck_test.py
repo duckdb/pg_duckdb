@@ -375,21 +375,37 @@ def test_md_views(md_cur: Cursor, ddb: Duckdb, default_db_name):
         match="Renaming columns in MotherDuck views is not supported",
     ):
         md_cur.sql("ALTER VIEW v2 RENAME COLUMN one TO new_one")
-    md_cur.sql("ALTER VIEW v2 RENAME TO v7")
-    assert md_cur.sql("SELECT * FROM v7") == (1, "abc")
 
-    with md_cur.connection.transaction():
-        md_cur.sql("ALTER VIEW v3 RENAME TO v8")
-        md_cur.sql("ALTER VIEW v7 RENAME TO v9")
-        assert md_cur.sql("SELECT * FROM v8") == 1
-        assert md_cur.sql("SELECT * FROM v9") == (1, "abc")
-        # Postgres support renaming views using ALTER TABLE
-        md_cur.sql("ALTER TABLE v8 RENAME TO v10")
-        md_cur.sql("ALTER TABLE v9 RENAME TO v11")
-        assert md_cur.sql("SELECT * FROM v10") == 1
-        assert md_cur.sql("SELECT * FROM v11") == (1, "abc")
-        md_cur.sql("CREATE VIEW v12 AS SELECT * FROM t1")
-        md_cur.sql("CREATE VIEW v13 AS SELECT * FROM t1")
+    if PG_MAJOR_VERSION >= 15:
+        md_cur.sql("ALTER VIEW v2 RENAME TO v7")
+        assert md_cur.sql("SELECT * FROM v7") == (1, "abc")
+
+        with md_cur.connection.transaction():
+            # We should be able to rename views in a transaction and query them
+            # as well.
+            md_cur.sql("ALTER VIEW v3 RENAME TO v8")
+            md_cur.sql("ALTER VIEW v7 RENAME TO v9")
+            assert md_cur.sql("SELECT * FROM v8") == 1
+            assert md_cur.sql("SELECT * FROM v9") == (1, "abc")
+
+            # Postgres supports renaming views using ALTER TABLE
+            md_cur.sql("ALTER TABLE v8 RENAME TO v10")
+            md_cur.sql("ALTER TABLE v9 RENAME TO v11")
+            assert md_cur.sql("SELECT * FROM v10") == 1
+            assert md_cur.sql("SELECT * FROM v11") == (1, "abc")
+
+            # We should be able to create new views in the same transaction too
+            md_cur.sql("CREATE VIEW v12 AS SELECT * FROM t1")
+            md_cur.sql("CREATE VIEW v13 AS SELECT * FROM t1")
+            assert md_cur.sql("SELECT count(*) FROM v12") == 2
+            assert md_cur.sql("SELECT count(*) FROM v13") == 2
+
+    else:
+        with pytest.raises(
+            psycopg.errors.FeatureNotSupported,
+            match="Renaming DuckDB views is not supported in PostgreSQL versions older than 15.0",
+        ):
+            md_cur.sql("ALTER VIEW v2 RENAME TO v7")
 
     # Dropping views should work as expected
     with pytest.raises(
@@ -398,7 +414,10 @@ def test_md_views(md_cur: Cursor, ddb: Duckdb, default_db_name):
     ):
         md_cur.sql("DROP VIEW v1, v4")
 
-    md_cur.sql("DROP VIEW v1, v10, v11, v12, v13")
+    if PG_MAJOR_VERSION >= 15:
+        md_cur.sql("DROP VIEW v1, v10, v11, v12, v13")
+    else:
+        md_cur.sql("DROP VIEW v1, v2, v3")
     md_cur.sql("DROP VIEW v4")
     md_cur.sql(f"DROP VIEW {default_db_name}.v5, {default_db_name}.v6")
 

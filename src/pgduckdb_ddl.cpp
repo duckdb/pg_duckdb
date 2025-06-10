@@ -24,6 +24,7 @@ extern "C" {
 #include "nodes/value.h"
 #include "optimizer/optimizer.h"
 #include "parser/analyze.h"
+#include "parser/parsetree.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
@@ -154,11 +155,35 @@ GetDuckdbViewExprFromQuery(Query *query) {
 		return NULL;
 	}
 
-	if (list_length(query->rtable) != 1) {
-		return NULL;
+	RangeTblEntry *rte = NULL;
+	foreach_ptr(Node, from_node, query->jointree->fromlist) {
+		if (IsA(from_node, RangeTblRef)) {
+			int varno = ((RangeTblRef *)from_node)->rtindex;
+			RangeTblEntry *rte_temp = rt_fetch(varno, query->rtable);
+
+			if (!rte_temp->inFromCl)
+				continue;
+
+			if (rte) {
+				elog(NOTICE, "Found multiple RTEs in the FROM clause of the query. This is not a duckdb.view query.");
+				/*
+				 * Found multiple RTEs in the FROM clause, which means it isn't
+				 * a duckdb.view query.
+				 */
+				return NULL;
+			}
+
+			rte = rte_temp;
+		} else {
+			elog(NOTICE, "Found something else in the FROM clause of the query. This is not a duckdb.view query.");
+			/*
+			 * Found something else in the FROM clause, which means it isn't
+			 * a duckdb.view query.
+			 */
+			return NULL;
+		}
 	}
 
-	RangeTblEntry *rte = (RangeTblEntry *)linitial(query->rtable);
 	if (rte->rtekind != RTE_FUNCTION) {
 		return NULL;
 	}
@@ -769,9 +794,9 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 	pgduckdb::CurrentServerOid = server->serverid;
 }
 
+#if PG_VERSION_NUM >= 150000
 static void
 UpdateDuckdbViewDefinition(Oid view_oid, const char *new_view_name) {
-#if PG_VERSION_NUM >= 150000
 	// Get the original view definition
 	Datum view_definition = DirectFunctionCall1(pg_get_viewdef, ObjectIdGetDatum(view_oid));
 	char *view_def_str = TextDatumGetCString(view_definition);
@@ -827,7 +852,10 @@ UpdateDuckdbViewDefinition(Oid view_oid, const char *new_view_name) {
 		elog(ERROR, "Failed to execute CREATE OR REPLACE VIEW: %s", SPI_result_code_string(ret));
 	}
 #else
-	elog(ERROR, "Renaming DuckDB views is not supported in PostgreSQL versions older than 15.0");
+static void
+UpdateDuckdbViewDefinition(Oid, const char *) {
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+	                errmsg("Renaming DuckDB views is not supported in PostgreSQL versions older than 15.0")));
 #endif
 }
 
