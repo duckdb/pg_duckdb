@@ -182,6 +182,14 @@ GetDuckdbViewExprFromQuery(Query *query) {
 		}
 	}
 
+	if (rte == NULL) {
+		/*
+		 * No RTE found in the FROM clause, which means it isn't a duckdb.view
+		 * query.
+		 */
+		return NULL;
+	}
+
 	if (rte->rtekind != RTE_FUNCTION) {
 		return NULL;
 	}
