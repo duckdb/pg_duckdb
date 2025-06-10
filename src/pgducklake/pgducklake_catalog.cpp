@@ -15,7 +15,7 @@ PgDuckLakeCatalog::Initialize(duckdb::optional_ptr<duckdb::ClientContext> /*cont
 duckdb::optional_ptr<duckdb::SchemaCatalogEntry>
 PgDuckLakeCatalog::LookupSchema(duckdb::CatalogTransaction transaction, const duckdb::EntryLookupInfo &schema_lookup,
                                 duckdb::OnEntryNotFound if_not_found) {
-    return DuckLakeCatalog::LookupSchema(transaction, schema_lookup, if_not_found);
+	return DuckLakeCatalog::LookupSchema(transaction, schema_lookup, if_not_found);
 	// Lazy metadata loading. Commented out as it requires upstream ducklake changes.
 #if 0
 	auto &schema_name = schema_lookup.GetEntryName();

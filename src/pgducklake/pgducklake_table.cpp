@@ -37,13 +37,12 @@ PgDuckLakeTable::CreateTable(Relation rel) {
 	// Get schema entry
 	char *nspname = get_namespace_name(rel->rd_rel->relnamespace);
 	duckdb::EntryLookupInfo schema_lookup(duckdb::CatalogType::SCHEMA_ENTRY, nspname);
-	auto schema_entry =
-	    ducklake_catalog.LookupSchema(catalog_txn, schema_lookup, duckdb::OnEntryNotFound::RETURN_NULL);
+	auto schema_entry = ducklake_catalog.LookupSchema(catalog_txn, schema_lookup, duckdb::OnEntryNotFound::RETURN_NULL);
 	// Try create schema if not found
 	if (!schema_entry) {
 		duckdb::CreateSchemaInfo create_schema_info;
 		create_schema_info.schema = nspname;
-		create_schema_info.on_conflict= duckdb::OnCreateConflict::IGNORE_ON_CONFLICT;
+		create_schema_info.on_conflict = duckdb::OnCreateConflict::IGNORE_ON_CONFLICT;
 		auto entry = ducklake_catalog.CreateSchema(catalog_txn, create_schema_info);
 		schema_entry = entry ? &entry->Cast<duckdb::SchemaCatalogEntry>() : nullptr;
 	}
