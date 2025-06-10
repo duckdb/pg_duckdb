@@ -329,41 +329,7 @@ pgduckdb_function_needs_subquery(Oid function_oid) {
 
 bool
 pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf) {
-	if (query->commandType != CMD_SELECT) {
-		return false;
-	}
-
-	if (list_length(query->rtable) != 1) {
-		return false;
-	}
-
-	RangeTblEntry *rte = (RangeTblEntry *)linitial(query->rtable);
-	if (rte->rtekind != RTE_FUNCTION) {
-		return false;
-	}
-
-	if (list_length(rte->functions) != 1) {
-		return false;
-	}
-
-	RangeTblFunction *rt_func = (RangeTblFunction *)linitial(rte->functions);
-
-	if (rt_func->funcexpr == NULL || !IsA(rt_func->funcexpr, FuncExpr)) {
-		return false;
-	}
-
-	FuncExpr *func_expr = (FuncExpr *)rt_func->funcexpr;
-
-	Oid function_oid = func_expr->funcid;
-
-	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
-		return false;
-	}
-
-	auto func_name = get_func_name(function_oid);
-	if (strcmp(func_name, "view") != 0) {
-		return false;
-	}
+	FuncExpr *func_expr = pgduckdb::GetDuckdbViewExprFromQuery(query);
 
 	int i = 0;
 	foreach_ptr(Expr, expr, func_expr->args) {
@@ -924,7 +890,7 @@ pgduckdb_get_rename_relationdef(Oid relation_oid, RenameStmt *rename_stmt) {
 	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
 
 	const char *relation_type = "TABLE";
-	if (rename_stmt->renameType == OBJECT_VIEW) {
+	if (relation->rd_rel->relkind == RELKIND_VIEW) {
 		relation_type = "VIEW";
 	}
 

@@ -21,6 +21,7 @@ extern "C" {
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/value.h"
 #include "optimizer/optimizer.h"
 #include "parser/analyze.h"
 #include "tcop/utility.h"
@@ -32,6 +33,7 @@ extern "C" {
 #include "executor/spi.h"
 #include "miscadmin.h"
 #include "rewrite/rewriteHandler.h"
+#include "utils/ruleutils.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
@@ -105,7 +107,6 @@ ContainsMotherDuckRelation(Node *node, void *context) {
 			if (rel->rd_rel->relkind == RELKIND_VIEW || rel->rd_rel->relkind == RELKIND_RELATION) {
 				/* Check if the relation is a MotherDuck view or table */
 				if (pgduckdb::IsMotherDuckView(rel) || pgduckdb::IsDuckdbTable(rel)) {
-					elog(NOTICE, "Found MotherDuck view or table: %s", range_var->relname);
 					relation_close(rel, NoLock);
 					return true;
 				}
@@ -136,11 +137,56 @@ NeedsToBeMotherDuckView(ViewStmt *stmt, char *schema_name) {
 		return true;
 	}
 
+	if (pgduckdb::top_level_duckdb_ddl_type == DDLType::RENAME_VIEW) {
+		return true;
+	}
+
 	if (pgduckdb::IsDuckdbSchemaName(schema_name)) {
 		return true;
 	}
 
 	return pgduckdb::ContainsMotherDuckRelation(stmt->query, NULL);
+}
+
+FuncExpr *
+GetDuckdbViewExprFromQuery(Query *query) {
+	if (query->commandType != CMD_SELECT) {
+		return NULL;
+	}
+
+	if (list_length(query->rtable) != 1) {
+		return NULL;
+	}
+
+	RangeTblEntry *rte = (RangeTblEntry *)linitial(query->rtable);
+	if (rte->rtekind != RTE_FUNCTION) {
+		return NULL;
+	}
+
+	if (list_length(rte->functions) != 1) {
+		return NULL;
+	}
+
+	RangeTblFunction *rt_func = (RangeTblFunction *)linitial(rte->functions);
+
+	if (rt_func->funcexpr == NULL || !IsA(rt_func->funcexpr, FuncExpr)) {
+		return NULL;
+	}
+
+	FuncExpr *func_expr = (FuncExpr *)rt_func->funcexpr;
+
+	Oid function_oid = func_expr->funcid;
+
+	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
+		return NULL;
+	}
+
+	auto func_name = get_func_name(function_oid);
+	if (strcmp(func_name, "view") != 0) {
+		return NULL;
+	}
+
+	return func_expr;
 }
 
 } // namespace pgduckdb
@@ -329,6 +375,7 @@ static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
 static void DuckdbHandleAlterForeignServerStmt(Node *parsetree);
 static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
 static void DuckdbHandleAlterUserMappingStmt(Node *parsetree);
+static bool DuckdbHandleRenameViewPre(RenameStmt *stmt);
 static bool DuckdbHandleViewStmtPre(Node *parsetree, ParamListInfo params, PlannedStmt *pstmt,
                                     const char *query_string);
 static void DuckdbHandleViewStmtPost(Node *parsetree);
@@ -564,13 +611,18 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 			}
 		} else if (stmt->renameType == OBJECT_TABLE ||
 		           (stmt->renameType == OBJECT_COLUMN && stmt->relationType == OBJECT_TABLE)) {
-			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, true);
+			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessExclusiveLock, true);
 			if (relation_oid == InvalidOid) {
 				/* Let postgres deal with this. It's possible that this is fine in
 				 * case of RENAME ... IF EXISTS */
 				return false;
 			}
 			Relation rel = RelationIdGetRelation(relation_oid);
+
+			if (rel->rd_rel->relkind == RELKIND_VIEW) {
+				RelationClose(rel);
+				return DuckdbHandleRenameViewPre(stmt);
+			}
 
 			if (pgduckdb::IsDuckdbTable(rel)) {
 				if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
@@ -584,30 +636,8 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 			RelationClose(rel);
 		} else if (stmt->renameType == OBJECT_VIEW ||
 		           (stmt->renameType == OBJECT_COLUMN && stmt->relationType == OBJECT_VIEW)) {
-			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, true);
-			if (relation_oid == InvalidOid) {
-				/* Let postgres deal with this. It's possible that this is fine in
-				 * case of RENAME ... IF EXISTS */
-				return false;
-			}
-			Relation rel = RelationIdGetRelation(relation_oid);
-			if (!pgduckdb::IsMotherDuckView(rel)) {
-				RelationClose(rel);
-				return false; // Not a MotherDuck view, let Postgres handle it
-			}
 
-			if (stmt->renameType == OBJECT_COLUMN) {
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				                errmsg("Renaming columns in MotherDuck views is not supported")));
-			}
-
-			pgduckdb::ClaimCurrentCommandId();
-
-			auto connection = pgduckdb::DuckDBManager::GetConnection(true);
-			pgduckdb::DuckDBQueryOrThrow(*connection, pgduckdb_get_rename_relationdef(relation_oid, stmt));
-			RelationClose(rel);
-
-			return true;
+			return DuckdbHandleRenameViewPre(stmt);
 		}
 
 		return false;
@@ -739,11 +769,125 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 	pgduckdb::CurrentServerOid = server->serverid;
 }
 
+static void
+UpdateDuckdbViewDefinition(Oid view_oid, const char *new_view_name) {
+	// Get the original view definition
+	Datum view_definition = DirectFunctionCall1(pg_get_viewdef, ObjectIdGetDatum(view_oid));
+	char *view_def_str = TextDatumGetCString(view_definition);
+
+	// Parse the view definition into an abstract syntax tree (AST)
+	List *parsetree_list = pg_parse_query(view_def_str);
+	if (list_length(parsetree_list) != 1) {
+		elog(ERROR, "Expected a single query, but got %d queries", list_length(parsetree_list));
+	}
+
+	RawStmt *raw_stmt = (RawStmt *)linitial(parsetree_list);
+
+#if PG_VERSION_NUM >= 150000
+	Query *query = parse_analyze_fixedparams(raw_stmt, view_def_str, NULL, 0, NULL);
+#else
+	Query *query = parse_analyze(raw_stmt, view_def_str, NULL, 0, NULL);
+#endif
+
+	FuncExpr *func_call = pgduckdb::GetDuckdbViewExprFromQuery(query);
+	// Modify the third argument of the function call
+	if (list_length(func_call->args) < 4) {
+		elog(ERROR, "duckdb.view function call does not have enough arguments");
+	}
+
+	Node *third_arg = (Node *)list_nth(func_call->args, 2);
+	if (third_arg == NULL || !IsA(third_arg, Const)) {
+		elog(ERROR, "Expected the third argument of duckdb.view to be a constant");
+	}
+
+	Const *third_arg_const = (Const *)third_arg;
+	if (third_arg_const->consttype != TEXTOID) {
+		elog(ERROR, "Expected the third argument of duckdb.view to be a text constant");
+	}
+
+	third_arg_const->constvalue = CStringGetTextDatum(new_view_name);
+
+	// Reconstruct the modified view definition
+	char *new_view_def_str = pg_get_querydef(query, false);
+
+	char *current_view_name = get_rel_name(view_oid);
+	char *schema_name = get_namespace_name(get_rel_namespace(view_oid));
+	// Construct CREATE OR REPLACE VIEW statement
+	StringInfo create_view_sql = makeStringInfo();
+	appendStringInfo(create_view_sql, "CREATE OR REPLACE VIEW %s AS %s",
+	                 quote_qualified_identifier(schema_name, current_view_name), new_view_def_str);
+
+	// Execute the SQL statement to update the view
+	SPI_connect();
+	int ret = SPI_exec(create_view_sql->data, 0);
+	SPI_finish();
+
+	if (ret != SPI_OK_UTILITY) {
+		elog(ERROR, "Failed to execute CREATE OR REPLACE VIEW: %s", SPI_result_code_string(ret));
+	}
+}
+
+static bool
+DuckdbHandleRenameViewPre(RenameStmt *stmt) {
+	Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessExclusiveLock, true);
+	if (relation_oid == InvalidOid) {
+		/* Let postgres deal with this. It's possible that this is fine in
+		 * case of RENAME ... IF EXISTS */
+		return false;
+	}
+	Relation rel = RelationIdGetRelation(relation_oid);
+	if (!pgduckdb::IsMotherDuckView(rel)) {
+		RelationClose(rel);
+		return false; // Not a MotherDuck view, let Postgres handle it
+	}
+
+	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Only one DuckDB view can be renamed in a single statement")));
+	}
+
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::RENAME_VIEW;
+
+	if (stmt->renameType == OBJECT_COLUMN) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("Renaming columns in MotherDuck views is not supported")));
+	}
+
+	pgduckdb::ClaimCurrentCommandId();
+
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+	pgduckdb::DuckDBQueryOrThrow(*connection, pgduckdb_get_rename_relationdef(relation_oid, stmt));
+	RelationClose(rel);
+
+	/* Now we need to replace the Postgres view to reference the new name in the duckdb.view(...) call */
+	UpdateDuckdbViewDefinition(relation_oid, stmt->newname);
+
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
+
+	return true;
+}
+
 static bool
 DuckdbHandleViewStmtPre(Node *parsetree, ParamListInfo params, PlannedStmt *pstmt, const char *query_string) {
 	auto stmt = castNode(ViewStmt, parsetree);
 	Oid schema_oid = RangeVarGetCreationNamespace(stmt->view);
 	char *schema_name = get_namespace_name(schema_oid);
+
+	if (pgduckdb::is_background_worker || pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::RENAME_VIEW) {
+		/*
+		 * Both in the background worker and during a RENAME VIEW, we've
+		 * already prepared the view query correctly (i.e. it's wrapped in a
+		 * duckdb.view(...)) call. So we don't need to wrap it here again. We
+		 * also don't need to create the view in DuckDB in these cases, because
+		 * it's already there. So this is just a no-op.
+		 *
+		 * We do want to claim the current command ID though, as well as making
+		 * sure our Post hook is fired.
+		 */
+		pgduckdb::ClaimCurrentCommandId();
+		return true;
+	}
+
 	if (!pgduckdb::NeedsToBeMotherDuckView(stmt, schema_name)) {
 		// Let Postgres handle this view
 		return false;
@@ -795,14 +939,6 @@ DuckdbHandleViewStmtPre(Node *parsetree, ParamListInfo params, PlannedStmt *pstm
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 		                errmsg("views must not contain data-modifying statements in WITH")));
 	/* END OF COPIED LOGIC */
-
-	if (pgduckdb::doing_motherduck_sync) {
-		/*
-		 * We don't want to forward DDL to DuckDB because we're syncing the
-		 * tables that are already there.
-		 */
-		return true;
-	}
 
 	char *duckdb_query_string = pgduckdb_get_querydef((Query *)copyObjectImpl(viewParse));
 	List *db_and_schema = pgduckdb_db_and_schema(schema_name, true);
