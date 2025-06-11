@@ -47,6 +47,7 @@ test: timescale_conflict
 test: timestamp_timestamptz
 test: timestamp_with_interval
 test: transaction_errors
+test: transaction_isolation
 test: transactions
 test: type_support
 test: union_functions
