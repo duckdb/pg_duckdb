@@ -10528,11 +10528,6 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		nargs++;
 	}
 
-	bool function_needs_subquery = pgduckdb_function_needs_subquery(funcoid);
-	if (function_needs_subquery) {
-		appendStringInfoString(buf, "(FROM ");
-	}
-
 	appendStringInfo(buf, "%s(",
 					 generate_function_name(funcoid, nargs,
 											argnames, argtypes,
@@ -10549,10 +10544,6 @@ get_func_expr(FuncExpr *expr, deparse_context *context,
 		get_rule_expr((Node *) lfirst(l), context, true);
 	}
 	appendStringInfoChar(buf, ')');
-
-	if (function_needs_subquery) {
-		appendStringInfoChar(buf, ')');
-	}
 }
 
 /*

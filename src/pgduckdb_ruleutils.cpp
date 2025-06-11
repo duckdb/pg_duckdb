@@ -294,39 +294,6 @@ pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cel
 }
 
 /*
- * iceberg_scan needs to be wrapped in an additianol subquery to resolve a
- * bug where aliasses on iceberg_scan are ignored:
- * https://github.com/duckdb/duckdb-iceberg/issues/44
- *
- * By wrapping the iceberg_scan call the alias is given to the subquery,
- * instead of th call. This subquery is easily optimized away by DuckDB,
- * because it doesn't do anything.
- *
- * This problem is also true for the "query" function, which we use when
- * creating materialized views and CTAS.
- * https://github.com/duckdb/duckdb/issues/15570#issuecomment-2598419474
- *
- * TODO: Probably check this in a bit more efficient way and move it to
- * pgduckdb_ruleutils.cpp
- */
-bool
-pgduckdb_function_needs_subquery(Oid function_oid) {
-	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
-		return false;
-	}
-
-	auto func_name = get_func_name(function_oid);
-	if (strcmp(func_name, "iceberg_scan") == 0) {
-		return true;
-	}
-
-	if (strcmp(func_name, "query") == 0) {
-		return true;
-	}
-	return false;
-}
-
-/*
  * A wrapper around pgduckdb_is_fake_type that returns -1 if the type of the
  * Const is fake, because that's the type of value that get_const_expr requires
  * in its showtype variable to never show the type.
