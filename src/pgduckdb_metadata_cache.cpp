@@ -170,6 +170,8 @@ BuildDuckdbOnlyFunctions() {
 	                                "epoch_ms",
 	                                "epoch_us",
 	                                "epoch_ns",
+	                                "make_timestamp",
+	                                "make_timestamptz",
 	                                "time_bucket",
 	                                "union_extract",
 	                                "union_tag"};
