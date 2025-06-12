@@ -1278,10 +1278,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 			continue;
 		}
 
-		auto save_nestlevel = NewGUCNestLevel();
-		SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
-		SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
-
 		Oid arg_types[] = {TEXTOID, TEXTOID, TEXTOID};
 		Datum values[] = {CStringGetTextDatum(motherduck_db.c_str()),
 		                  CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version),
@@ -1324,8 +1320,6 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 			}
 		} while (current_batch_size == deleted_tables_batch_size);
 		SPI_cursor_close(deleted_tables_portal);
-
-		AtEOXact_GUC(false, save_nestlevel);
 
 		SPI_commit_that_works_in_bgworker();
 
