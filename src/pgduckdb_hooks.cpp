@@ -35,6 +35,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
+#include "pgducklake/pgducklake_handler.hpp"
+
 static planner_hook_type prev_planner_hook = NULL;
 static ExecutorStart_hook_type prev_executor_start_hook = NULL;
 static ExecutorFinish_hook_type prev_executor_finish_hook = NULL;
@@ -86,13 +88,23 @@ ContainsDuckdbTables(List *rte_list) {
 }
 
 static bool
+ContainsDuckLakeTables(List *rte_list) {
+	foreach_node(RangeTblEntry, rte, rte_list) {
+		if (pgduckdb::IsDuckLakeTable(rte->relid)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+static bool
 ContainsDuckdbItems(Node *node, void *context) {
 	if (node == NULL)
 		return false;
 
 	if (IsA(node, Query)) {
 		Query *query = (Query *)node;
-		if (ContainsDuckdbTables(query->rtable)) {
+		if (ContainsDuckdbTables(query->rtable) || ContainsDuckLakeTables(query->rtable)) {
 			return true;
 		}
 #if PG_VERSION_NUM >= 160000
@@ -198,7 +210,9 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	if (query->commandType != CMD_SELECT) {
 		if (query->rtable != NULL) {
 			RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
-			if (!::IsDuckdbTable(resultRte->relid)) {
+			bool is_ducklake_table = pgduckdb::IsDuckLakeTable(resultRte->relid);
+
+			if (!::IsDuckdbTable(resultRte->relid) && !is_ducklake_table) {
 				elog(elevel, "DuckDB does not support modififying Postgres tables");
 				return false;
 			}

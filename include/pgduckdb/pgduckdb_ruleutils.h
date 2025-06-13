@@ -15,8 +15,9 @@ char *pgduckdb_get_tabledef(Oid relation_id);
 char *pgduckdb_get_alter_tabledef(Oid relation_oid, AlterTableStmt *alter_stmt);
 char *pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt);
 bool pgduckdb_is_not_default_expr(Node *node, void *context);
-List *pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table);
-const char *pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table);
+List *pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table, bool is_ducklake_table);
+const char *pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table,
+                                          bool is_ducklake_table);
 bool pgduckdb_is_duckdb_row(Oid type_oid);
 bool pgduckdb_is_unresolved_type(Oid type_oid);
 bool pgduckdb_is_fake_type(Oid type_oid);

@@ -54,3 +54,4 @@ test: type_support
 test: union_functions
 test: unresolved_type
 test: views
+test: ducklake/basic

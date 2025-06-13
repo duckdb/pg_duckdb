@@ -42,6 +42,8 @@ extern "C" {
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 
+#include "pgducklake/pgducklake_handler.hpp"
+
 extern "C" {
 bool outermost_query = true;
 
@@ -409,7 +411,11 @@ pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level) {
  * are not escaped yet.
  */
 List *
-pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
+pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table, bool is_ducklake_table) {
+	if (is_ducklake_table) {
+		return list_make2((void *)"pgducklake", (void *)postgres_schema_name);
+	}
+
 	if (!is_duckdb_table) {
 		return list_make2((void *)"pgduckdb", (void *)postgres_schema_name);
 	}
@@ -475,8 +481,8 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, bool is_duckdb_table) {
  * database are quoted if necessary.
  */
 const char *
-pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table) {
-	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, is_duckdb_table);
+pgduckdb_db_and_schema_string(const char *postgres_schema_name, bool is_duckdb_table, bool is_ducklake_table) {
+	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, is_duckdb_table, is_ducklake_table);
 	const char *db_name = (const char *)linitial(db_and_schema);
 	const char *schema_name = (const char *)lsecond(db_and_schema);
 	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
@@ -496,8 +502,9 @@ pgduckdb_relation_name(Oid relation_oid) {
 	const char *relname = NameStr(relation->relname);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
 	bool is_duckdb_table = pgduckdb::IsDuckdbTable(relation);
+	bool is_ducklake_table = pgduckdb::IsDuckLakeTable(relation_oid);
 
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, is_duckdb_table);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, is_duckdb_table, is_ducklake_table);
 
 	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
@@ -548,7 +555,8 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	Relation relation = relation_open(relation_oid, AccessShareLock);
 	const char *relation_name = pgduckdb_relation_name(relation_oid);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation));
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, pgduckdb::IsDuckdbTable(relation),
+	                                                          pgduckdb::IsDuckLakeTable(relation));
 
 	StringInfoData buffer;
 	initStringInfo(&buffer);
@@ -780,7 +788,8 @@ pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
 	Assert(pgduckdb::IsDuckdbTable(relation));
 
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
+	const char *db_and_schema =
+	    pgduckdb_db_and_schema_string(postgres_schema_name, true, pgduckdb::IsDuckLakeTable(relation_oid));
 	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
 
 	StringInfoData buffer;

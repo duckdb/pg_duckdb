@@ -1,0 +1,38 @@
+CREATE TABLE t(a INT) USING ducklake;
+INSERT INTO t SELECT g % 10 FROM generate_series(1, 1000) g;
+SELECT COUNT(*) FROM t;
+ count 
+-------
+  1000
+(1 row)
+
+SELECT a, COUNT(*) FROM t WHERE a > 5 GROUP BY a ORDER BY a;
+ a | count 
+---+-------
+ 6 |   100
+ 7 |   100
+ 8 |   100
+ 9 |   100
+(4 rows)
+
+CREATE TABLE h(a INT);
+INSERT INTO h SELECT g % 10 FROM generate_series(1, 1000) g;
+-- insert into ducklake from an heap table
+INSERT INTO t SELECT * FROM h;
+SELECT COUNT(*) FROM t;
+ count 
+-------
+  2000
+(1 row)
+
+DROP TABLE t;
+DROP TABLE h;
+-- empty table
+CREATE TABLE empty(a INT) USING ducklake;
+SELECT COUNT(*) FROM empty;
+ count 
+-------
+     0
+(1 row)
+
+DROP TABLE empty;
