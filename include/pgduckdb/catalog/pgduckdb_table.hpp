@@ -16,14 +16,12 @@ public:
 
 	virtual ~PostgresTable();
 
-public:
 	duckdb::unique_ptr<duckdb::BaseStatistics> GetStatistics(duckdb::ClientContext &context,
 	                                                         duckdb::column_t column_id) override;
 	duckdb::TableFunction GetScanFunction(duckdb::ClientContext &context,
 	                                      duckdb::unique_ptr<duckdb::FunctionData> &bind_data) override;
 	duckdb::TableStorageInfo GetStorageInfo(duckdb::ClientContext &context) override;
 
-public:
 	static Relation OpenRelation(Oid relid);
 	static void SetTableInfo(duckdb::CreateTableInfo &info, Relation rel);
 
@@ -31,6 +29,10 @@ protected:
 	Relation rel;
 	Cardinality cardinality;
 	Snapshot snapshot;
+
+private:
+	PostgresTable(const PostgresTable &) = delete;
+	PostgresTable &operator=(const PostgresTable &) = delete;
 };
 
 } // namespace pgduckdb

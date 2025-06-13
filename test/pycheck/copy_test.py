@@ -21,9 +21,9 @@ def test_copy_to_local(cur: Cursor, tmp_path: Path):
     with open(csv_path, "r") as file:
         content = file.read()
         expected_content = "id,name\n1,Alice\n2,Bob\n"
-        assert (
-            content == expected_content
-        ), f"Expected: {expected_content}, but got: {content}"
+        assert content == expected_content, (
+            f"Expected: {expected_content}, but got: {content}"
+        )
 
     # The above was using duckdb exection because duckdb.force_execution is
     # true by default in our tests. We can validate that by looking at the

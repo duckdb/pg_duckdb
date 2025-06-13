@@ -11,7 +11,6 @@ class PostgresSchema : public duckdb::SchemaCatalogEntry {
 public:
 	PostgresSchema(duckdb::Catalog &catalog, duckdb::CreateSchemaInfo &info, Snapshot snapshot);
 
-public:
 	// -- Schema API --
 	void Scan(duckdb::ClientContext &context, duckdb::CatalogType type,
 	          const std::function<void(CatalogEntry &)> &callback) override;
@@ -42,9 +41,12 @@ public:
 	void DropEntry(duckdb::ClientContext &context, duckdb::DropInfo &info) override;
 	void Alter(duckdb::CatalogTransaction transaction, duckdb::AlterInfo &info) override;
 
-public:
 	Snapshot snapshot;
 	duckdb::Catalog &catalog;
+
+private:
+	PostgresSchema(const PostgresSchema &) = delete;
+	PostgresSchema &operator=(const PostgresSchema &) = delete;
 };
 
 } // namespace pgduckdb

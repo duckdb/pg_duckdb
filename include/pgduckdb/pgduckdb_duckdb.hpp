@@ -54,7 +54,13 @@ public:
 	void Reset();
 
 private:
-	DuckDBManager() = default;
+	DuckDBManager()
+	    : extensions_table_current_seq(0), database(nullptr), connection(nullptr), default_dbname("<!UNSET!>"),
+	      secrets_valid(false) {
+	}
+
+	DuckDBManager(const DuckDBManager &) = delete;
+	DuckDBManager &operator=(const DuckDBManager &) = delete;
 
 	static DuckDBManager manager_instance;
 

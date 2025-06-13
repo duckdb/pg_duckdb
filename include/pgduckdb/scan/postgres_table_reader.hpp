@@ -8,15 +8,23 @@ namespace pgduckdb {
 
 class PostgresTableReader {
 public:
-	PostgresTableReader(const char *table_scan_query, bool count_tuples_only);
+	PostgresTableReader();
 	~PostgresTableReader();
 	TupleTableSlot *GetNextTuple();
-	void PostgresTableReaderCleanup();
+	void Init(const char *table_scan_query, bool count_tuples_only);
+	void Cleanup();
 
 private:
+	PostgresTableReader(const PostgresTableReader &) = delete;
+	PostgresTableReader &operator=(const PostgresTableReader &) = delete;
+
+	void InitUnsafe(const char *table_scan_query, bool count_tuples_only);
+	void InitRunWithParallelScan(PlannedStmt *, bool);
+	void CleanupUnsafe();
+
+	TupleTableSlot *GetNextTupleUnsafe();
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
-	const char *ExplainScanPlan(QueryDesc *query_desc);
 	bool CanTableScanRunInParallel(Plan *plan);
 	bool MarkPlanParallelAware(Plan *plan);
 

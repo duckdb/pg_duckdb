@@ -24,7 +24,6 @@ bool pgduckdb_var_is_duckdb_row(Var *var);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
 Var *pgduckdb_duckdb_row_subscript_var(Expr *expr);
 bool pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell);
-bool pgduckdb_function_needs_subquery(Oid function_oid);
 bool pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf);
 int pgduckdb_show_type(Const *constval, int original_showtype);
 bool pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var, char *colname);

@@ -434,21 +434,7 @@ DuckdbHandleDDLPost(PlannedStmt *pstmt) {
  */
 static bool
 DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
-	if (!pgduckdb::IsExtensionRegistered()) {
-		/* We're not installed, so don't mess with the query */
-		return false;
-	}
-
 	Node *parsetree = pstmt->utilityStmt;
-
-	if (IsA(parsetree, TransactionStmt)) {
-		/*
-		 * Don't do anything for transaction statements, we have the
-		 * transaction XactCallback functions to handle those in
-		 * pgduckdb_xact.cpp
-		 */
-		return false;
-	}
 
 	/*
 	 * Time to check for disallowed mixed writes here. The handling for some of
@@ -1108,10 +1094,55 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	pgduckdb::SetStatementTopLevel(prev_top_level_ddl);
 }
 
+static bool
+DuckdbShouldCallDDLHooks(PlannedStmt *pstmt) {
+	Node *parsetree = pstmt->utilityStmt;
+
+	/*
+	 * Normally we want to call IsExtensionRegistered for any activity. That
+	 * way we initialize our cache, and more importantly trigger start of the
+	 * background worker to sync MotherDuck tables.
+	 *
+	 * However, there are certain commands related to transaction isolation
+	 * that Postgres does not allow to run after any other query. So the
+	 * queries we do to initialize our cache interfere, then cause errors for
+	 * the command the user tried to execute.
+	 *
+	 * The first of such commands are BEGIN commands similar to this:
+	 *
+	 * BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+	 */
+	if (IsA(parsetree, TransactionStmt)) {
+		/*
+		 * We could explicitely only check for BEGIN, but any others won't be
+		 * the first query in a session anyway (so initialzing caching doesn't
+		 * matter).
+		 *
+		 * Secondly, we also don't want to do anything for transaction
+		 * statements in this hook anyway. Anything related to transaction
+		 * management is our the XactCallback in pgduckdb_xact.cpp instead.
+		 */
+		return false;
+	}
+
+	/*
+	 * ... The second of such commands are SET TRANSACTION commands:
+	 */
+	if (IsA(parsetree, VariableSetStmt)) {
+		VariableSetStmt *stmt = castNode(VariableSetStmt, parsetree);
+		if (stmt->kind == VAR_SET_MULTI && StringHasPrefix(stmt->name, "TRANSACTION")) {
+			return false;
+		}
+	}
+
+	return pgduckdb::IsExtensionRegistered();
+}
+
 static void
 DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
-	if (!pgduckdb::IsExtensionRegistered()) {
+
+	if (!DuckdbShouldCallDDLHooks(pstmt)) {
 		return prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 	}
 

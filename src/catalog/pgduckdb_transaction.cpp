@@ -28,7 +28,7 @@ PostgresTransaction::~PostgresTransaction() {
 }
 
 SchemaItems::SchemaItems(duckdb::unique_ptr<PostgresSchema> &&_schema, const duckdb::string &_name)
-    : name(_name), schema(std::move(_schema)) {
+    : name(_name), schema(std::move(_schema)), tables() {
 }
 
 duckdb::optional_ptr<duckdb::CatalogEntry>
@@ -75,6 +75,9 @@ PostgresTransaction::GetSchema(const duckdb::string &name) {
 	auto pg_schema = duckdb::make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
 	schemas->emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
 	return schemas->at(name).GetSchema();
+}
+
+PostgresContextState::PostgresContextState() : duckdb::ClientContextState(), schemas() {
 }
 
 void

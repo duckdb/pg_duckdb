@@ -294,39 +294,6 @@ pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cel
 	return false;
 }
 
-/*
- * iceberg_scan needs to be wrapped in an additianol subquery to resolve a
- * bug where aliasses on iceberg_scan are ignored:
- * https://github.com/duckdb/duckdb-iceberg/issues/44
- *
- * By wrapping the iceberg_scan call the alias is given to the subquery,
- * instead of th call. This subquery is easily optimized away by DuckDB,
- * because it doesn't do anything.
- *
- * This problem is also true for the "query" function, which we use when
- * creating materialized views and CTAS.
- * https://github.com/duckdb/duckdb/issues/15570#issuecomment-2598419474
- *
- * TODO: Probably check this in a bit more efficient way and move it to
- * pgduckdb_ruleutils.cpp
- */
-bool
-pgduckdb_function_needs_subquery(Oid function_oid) {
-	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
-		return false;
-	}
-
-	auto func_name = get_func_name(function_oid);
-	if (strcmp(func_name, "iceberg_scan") == 0) {
-		return true;
-	}
-
-	if (strcmp(func_name, "query") == 0) {
-		return true;
-	}
-	return false;
-}
-
 bool
 pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf) {
 	FuncExpr *func_expr = pgduckdb::GetDuckdbViewExprFromQuery(query);
@@ -1229,5 +1196,89 @@ pgduckdb_add_tablesample_percent(const char *tsm_name, StringInfo buf, int num_a
 		return;
 	}
 	appendStringInfoChar(buf, '%');
+}
+
+/*
+DuckDB doesn't use an escape character in LIKE expressions by default.
+Cf.
+https://github.com/duckdb/duckdb/blob/12183c444dd729daad5cb463e59f3112a806a88b/src/function/scalar/string/like.cpp#L152
+
+So when converting the PG Query to string, we force the escape
+character (`\`) using the `xxx_escape` functions
+*/
+
+struct PGDuckDBGetOperExprContext {
+	const char *pg_op_name;
+	const char *duckdb_op_name;
+	const char *escape_pattern;
+	bool is_likeish_op;
+	bool is_negated;
+};
+
+void *
+pg_duckdb_get_oper_expr_make_ctx(const char *op_name, Node **, Node **arg2) {
+	auto ctx = (PGDuckDBGetOperExprContext *)palloc0(sizeof(PGDuckDBGetOperExprContext));
+	ctx->pg_op_name = op_name;
+	ctx->is_likeish_op = false;
+	ctx->is_negated = false;
+	ctx->escape_pattern = "'\\'";
+
+	if (AreStringEqual(op_name, "~~")) {
+		ctx->duckdb_op_name = "LIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = false;
+	} else if (AreStringEqual(op_name, "~~*")) {
+		ctx->duckdb_op_name = "ILIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = false;
+	} else if (AreStringEqual(op_name, "!~~")) {
+		ctx->duckdb_op_name = "LIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = true;
+	} else if (AreStringEqual(op_name, "!~~*")) {
+		ctx->duckdb_op_name = "ILIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = true;
+	}
+
+	if (ctx->is_likeish_op && IsA(*arg2, FuncExpr)) {
+		auto arg2_func = (FuncExpr *)*arg2;
+		auto func_name = get_func_name(arg2_func->funcid);
+		if (!AreStringEqual(func_name, "like_escape") && !AreStringEqual(func_name, "ilike_escape")) {
+			elog(ERROR, "Unexpected function in LIKE expression: '%s'", func_name);
+		}
+
+		*arg2 = (Node *)linitial(arg2_func->args);
+		ctx->escape_pattern = pgduckdb_deparse_expression((Node *)lsecond(arg2_func->args), nullptr, false, false);
+	}
+
+	return ctx;
+}
+
+void
+pg_duckdb_get_oper_expr_prefix(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_likeish_op && ctx->is_negated) {
+		appendStringInfo(buf, "NOT (");
+	}
+}
+
+void
+pg_duckdb_get_oper_expr_middle(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	auto op = ctx->duckdb_op_name ? ctx->duckdb_op_name : ctx->pg_op_name;
+	appendStringInfo(buf, " %s ", op);
+}
+
+void
+pg_duckdb_get_oper_expr_suffix(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_likeish_op) {
+		appendStringInfo(buf, " ESCAPE %s", ctx->escape_pattern);
+
+		if (ctx->is_negated) {
+			appendStringInfo(buf, ")");
+		}
+	}
 }
 }
