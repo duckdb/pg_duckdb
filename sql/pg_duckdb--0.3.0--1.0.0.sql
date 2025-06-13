@@ -223,16 +223,6 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
-CREATE FUNCTION @extschema@.epoch_ms(bigint) RETURNS timestamp
-SET search_path = pg_catalog, pg_temp
-AS 'MODULE_PATHNAME', 'duckdb_only_function'
-LANGUAGE C;
-
-CREATE FUNCTION @extschema@.epoch_ms(duckdb.unresolved_type) RETURNS duckdb.unresolved_type
-SET search_path = pg_catalog, pg_temp
-AS 'MODULE_PATHNAME', 'duckdb_only_function'
-LANGUAGE C;
-
 CREATE FUNCTION @extschema@.epoch_us(interval) RETURNS bigint
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
