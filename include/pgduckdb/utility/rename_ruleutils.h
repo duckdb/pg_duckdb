@@ -1,5 +1,8 @@
 #pragma once
 
+#include "postgres.h"
+#include "fmgr.h"
+
 /*
  * This file contains the renaming of the functions exposed by
  * vendor/pg_ruleutils.h functions to avoid conflicts with the PostgreSQL
@@ -29,3 +32,24 @@
  */
 #define generate_qualified_relation_name          pgduckdb_relation_name
 #define generate_relation_name(relid, namespaces) pgduckdb_relation_name(relid)
+
+#define declare_pgduckdb_ruleutils_function(original_name) extern Datum pgduckdb_##original_name(PG_FUNCTION_ARGS);
+
+#define pg_get_viewdef           pgduckdb_pg_get_viewdef
+#define pg_get_viewdef_ext       pgduckdb_pg_get_viewdef_ext
+#define pg_get_viewdef_wrap      pgduckdb_pg_get_viewdef_wrap
+#define pg_get_viewdef_name      pgduckdb_pg_get_viewdef_name
+#define pg_get_viewdef_name_ext  pgduckdb_pg_get_viewdef_name_ext
+#define pg_get_triggerdef        pgduckdb_pg_get_triggerdef
+#define pg_get_triggerdef_ext    pgduckdb_pg_get_triggerdef_ext
+#define pg_get_indexdef_name     pgduckdb_pg_get_indexdef_name
+#define pg_get_indexdef_name_ext pgduckdb_pg_get_indexdef_name_ext
+declare_pgduckdb_ruleutils_function(pg_get_viewdef);
+declare_pgduckdb_ruleutils_function(pg_get_viewdef_ext);
+declare_pgduckdb_ruleutils_function(pg_get_viewdef_wrap);
+declare_pgduckdb_ruleutils_function(pg_get_viewdef_name);
+declare_pgduckdb_ruleutils_function(pg_get_viewdef_name_ext);
+declare_pgduckdb_ruleutils_function(pg_get_triggerdef);
+declare_pgduckdb_ruleutils_function(pg_get_triggerdef_ext);
+declare_pgduckdb_ruleutils_function(pg_get_indexdef);
+declare_pgduckdb_ruleutils_function(pg_get_indexdef_ext);

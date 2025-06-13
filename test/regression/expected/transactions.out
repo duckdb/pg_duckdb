@@ -338,7 +338,7 @@ INSERT INTO pg_depend(classid, objid, objsubid, refclassid, refobjid, refobjsubi
 BEGIN;
     DROP SCHEMA mixed CASCADE;
 NOTICE:  drop cascades to table t_ddb2
-ERROR:  Dropping both DuckDB tables and non-DuckDB objects in the same transaction is not supported
+ERROR:  Dropping both DuckDB relations and non-DuckDB objects in the same transaction is not supported
 END;
 -- We have a special message for tables
 CREATE TABLE mixed.t(a int);
@@ -347,7 +347,7 @@ BEGIN;
 NOTICE:  drop cascades to 2 other objects
 DETAIL:  drop cascades to table t_ddb2
 drop cascades to table mixed.t
-ERROR:  Dropping both DuckDB and non-DuckDB tables in the same transaction is not supported
+ERROR:  Dropping both DuckDB and non-DuckDB relations in the same transaction is not supported
 END;
 -- It should work outside of a transaction though.
 DROP SCHEMA mixed CASCADE;

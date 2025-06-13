@@ -87,5 +87,7 @@ struct PlanState;
 
 struct Plan;
 
+struct FuncExpr;
+
 typedef struct FunctionCallInfoBaseData *FunctionCallInfo;
 }
