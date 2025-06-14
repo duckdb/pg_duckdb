@@ -87,7 +87,7 @@ SELECT 1;
 (1 row)
 
 CALL duckdb.enable_motherduck();
-ERROR:  (PGDuckDB/pgduckdb_enable_motherduck_cpp) Executor Error: (PGDuckDB/::PreventInTransactionBlock) duckdb.enable_motherduck() cannot run inside a transaction block
+ERROR:  duckdb.enable_motherduck() cannot run inside a transaction block
 ROLLBACK;
 -- Use helper to enable MD: will fail since there's no token in environment
 CALL duckdb.enable_motherduck();
@@ -103,7 +103,7 @@ SELECT 1;
 (1 row)
 
 CALL duckdb.enable_motherduck();
-ERROR:  (PGDuckDB/pgduckdb_enable_motherduck_cpp) Executor Error: (PGDuckDB/::PreventInTransactionBlock) duckdb.enable_motherduck() cannot run inside a transaction block
+ERROR:  duckdb.enable_motherduck() cannot run inside a transaction block
 ROLLBACK;
 -- Now MD is enabled again
 SELECT * FROM duckdb.is_motherduck_enabled();
