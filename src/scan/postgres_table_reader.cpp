@@ -129,11 +129,26 @@ PostgresTableReader::InitRunWithParallelScan(PlannedStmt *planned_stmt, bool cou
 	}
 }
 
+/*
+ * Initializes a tuple slot for the current query.
+ *
+ * The returned TupleTableSlot is allocated in the context of `table_scan_query_desc->estate`
+ * and will be automatically cleaned up when `table_scan_query_desc` is destroyed.
+ *
+ * Returns NULL if the table reader has already been cleaned up, e.g., if concurrent threads
+ * have finished the scan and triggered cleanup).
+ */
+TupleTableSlot *
+PostgresTableReader::InitTupleSlot() {
+	D_ASSERT(!cleaned_up);
+	return PostgresFunctionGuard(ExecInitExtraTupleSlot, table_scan_query_desc->estate,
+	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
+}
+
 PostgresTableReader::~PostgresTableReader() {
 	if (cleaned_up) {
 		return;
 	}
-
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	Cleanup();
 }
@@ -281,13 +296,39 @@ PostgresTableReader::GetNextTupleUnsafe() {
 	return TupIsNull(thread_scan_slot) ? ExecClearTuple(slot) : thread_scan_slot;
 }
 
+/*
+ * Reads the next minimal tuple from a Postgres parallel worker and copies it into the provided buffer.
+ * This function should only be called when the table scan is running with parallel workers.
+ *
+ * @param minimal_tuple_buffer Buffer to store the copied minimal tuple.
+ * @return true if a tuple was read and copied; false if the scan is complete and no more tuples are available.
+ *
+ * Note: The caller must hold the GlobalProcessLock before invoking this function.
+ */
+bool
+PostgresTableReader::GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
+	MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
+	if (HeapTupleIsValid(worker_minmal_tuple)) {
+		// deep copy worker_minmal_tuple to destination buffer
+		Size tuple_size = worker_minmal_tuple->t_len + MINIMAL_TUPLE_DATA_OFFSET;
+		minimal_tuple_buffer.resize(tuple_size);
+		memcpy(minimal_tuple_buffer.data(), worker_minmal_tuple, tuple_size);
+		return true;
+	}
+
+	minimal_tuple_buffer.resize(0);
+	return false;
+}
+
 MinimalTuple
 PostgresTableReader::GetNextWorkerTuple() {
 	int nvisited = 0;
 	TupleQueueReader *reader = NULL;
 	MinimalTuple minimal_tuple = NULL;
 	bool readerdone = false;
-	for (;;) {
+	// The loop's stop condition acts as a safeguard in multithreaded scans, ensuring that if one thread calls this
+	// function after another thread has already completed the scan, we do not access invalid readers.
+	for (; next_parallel_reader < nreaders;) {
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
 
 		minimal_tuple = TupleQueueReaderNext(reader, true, &readerdone);
@@ -327,6 +368,8 @@ PostgresTableReader::GetNextWorkerTuple() {
 			nvisited = 0;
 		}
 	}
+
+	return NULL;
 }
 
 } // namespace pgduckdb
