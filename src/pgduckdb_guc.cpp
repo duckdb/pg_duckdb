@@ -113,6 +113,7 @@ bool duckdb_force_execution = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
 bool duckdb_convert_unsupported_numeric_to_double = false;
 bool duckdb_log_pg_explain = false;
+int duckdb_threads_for_postgres_scan = 2;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_postgres_role = strdup("");
@@ -146,9 +147,12 @@ InitGUC() {
 	DefineCustomVariable("duckdb.log_pg_explain", "Logs the EXPLAIN plan of a Postgres scan at the NOTICE log level",
 	                     &duckdb_log_pg_explain);
 
+	DefineCustomVariable("duckdb.threads_for_postgres_scan",
+	                     "Maximum number of DuckDB threads used for a single Postgres scan",
+	                     &duckdb_threads_for_postgres_scan, 1, MAX_PARALLEL_WORKER_LIMIT);
 	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
 	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
-	                     &pgduckdb::duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
+	                     &duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
 
 	DefineCustomVariable("duckdb.postgres_role",
 	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
