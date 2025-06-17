@@ -590,14 +590,14 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 
 	D_ASSERT(STANDARD_VECTOR_SIZE % LOCAL_STATE_SLOT_BATCH_SIZE == 0);
 	bool is_parallel_scan = local_state.global_state->MaxThreads() > 1;
-	int batch_size = is_parallel_scan ? LOCAL_STATE_SLOT_BATCH_SIZE : STANDARD_VECTOR_SIZE;
-	int num_batches = STANDARD_VECTOR_SIZE / batch_size;
+	size_t batch_size = is_parallel_scan ? LOCAL_STATE_SLOT_BATCH_SIZE : STANDARD_VECTOR_SIZE;
+	size_t num_batches = STANDARD_VECTOR_SIZE / batch_size;
 
 	// For single-threaded scans, only one batch is processed and the global lock is acquired for each batch.
 	// For parallel scans, multiple batches are processed; the global lock is held only during tuple retrieval
 	// from the PostgreSQL parallel worker, allowing the rest of the processing to proceed concurrently.
 	for (size_t batch_idx = 0; batch_idx < num_batches; batch_idx++) {
-		int valid_slots = 0;
+		size_t valid_slots = 0;
 		{
 			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 			for (size_t i = 0; i < batch_size; i++) {
