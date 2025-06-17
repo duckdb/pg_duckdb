@@ -252,7 +252,7 @@ static ProcessUtility_hook_type prev_process_utility_hook = NULL;
  * will be set to the new one.
  */
 static RawStmt *
-EntrenchColumnsFromCall(Query *query, ParamListInfo params, const char *function_call, const char **query_string) {
+EntrenchColumnsFromCall(Query *query, const char *function_call, const char **query_string) {
 	/*
 	 * We call into our DuckDB planning logic directly here, to ensure that
 	 * this query is planned using DuckDB. This is needed for a CTAS into a
@@ -263,7 +263,7 @@ EntrenchColumnsFromCall(Query *query, ParamListInfo params, const char *function
 	 * different column types).
 	 */
 	pgduckdb::IsAllowedStatement(query, true);
-	PlannedStmt *plan = DuckdbPlanNode(query, *query_string, CURSOR_OPT_PARALLEL_OK, params, true);
+	PlannedStmt *plan = DuckdbPlanNode(query, CURSOR_OPT_PARALLEL_OK, true);
 
 	/* This is where our custom code starts again */
 	List *target_list = plan->planTree->targetlist;
@@ -313,12 +313,12 @@ EntrenchColumnsFromCall(Query *query, ParamListInfo params, const char *function
  *
  */
 static Query *
-WrapQueryInDuckdbQueryCall(Query *query, ParamListInfo params, const char *query_string) {
+WrapQueryInDuckdbQueryCall(Query *query, const char *query_string) {
 	char *duckdb_query_string = pgduckdb_get_querydef(query);
 
 	char *function_call = psprintf("duckdb.query(%s)", quote_literal_cstr(duckdb_query_string));
 
-	RawStmt *raw_stmt = EntrenchColumnsFromCall(query, params, function_call, &query_string);
+	RawStmt *raw_stmt = EntrenchColumnsFromCall(query, function_call, &query_string);
 
 #if PG_VERSION_NUM >= 150000
 	return parse_analyze_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
@@ -407,8 +407,7 @@ static void DuckdbHandleAlterForeignServerStmt(Node *parsetree);
 static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
 static void DuckdbHandleAlterUserMappingStmt(Node *parsetree);
 static bool DuckdbHandleRenameViewPre(RenameStmt *stmt);
-static bool DuckdbHandleViewStmtPre(Node *parsetree, ParamListInfo params, PlannedStmt *pstmt,
-                                    const char *query_string);
+static bool DuckdbHandleViewStmtPre(Node *parsetree, PlannedStmt *pstmt, const char *query_string);
 static void DuckdbHandleViewStmtPost(Node *parsetree);
 
 static void
@@ -433,7 +432,7 @@ DuckdbHandleDDLPost(PlannedStmt *pstmt) {
  * Returns true if we need to run the post hook
  */
 static bool
-DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
+DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 	Node *parsetree = pstmt->utilityStmt;
 
 	/*
@@ -571,7 +570,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 		query = linitial_node(Query, rewritten);
 		Assert(query->commandType == CMD_SELECT);
 
-		Query *wrapped_query = WrapQueryInDuckdbQueryCall(query, params, query_string);
+		Query *wrapped_query = WrapQueryInDuckdbQueryCall(query, query_string);
 
 		/*
 		 * We need to use the same context as the original query, because it
@@ -616,7 +615,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string, ParamListInfo p
 		}
 		return false;
 	} else if (IsA(parsetree, ViewStmt)) {
-		return DuckdbHandleViewStmtPre(parsetree, params, pstmt, query_string);
+		return DuckdbHandleViewStmtPre(parsetree, pstmt, query_string);
 	} else if (IsA(parsetree, RenameStmt)) {
 		auto stmt = castNode(RenameStmt, parsetree);
 		if (stmt->renameType == OBJECT_SCHEMA) {
@@ -892,7 +891,7 @@ DuckdbHandleRenameViewPre(RenameStmt *stmt) {
 }
 
 static bool
-DuckdbHandleViewStmtPre(Node *parsetree, ParamListInfo params, PlannedStmt *pstmt, const char *query_string) {
+DuckdbHandleViewStmtPre(Node *parsetree, PlannedStmt *pstmt, const char *query_string) {
 	auto stmt = castNode(ViewStmt, parsetree);
 	Oid schema_oid = RangeVarGetCreationNamespace(stmt->view);
 	char *schema_name = get_namespace_name(schema_oid);
@@ -974,7 +973,7 @@ DuckdbHandleViewStmtPre(Node *parsetree, ParamListInfo params, PlannedStmt *pstm
 	    psprintf("duckdb.view(%s, %s, %s, %s)", quote_literal_cstr(duckdb_db), quote_literal_cstr(duckdb_schema),
 	             quote_literal_cstr(stmt->view->relname), quote_literal_cstr(duckdb_query_string));
 
-	RawStmt *wrapped_query = EntrenchColumnsFromCall(viewParse, params, function_call, &query_string);
+	RawStmt *wrapped_query = EntrenchColumnsFromCall(viewParse, function_call, &query_string);
 
 	MemoryContext query_context = GetMemoryChunkContext(stmt->query);
 	MemoryContext oldcontext = MemoryContextSwitchTo(query_context);
@@ -1085,7 +1084,7 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	bool prev_top_level_ddl = pgduckdb::IsStatementTopLevel();
 	pgduckdb::SetStatementTopLevel(context == PROCESS_UTILITY_TOPLEVEL);
 
-	bool needs_to_run_post = DuckdbHandleDDLPre(pstmt, query_string, params);
+	bool needs_to_run_post = DuckdbHandleDDLPre(pstmt, query_string);
 	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 	if (needs_to_run_post) {
 		DuckdbHandleDDLPost(pstmt);

@@ -133,8 +133,7 @@ DuckdbRangeTableEntry(CustomScan *custom_scan) {
 }
 
 PlannedStmt *
-DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
-               bool throw_error) {
+DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 	/* We need to check can we DuckDB create plan */
 
 	Plan *duckdb_plan = InvokeCPPFunc(CreatePlan, parse, throw_error);
@@ -152,30 +151,37 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 		duckdb_plan = materialize_finished_plan(duckdb_plan);
 	}
 
-	/*
-	 * We let postgres generate a basic plan, but then completely overwrite the
-	 * actual plan with our CustomScan node. This is useful to get the correct
-	 * values for all the other many fields of the PlannedStmt.
-	 *
-	 * XXX: The primary reason we did this in the past is so that Postgres
-	 * filled in permInfos and rtable correctly. Those are needed for postgres
-	 * to do its permission checks on the used tables. We do these checks
-	 * inside DuckDB as well, so that's not really necessary anymore. We still
-	 * do this though to get all the other fields filled in correctly. Possibly
-	 * we don't need to do this anymore.
-	 *
-	 * FIXME: For some reason this needs an additional query copy to allow
-	 * re-planning of the query later during execution. But I don't really
-	 * understand why this is needed.
-	 */
-	Query *copied_query = (Query *)copyObjectImpl(parse);
-	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
+	PlannedStmt *planned_stmt = makeNode(PlannedStmt);
+	planned_stmt->commandType = parse->commandType;
+	planned_stmt->queryId = parse->queryId;
+	planned_stmt->hasReturning = (parse->returningList != NIL);
+	planned_stmt->hasModifyingCTE = parse->hasModifyingCTE;
+	planned_stmt->canSetTag = parse->canSetTag;
+	planned_stmt->transientPlan = false;
+	planned_stmt->dependsOnRole = false;
+	planned_stmt->parallelModeNeeded = false;
+	planned_stmt->planTree = duckdb_plan;
+	planned_stmt->rtable = NULL;
+#if PG_VERSION_NUM >= 160000
+	planned_stmt->permInfos = NULL;
+#endif
+	planned_stmt->resultRelations = NULL;
+	planned_stmt->appendRelations = NULL;
+	planned_stmt->subplans = NIL;
+	planned_stmt->rewindPlanIDs = NULL;
+	planned_stmt->rowMarks = NIL;
+	planned_stmt->relationOids = NIL;
+	planned_stmt->invalItems = NIL;
+	planned_stmt->paramExecTypes = NIL;
 
-	postgres_plan->planTree = duckdb_plan;
+	/* utilityStmt should be null, but we might as well copy it */
+	planned_stmt->utilityStmt = parse->utilityStmt;
+	planned_stmt->stmt_location = parse->stmt_location;
+	planned_stmt->stmt_len = parse->stmt_len;
 
 	/* Put a DuckdDB RTE at the end of the rtable */
 	RangeTblEntry *rte = DuckdbRangeTableEntry(custom_scan);
-	postgres_plan->rtable = lappend(postgres_plan->rtable, rte);
+	planned_stmt->rtable = lappend(planned_stmt->rtable, rte);
 
 	/* Update the varno of the Var nodes in the custom_scan_tlist, to point to
 	 * our new RTE. This should not be necessary anymore when we stop relying
@@ -183,8 +189,8 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 	foreach_node(TargetEntry, target_entry, custom_scan->custom_scan_tlist) {
 		Var *var = castNode(Var, target_entry->expr);
 
-		var->varno = list_length(postgres_plan->rtable);
+		var->varno = list_length(planned_stmt->rtable);
 	}
 
-	return postgres_plan;
+	return planned_stmt;
 }
