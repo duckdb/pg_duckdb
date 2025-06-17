@@ -1289,20 +1289,20 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 			if (type_modifier == -1) {
 				return duckdb::LogicalType::USER(
 				    "DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to "
-				    "a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else if (precision < 1 || precision > 38) {
 				return duckdb::LogicalType::USER(
 				    "DuckDB only supports NUMERIC with a precision of 1-38. You can choose to convert these NUMERICs "
-				    "to a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else if (scale < 0 || scale > 38) {
 				return duckdb::LogicalType::USER(
 				    "DuckDB only supports NUMERIC with a scale of 0-38. You can choose to convert these NUMERICs to a "
-				    "DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else {
 				return duckdb::LogicalType::USER(
 				    "DuckDB does not support NUMERIC with a scale that is larger than the precision. You can choose to "
-				    "convert these NUMERICs to a DOUBLE by using 'SET "
-				    "duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = "
+				    "true'");
 			}
 		}
 

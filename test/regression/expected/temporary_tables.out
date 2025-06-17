@@ -165,7 +165,7 @@ CREATE TEMP TABLE t(a int) WITH (fillfactor = 50);
 ERROR:  Storage options are not supported in DuckDB
 -- Should fail because user should specify the precision of the NUMERIC.
 CREATE TEMP TABLE large_numeric_tbl (a NUMERIC) USING duckdb;
-ERROR:  (PGDuckDB/duckdb_create_table_trigger_cpp) Not implemented Error: Unsupported Postgres type: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'
+ERROR:  (PGDuckDB/duckdb_create_table_trigger_cpp) Not implemented Error: Unsupported Postgres type: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'
 -- But it's fine if the user specifies the precision
 CREATE TEMP TABLE large_numeric_tbl_specified (a NUMERIC(38,20)) USING duckdb;
 -- CTAS is fine though, it will use duckdb its default
