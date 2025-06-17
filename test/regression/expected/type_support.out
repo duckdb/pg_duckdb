@@ -327,7 +327,7 @@ INSERT INTO numeric_as_double SELECT a FROM (VALUES
     (458234502034234234234.000012)
 ) t(a);
 SELECT * FROM numeric_as_double;
-WARNING:  Unsupported Postgres type: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'
+WARNING:  Unsupported Postgres type: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'
               a               
 ------------------------------
                   0.234234234
