@@ -151,46 +151,35 @@ DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 		duckdb_plan = materialize_finished_plan(duckdb_plan);
 	}
 
-	PlannedStmt *planned_stmt = makeNode(PlannedStmt);
-	planned_stmt->commandType = parse->commandType;
-	planned_stmt->queryId = parse->queryId;
-	planned_stmt->hasReturning = (parse->returningList != NIL);
-	planned_stmt->hasModifyingCTE = parse->hasModifyingCTE;
-	planned_stmt->canSetTag = parse->canSetTag;
-	planned_stmt->transientPlan = false;
-	planned_stmt->dependsOnRole = false;
-	planned_stmt->parallelModeNeeded = false;
-	planned_stmt->planTree = duckdb_plan;
-	planned_stmt->rtable = NULL;
+	RangeTblEntry *rte = DuckdbRangeTableEntry(custom_scan);
+
+	PlannedStmt *result = makeNode(PlannedStmt);
+	result->commandType = parse->commandType;
+	result->queryId = parse->queryId;
+	result->hasReturning = (parse->returningList != NIL);
+	result->hasModifyingCTE = parse->hasModifyingCTE;
+	result->canSetTag = parse->canSetTag;
+	result->transientPlan = false;
+	result->dependsOnRole = false;
+	result->parallelModeNeeded = false;
+	result->planTree = duckdb_plan;
+	result->rtable = list_make1(rte);
 #if PG_VERSION_NUM >= 160000
-	planned_stmt->permInfos = NULL;
+	result->permInfos = NULL;
 #endif
-	planned_stmt->resultRelations = NULL;
-	planned_stmt->appendRelations = NULL;
-	planned_stmt->subplans = NIL;
-	planned_stmt->rewindPlanIDs = NULL;
-	planned_stmt->rowMarks = NIL;
-	planned_stmt->relationOids = NIL;
-	planned_stmt->invalItems = NIL;
-	planned_stmt->paramExecTypes = NIL;
+	result->resultRelations = NULL;
+	result->appendRelations = NULL;
+	result->subplans = NIL;
+	result->rewindPlanIDs = NULL;
+	result->rowMarks = NIL;
+	result->relationOids = NIL;
+	result->invalItems = NIL;
+	result->paramExecTypes = NIL;
 
 	/* utilityStmt should be null, but we might as well copy it */
-	planned_stmt->utilityStmt = parse->utilityStmt;
-	planned_stmt->stmt_location = parse->stmt_location;
-	planned_stmt->stmt_len = parse->stmt_len;
+	result->utilityStmt = parse->utilityStmt;
+	result->stmt_location = parse->stmt_location;
+	result->stmt_len = parse->stmt_len;
 
-	/* Put a DuckdDB RTE at the end of the rtable */
-	RangeTblEntry *rte = DuckdbRangeTableEntry(custom_scan);
-	planned_stmt->rtable = lappend(planned_stmt->rtable, rte);
-
-	/* Update the varno of the Var nodes in the custom_scan_tlist, to point to
-	 * our new RTE. This should not be necessary anymore when we stop relying
-	 * on the standard_planner here. */
-	foreach_node(TargetEntry, target_entry, custom_scan->custom_scan_tlist) {
-		Var *var = castNode(Var, target_entry->expr);
-
-		var->varno = list_length(planned_stmt->rtable);
-	}
-
-	return planned_stmt;
+	return result;
 }
