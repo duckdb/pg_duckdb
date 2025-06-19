@@ -471,7 +471,7 @@ EXPLAIN VERBOSE INSERT INTO tc(c) SELECT md5('ta');
                          QUERY PLAN                         
 ------------------------------------------------------------
  Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
-   Output: duckdb_scan."Count"
+   Output: "Count"
    DuckDB Execution Plan: 
  
  ┌───────────────────────────┐
@@ -508,7 +508,7 @@ EXPLAIN VERBOSE INSERT INTO tc(d) SELECT md5('test');
                          QUERY PLAN                         
 ------------------------------------------------------------
  Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
-   Output: duckdb_scan."Count"
+   Output: "Count"
    DuckDB Execution Plan: 
  
  ┌───────────────────────────┐
