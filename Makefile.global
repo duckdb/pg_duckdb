@@ -7,7 +7,7 @@ $(error Minimum version of PostgreSQL required is $(PG_MIN_VER) (but have $(PG_V
 endif
 
 # If you want to test with an unsupported PG version you can pass a different value to make
-PG_MAX_VER ?= 17
+PG_MAX_VER ?= 18
 ifeq ($(shell expr "$(PG_MAX_VER)" \>=  "$(PG_VER)"), 0)
 $(error Maximum supported version of PostgreSQL is $(PG_MAX_VER) (but have $(PG_VER)))
 endif
