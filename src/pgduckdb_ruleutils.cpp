@@ -126,7 +126,7 @@ pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc) {
  * the Var of the duckdb row if it is.
  */
 Var *
-pgduckdb_duckdb_row_subscript_var(Expr *expr) {
+pgduckdb_duckdb_subscript_var(Expr *expr) {
 	if (!expr) {
 		return NULL;
 	}
@@ -143,9 +143,6 @@ pgduckdb_duckdb_row_subscript_var(Expr *expr) {
 
 	Var *refexpr = (Var *)subscript->refexpr;
 
-	if (!pgduckdb_var_is_duckdb_row(refexpr)) {
-		return NULL;
-	}
 	return refexpr;
 }
 

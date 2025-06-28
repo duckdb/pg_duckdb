@@ -41,9 +41,9 @@ SELECT jsoncol[1], arraycol[2] FROM (
     SELECT r['jsoncol'] jsoncol, r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
 ) q;
- jsoncol | arraycol 
----------+----------
- "d"     |       22
+ jsoncol[1] | arraycol[2] 
+------------+-------------
+ "d"        |          22
 (1 row)
 
 -- And the same for slice subscripts
@@ -57,8 +57,8 @@ SELECT arraycol[1:2] FROM (
     SELECT r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
 ) q;
- arraycol 
-----------
+ arraycol[1:2] 
+---------------
  {11,22}
 (1 row)
 

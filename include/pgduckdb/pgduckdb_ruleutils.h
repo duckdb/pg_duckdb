@@ -22,7 +22,7 @@ bool pgduckdb_is_unresolved_type(Oid type_oid);
 bool pgduckdb_is_fake_type(Oid type_oid);
 bool pgduckdb_var_is_duckdb_row(Var *var);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
-Var *pgduckdb_duckdb_row_subscript_var(Expr *expr);
+Var *pgduckdb_duckdb_subscript_var(Expr *expr);
 bool pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell);
 bool pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf);
 int pgduckdb_show_type(Const *constval, int original_showtype);
