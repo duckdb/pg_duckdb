@@ -65,13 +65,8 @@ PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_
 
 	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr);
 
-#if PG_VERSION_NUM >= 180000
-	table_scan_query_desc = CreateQueryDesc(planned_stmt, nullptr, table_scan_query, GetActiveSnapshot(),
-	                                        InvalidSnapshot, None_Receiver, nullptr, nullptr, 0);
-#else
 	table_scan_query_desc = CreateQueryDesc(planned_stmt, table_scan_query, GetActiveSnapshot(), InvalidSnapshot,
 	                                        None_Receiver, nullptr, nullptr, 0);
-#endif
 
 	ExecutorStart(table_scan_query_desc, 0);
 

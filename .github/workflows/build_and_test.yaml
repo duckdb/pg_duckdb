@@ -52,7 +52,7 @@ jobs:
           type: ReleaseStatic
         - version: REL_17_STABLE
           type: Debug
-        - version: REL_18_BETA1
+        - version: master
           type: Release
 
         # Not enabled for now (waiting for April 2025 code freeze)
