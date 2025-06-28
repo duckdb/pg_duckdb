@@ -99,6 +99,27 @@ pgduckdb_is_fake_type(Oid type_oid) {
 }
 
 bool
+pgduckdb_is_duckdb_subscript_type(Oid type_oid) {
+	if (pgduckdb_is_unresolved_type(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb_is_duckdb_row(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb::DuckdbStructOid() == type_oid) {
+		return true;
+	}
+
+	if (pgduckdb::DuckdbMapOid() == type_oid) {
+		return true;
+	}
+
+	return false;
+}
+
+bool
 pgduckdb_var_is_duckdb_row(Var *var) {
 	if (!var) {
 		return false;
@@ -122,11 +143,11 @@ pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc) {
 }
 
 /*
- * Returns NULL if the expression is not a subscript on a duckdb row. Returns
- * the Var of the duckdb row if it is.
+ * Returns NULL if the expression is a subscript on a duckdb specific type.
+ * Returns the Var of the duckdb row if it is.
  */
 Var *
-pgduckdb_duckdb_row_subscript_var(Expr *expr) {
+pgduckdb_duckdb_subscript_var(Expr *expr) {
 	if (!expr) {
 		return NULL;
 	}
@@ -143,9 +164,10 @@ pgduckdb_duckdb_row_subscript_var(Expr *expr) {
 
 	Var *refexpr = (Var *)subscript->refexpr;
 
-	if (!pgduckdb_var_is_duckdb_row(refexpr)) {
+	if (!pgduckdb_is_duckdb_subscript_type(refexpr->vartype)) {
 		return NULL;
 	}
+
 	return refexpr;
 }
 
