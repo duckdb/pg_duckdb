@@ -203,3 +203,9 @@ select make_timestamptz(r['microseconds']) from duckdb.query($$ SELECT 168657000
  Mon Jun 12 04:40:00 2023 PDT
 (1 row)
 
+SELECT (s).* FROM (select (r).s FROM duckdb.query($$ SELECT {'key1': 'value1', 'key2': 42} AS s $$) r);
+  key1  | key2 
+--------+------
+ value1 |   42
+(1 row)
+

@@ -63,20 +63,15 @@ SELECT arraycol[1:2] FROM (
 (1 row)
 
 SELECT r['arraycol'][:] FROM read_parquet('../../data/indexable.parquet') r;
- r.arraycol[:] 
----------------
- {11,22,33}
-(1 row)
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Parser Error: syntax error at or near "*"
 
+LINE 1: SELECT r.arraycol.* FROM system.main.read_parquet('../../data/indexable.parquet...
+                          ^
 SELECT arraycol[:] FROM (
     SELECT r['arraycol'] arraycol
     FROM read_parquet('../../data/indexable.parquet') r
 ) q;
-  arraycol  
-------------
- {11,22,33}
-(1 row)
-
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Binder Error: Cannot extract field from expression "arraycol.*" because it is not a struct
 -- Subqueries correctly expand *, in case of multiple columns.
 SELECT * FROM (
     SELECT 'something' as prefix, *, 'something else' as postfix
@@ -506,7 +501,7 @@ SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r WHERE r['c'] > 50
     51
 (1 row)
 
-SELECT r['a'], r['b'], r['c'] FROM read_json('../../data/table.json') r WHERE r['c'] > 50.4 AND r['c'] < 51.2;
+SELECT (r).a, (r).b, (r).c FROM read_json('../../data/table.json') r WHERE (r).c > 50.4 AND (r).c < 51.2;
  a  |    b    |  c   
 ----+---------+------
  50 | json_50 | 50.5

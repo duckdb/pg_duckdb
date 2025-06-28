@@ -350,6 +350,14 @@ pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var
 	int varno;
 	int varattno;
 
+	if (strcmp(colname, "?column?") == 0) {
+		/*
+		 * If the column name is "?column?", then it means that Postgres
+		 * couldn't figure out a decent alias.
+		 */
+		return false;
+	}
+
 	/*
 	 * If we have a syntactic referent for the Var, and we're working from a
 	 * parse tree, prefer to use the syntactic referent.  Otherwise, fall back
@@ -388,6 +396,15 @@ pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf) {
 	}
 
 	Assert(sbsref->refupperindexpr);
+
+	if (linitial(sbsref->refupperindexpr) == NULL) {
+		return sbsref;
+	}
+
+	if (IsA(linitial(sbsref->refupperindexpr), String)) {
+		return sbsref;
+	}
+
 	Oid typoutput;
 	bool typIsVarlena;
 	Const *constval = castNode(Const, linitial(sbsref->refupperindexpr));

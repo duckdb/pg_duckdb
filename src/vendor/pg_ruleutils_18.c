@@ -13082,17 +13082,33 @@ printSubscripts(SubscriptingRef *sbsref, deparse_context *context)
 	lowlist_item = list_head(sbsref->reflowerindexpr);	/* could be NULL */
 	foreach(uplist_item, sbsref->refupperindexpr)
 	{
-		appendStringInfoChar(buf, '[');
-		if (lowlist_item)
+		Node	   *up = (Node *) lfirst(uplist_item);
+
+		if (!up)
 		{
-			/* If subexpression is NULL, get_rule_expr prints nothing */
-			get_rule_expr((Node *) lfirst(lowlist_item), context, false);
-			appendStringInfoChar(buf, ':');
-			lowlist_item = lnext(sbsref->reflowerindexpr, lowlist_item);
+			appendStringInfoString(buf, ".*");
 		}
-		/* If subexpression is NULL, get_rule_expr prints nothing */
-		get_rule_expr((Node *) lfirst(uplist_item), context, false);
-		appendStringInfoChar(buf, ']');
+		else if (IsA(up, String))
+		{
+			appendStringInfoChar(buf, '.');
+			appendStringInfoString(buf, quote_identifier(strVal(up)));
+		}
+		else
+		{
+			appendStringInfoChar(buf, '[');
+			if (lowlist_item)
+			{
+				/* If subexpression is NULL, get_rule_expr prints nothing */
+				get_rule_expr((Node *) lfirst(lowlist_item), context, false);
+				appendStringInfoChar(buf, ':');
+			}
+			/* If subexpression is NULL, get_rule_expr prints nothing */
+			get_rule_expr((Node *) lfirst(uplist_item), context, false);
+			appendStringInfoChar(buf, ']');
+		}
+
+		if (lowlist_item)
+			lowlist_item = lnext(sbsref->reflowerindexpr, lowlist_item);
 	}
 }
 

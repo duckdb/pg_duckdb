@@ -40,19 +40,25 @@ jobs:
       matrix:
         include:
         - version: REL_14_STABLE
+          repo: postgres/postgres
           type: Release
         - version: REL_15_STABLE
+          repo: postgres/postgres
           type: Release
         - version: REL_16_STABLE
+          repo: postgres/postgres
           type: Release
         # For PG17 we build DuckDB as a static library. There's nothing special
         # about the static library, nor PG17. This is only done so that we have
         # CI coverage for our logic to build a static library version.
         - version: REL_17_STABLE
+          repo: postgres/postgres
           type: ReleaseStatic
         - version: REL_17_STABLE
+          repo: postgres/postgres
           type: Debug
-        - version: master
+        - version: cf/5214
+          repo: postgresql-cfbot/postgresql
           type: Release
 
         # Not enabled for now (waiting for April 2025 code freeze)
@@ -89,7 +95,7 @@ jobs:
       - name: Checkout PostgreSQL code
         run: |
           rm -rf postgres
-          git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/postgres/postgres.git
+          git clone --branch ${{ matrix.version }} --single-branch --depth 1 https://github.com/${{ matrix.repo }}.git postgres
 
       - name: Compute Version SHAs
         id: versions
