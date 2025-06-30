@@ -284,4 +284,4 @@ SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths
 
 SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r;
 SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r WHERE r['c'] > 50.4;
-SELECT r['a'], r['b'], r['c'] FROM read_json('../../data/table.json') r WHERE r['c'] > 50.4 AND r['c'] < 51.2;
+SELECT (r).a, (r).b, (r).c FROM read_json('../../data/table.json') r WHERE (r).c > 50.4 AND (r).c < 51.2;

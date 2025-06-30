@@ -48,3 +48,5 @@ select make_timestamp(1686570000000000);
 select make_timestamp(r['microseconds']) from duckdb.query($$ SELECT 1686570000000000 AS microseconds $$) r;
 select make_timestamptz(1686570000000000);
 select make_timestamptz(r['microseconds']) from duckdb.query($$ SELECT 1686570000000000 AS microseconds $$) r;
+
+SELECT (s).* FROM (select (r).s FROM duckdb.query($$ SELECT {'key1': 'value1', 'key2': 42} AS s $$) r);

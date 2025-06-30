@@ -89,6 +89,27 @@ AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_In
 	}
 }
 
+bool
+AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, Node *subscript, bool is_slice) {
+	if (IsA(subscript, A_Indices)) {
+		// If the subscript is an A_Indices node, we can add the expressions directly
+		AddSubscriptExpressions(sbsref, pstate, castNode(A_Indices, subscript), is_slice);
+		return true;
+	}
+
+	if (IsA(subscript, String)) {
+		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, subscript);
+		return true;
+	}
+
+	if (IsA(subscript, A_Star)) {
+		sbsref->refupperindexpr = lappend(sbsref->refupperindexpr, NULL);
+		return true;
+	}
+
+	return false;
+}
+
 /*
  * DuckdbSubscriptTransform is called by the parser when a subscripting
  * operation is performed on a duckdb type that can be indexed by arbitrary
@@ -96,7 +117,7 @@ AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_In
  * subscript returns an an duckdb.unresolved_type again.
  */
 void
-DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+DuckdbSubscriptTransform(SubscriptingRef *sbsref, List **indirection, struct ParseState *pstate, bool is_slice,
                          bool is_assignment, const char *type_name) {
 	/*
 	 * We need to populate our cache for some of the code below. Normally this
@@ -111,18 +132,22 @@ DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct Pars
 		elog(ERROR, "Assignment to %s is not supported", type_name);
 	}
 
-	if (indirection == NIL) {
+	if (*indirection == NIL) {
 		elog(ERROR, "Subscripting %s with an empty subscript is not supported", type_name);
 	}
 
 	// Transform each subscript expression
-	foreach_node(A_Indices, subscript, indirection) {
-		AddSubscriptExpressions(sbsref, pstate, subscript, is_slice);
+	foreach_ptr(Node, subscript, *indirection) {
+		if (!AddSubscriptExpressions(sbsref, pstate, subscript, is_slice)) {
+			break;
+		}
 	}
 
 	// Set the result type of the subscripting operation
 	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
 	sbsref->reftypmod = -1;
+
+	*indirection = list_delete_first_n(*indirection, list_length(sbsref->refupperindexpr));
 }
 
 /*
@@ -136,7 +161,7 @@ DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct Pars
  * Currently this is used for duckdb.row and duckdb.struct types.
  */
 void
-DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List **indirection, struct ParseState *pstate, bool is_slice,
                              bool is_assignment, const char *type_name) {
 	/*
 	 * We need to populate our cache for some of the code below. Normally this
@@ -151,20 +176,23 @@ DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct 
 		elog(ERROR, "Assignment to %s is not supported", type_name);
 	}
 
-	if (indirection == NIL) {
+	if (*indirection == NIL) {
 		elog(ERROR, "Subscripting %s with an empty subscript is not supported", type_name);
 	}
 
 	bool first = true;
 
 	// Transform each subscript expression
-	foreach_node(A_Indices, subscript, indirection) {
-		/* The first subscript needs to be a TEXT constant, since it should be
-		 * a column reference. But the subscripts after that can be anything,
-		 * DuckDB should interpret those. */
-		if (first) {
-			sbsref->refupperindexpr =
-			    lappend(sbsref->refupperindexpr, CoerceSubscriptToText(pstate, subscript, type_name));
+	foreach_ptr(Node, subscript, *indirection) {
+		/*
+		 * If the first subscript is an index expression then it needs to be
+		 * coerced to text, since it should be a column reference. But the
+		 * subscripts after that can be anything, DuckDB should interpret
+		 * those.
+		 */
+		if (first && IsA(subscript, A_Indices)) {
+			sbsref->refupperindexpr = lappend(sbsref->refupperindexpr,
+			                                  CoerceSubscriptToText(pstate, castNode(A_Indices, subscript), type_name));
 			if (is_slice) {
 				sbsref->reflowerindexpr = lappend(sbsref->reflowerindexpr, NULL);
 			}
@@ -172,12 +200,16 @@ DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct 
 			continue;
 		}
 
-		AddSubscriptExpressions(sbsref, pstate, subscript, is_slice);
+		if (!AddSubscriptExpressions(sbsref, pstate, subscript, is_slice)) {
+			break;
+		}
 	}
 
 	// Set the result type of the subscripting operation
 	sbsref->refrestype = pgduckdb::DuckdbUnresolvedTypeOid();
 	sbsref->reftypmod = -1;
+
+	*indirection = list_delete_first_n(*indirection, list_length(sbsref->refupperindexpr));
 }
 
 static bool
@@ -229,8 +261,14 @@ DuckdbSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefStat
 }
 
 void
-DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+#if PG_VERSION_NUM >= 180000
+DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List **indirection, struct ParseState *pstate, bool is_slice,
                             bool is_assignment) {
+#else
+DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection_, struct ParseState *pstate, bool is_slice,
+                            bool is_assignment) {
+	List **indirection = &indirection_;
+#endif
 	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.row");
 }
 
@@ -249,8 +287,14 @@ static SubscriptRoutines duckdb_row_subscript_routines = {
 };
 
 void
-DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate,
+#if PG_VERSION_NUM >= 180000
+DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List **indirection, struct ParseState *pstate,
                                        bool is_slice, bool is_assignment) {
+#else
+DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List *indirection_, struct ParseState *pstate,
+                                       bool is_slice, bool is_assignment) {
+	List **indirection = &indirection_;
+#endif
 	DuckdbSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.unresolved_type");
 }
 
@@ -269,8 +313,14 @@ static SubscriptRoutines duckdb_unresolved_type_subscript_routines = {
 };
 
 void
-DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+#if PG_VERSION_NUM >= 180000
+DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List **indirection, struct ParseState *pstate, bool is_slice,
                                bool is_assignment) {
+#else
+DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection_, struct ParseState *pstate, bool is_slice,
+                               bool is_assignment) {
+	List **indirection = &indirection_;
+#endif
 	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.struct");
 }
 
@@ -289,8 +339,14 @@ static SubscriptRoutines duckdb_struct_subscript_routines = {
 };
 
 void
-DuckdbMapSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+#if PG_VERSION_NUM >= 180000
+DuckdbMapSubscriptTransform(SubscriptingRef *sbsref, List **indirection, struct ParseState *pstate, bool is_slice,
                             bool is_assignment) {
+#else
+DuckdbMapSubscriptTransform(SubscriptingRef *sbsref, List *indirection_, struct ParseState *pstate, bool is_slice,
+                            bool is_assignment) {
+	List **indirection = &indirection_;
+#endif
 	DuckdbSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.map");
 }
 

@@ -6333,7 +6333,7 @@ get_target_list(List *targetList, deparse_context *context)
 		 * to the column name are still valid.
 		 */
 		if (!duckdb_skip_as && outermost_targetlist) {
-			Var *subscript_var = pgduckdb_duckdb_row_subscript_var(tle->expr);
+			Var *subscript_var = pgduckdb_duckdb_subscript_var(tle->expr);
 			if (subscript_var) {
 				/*
 				 * This cannot be moved to pgduckdb_ruleutils, because of
@@ -13082,17 +13082,33 @@ printSubscripts(SubscriptingRef *sbsref, deparse_context *context)
 	lowlist_item = list_head(sbsref->reflowerindexpr);	/* could be NULL */
 	foreach(uplist_item, sbsref->refupperindexpr)
 	{
-		appendStringInfoChar(buf, '[');
-		if (lowlist_item)
+		Node	   *up = (Node *) lfirst(uplist_item);
+
+		if (!up)
 		{
-			/* If subexpression is NULL, get_rule_expr prints nothing */
-			get_rule_expr((Node *) lfirst(lowlist_item), context, false);
-			appendStringInfoChar(buf, ':');
-			lowlist_item = lnext(sbsref->reflowerindexpr, lowlist_item);
+			appendStringInfoString(buf, ".*");
 		}
-		/* If subexpression is NULL, get_rule_expr prints nothing */
-		get_rule_expr((Node *) lfirst(uplist_item), context, false);
-		appendStringInfoChar(buf, ']');
+		else if (IsA(up, String))
+		{
+			appendStringInfoChar(buf, '.');
+			appendStringInfoString(buf, quote_identifier(strVal(up)));
+		}
+		else
+		{
+			appendStringInfoChar(buf, '[');
+			if (lowlist_item)
+			{
+				/* If subexpression is NULL, get_rule_expr prints nothing */
+				get_rule_expr((Node *) lfirst(lowlist_item), context, false);
+				appendStringInfoChar(buf, ':');
+			}
+			/* If subexpression is NULL, get_rule_expr prints nothing */
+			get_rule_expr((Node *) lfirst(uplist_item), context, false);
+			appendStringInfoChar(buf, ']');
+		}
+
+		if (lowlist_item)
+			lowlist_item = lnext(sbsref->reflowerindexpr, lowlist_item);
 	}
 }
 

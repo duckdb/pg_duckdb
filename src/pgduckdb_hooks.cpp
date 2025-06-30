@@ -331,31 +331,18 @@ DuckdbExecutorStartHook_Cpp(QueryDesc *queryDesc) {
 	pgduckdb::ClaimCurrentCommandId();
 }
 
-#if PG_VERSION_NUM >= 180000
-static bool
-#else
 static void
-#endif
 DuckdbExecutorStartHook(QueryDesc *queryDesc, int eflags) {
 	pgduckdb::executor_nest_level++;
 	if (!pgduckdb::IsExtensionRegistered()) {
 		pgduckdb::MarkStatementNotTopLevel();
-		return prev_executor_start_hook(queryDesc, eflags);
+		prev_executor_start_hook(queryDesc, eflags);
+		return;
 	}
 
-#if PG_VERSION_NUM >= 180000
-	if (!prev_executor_start_hook(queryDesc, eflags)) {
-		return false;
-	}
-#else
 	prev_executor_start_hook(queryDesc, eflags);
-#endif
 
 	InvokeCPPFunc(DuckdbExecutorStartHook_Cpp, queryDesc);
-
-#if PG_VERSION_NUM >= 180000
-	return true;
-#endif
 }
 
 /*

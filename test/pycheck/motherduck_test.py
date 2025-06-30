@@ -280,29 +280,36 @@ def test_md_duckdb_only_types(md_cur: Cursor, ddb: Duckdb):
     ddb.sql("""
             CREATE TABLE t1(
                 m MAP(INT, VARCHAR),
+                ms MAP(VARCHAR, INT),
                 s STRUCT(v VARCHAR, i INTEGER),
                 u UNION(t time, d date),
             )""")
     ddb.sql("""
         INSERT INTO t1 VALUES (
             MAP{1: 'abc'},
+            MAP{'abc': 1},
             {'v': 'struct abc', 'i': 123},
             '12:00'::time,
         ), (
             MAP{2: 'def'},
+            MAP{'def': 2},
             {'v': 'struct def', 'i': 456},
             '2023-10-01'::date,
         )
     """)
     md_cur.wait_until_table_exists("t1")
     assert md_cur.sql("""select * from t1""") == [
-        ("{1=abc}", "{'v': struct abc, 'i': 123}", "12:00:00"),
-        ("{2=def}", "{'v': struct def, 'i': 456}", "2023-10-01"),
+        ("{1=abc}", "{abc=1}", "{'v': struct abc, 'i': 123}", "12:00:00"),
+        ("{2=def}", "{def=2}", "{'v': struct def, 'i': 456}", "2023-10-01"),
     ]
 
     assert md_cur.sql("""select m[1] from t1""") == ["abc", None]
+    assert md_cur.sql("""select ms['abc'] from t1""") == [1, None]
+    assert md_cur.sql("""select (ms).abc from t1""") == [1, None]
     assert md_cur.sql("""select s['v'] from t1""") == ["struct abc", "struct def"]
     assert md_cur.sql("""select s['i'] from t1""") == [123, 456]
+    assert md_cur.sql("""select (s).v from t1""") == ["struct abc", "struct def"]
+    assert md_cur.sql("""select (s).i from t1""") == [123, 456]
     assert md_cur.sql("""select union_extract(u,'t') from t1""") == [
         datetime.time(12, 0),
         None,

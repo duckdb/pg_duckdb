@@ -212,6 +212,9 @@ SELECT public.json_group_structure(j) FROM example2;
 --     ('{"family": "canidae", "species": ["labrador", "bulldog"], "hair": true}');
 -- -- <JSON_TRANSFORM>
 SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') FROM example2;
+SELECT (transformed).* FROM (
+    SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') as transformed FROM example2
+) q;
 
 SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 2)"}') FROM example2;
 

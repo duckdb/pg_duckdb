@@ -343,6 +343,15 @@ SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') F
  {'family': canidae, 'coolness': NULL}
 (2 rows)
 
+SELECT (transformed).* FROM (
+    SELECT public.json_transform(j, '{"family": "VARCHAR", "coolness": "DOUBLE"}') as transformed FROM example2
+) q;
+  family  | coolness 
+----------+----------
+ anatidae |    42.42
+ canidae  |         
+(2 rows)
+
 SELECT public.json_transform(j, '{"family": "TINYINT", "coolness": "DECIMAL(4, 2)"}') FROM example2;
            json_transform            
 -------------------------------------
