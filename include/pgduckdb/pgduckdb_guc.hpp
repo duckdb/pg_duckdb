@@ -2,6 +2,7 @@
 
 namespace pgduckdb {
 void InitGUC();
+void InitGUCHooks();
 
 extern bool duckdb_force_execution;
 extern bool duckdb_unsafe_allow_mixed_transactions;

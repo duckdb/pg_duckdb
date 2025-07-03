@@ -2,14 +2,20 @@
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "miscadmin.h" // DataDir
 #include "lib/stringinfo.h"
 #include "postmaster/bgworker_internals.h"
 }
+
+static GucStringAssignHook prev_tz_assign_hook = nullptr;
 
 namespace pgduckdb {
 
@@ -223,6 +229,64 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                           &duckdb_disabled_filesystems, PGC_SUSET);
+}
+
+#if PG_VERSION_NUM < 160000
+static struct config_generic *
+find_option(const char *name, bool, bool, int) {
+	struct config_generic *gen = nullptr;
+
+	int var_count = GetNumConfigOptions();
+	auto *guc_variables = get_guc_variables();
+
+	for (int i = 0; i < var_count; i++) {
+		if (pg_strcasecmp(name, guc_variables[i]->name) == 0) {
+			gen = (struct config_generic *)guc_variables[i];
+			break;
+		}
+	}
+
+	return gen;
+}
+#endif
+
+static void
+DuckAssignTimezone_Cpp(const char *tz) {
+	if (IsExtensionRegistered()) {
+		if (!DuckDBManager::IsInitialized()) {
+			return;
+		}
+
+		// update duckdb tz
+		auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+		pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
+	}
+}
+
+static void
+DuckAssignTimezone(const char *newval, void *extra) {
+	prev_tz_assign_hook(newval, extra);
+
+	// assign_timezone have not update guc_variables, so we can't use GetConfigOption
+	auto *tz = pg_get_timezone_name(*((pg_tz **)extra));
+	InvokeCPPFunc(DuckAssignTimezone_Cpp, tz);
+}
+
+/*
+ * Initialize GUC hooks.
+ *  some guc shoule be set to duckdb instance, such as timezone
+ *  is there any other guc should be set to duckdb instance?
+ */
+void
+InitGUCHooks() {
+	// timezone
+	{
+		if (auto *tz = (struct config_string *)find_option("TimeZone", false, false, 0); tz != nullptr) {
+			prev_tz_assign_hook = tz->assign_hook;
+			tz->assign_hook = DuckAssignTimezone;
+		}
+	}
 }
 
 } // namespace pgduckdb
