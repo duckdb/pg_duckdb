@@ -2,10 +2,15 @@
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/vendor/pgtz.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "miscadmin.h" // DataDir
 #include "lib/stringinfo.h"
 #include "postmaster/bgworker_internals.h"
@@ -223,6 +228,43 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                           &duckdb_disabled_filesystems, PGC_SUSET);
+}
+
+static void
+DuckAssignTimezone_Cpp() {
+	if (IsExtensionRegistered()) {
+		if (!DuckDBManager::IsInitialized()) {
+			return;
+		}
+
+		// update duckdb tz
+		std::string pg_time_zone(session_timezone->TZname);
+		auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+		pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(pg_time_zone));
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", pg_time_zone.c_str());
+	}
+}
+
+static void
+DuckAssignTimezone(const char *, void *extra) {
+	session_timezone = *((pg_tz **)extra);
+
+	InvokeCPPFunc(DuckAssignTimezone_Cpp);
+}
+
+/*
+ * Initialize GUC hooks.
+ *  some guc shoule be set to duckdb instance, such as timezone
+ *  is there any other guc should be set to duckdb instance?
+ */
+void
+InitGUCHooks() {
+	// timezone
+	{
+		if (auto *tz = (struct config_string *)get_config_handle("TimeZone"); tz != nullptr) {
+			tz->assign_hook = DuckAssignTimezone;
+		}
+	}
 }
 
 } // namespace pgduckdb
