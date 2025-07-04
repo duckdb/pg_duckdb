@@ -10,7 +10,11 @@ extern "C" {
 #include "postgres.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
-#include "utils/guc_hooks.h"
+#if PG_VERSION_NUM >= 140000 && PG_VERSION_NUM < 160000
+#include "commands/variable.h" // assign_timezone
+#else
+#include "utils/guc_hooks.h" // assign_timezone
+#endif
 #include "miscadmin.h" // DataDir
 #include "lib/stringinfo.h"
 #include "postmaster/bgworker_internals.h"
