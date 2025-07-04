@@ -28,6 +28,7 @@ _PG_init(void) {
 	}
 
 	pgduckdb::InitGUC();
+	pgduckdb::InitGUCHooks();
 	DuckdbInitHooks();
 	DuckdbInitNode();
 	pgduckdb::InitBackgroundWorkersShmem();

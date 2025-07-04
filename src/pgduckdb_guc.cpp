@@ -2,13 +2,23 @@
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
+#if PG_VERSION_NUM >= 140000 && PG_VERSION_NUM < 160000
+#include "commands/variable.h" // assign_timezone
+#else
+#include "utils/guc_hooks.h" // assign_timezone
+#endif
 #include "miscadmin.h" // DataDir
 #include "lib/stringinfo.h"
 #include "postmaster/bgworker_internals.h"
+#include "pgduckdb/vendor/pgtz.hpp"
 }
 
 namespace pgduckdb {
@@ -223,6 +233,143 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                           &duckdb_disabled_filesystems, PGC_SUSET);
+}
+
+extern "C" {
+
+#if PG_VERSION_NUM >= 140000 && PG_VERSION_NUM < 160000
+/*
+ * the bare comparison function for GUC names
+ */
+static int
+guc_name_compare(const char *namea, const char *nameb) {
+	/*
+	 * The temptation to use strcasecmp() here must be resisted, because the
+	 * array ordering has to remain stable across setlocale() calls. So, build
+	 * our own with a simple ASCII-only downcasing.
+	 */
+	while (*namea && *nameb) {
+		char cha = *namea++;
+		char chb = *nameb++;
+
+		if (cha >= 'A' && cha <= 'Z')
+			cha += 'a' - 'A';
+		if (chb >= 'A' && chb <= 'Z')
+			chb += 'a' - 'A';
+		if (cha != chb)
+			return cha - chb;
+	}
+	if (*namea)
+		return 1; /* a is longer */
+	if (*nameb)
+		return -1; /* b is longer */
+	return 0;
+}
+
+/*
+ * comparator for qsorting and bsearching guc_variables array
+ */
+static int
+guc_var_compare(const void *a, const void *b) {
+	const char *namea = **(const char **const *)a;
+	const char *nameb = **(const char **const *)b;
+
+	return guc_name_compare(namea, nameb);
+}
+
+/*
+ * To allow continued support of obsolete names for GUC variables, we apply
+ * the following mappings to any unrecognized name.  Note that an old name
+ * should be mapped to a new one only if the new variable has very similar
+ * semantics to the old.
+ */
+static const char *const map_old_guc_names[] = {"sort_mem", "work_mem", "vacuum_mem", "maintenance_work_mem", NULL};
+
+static struct config_generic *
+find_option(const char *name, bool, bool skip_errors, int elevel) {
+	const char **key = &name;
+	struct config_generic **res;
+	int i;
+	auto *guc_variables = get_guc_variables();
+
+	Assert(name);
+
+	/*
+	 * By equating const char ** with struct config_generic *, we are assuming
+	 * the name field is first in config_generic.
+	 */
+	res = (struct config_generic **)bsearch((void *)&key, (void *)guc_variables, GetNumConfigOptions(),
+	                                        sizeof(struct config_generic *), guc_var_compare);
+	if (res)
+		return *res;
+
+	/*
+	 * See if the name is an obsolete name for a variable.  We assume that the
+	 * set of supported old names is short enough that a brute-force search is
+	 * the best way.
+	 */
+	for (i = 0; map_old_guc_names[i] != NULL; i += 2) {
+		if (guc_name_compare(name, map_old_guc_names[i]) == 0)
+			return find_option(map_old_guc_names[i + 1], false, skip_errors, elevel);
+	}
+
+	/* Unknown name */
+	if (!skip_errors)
+		ereport(elevel,
+		        (errcode(ERRCODE_UNDEFINED_OBJECT), errmsg("unrecognized configuration parameter \"%s\"", name)));
+	return NULL;
+}
+#endif
+
+#if PG_VERSION_NUM < 170000
+struct config_generic *
+get_config_handle(const char *name) {
+	struct config_generic *gen = find_option(name, false, false, 0);
+
+	if (gen && ((gen->flags & GUC_CUSTOM_PLACEHOLDER) == 0))
+		return gen;
+
+	return NULL;
+}
+#endif
+
+static void
+DuckAssignTimezone_Cpp(const char *tz) {
+	if (IsExtensionRegistered()) {
+		if (!DuckDBManager::IsInitialized()) {
+			return;
+		}
+
+		// update duckdb tz
+		auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+		pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
+	}
+}
+
+static void
+DuckAssignTimezone(const char *newval, void *extra) {
+	assign_timezone(newval, extra);
+
+	// assign_timezone have not update guc_variables, so we can't use GetConfigOption
+	auto *tz = *((pg_tz **)extra);
+	InvokeCPPFunc(DuckAssignTimezone_Cpp, tz->TZname);
+}
+}
+
+/*
+ * Initialize GUC hooks.
+ *  some guc shoule be set to duckdb instance, such as timezone
+ *  is there any other guc should be set to duckdb instance?
+ */
+void
+InitGUCHooks() {
+	// timezone
+	{
+		if (auto *tz = (struct config_string *)get_config_handle("TimeZone"); tz != nullptr) {
+			tz->assign_hook = DuckAssignTimezone;
+		}
+	}
 }
 
 } // namespace pgduckdb
