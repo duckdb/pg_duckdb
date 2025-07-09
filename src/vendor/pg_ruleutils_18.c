@@ -6333,7 +6333,7 @@ get_target_list(List *targetList, deparse_context *context)
 		 * to the column name are still valid.
 		 */
 		if (!duckdb_skip_as && outermost_targetlist) {
-			Var *subscript_var = pgduckdb_duckdb_row_subscript_var(tle->expr);
+			Var *subscript_var = pgduckdb_duckdb_subscript_var(tle->expr);
 			if (subscript_var) {
 				/*
 				 * This cannot be moved to pgduckdb_ruleutils, because of
