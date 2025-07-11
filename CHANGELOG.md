@@ -8,7 +8,7 @@
 - Add support for DDL on DuckDB tables in transactions. (#632)
 - Make `duckdb.unresolved_type` support `min`, `date_trunc`, `length`, `regexp_replace`, `LIKE`, `ILIKE`, `SIMILAR TO`. (#643)
 - Add cast from `duckdb.unresolved_type` to `bytea`. (#643)
-- Add support for the DuckDB functions `strftime`, `strptime`, `epoch`, `epoch_ms`, `epoch_us`, `epoch_ns`, `time_bucket`. (#643)
+- Add support for the DuckDB date/time functions: `strftime`, `strptime`, `epoch`, `epoch_ms`, `epoch_us`, `epoch_ns`, `time_bucket`, `make_timestamp`, `make_timestamptz`. (#643)
 - Add support for using MotherDuck in multiple Postgres databases. (#544, #545)
 - Add ALTER TABLE support for DuckDB tables. (#652)
 - Add support to `COPY ... TO` and `COPY ... FROM` for DuckDB tables. (#665)
@@ -17,6 +17,10 @@
 - Add support for `TABLESAMPLE`. (#559)
 - Add `duckdb.extension_directory`, `duckdb.temporary_directory` and `duckdb.max_temporary_directory_size` settings. (#704)
 - Add source locations to error messages. (#758)
+- Add basic collation support by allowing users to configure `duckdb.default_collation`. (#814)
+- Add support for converting Postgres table values in parallel. This can speed up large scans a lot. (#762)
+- Add support for MotherDuck views. You can now create views inside MotherDuck and query views that are already stored in MotherDuck. (#822)
+- Add support for Postgres 18 Beta 2. Since Postgres 18 has not had a final release yet, this is still considered an experimental feature. (#788)
 
 ## Changed
 
@@ -30,11 +34,15 @@
 - Do not allow creating non-`duckdb` tables in a `ddb$` schema. (#650)
 - When creating MotherDuck tables from Postgres, automatically make them be created by the table creation. Before you had to set the ROLE manually before issuing the CREATE TABLE command. (#650)
 - Add automated tests for MotherDuck integration. (#649)
-- Sync the Postgres timezone to DuckDB when initializing the DuckDB connection. This makes some date parsing/formatting behave better. (#643)
+- Sync the Postgres timezone to DuckDB when initializing the DuckDB connection. This makes some date parsing/formatting behave better. (#643, #853)
 - Support `FORMAT JSON` for `COPY` commands. (#665)
 - Force `COPY` to use DuckDB execution when using `duckdb.force_execution`. (#665)
 - Automatically use DuckDB execution for COPY when file extensions are used for filetypes that DuckDB understands (`.parquet`, `.json`, `.ndjson`, `jsonl`, `.gz`, `.zst`). (#665)
 - Return `TEXT` columns instead of `VARCHAR` columns when using DuckDB execution. (#583)
+- Extensions in `duckdb.extensions` now get automatically installed before running any DuckDB query if `duckdb.autoinstall_known_extensions` is set to `true`. This helps with read-replica setups, where the extension gets installed on the primary and but the replica is queried. (#801)
+- By default `duckdb.disabled_filesystems` is now empty. To keep the default installation secure, `LocalFileSystem` will now be appended for any user that does not have the `pg_read_server_files` and `pg_write_server_files` privileges. (#802)
+- Push down `LIKE` expressions and `upper()`/`lower()` calls to Postgres storage. These expressions can sometimes be pushed down to the index. (#808)
+-
 
 ## Fixed
 
@@ -58,6 +66,11 @@
 - Handle issues when DuckDB query would return different types between planning and execution phase. (#759)
 - Disallow DuckDB tables as a partition. This wasn't supported, and would fail in weird ways when attempted. Now a clear error is thrown. (#778)
 - Fix memory leak when reading LIST/JSON/JSONB columns from Postgres tables. (#784)
+- Fix dropping the Postgres side of a MotherDuck table, when the table does not exist anymore in MotherDuck. (#784)
+- Don't show hints about misuse of functions that return `duckdb.row` for queries that don't use those those functions. (#811)
+- Fix LIKE expressions involving a backslash (`\`) or `LIKE ... ESCAPE` expressions. (#815)
+- Fix errors for transactions that use `SET TRANSACTION ISOLATION`. (#834)
+- Fix compatibility issue with TimescaleDB extension. (#846)
 
 
 # 0.3.1 (2025-02-13)
