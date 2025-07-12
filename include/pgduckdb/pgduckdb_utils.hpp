@@ -3,8 +3,8 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/error_data.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
-#include "pgduckdb/pg/error_data.hpp"
 #include "pgduckdb/logger.hpp"
+#include "pgduckdb/utility/exception.hpp"
 
 #include <setjmp.h>
 
@@ -14,6 +14,7 @@ extern "C" {
 // Note: these forward-declarations could live in a header under the `pg/` folder.
 // But since they are (hopefully) only used in this file, we keep them here.
 struct ErrorContextCallback;
+struct ErrorData;
 struct MemoryContextData;
 
 typedef struct MemoryContextData *MemoryContext;
@@ -26,6 +27,7 @@ extern ErrorData *CopyErrorData();
 extern void FlushErrorState();
 extern pg_stack_base_t set_stack_base();
 extern void restore_stack_base(pg_stack_base_t base);
+extern int errdetail(const char *fmt, ...);
 }
 
 namespace pgduckdb {
@@ -83,7 +85,7 @@ private:
  */
 template <typename Func, Func func, typename... FuncArgs>
 typename std::invoke_result<Func, FuncArgs...>::type
-__PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
+__PostgresFunctionGuard__(const char *func_name, const char *file_name, int line, FuncArgs... args) {
 	std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
 	MemoryContext ctx = CurrentMemoryContext;
 
@@ -110,20 +112,22 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 			FlushErrorState();
 		} else {
 			// This is a pretty bad situation - we failed to extract the error message.
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Failed to extract Postgres error message");
+			pd_log(WARNING, "(PGGuard/%s) Exception in %s:%d: could not extract ErrorData.", func_name, file_name,
+			       line);
+			throw Exception();
 		}
 	} // PG_END_TRY
 
-	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, pg::GetErrorDataMessage(edata));
-	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
+	throw pgduckdb::Exception(edata);
 }
 
 #define PostgresFunctionGuard(FUNC, ...)                                                                               \
-	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(#FUNC, ##__VA_ARGS__)
+	pgduckdb::__PostgresFunctionGuard__<decltype(&FUNC), &FUNC>(#FUNC, __FILE__, __LINE__, ##__VA_ARGS__)
 
 template <typename T, typename ReturnType, typename... FuncArgs>
 ReturnType
-__PostgresMemberGuard__(ReturnType (T::*func)(FuncArgs... args), T *instance, const char *func_name, FuncArgs... args) {
+__PostgresMemberGuard__(ReturnType (T::*func)(FuncArgs... args), T *instance, const char *func_name,
+                        const char *file_name, int line, FuncArgs... args) {
 	MemoryContext ctx = CurrentMemoryContext;
 
 	{ // Scope for PG_END_TRY
@@ -150,15 +154,17 @@ __PostgresMemberGuard__(ReturnType (T::*func)(FuncArgs... args), T *instance, co
 			FlushErrorState();
 		} else {
 			// This is a pretty bad situation - we failed to extract the error message.
-			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Failed to extract Postgres error message");
+			pd_log(WARNING, "(PGGuard/%s) Exception in %s:%d: could not extract ErrorData.", func_name, file_name,
+			       line);
+			throw Exception();
 		}
 	} // PG_END_TRY
 
-	auto message = duckdb::StringUtil::Format("(PGDuckDB/%s) %s", func_name, pg::GetErrorDataMessage(edata));
-	throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, message);
+	throw pgduckdb::Exception(edata);
 }
 
-#define PostgresMemberGuard(FUNC, ...) pgduckdb::__PostgresMemberGuard__(&FUNC, this, __func__, ##__VA_ARGS__)
+#define PostgresMemberGuard(FUNC, ...)                                                                                 \
+	pgduckdb::__PostgresMemberGuard__(&FUNC, this, __func__, __FILE__, __LINE__, ##__VA_ARGS__)
 
 duckdb::unique_ptr<duckdb::QueryResult> DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query);
 
