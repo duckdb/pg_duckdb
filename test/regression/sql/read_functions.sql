@@ -277,7 +277,7 @@ WHERE
 	AND r['l_quantity'] < 25
 LIMIT 1;
 
-SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg');
+SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg') ORDER BY sequence_number;
 SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths => true);
 
 -- read_json
