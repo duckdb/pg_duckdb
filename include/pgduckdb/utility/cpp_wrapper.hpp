@@ -1,6 +1,7 @@
 #pragma once
 
 #include <duckdb/common/error_data.hpp>
+#include "pgduckdb/utility/exception.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -13,16 +14,39 @@ typename std::invoke_result<Func, FuncArgs &...>::type
 __CPPFunctionGuard__(const char *func_name, const char *file_name, int line, FuncArgs &...args) {
 	const char *error_message = nullptr;
 	auto pg_es_start = PG_exception_stack;
+
+	// We may restore the PG error data from two ways:
+	// 1. The error data is stored in the exception object and the error type was preserved
+	// 2. The error pointer was stored in the extra info of the DuckDB exception object
+	ErrorData *maybe_error_data = nullptr;
 	try {
 		return func(args...);
+	} catch (pgduckdb::Exception &ex) {
+		if (ex.error_data == nullptr) {
+			error_message = "Failed to extract Postgres error message";
+		} else {
+			maybe_error_data = ex.error_data;
+		}
 	} catch (duckdb::Exception &ex) {
 		duckdb::ErrorData edata(ex.what());
-		error_message = pstrdup(edata.Message().c_str());
+		auto it = edata.ExtraInfo().find("error_data_ptr");
+		if (it != edata.ExtraInfo().end()) {
+			// Restore pointer stored in DuckDB exception
+			maybe_error_data = reinterpret_cast<ErrorData *>(std::stoull(it->second));
+		} else {
+			error_message = pstrdup(edata.Message().c_str());
+		}
 	} catch (std::exception &ex) {
 		const auto msg = ex.what();
 		if (msg[0] == '{') {
 			duckdb::ErrorData edata(ex.what());
-			error_message = pstrdup(edata.Message().c_str());
+			auto it = edata.ExtraInfo().find("error_data_ptr");
+			if (it != edata.ExtraInfo().end()) {
+				// Restore pointer stored in DuckDB exception
+				maybe_error_data = reinterpret_cast<ErrorData *>(std::stoull(it->second));
+			} else {
+				error_message = pstrdup(edata.Message().c_str());
+			}
 		} else {
 			error_message = pstrdup(ex.what());
 		}
@@ -73,11 +97,14 @@ __CPPFunctionGuard__(const char *func_name, const char *file_name, int line, Fun
 		PG_exception_stack = pg_es_start;
 	}
 
-	// Simplified version of `elog(ERROR, ...)`, with arguments inlined
-	if (errstart_cold(ERROR, TEXTDOMAIN)) {
+	if (maybe_error_data) {
+		ReThrowError(maybe_error_data);
+	} else if (errstart_cold(ERROR, TEXTDOMAIN)) {
+		// Simplified version of `elog(ERROR, ...)`, with arguments inlined
 		errmsg_internal("(PGDuckDB/%s) %s", func_name, error_message);
 		errfinish(file_name, line, func_name);
 	}
+
 	pg_unreachable();
 }
 
