@@ -2,6 +2,7 @@
 
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pg/transactions.hpp"
+#include "pgduckdb/pg/explain.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
@@ -237,10 +238,10 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 			pgduckdb::TriggerActivity();
 			pgduckdb::IsAllowedStatement(parse, true);
 
-			return DuckdbPlanNode(parse, query_string, cursor_options, bound_params, true);
+			return DuckdbPlanNode(parse, cursor_options, true);
 		} else if (pgduckdb::ShouldTryToUseDuckdbExecution(parse)) {
 			pgduckdb::TriggerActivity();
-			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, query_string, cursor_options, bound_params, false);
+			PlannedStmt *duckdbPlan = DuckdbPlanNode(parse, cursor_options, false);
 			if (duckdbPlan) {
 				return duckdbPlan;
 			}
@@ -340,6 +341,7 @@ DuckdbExecutorStartHook(QueryDesc *queryDesc, int eflags) {
 	}
 
 	prev_executor_start_hook(queryDesc, eflags);
+
 	InvokeCPPFunc(DuckdbExecutorStartHook_Cpp, queryDesc);
 }
 
@@ -390,11 +392,8 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	 * EXPLAIN queries are also always re-planned (see
 	 * standard_ExplainOneQuery).
 	 */
-	duckdb_explain_analyze = es->analyze;
-	if (es->format == EXPLAIN_FORMAT_JSON)
-		duckdb_explain_format = duckdb::ExplainFormat::JSON;
-	else
-		duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
+	duckdb_explain_analyze = pgduckdb::pg::IsExplainAnalyze(es);
+	duckdb_explain_format = pgduckdb::pg::DuckdbExplainFormat(es);
 	duckdb_explain_ctas = into != NULL;
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }

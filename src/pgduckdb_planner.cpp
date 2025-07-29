@@ -82,12 +82,13 @@ CreatePlan(Query *query, bool throw_error) {
 		typtup = (Form_pg_type)GETSTRUCT(tp);
 		typtup->typtypmod = pgduckdb::GetPostgresDuckDBTypemod(prepared_result_types[i]);
 
-		/* We fill in the varno later, once we know the index of the custom RTE
-		 * that we create. We'll know this at the end of DuckdbPlanNode. This
-		 * can probably be simplified when we don't call the standard_planner
-		 * anymore inside DuckdbPlanNode, because then we only need a single
-		 * RTE. */
-		Var *var = makeVar(0, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
+		/*
+		 * We hardcode varno 1 here, because our final plan will only have a
+		 * single RTE (this custom scan). In the past we put 0 here, and then
+		 * filled it in later. If at some point we need multiple RTEs again, we
+		 * might want to start doing that again.
+		 */
+		Var *var = makeVar(1, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
 
 		TargetEntry *target_entry =
 		    makeTargetEntry((Expr *)var, i + 1, (char *)pstrdup(prepared_query->GetNames()[i].c_str()), false);
@@ -133,8 +134,7 @@ DuckdbRangeTableEntry(CustomScan *custom_scan) {
 }
 
 PlannedStmt *
-DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
-               bool throw_error) {
+DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 	/* We need to check can we DuckDB create plan */
 
 	Plan *duckdb_plan = InvokeCPPFunc(CreatePlan, parse, throw_error);
@@ -152,39 +152,35 @@ DuckdbPlanNode(Query *parse, const char *query_string, int cursor_options, Param
 		duckdb_plan = materialize_finished_plan(duckdb_plan);
 	}
 
-	/*
-	 * We let postgres generate a basic plan, but then completely overwrite the
-	 * actual plan with our CustomScan node. This is useful to get the correct
-	 * values for all the other many fields of the PlannedStmt.
-	 *
-	 * XXX: The primary reason we did this in the past is so that Postgres
-	 * filled in permInfos and rtable correctly. Those are needed for postgres
-	 * to do its permission checks on the used tables. We do these checks
-	 * inside DuckDB as well, so that's not really necessary anymore. We still
-	 * do this though to get all the other fields filled in correctly. Possibly
-	 * we don't need to do this anymore.
-	 *
-	 * FIXME: For some reason this needs an additional query copy to allow
-	 * re-planning of the query later during execution. But I don't really
-	 * understand why this is needed.
-	 */
-	Query *copied_query = (Query *)copyObjectImpl(parse);
-	PlannedStmt *postgres_plan = standard_planner(copied_query, query_string, cursor_options, bound_params);
-
-	postgres_plan->planTree = duckdb_plan;
-
-	/* Put a DuckdDB RTE at the end of the rtable */
 	RangeTblEntry *rte = DuckdbRangeTableEntry(custom_scan);
-	postgres_plan->rtable = lappend(postgres_plan->rtable, rte);
 
-	/* Update the varno of the Var nodes in the custom_scan_tlist, to point to
-	 * our new RTE. This should not be necessary anymore when we stop relying
-	 * on the standard_planner here. */
-	foreach_node(TargetEntry, target_entry, custom_scan->custom_scan_tlist) {
-		Var *var = castNode(Var, target_entry->expr);
+	PlannedStmt *result = makeNode(PlannedStmt);
+	result->commandType = parse->commandType;
+	result->queryId = parse->queryId;
+	result->hasReturning = (parse->returningList != NIL);
+	result->hasModifyingCTE = parse->hasModifyingCTE;
+	result->canSetTag = parse->canSetTag;
+	result->transientPlan = false;
+	result->dependsOnRole = false;
+	result->parallelModeNeeded = false;
+	result->planTree = duckdb_plan;
+	result->rtable = list_make1(rte);
+#if PG_VERSION_NUM >= 160000
+	result->permInfos = NULL;
+#endif
+	result->resultRelations = NULL;
+	result->appendRelations = NULL;
+	result->subplans = NIL;
+	result->rewindPlanIDs = NULL;
+	result->rowMarks = NIL;
+	result->relationOids = NIL;
+	result->invalItems = NIL;
+	result->paramExecTypes = NIL;
 
-		var->varno = list_length(postgres_plan->rtable);
-	}
+	/* utilityStmt should be null, but we might as well copy it */
+	result->utilityStmt = parse->utilityStmt;
+	result->stmt_location = parse->stmt_location;
+	result->stmt_len = parse->stmt_len;
 
-	return postgres_plan;
+	return result;
 }

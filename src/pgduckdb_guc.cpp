@@ -2,14 +2,20 @@
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
+#include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/utility/cpp_wrapper.hpp"
 
 extern "C" {
 #include "postgres.h"
 #include "utils/guc.h"
+#include "utils/guc_tables.h"
 #include "miscadmin.h" // DataDir
 #include "lib/stringinfo.h"
 #include "postmaster/bgworker_internals.h"
 }
+
+static GucStringAssignHook prev_tz_assign_hook = nullptr;
 
 namespace pgduckdb {
 
@@ -113,9 +119,11 @@ bool duckdb_force_execution = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
 bool duckdb_convert_unsupported_numeric_to_double = false;
 bool duckdb_log_pg_explain = false;
+int duckdb_threads_for_postgres_scan = 2;
 int duckdb_max_workers_per_postgres_scan = 2;
 char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_postgres_role = strdup("");
+bool duckdb_force_motherduck_views = false;
 
 int duckdb_maximum_threads = -1;
 char *duckdb_maximum_memory = strdup("4GB");
@@ -146,14 +154,21 @@ InitGUC() {
 	DefineCustomVariable("duckdb.log_pg_explain", "Logs the EXPLAIN plan of a Postgres scan at the NOTICE log level",
 	                     &duckdb_log_pg_explain);
 
+	DefineCustomVariable("duckdb.threads_for_postgres_scan",
+	                     "Maximum number of DuckDB threads used for a single Postgres scan",
+	                     &duckdb_threads_for_postgres_scan, 1, MAX_PARALLEL_WORKER_LIMIT);
 	DefineCustomVariable("duckdb.max_workers_per_postgres_scan",
 	                     "Maximum number of PostgreSQL workers used for a single Postgres scan",
-	                     &pgduckdb::duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
+	                     &duckdb_max_workers_per_postgres_scan, 0, MAX_PARALLEL_WORKER_LIMIT);
 
 	DefineCustomVariable("duckdb.postgres_role",
 	                     "Which postgres role should be allowed to use DuckDB execution, use the secrets and create "
 	                     "MotherDuck tables. Defaults to superusers only",
 	                     &duckdb_postgres_role, PGC_POSTMASTER, GUC_SUPERUSER_ONLY);
+
+	DefineCustomVariable("duckdb.force_motherduck_views",
+	                     "Force all views to be created in MotherDuck, even if they don't use MotherDuck tables",
+	                     &duckdb_force_motherduck_views);
 
 	/* GUCs acting on DuckDB instance */
 	DefineCustomDuckDBVariable("duckdb.enable_external_access", "Allow the DuckDB to access external state.",
@@ -214,6 +229,64 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                           &duckdb_disabled_filesystems, PGC_SUSET);
+}
+
+#if PG_VERSION_NUM < 160000
+static struct config_generic *
+find_option(const char *name, bool, bool, int) {
+	struct config_generic *gen = nullptr;
+
+	int var_count = GetNumConfigOptions();
+	auto *guc_variables = get_guc_variables();
+
+	for (int i = 0; i < var_count; i++) {
+		if (pg_strcasecmp(name, guc_variables[i]->name) == 0) {
+			gen = (struct config_generic *)guc_variables[i];
+			break;
+		}
+	}
+
+	return gen;
+}
+#endif
+
+static void
+DuckAssignTimezone_Cpp(const char *tz) {
+	if (IsExtensionRegistered()) {
+		if (!DuckDBManager::IsInitialized()) {
+			return;
+		}
+
+		// update duckdb tz
+		auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+		pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
+	}
+}
+
+static void
+DuckAssignTimezone(const char *newval, void *extra) {
+	prev_tz_assign_hook(newval, extra);
+
+	// assign_timezone have not update guc_variables, so we can't use GetConfigOption
+	auto *tz = pg_get_timezone_name(*((pg_tz **)extra));
+	InvokeCPPFunc(DuckAssignTimezone_Cpp, tz);
+}
+
+/*
+ * Initialize GUC hooks.
+ *  some guc shoule be set to duckdb instance, such as timezone
+ *  is there any other guc should be set to duckdb instance?
+ */
+void
+InitGUCHooks() {
+	// timezone
+	{
+		if (auto *tz = (struct config_string *)find_option("TimeZone", false, false, 0); tz != nullptr) {
+			prev_tz_assign_hook = tz->assign_hook;
+			tz->assign_hook = DuckAssignTimezone;
+		}
+	}
 }
 
 } // namespace pgduckdb

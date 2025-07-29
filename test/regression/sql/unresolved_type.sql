@@ -22,14 +22,29 @@ select strftime(timestamp '1992-01-01 20:38:40', '%a, %-d %B %Y - %I:%M:%S %p');
 select strftime(timestamptz '1992-01-01 20:38:40', '%a, %-d %B %Y - %I:%M:%S %p');
 select strftime(r['ts'], '%a, %-d %B %Y - %I:%M:%S %p') from duckdb.query($$ SELECT timestamp '1992-01-01 20:38:40' ts $$) r;
 
-select epoch_ms(701222400000);
 select epoch_ms(TIMESTAMP '2021-08-03 11:59:44.123456');
 select epoch_ns(TIMESTAMP '2021-08-03 11:59:44.123456');
 select epoch_us(TIMESTAMP '2021-08-03 11:59:44.123456');
 select epoch('2022-11-07 08:43:04'::TIMESTAMP);
 
-select epoch_ms(r['a']) from duckdb.query($$ SELECT 701222400000 a $$) r;
-select epoch_ms(r['ts']) from duckdb.query($$ SELECT TIMESTAMP '2021-08-03 11:59:44.123456' ts $$) r;
+-- TODO: Add this back after we start using DuckDB 1.4, which removes epoch_ms
+-- for bigint:
+--
+-- select epoch_ms(r['ts']) from duckdb.query($$ SELECT TIMESTAMP '2021-08-03 11:59:44.123456' ts $$) r;
 select epoch_ns(r['ts']) from duckdb.query($$ SELECT TIMESTAMP '2021-08-03 11:59:44.123456' ts $$) r;
 select epoch_us(r['ts']) from duckdb.query($$ SELECT TIMESTAMP '2021-08-03 11:59:44.123456' ts $$) r;
 select epoch(r['ts']) from duckdb.query($$ SELECT '2022-11-07 08:43:04'::TIMESTAMP ts $$) r;
+
+-- Tests for make_timestamp[tz]. The ones with many arguments also exist in
+-- postgres, so we force duckdb execution by using duckdb.query.
+select make_timestamp(2023, 6, 12, 10, 30, 12.42) FROM duckdb.query($$ SELECT 1
+$$);
+select make_timestamptz(2023, 6, 12, 10, 30, 12.42) FROM duckdb.query($$ SELECT 1
+$$);
+select make_timestamptz(2023, 6, 12, 10, 30, 12.42, 'CET') FROM duckdb.query($$ SELECT 1
+$$);
+
+select make_timestamp(1686570000000000);
+select make_timestamp(r['microseconds']) from duckdb.query($$ SELECT 1686570000000000 AS microseconds $$) r;
+select make_timestamptz(1686570000000000);
+select make_timestamptz(r['microseconds']) from duckdb.query($$ SELECT 1686570000000000 AS microseconds $$) r;

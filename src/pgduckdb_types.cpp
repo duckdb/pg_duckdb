@@ -11,6 +11,7 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
+#include "pgduckdb/pg/memory.hpp"
 #include "pgduckdb/pg/types.hpp"
 
 extern "C" {
@@ -355,8 +356,8 @@ ConvertTimestampTzDatum(const duckdb::Value &value) {
 	if (!ValidTimestampOrTimestampTz(rawValue))
 		throw duckdb::OutOfRangeException(
 		    "The TimestampTz value should be between min and max value (%s <-> %s)",
-		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_t>(PGDUCKDB_MIN_TIMESTAMP_VALUE)),
-		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_t>(PGDUCKDB_MAX_TIMESTAMP_VALUE)));
+		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_tz_t>(PGDUCKDB_MIN_TIMESTAMP_VALUE)),
+		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_tz_t>(PGDUCKDB_MAX_TIMESTAMP_VALUE)));
 
 	return TimestampTzGetDatum(rawValue - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
 }
@@ -884,7 +885,9 @@ namespace {
 template <class OP>
 struct PostgresArrayAppendState {
 public:
-	PostgresArrayAppendState(idx_t _number_of_dimensions) : number_of_dimensions(_number_of_dimensions) {
+	PostgresArrayAppendState(idx_t _number_of_dimensions)
+	    : count(0), expected_values(1), datums(nullptr), nulls(nullptr), dimensions(nullptr), lower_bounds(nullptr),
+	      number_of_dimensions(_number_of_dimensions) {
 		dimensions = (int *)palloc(number_of_dimensions * sizeof(int));
 		lower_bounds = (int *)palloc(number_of_dimensions * sizeof(int));
 		for (idx_t i = 0; i < number_of_dimensions; i++) {
@@ -1022,7 +1025,7 @@ ConvertDuckToPostgresArray(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 
 bool
 ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col) {
-	Oid oid = slot->tts_tupleDescriptor->attrs[col].atttypid;
+	Oid oid = TupleDescAttr(slot->tts_tupleDescriptor, col)->atttypid;
 
 	switch (oid) {
 	case BITOID:
@@ -1286,20 +1289,20 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 			if (type_modifier == -1) {
 				return duckdb::LogicalType::USER(
 				    "DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to "
-				    "a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else if (precision < 1 || precision > 38) {
 				return duckdb::LogicalType::USER(
 				    "DuckDB only supports NUMERIC with a precision of 1-38. You can choose to convert these NUMERICs "
-				    "to a DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else if (scale < 0 || scale > 38) {
 				return duckdb::LogicalType::USER(
 				    "DuckDB only supports NUMERIC with a scale of 0-38. You can choose to convert these NUMERICs to a "
-				    "DOUBLE by using 'SET duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else {
 				return duckdb::LogicalType::USER(
 				    "DuckDB does not support NUMERIC with a scale that is larger than the precision. You can choose to "
-				    "convert these NUMERICs to a DOUBLE by using 'SET "
-				    "duckdb.duckdb.convert_unsupported_numeric_to_double = true'");
+				    "convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = "
+				    "true'");
 			}
 		}
 
@@ -1962,17 +1965,18 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 			auto &array_mask = duckdb::FlatVector::Validity(result);
 			array_mask.SetInvalid(scan_local_state.output_vector_size);
 		} else {
-			auto attr = slot->tts_tupleDescriptor->attrs[duckdb_output_index];
-			if (attr.attlen == -1) {
+			auto attr = TupleDescAttr(slot->tts_tupleDescriptor, duckdb_output_index);
+			if (attr->attlen == -1) {
 				bool should_free = false;
 				Datum detoasted_value = DetoastPostgresDatum(
 				    reinterpret_cast<varlena *>(slot->tts_values[duckdb_output_index]), &should_free);
-				ConvertPostgresToDuckValue(attr.atttypid, detoasted_value, result, scan_local_state.output_vector_size);
+				ConvertPostgresToDuckValue(attr->atttypid, detoasted_value, result,
+				                           scan_local_state.output_vector_size);
 				if (should_free) {
 					duckdb_free(reinterpret_cast<void *>(detoasted_value));
 				}
 			} else {
-				ConvertPostgresToDuckValue(attr.atttypid, slot->tts_values[duckdb_output_index], result,
+				ConvertPostgresToDuckValue(attr->atttypid, slot->tts_values[duckdb_output_index], result,
 				                           scan_local_state.output_vector_size);
 			}
 		}
@@ -1980,6 +1984,82 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 
 	scan_local_state.output_vector_size++;
 	scan_global_state->total_row_count++;
+}
+
+/*
+ * Returns true if the given type can be converted from a Postgres datum to a DuckDB value
+ * without requiring any Postgres-specific functions or memory allocations (such as palloc).
+ */
+static bool
+IsThreadSafeTypeForPostgresToDuckDB(Oid attr_type, duckdb::LogicalTypeId duckdb_type) {
+	if (duckdb_type == duckdb::LogicalTypeId::VARCHAR) {
+		return attr_type != JSONBOID;
+	}
+	if (duckdb_type == duckdb::LogicalTypeId::LIST || duckdb_type == duckdb::LogicalTypeId::BIT) {
+		return false;
+	}
+
+	return true;
+}
+
+/*
+ * Insert batch of tuples into chunk. This function is thread-safe and is meant for multi-threaded scans.
+ *
+ * Global lock & PG memory context are handled for unsafe types, e.g., JSONB/LIST/VARBIT.
+ */
+void
+InsertTuplesIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_local_state, TupleTableSlot **slots,
+                      int num_slots) {
+	if (num_slots == 0) {
+		return;
+	}
+
+	auto scan_global_state = scan_local_state.global_state;
+	int natts = slots[0]->tts_tupleDescriptor->natts;
+	D_ASSERT(!scan_global_state->count_tuples_only);
+
+	for (int duckdb_output_index = 0; duckdb_output_index < natts; duckdb_output_index++) {
+		auto &result = output.data[duckdb_output_index];
+		auto attr = TupleDescAttr(slots[0]->tts_tupleDescriptor, duckdb_output_index);
+		bool is_safe_type = IsThreadSafeTypeForPostgresToDuckDB(attr->atttypid, result.GetType().id());
+
+		std::unique_ptr<std::lock_guard<std::recursive_mutex>> lock_guard;
+		MemoryContext old_ctx = NULL;
+		if (!is_safe_type) {
+			lock_guard = std::make_unique<std::lock_guard<std::recursive_mutex>>(GlobalProcessLock::GetLock());
+			old_ctx = pg::MemoryContextSwitchTo(scan_global_state->duckdb_scan_memory_ctx);
+		}
+
+		for (int row = 0; row < num_slots; row++) {
+			if (slots[row]->tts_isnull[duckdb_output_index]) {
+				auto &array_mask = duckdb::FlatVector::Validity(result);
+				array_mask.SetInvalid(scan_local_state.output_vector_size + row);
+			} else {
+				if (attr->attlen == -1) {
+					bool should_free = false;
+					Datum detoasted_value = DetoastPostgresDatum(
+					    reinterpret_cast<varlena *>(slots[row]->tts_values[duckdb_output_index]), &should_free);
+					ConvertPostgresToDuckValue(attr->atttypid, detoasted_value, result,
+					                           scan_local_state.output_vector_size + row);
+					if (should_free) {
+						duckdb_free(reinterpret_cast<void *>(detoasted_value));
+					}
+				} else {
+					ConvertPostgresToDuckValue(attr->atttypid, slots[row]->tts_values[duckdb_output_index], result,
+					                           scan_local_state.output_vector_size + row);
+				}
+			}
+		}
+
+		if (!is_safe_type) {
+			pg::MemoryContextSwitchTo(old_ctx);
+			pg::MemoryContextReset(scan_global_state->duckdb_scan_memory_ctx);
+			// Lock will be automatically unlocked when lock_guard goes out of scope
+		}
+	}
+
+	scan_local_state.output_vector_size += num_slots;
+	scan_global_state->total_row_count += num_slots;
 }
 
 NumericVar

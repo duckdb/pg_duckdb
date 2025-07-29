@@ -146,6 +146,7 @@ BuildDuckdbOnlyFunctions() {
 	                                "read_json",
 	                                "approx_count_distinct",
 	                                "query",
+	                                "view",
 	                                "json_exists",
 	                                "json_extract",
 	                                "json_extract_string",
@@ -170,6 +171,8 @@ BuildDuckdbOnlyFunctions() {
 	                                "epoch_ms",
 	                                "epoch_us",
 	                                "epoch_ns",
+	                                "make_timestamp",
+	                                "make_timestamptz",
 	                                "time_bucket",
 	                                "union_extract",
 	                                "union_tag"};

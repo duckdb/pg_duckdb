@@ -21,8 +21,10 @@ extern "C" {
 #include "nodes/print.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
+#include "nodes/value.h"
 #include "optimizer/optimizer.h"
 #include "parser/analyze.h"
+#include "parser/parsetree.h"
 #include "tcop/utility.h"
 #include "utils/builtins.h"
 #include "utils/syscache.h"
@@ -32,6 +34,7 @@ extern "C" {
 #include "executor/spi.h"
 #include "miscadmin.h"
 #include "rewrite/rewriteHandler.h"
+#include "utils/ruleutils.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
@@ -51,6 +54,172 @@ extern "C" {
 namespace pgduckdb {
 DDLType top_level_duckdb_ddl_type = DDLType::NONE;
 bool refreshing_materialized_view = false;
+
+bool
+IsMotherDuckView(Form_pg_class relation) {
+	if (relation->relkind != RELKIND_VIEW) {
+		return false;
+	}
+
+	SPI_connect();
+
+	Oid saved_userid;
+	int sec_context;
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
+	SetConfigOption("duckdb.force_execution", "false", PGC_USERSET, PGC_S_SESSION);
+	GetUserIdAndSecContext(&saved_userid, &sec_context);
+	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	Oid arg_types[] = {OIDOID};
+	Datum values[] = {ObjectIdGetDatum(relation->oid)};
+	int ret = SPI_execute_with_args(R"(
+			SELECT FROM duckdb.tables WHERE relid = $1 LIMIT 1;
+								 )",
+	                                lengthof(arg_types), arg_types, values, NULL, false, 0);
+
+	if (ret != SPI_OK_SELECT) {
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	}
+
+	/* Revert back to original privileges */
+	SetUserIdAndSecContext(saved_userid, sec_context);
+	AtEOXact_GUC(false, save_nestlevel);
+
+	bool found = SPI_processed > 0;
+	SPI_finish();
+	return found;
+}
+
+bool
+IsMotherDuckView(Relation relation) {
+	return IsMotherDuckView(relation->rd_rel);
+}
+
+static bool
+ContainsMotherDuckRelation(Node *node, void *context) {
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, RangeVar)) {
+		RangeVar *range_var = (RangeVar *)node;
+		Oid relid = RangeVarGetRelid(range_var, AccessShareLock, true);
+		if (OidIsValid(relid)) {
+			Relation rel = relation_open(relid, AccessShareLock);
+			if (rel->rd_rel->relkind == RELKIND_VIEW || rel->rd_rel->relkind == RELKIND_RELATION) {
+				/* Check if the relation is a MotherDuck view or table */
+				if (pgduckdb::IsMotherDuckView(rel) || pgduckdb::IsDuckdbTable(rel)) {
+					relation_close(rel, NoLock);
+					return true;
+				}
+			}
+			relation_close(rel, NoLock);
+		}
+	}
+
+	/* Continue walking the tree */
+#if PG_VERSION_NUM >= 160000
+	return raw_expression_tree_walker(node, ContainsMotherDuckRelation, context);
+#else
+	return raw_expression_tree_walker(node, (bool (*)())((void *)ContainsMotherDuckRelation), context);
+#endif
+}
+
+static bool
+NeedsToBeMotherDuckView(ViewStmt *stmt, char *schema_name) {
+	if (!IsMotherDuckEnabled()) {
+		return false;
+	}
+
+	if (pgduckdb::duckdb_force_motherduck_views) {
+		return true;
+	}
+
+	if (pgduckdb::is_background_worker) {
+		return true;
+	}
+
+	if (pgduckdb::top_level_duckdb_ddl_type == DDLType::RENAME_VIEW) {
+		return true;
+	}
+
+	if (pgduckdb::IsDuckdbSchemaName(schema_name)) {
+		return true;
+	}
+
+	return pgduckdb::ContainsMotherDuckRelation(stmt->query, NULL);
+}
+
+FuncExpr *
+GetDuckdbViewExprFromQuery(Query *query) {
+	if (query->commandType != CMD_SELECT) {
+		return NULL;
+	}
+
+	RangeTblEntry *rte = NULL;
+	foreach_ptr(Node, from_node, query->jointree->fromlist) {
+		if (IsA(from_node, RangeTblRef)) {
+			int varno = ((RangeTblRef *)from_node)->rtindex;
+			RangeTblEntry *rte_temp = rt_fetch(varno, query->rtable);
+
+			if (!rte_temp->inFromCl)
+				continue;
+
+			if (rte) {
+				/*
+				 * Found multiple RTEs in the FROM clause, which means it isn't
+				 * a duckdb.view query.
+				 */
+				return NULL;
+			}
+
+			rte = rte_temp;
+		} else {
+			/*
+			 * Found something else in the FROM clause, which means it isn't
+			 * a duckdb.view query.
+			 */
+			return NULL;
+		}
+	}
+
+	if (rte == NULL) {
+		/*
+		 * No RTE found in the FROM clause, which means it isn't a duckdb.view
+		 * query.
+		 */
+		return NULL;
+	}
+
+	if (rte->rtekind != RTE_FUNCTION) {
+		return NULL;
+	}
+
+	if (list_length(rte->functions) != 1) {
+		return NULL;
+	}
+
+	RangeTblFunction *rt_func = (RangeTblFunction *)linitial(rte->functions);
+
+	if (rt_func->funcexpr == NULL || !IsA(rt_func->funcexpr, FuncExpr)) {
+		return NULL;
+	}
+
+	FuncExpr *func_expr = (FuncExpr *)rt_func->funcexpr;
+
+	Oid function_oid = func_expr->funcid;
+
+	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
+		return NULL;
+	}
+
+	auto func_name = get_func_name(function_oid);
+	if (strcmp(func_name, "view") != 0) {
+		return NULL;
+	}
+
+	return func_expr;
+}
+
 } // namespace pgduckdb
 
 /*
@@ -63,21 +232,41 @@ static bool ctas_skip_data = false;
 static ProcessUtility_hook_type prev_process_utility_hook = NULL;
 
 /*
- * WrapQueryInQueryCall takes a query and wraps it an duckdb.query(...) call.
- * It then explicitly references all the columns and the types from the
- * original qeury its target list. So a query like this:
+ * EntrenchColumnsFromCall takes a function call that returns a duckdb.row type
+ * and returns a SELECT query. This SELECT query explicitly references all the
+ * columns and the types from the original Query its target list. So a query
+ * like this.
  *
- * SELECT r from read_csv('file.csv') r;
+ * The Query object matching:
  *
- * Would expand to:
+ * SELECT * FROM read_csv('file.csv');
+ *
+ * Together with the function call "read_csv('file.csv')" would result in the
+ * following query:
  *
  * SELECT r['id']::int AS id, r['name']::text AS name
- * FROM duckdb.query('SELECT * from system.main.read_csv(''file.csv'')') r;
+ * FROM read_csv(''file.csv'')') r;
  *
+ * query_string should originally contain the original query string, which is
+ * only used for error reporting. When the function returns this query_string
+ * will be set to the new one.
  */
-static Query *
-WrapQueryInDuckdbQueryCall(Query *query, List *target_list) {
-	char *duckdb_query_string = pgduckdb_get_querydef(query);
+static RawStmt *
+EntrenchColumnsFromCall(Query *query, const char *function_call, const char **query_string) {
+	/*
+	 * We call into our DuckDB planning logic directly here, to ensure that
+	 * this query is planned using DuckDB. This is needed for a CTAS into a
+	 * DuckDB table, where the query itself does not require DuckDB
+	 * execution. If we don't set force_execution to true, the query will
+	 * be planned using Postgres, but then later executed using DuckDB when
+	 * we actually write into the DuckDB table (possibly resulting in
+	 * different column types).
+	 */
+	pgduckdb::IsAllowedStatement(query, true);
+	PlannedStmt *plan = DuckdbPlanNode(query, CURSOR_OPT_PARALLEL_OK, true);
+
+	/* This is where our custom code starts again */
+	List *target_list = plan->planTree->targetlist;
 
 	StringInfo buf = makeStringInfo();
 	appendStringInfo(buf, "SELECT ");
@@ -94,7 +283,7 @@ WrapQueryInDuckdbQueryCall(Query *query, List *target_list) {
 		                 format_type_with_typemod(type, typemod), quote_identifier(tle->resname));
 	}
 
-	appendStringInfo(buf, " FROM duckdb.query(%s) r", quote_literal_cstr(duckdb_query_string));
+	appendStringInfo(buf, " FROM %s r", function_call);
 
 	List *parsetree_list = pg_parse_query(buf->data);
 
@@ -106,11 +295,35 @@ WrapQueryInDuckdbQueryCall(Query *query, List *target_list) {
 	if (list_length(parsetree_list) > 1)
 		ereport(ERROR,
 		        (errcode(ERRCODE_SYNTAX_ERROR), errmsg("BUG: pg_duckdb generated a command with multiple queries")));
+	*query_string = buf->data;
+	return (RawStmt *)linitial(parsetree_list);
+}
+
+/*
+ * WrapQueryInQueryCall takes a query and wraps it an duckdb.query(...) call.
+ * It then explicitly references all the columns and the types from the
+ * original qeury its target list. So a query like this:
+ *
+ * SELECT r from read_csv('file.csv') r;
+ *
+ * Would expand to:
+ *
+ * SELECT r['id']::int AS id, r['name']::text AS name
+ * FROM duckdb.query('SELECT * from system.main.read_csv(''file.csv'')') r;
+ *
+ */
+static Query *
+WrapQueryInDuckdbQueryCall(Query *query, const char *query_string) {
+	char *duckdb_query_string = pgduckdb_get_querydef(query);
+
+	char *function_call = psprintf("duckdb.query(%s)", quote_literal_cstr(duckdb_query_string));
+
+	RawStmt *raw_stmt = EntrenchColumnsFromCall(query, function_call, &query_string);
 
 #if PG_VERSION_NUM >= 150000
-	return parse_analyze_fixedparams((RawStmt *)linitial(parsetree_list), buf->data, NULL, 0, NULL);
+	return parse_analyze_fixedparams(raw_stmt, query_string, NULL, 0, NULL);
 #else
-	return parse_analyze((RawStmt *)linitial(parsetree_list), buf->data, NULL, 0, NULL);
+	return parse_analyze(raw_stmt, query_string, NULL, 0, NULL);
 #endif
 }
 
@@ -151,28 +364,76 @@ DropTablePreCheck(DropStmt *stmt) {
 	}
 }
 
+/*
+ * This is a DROP pre-check to check if a DROP VIEW command tries to drop both
+ * DuckDB and Postgres views. Doing so is not allowed within an explicit
+ * transaction. It also claims the command ID
+ */
+static void
+DropViewPreCheck(DropStmt *stmt) {
+	Assert(stmt->removeType == OBJECT_VIEW);
+	bool dropping_duckdb_views = false;
+	bool dropping_postgres_views = false;
+	foreach_node(List, obj, stmt->objects) {
+		/* check if view is duckdb view */
+		RangeVar *rel = makeRangeVarFromNameList(obj);
+		Oid relid = RangeVarGetRelid(rel, AccessShareLock, true);
+		if (!OidIsValid(relid)) {
+			/* Let postgres deal with this. It's possible that this is fine in
+			 * case of DROP ... IF EXISTS */
+			continue;
+		}
+
+		Relation relation = relation_open(relid, AccessShareLock);
+
+		if (pgduckdb::IsMotherDuckView(relation)) {
+			if (!dropping_duckdb_views) {
+				pgduckdb::ClaimCurrentCommandId();
+				dropping_duckdb_views = true;
+			}
+		} else {
+			dropping_postgres_views = true;
+		}
+		relation_close(relation, NoLock);
+	}
+
+	if (!pgduckdb::MixedWritesAllowed() && dropping_duckdb_views && dropping_postgres_views) {
+		elog(ERROR, "Dropping both DuckDB and non-DuckDB views in the same transaction is not supported");
+	}
+}
+
 static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
 static void DuckdbHandleAlterForeignServerStmt(Node *parsetree);
 static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
 static void DuckdbHandleAlterUserMappingStmt(Node *parsetree);
+static bool DuckdbHandleRenameViewPre(RenameStmt *stmt);
+static bool DuckdbHandleViewStmtPre(Node *parsetree, PlannedStmt *pstmt, const char *query_string);
+static void DuckdbHandleViewStmtPost(Node *parsetree);
 
 static void
-DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo params) {
-	if (!pgduckdb::IsExtensionRegistered()) {
-		/* We're not installed, so don't mess with the query */
-		return;
-	}
-
+DuckdbHandleDDLPost(PlannedStmt *pstmt) {
 	Node *parsetree = pstmt->utilityStmt;
 
-	if (IsA(parsetree, TransactionStmt)) {
+	if (IsA(parsetree, ViewStmt)) {
 		/*
-		 * Don't do anything for transaction statements, we have the
-		 * transaction XactCallback functions to handle those in
-		 * pgduckdb_xact.cpp
+		 * Handle the ViewStmt here, so that we can wrap it in a
+		 * duckdb.query(...) call.
 		 */
-		return;
+		DuckdbHandleViewStmtPost(parsetree);
+	} else {
+		/* For other DDL statements, we just need to claim any CommandId that
+		 * was used during the Postgres processing of the DDL statement.
+		 */
+		pgduckdb::ClaimCurrentCommandId(true);
 	}
+}
+
+/*
+ * Returns true if we need to run the post hook
+ */
+static bool
+DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
+	Node *parsetree = pstmt->utilityStmt;
 
 	/*
 	 * Time to check for disallowed mixed writes here. The handling for some of
@@ -207,7 +468,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			pgduckdb::ClaimCurrentCommandId();
 		}
 
-		return;
+		return false;
 	} else if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
 
@@ -247,7 +508,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			// No need to plan here as well, because standard_ProcessUtility
 			// will already plan the query and thus get the correct columns and
 			// their types.
-			return;
+			return false;
 		}
 
 		Query *original_query = castNode(Query, stmt->query);
@@ -287,7 +548,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 
 		if (!needs_planning) {
 			// If we don't need planning let's not do anything though.
-			return;
+			return false;
 		}
 
 		MemoryContext oldcontext = CurrentMemoryContext;
@@ -309,24 +570,7 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		query = linitial_node(Query, rewritten);
 		Assert(query->commandType == CMD_SELECT);
 
-		Query *rewritten_query_copy = (Query *)copyObjectImpl(query);
-
-		/*
-		 * We call into our DuckDB planning logic directly here, to ensure that
-		 * this query is planned using DuckDB. This is needed for a CTAS into a
-		 * DuckDB table, where the query itself does not require DuckDB
-		 * execution. If we don't set force_execution to true, the query will
-		 * be planned using Postgres, but then later executed using DuckDB when
-		 * we actually write into the DuckDB table (possibly resulting in
-		 * different column types).
-		 */
-		pgduckdb::IsAllowedStatement(query, true);
-		PlannedStmt *plan = DuckdbPlanNode(query, query_string, CURSOR_OPT_PARALLEL_OK, params, true);
-
-		/* This is where our custom code starts again */
-		List *target_list = plan->planTree->targetlist;
-
-		Query *wrapped_query = WrapQueryInDuckdbQueryCall(rewritten_query_copy, target_list);
+		Query *wrapped_query = WrapQueryInDuckdbQueryCall(query, query_string);
 
 		/*
 		 * We need to use the same context as the original query, because it
@@ -349,7 +593,11 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			 */
 			MemoryContext view_query_context = GetMemoryChunkContext(stmt->into->viewQuery);
 			MemoryContextSwitchTo(view_query_context);
+#if PG_VERSION_NUM >= 180000
+			stmt->into->viewQuery = (Query *)copyObjectImpl(stmt->query);
+#else
 			stmt->into->viewQuery = (Node *)copyObjectImpl(stmt->query);
+#endif
 			MemoryContextSwitchTo(oldcontext);
 		}
 	} else if (IsA(parsetree, RefreshMatViewStmt)) {
@@ -369,7 +617,9 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 				elog(ERROR, "Creating ddb$ schemas is currently not supported");
 			}
 		}
-		return;
+		return false;
+	} else if (IsA(parsetree, ViewStmt)) {
+		return DuckdbHandleViewStmtPre(parsetree, pstmt, query_string);
 	} else if (IsA(parsetree, RenameStmt)) {
 		auto stmt = castNode(RenameStmt, parsetree);
 		if (stmt->renameType == OBJECT_SCHEMA) {
@@ -379,9 +629,20 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 			if (pgduckdb::IsDuckdbSchemaName(stmt->newname)) {
 				elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
 			}
-		} else if (stmt->renameType == OBJECT_TABLE || stmt->renameType == OBJECT_COLUMN) {
-			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
+		} else if (stmt->renameType == OBJECT_TABLE ||
+		           (stmt->renameType == OBJECT_COLUMN && stmt->relationType == OBJECT_TABLE)) {
+			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessExclusiveLock, true);
+			if (relation_oid == InvalidOid) {
+				/* Let postgres deal with this. It's possible that this is fine in
+				 * case of RENAME ... IF EXISTS */
+				return false;
+			}
 			Relation rel = RelationIdGetRelation(relation_oid);
+
+			if (rel->rd_rel->relkind == RELKIND_VIEW) {
+				RelationClose(rel);
+				return DuckdbHandleRenameViewPre(stmt);
+			}
 
 			if (pgduckdb::IsDuckdbTable(rel)) {
 				if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
@@ -393,20 +654,27 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 				pgduckdb::ClaimCurrentCommandId();
 			}
 			RelationClose(rel);
+		} else if (stmt->renameType == OBJECT_VIEW ||
+		           (stmt->renameType == OBJECT_COLUMN && stmt->relationType == OBJECT_VIEW)) {
+
+			return DuckdbHandleRenameViewPre(stmt);
 		}
 
-		return;
+		return false;
 	} else if (IsA(parsetree, DropStmt)) {
 		auto stmt = castNode(DropStmt, parsetree);
 		switch (stmt->removeType) {
 		case OBJECT_TABLE:
 			DropTablePreCheck(stmt);
 			break;
+		case OBJECT_VIEW:
+			DropViewPreCheck(stmt);
+			break;
 		default:
 			/* ignore anything else */
 			break;
 		}
-		return;
+		return false;
 	} else if (IsA(parsetree, AlterTableStmt)) {
 		auto stmt = castNode(AlterTableStmt, parsetree);
 		Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessShareLock, false);
@@ -420,6 +688,11 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		if (pgduckdb::IsDuckdbTable(relation) && pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::NONE) {
 			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::ALTER_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
+		}
+
+		if (pgduckdb::IsMotherDuckView(relation)) {
+			ereport(ERROR,
+			        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Altering a MotherDuck view is not supported")));
 		}
 		RelationClose(relation);
 	} else if (IsA(parsetree, AlterObjectSchemaStmt)) {
@@ -436,17 +709,19 @@ DuckdbHandleDDL(PlannedStmt *pstmt, const char *query_string, ParamListInfo para
 		}
 	} else if (IsA(parsetree, CreateForeignServerStmt)) {
 		DuckdbHandleCreateForeignServerStmt(parsetree);
-		return;
+		return false;
 	} else if (IsA(parsetree, AlterForeignServerStmt)) {
 		DuckdbHandleAlterForeignServerStmt(parsetree);
-		return;
+		return false;
 	} else if (IsA(parsetree, CreateUserMappingStmt)) {
 		DuckdbHandleCreateUserMappingStmt(parsetree);
-		return;
+		return false;
 	} else if (IsA(parsetree, AlterUserMappingStmt)) {
 		DuckdbHandleAlterUserMappingStmt(parsetree);
-		return;
+		return false;
 	}
+
+	return false;
 }
 
 static void
@@ -514,6 +789,274 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 	pgduckdb::CurrentServerOid = server->serverid;
 }
 
+#if PG_VERSION_NUM >= 150000
+static void
+UpdateDuckdbViewDefinition(Oid view_oid, const char *new_view_name) {
+	// Get the original view definition
+	Datum view_definition = DirectFunctionCall1(pg_get_viewdef, ObjectIdGetDatum(view_oid));
+	char *view_def_str = TextDatumGetCString(view_definition);
+
+	// Parse the view definition into an abstract syntax tree (AST)
+	List *parsetree_list = pg_parse_query(view_def_str);
+	if (list_length(parsetree_list) != 1) {
+		elog(ERROR, "Expected a single query, but got %d queries", list_length(parsetree_list));
+	}
+
+	RawStmt *raw_stmt = (RawStmt *)linitial(parsetree_list);
+
+	Query *query = parse_analyze_fixedparams(raw_stmt, view_def_str, NULL, 0, NULL);
+
+	FuncExpr *func_expr = pgduckdb::GetDuckdbViewExprFromQuery(query);
+	if (!func_expr) {
+		elog(ERROR, "Expected a duckdb.view function call in the view definition");
+	}
+
+	// Modify the third argument of the function call
+	if (list_length(func_expr->args) < 4) {
+		elog(ERROR, "duckdb.view function call does not have enough arguments");
+	}
+
+	Node *third_arg = (Node *)list_nth(func_expr->args, 2);
+	if (third_arg == NULL || !IsA(third_arg, Const)) {
+		elog(ERROR, "Expected the third argument of duckdb.view to be a constant");
+	}
+
+	Const *third_arg_const = (Const *)third_arg;
+	if (third_arg_const->consttype != TEXTOID) {
+		elog(ERROR, "Expected the third argument of duckdb.view to be a text constant");
+	}
+
+	third_arg_const->constvalue = CStringGetTextDatum(new_view_name);
+
+	// Reconstruct the modified view definition
+	char *new_view_def_str = pg_get_querydef(query, false);
+
+	char *current_view_name = get_rel_name(view_oid);
+	char *schema_name = get_namespace_name(get_rel_namespace(view_oid));
+	// Construct CREATE OR REPLACE VIEW statement
+	StringInfo create_view_sql = makeStringInfo();
+	appendStringInfo(create_view_sql, "CREATE OR REPLACE VIEW %s AS %s",
+	                 quote_qualified_identifier(schema_name, current_view_name), new_view_def_str);
+
+	// Execute the SQL statement to update the view
+	SPI_connect();
+	int ret = SPI_exec(create_view_sql->data, 0);
+	SPI_finish();
+
+	if (ret != SPI_OK_UTILITY) {
+		elog(ERROR, "Failed to execute CREATE OR REPLACE VIEW: %s", SPI_result_code_string(ret));
+	}
+#else
+static void
+UpdateDuckdbViewDefinition(Oid, const char *) {
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+	                errmsg("Renaming DuckDB views is not supported in PostgreSQL versions older than 15.0")));
+#endif
+}
+
+static bool
+DuckdbHandleRenameViewPre(RenameStmt *stmt) {
+	Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessExclusiveLock, true);
+	if (relation_oid == InvalidOid) {
+		/* Let postgres deal with this. It's possible that this is fine in
+		 * case of RENAME ... IF EXISTS */
+		return false;
+	}
+	Relation rel = RelationIdGetRelation(relation_oid);
+	if (!pgduckdb::IsMotherDuckView(rel)) {
+		RelationClose(rel);
+		return false; // Not a MotherDuck view, let Postgres handle it
+	}
+
+	if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
+		ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+		                errmsg("Only one DuckDB view can be renamed in a single statement")));
+	}
+
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::RENAME_VIEW;
+
+	if (stmt->renameType == OBJECT_COLUMN) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("Renaming columns in MotherDuck views is not supported")));
+	}
+
+	pgduckdb::ClaimCurrentCommandId();
+
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+	pgduckdb::DuckDBQueryOrThrow(*connection, pgduckdb_get_rename_relationdef(relation_oid, stmt));
+	RelationClose(rel);
+
+	/* Now we need to replace the Postgres view to reference the new name in the duckdb.view(...) call */
+	UpdateDuckdbViewDefinition(relation_oid, stmt->newname);
+
+	pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::NONE;
+
+	return true;
+}
+
+static bool
+DuckdbHandleViewStmtPre(Node *parsetree, PlannedStmt *pstmt, const char *query_string) {
+	auto stmt = castNode(ViewStmt, parsetree);
+	Oid schema_oid = RangeVarGetCreationNamespace(stmt->view);
+	char *schema_name = get_namespace_name(schema_oid);
+
+	if (pgduckdb::is_background_worker || pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::RENAME_VIEW) {
+		/*
+		 * Both in the background worker and during a RENAME VIEW, we've
+		 * already prepared the view query correctly (i.e. it's wrapped in a
+		 * duckdb.view(...)) call. So we don't need to wrap it here again. We
+		 * also don't need to create the view in DuckDB in these cases, because
+		 * it's already there. So this is just a no-op.
+		 *
+		 * We do want to claim the current command ID though, as well as making
+		 * sure our Post hook is fired.
+		 */
+		pgduckdb::ClaimCurrentCommandId();
+		return true;
+	}
+
+	if (!pgduckdb::NeedsToBeMotherDuckView(stmt, schema_name)) {
+		// Let Postgres handle this view
+		return false;
+	}
+
+	pgduckdb::ClaimCurrentCommandId();
+
+	if (stmt->withCheckOption != NO_CHECK_OPTION) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("views with WITH CHECK OPTION are not supported in DuckDB")));
+	}
+
+	if (stmt->options != NIL) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("views with in DuckDB do not support WITH")));
+	}
+
+	if (stmt->view->relpersistence != RELPERSISTENCE_PERMANENT) {
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("TEMPORARY views are not supported in DuckDB")));
+	}
+
+	/* This logic is copied from DefineView in the Postgres source code */
+	RawStmt *rawstmt = makeNode(RawStmt);
+	rawstmt->stmt = stmt->query;
+	rawstmt->stmt_location = pstmt->stmt_location;
+	rawstmt->stmt_len = pstmt->stmt_len;
+#if PG_VERSION_NUM >= 150000
+	Query *viewParse = parse_analyze_fixedparams(rawstmt, query_string, NULL, 0, NULL);
+#else
+	Query *viewParse = parse_analyze(rawstmt, query_string, NULL, 0, NULL);
+#endif
+
+	/*
+	 * The grammar should ensure that the result is a single SELECT Query.
+	 * However, it doesn't forbid SELECT INTO, so we have to check for that.
+	 */
+	if (!IsA(viewParse, Query))
+		elog(ERROR, "unexpected parse analysis result");
+	if (viewParse->utilityStmt != NULL && IsA(viewParse->utilityStmt, CreateTableAsStmt))
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("views must not contain SELECT INTO")));
+	if (viewParse->commandType != CMD_SELECT)
+		elog(ERROR, "unexpected parse analysis result");
+
+	/*
+	 * Check for unsupported cases.  These tests are redundant with ones in
+	 * DefineQueryRewrite(), but that function will complain about a bogus ON
+	 * SELECT rule, and we'd rather the message complain about a view.
+	 */
+	if (viewParse->hasModifyingCTE)
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("views must not contain data-modifying statements in WITH")));
+	/* END OF COPIED LOGIC */
+
+	char *duckdb_query_string = pgduckdb_get_querydef((Query *)copyObjectImpl(viewParse));
+	List *db_and_schema = pgduckdb_db_and_schema(schema_name, true);
+
+	char *duckdb_db = (char *)linitial(db_and_schema);
+	char *duckdb_schema = (char *)lsecond(db_and_schema);
+
+	char *function_call =
+	    psprintf("duckdb.view(%s, %s, %s, %s)", quote_literal_cstr(duckdb_db), quote_literal_cstr(duckdb_schema),
+	             quote_literal_cstr(stmt->view->relname), quote_literal_cstr(duckdb_query_string));
+
+	RawStmt *wrapped_query = EntrenchColumnsFromCall(viewParse, function_call, &query_string);
+
+	MemoryContext query_context = GetMemoryChunkContext(stmt->query);
+	MemoryContext oldcontext = MemoryContextSwitchTo(query_context);
+	stmt->query = (Node *)copyObjectImpl(wrapped_query->stmt);
+	MemoryContextSwitchTo(oldcontext);
+
+	char *create_view_string = pgduckdb_get_viewdef(stmt, schema_name, stmt->view->relname, duckdb_query_string);
+
+	/* We're doing a cross-database writes, so want to use a transaction to
+	 * limit the duration of inconsistency. */
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+	pgduckdb::DuckDBQueryOrThrow(*connection, create_view_string);
+	return true;
+}
+
+static void
+DuckdbHandleViewStmtPost(Node *parsetree) {
+	auto stmt = castNode(ViewStmt, parsetree);
+
+	Relation rel = relation_openrv(stmt->view, AccessShareLock);
+	Oid relid = rel->rd_id;
+	auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
+	char *postgres_schema_name = get_namespace_name(rel->rd_rel->relnamespace);
+
+	const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
+	relation_close(rel, NoLock);
+
+	Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
+	Datum values[] = {ObjectIdGetDatum(relid), CStringGetTextDatum(duckdb_db), 0,
+	                  CStringGetTextDatum(default_db.c_str())};
+	char nulls[] = {' ', ' ', 'n', ' '};
+
+	if (pgduckdb::doing_motherduck_sync) {
+		values[2] = CStringGetTextDatum(pgduckdb::current_motherduck_catalog_version);
+		nulls[2] = ' ';
+	}
+
+	SPI_connect();
+
+	Oid saved_userid;
+	int sec_context;
+	auto save_nestlevel = NewGUCNestLevel();
+	SetConfigOption("search_path", "pg_catalog, pg_temp", PGC_USERSET, PGC_S_SESSION);
+	GetUserIdAndSecContext(&saved_userid, &sec_context);
+	SetUserIdAndSecContext(BOOTSTRAP_SUPERUSERID, sec_context | SECURITY_LOCAL_USERID_CHANGE);
+
+	pgduckdb::pg::SetForceAllowWrites(true);
+	int ret = SPI_execute_with_args(R"(
+			INSERT INTO duckdb.tables (relid, duckdb_db, motherduck_catalog_version, default_database)
+			VALUES ($1, $2, $3, $4)
+			ON CONFLICT (relid) DO UPDATE SET
+				duckdb_db = EXCLUDED.duckdb_db,
+				motherduck_catalog_version = EXCLUDED.motherduck_catalog_version,
+				default_database = EXCLUDED.default_database
+			)",
+	                                lengthof(arg_types), arg_types, values, nulls, false, 0);
+	pgduckdb::pg::SetForceAllowWrites(false);
+
+	/* Revert back to original privileges */
+	SetUserIdAndSecContext(saved_userid, sec_context);
+	AtEOXact_GUC(false, save_nestlevel);
+
+	if (ret != SPI_OK_INSERT) {
+		elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
+	}
+
+	SPI_finish();
+
+	ObjectAddress view_address = {
+	    .classId = RelationRelationId,
+	    .objectId = relid,
+	    .objectSubId = 0,
+	};
+	pgduckdb::RecordDependencyOnMDServer(&view_address);
+	ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
+
+	pgduckdb::ClaimCurrentCommandId(true);
+}
+
 static void
 DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                       ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
@@ -545,16 +1088,64 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	bool prev_top_level_ddl = pgduckdb::IsStatementTopLevel();
 	pgduckdb::SetStatementTopLevel(context == PROCESS_UTILITY_TOPLEVEL);
 
-	DuckdbHandleDDL(pstmt, query_string, params);
+	bool needs_to_run_post = DuckdbHandleDDLPre(pstmt, query_string);
 	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
+	if (needs_to_run_post) {
+		DuckdbHandleDDLPost(pstmt);
+	}
 
 	pgduckdb::SetStatementTopLevel(prev_top_level_ddl);
+}
+
+static bool
+DuckdbShouldCallDDLHooks(PlannedStmt *pstmt) {
+	Node *parsetree = pstmt->utilityStmt;
+
+	/*
+	 * Normally we want to call IsExtensionRegistered for any activity. That
+	 * way we initialize our cache, and more importantly trigger start of the
+	 * background worker to sync MotherDuck tables.
+	 *
+	 * However, there are certain commands related to transaction isolation
+	 * that Postgres does not allow to run after any other query. So the
+	 * queries we do to initialize our cache interfere, then cause errors for
+	 * the command the user tried to execute.
+	 *
+	 * The first of such commands are BEGIN commands similar to this:
+	 *
+	 * BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+	 */
+	if (IsA(parsetree, TransactionStmt)) {
+		/*
+		 * We could explicitely only check for BEGIN, but any others won't be
+		 * the first query in a session anyway (so initialzing caching doesn't
+		 * matter).
+		 *
+		 * Secondly, we also don't want to do anything for transaction
+		 * statements in this hook anyway. Anything related to transaction
+		 * management is our the XactCallback in pgduckdb_xact.cpp instead.
+		 */
+		return false;
+	}
+
+	/*
+	 * ... The second of such commands are SET TRANSACTION commands:
+	 */
+	if (IsA(parsetree, VariableSetStmt)) {
+		VariableSetStmt *stmt = castNode(VariableSetStmt, parsetree);
+		if (stmt->kind == VAR_SET_MULTI && StringHasPrefix(stmt->name, "TRANSACTION")) {
+			return false;
+		}
+	}
+
+	return pgduckdb::IsExtensionRegistered();
 }
 
 static void
 DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
-	if (!pgduckdb::IsExtensionRegistered()) {
+
+	if (!DuckdbShouldCallDDLHooks(pstmt)) {
 		return prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 	}
 
@@ -881,9 +1472,9 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * want to start allowing this than it is to start disallowing it.
 	 */
 	int ret = SPI_exec(R"(
-		SELECT count(*)::bigint, (count(*) FILTER (WHERE object_type = 'table'))::bigint
+		SELECT count(*)::bigint, (count(*) FILTER (WHERE object_type IN ('table', 'view')))::bigint
 		FROM pg_catalog.pg_event_trigger_dropped_objects()
-		WHERE object_type NOT IN ('type', 'sequence', 'table constraint', 'index', 'default value', 'trigger', 'toast table')
+		WHERE object_type NOT IN ('type', 'sequence', 'table constraint', 'index', 'default value', 'trigger', 'toast table', 'rule')
 	)",
 	                   0);
 	if (ret != SPI_OK_SELECT) {
@@ -895,7 +1486,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	}
 
 	int64 total_deleted;
-	int64 deleted_tables;
+	int64 deleted_relations;
 
 	{
 		HeapTuple tuple = SPI_tuptable->vals[0];
@@ -906,14 +1497,14 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		}
 		total_deleted = DatumGetInt64(total_deleted_datum);
 
-		Datum deleted_tables_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
+		Datum deleted_relations_datum = SPI_getbinval(tuple, SPI_tuptable->tupdesc, 2, &isnull);
 		if (isnull) {
 			elog(ERROR, "Expected number of deleted tables but found NULL");
 		}
-		deleted_tables = DatumGetInt64(deleted_tables_datum);
+		deleted_relations = DatumGetInt64(deleted_relations_datum);
 	}
 
-	if (deleted_tables == 0) {
+	if (deleted_relations == 0) {
 		/*
 		 * No tables were deleted at all, thus also no duckdb tables. So no
 		 * need to do anything.
@@ -942,12 +1533,12 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	ret = SPI_exec(R"(
 		DELETE FROM duckdb.tables
 		USING (
-			SELECT objid, schema_name, object_name
+			SELECT objid, schema_name, object_name, object_type
 			FROM pg_catalog.pg_event_trigger_dropped_objects()
-			WHERE object_type = 'table'
+			WHERE object_type in ('table', 'view')
 		) objs
 		WHERE relid = objid
-		RETURNING objs.schema_name, objs.object_name
+		RETURNING objs.schema_name, objs.object_name, objs.object_type
 		)",
 	               0);
 	pgduckdb::pg::SetForceAllowWrites(false);
@@ -966,7 +1557,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 */
 	duckdb::Connection *connection = nullptr;
 
-	int64 deleted_duckdb_tables = 0;
+	int64 deleted_duckdb_relations = 0;
 
 	/*
 	 * Now forward the DROP to DuckDB... but only if MotherDuck is actually
@@ -994,12 +1585,13 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 
 			char *postgres_schema_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
 			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
+			char *object_type = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 3);
 			char *drop_query =
-			    psprintf("DROP TABLE IF EXISTS %s.%s", pgduckdb_db_and_schema_string(postgres_schema_name, true),
-			             quote_identifier(table_name));
+			    psprintf("DROP %s IF EXISTS %s.%s", object_type,
+			             pgduckdb_db_and_schema_string(postgres_schema_name, true), quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 
-			deleted_duckdb_tables++;
+			deleted_duckdb_relations++;
 		}
 	}
 
@@ -1041,7 +1633,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		pgduckdb::DuckDBQueryOrThrow(*connection,
 		                             std::string("DROP TABLE pg_temp.main.") + quote_identifier(table_name));
 		pgduckdb::UnregisterDuckdbTempTable(relid);
-		deleted_duckdb_tables++;
+		deleted_duckdb_relations++;
 	}
 
 	/*
@@ -1050,17 +1642,18 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 */
 	pgduckdb::SetStatementTopLevel(is_top_level);
 
-	if (!pgduckdb::MixedWritesAllowed() && deleted_duckdb_tables > 0) {
-		if (deleted_duckdb_tables < deleted_tables) {
-			elog(ERROR, "Dropping both DuckDB and non-DuckDB tables in the same transaction is not supported");
+	if (!pgduckdb::MixedWritesAllowed() && deleted_duckdb_relations > 0) {
+		if (deleted_duckdb_relations < deleted_relations) {
+			elog(ERROR, "Dropping both DuckDB and non-DuckDB relations in the same transaction is not supported");
 		}
 
-		if (deleted_duckdb_tables < total_deleted) {
-			elog(ERROR, "Dropping both DuckDB tables and non-DuckDB objects in the same transaction is not supported");
+		if (deleted_duckdb_relations < total_deleted) {
+			elog(ERROR,
+			     "Dropping both DuckDB relations and non-DuckDB objects in the same transaction is not supported");
 		}
 	}
 
-	if (deleted_duckdb_tables > 0) {
+	if (deleted_duckdb_relations > 0) {
 		pgduckdb::ClaimCurrentCommandId(true);
 	}
 
@@ -1195,7 +1788,7 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		alter_table_stmt_string = pgduckdb_get_alter_tabledef(relid, alter_table_stmt);
 	} else if (IsA(trigdata->parsetree, RenameStmt)) {
 		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
-		alter_table_stmt_string = pgduckdb_get_rename_tabledef(relid, rename_stmt);
+		alter_table_stmt_string = pgduckdb_get_rename_relationdef(relid, rename_stmt);
 	} else {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
 	}

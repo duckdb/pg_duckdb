@@ -12,9 +12,18 @@ IsEmptyString(const char *str) {
 	return AreStringEqual(str, "");
 }
 
+inline bool
+StringHasPrefix(const char *str, const char *prefix) {
+	if (str == nullptr || prefix == nullptr) {
+		return false;
+	}
+	size_t prefix_length = strlen(prefix);
+	return strncmp(str, prefix, prefix_length) == 0;
+}
+
 namespace pgduckdb {
 inline bool
 IsDuckdbSchemaName(const char *s) {
-	return strncmp("ddb$", s, 4) == 0;
+	return StringHasPrefix(s, "ddb$");
 }
 } // namespace pgduckdb

@@ -29,10 +29,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
-static constexpr char s3_filename_prefix[] = "s3://";
-static constexpr char gcs_filename_prefix[] = "gs://";
-static constexpr char r2_filename_prefix[] = "r2://";
-
 /*
  * Returns the relation of the copy_stmt as a fully qualified DuckDB table reference. This is done
  * including the column names if provided in the original copy_stmt, e.g. my_table(column1, column2).
@@ -312,10 +308,15 @@ static bool
 NeedsDuckdbExecution(CopyStmt *stmt) {
 	/* Copy `filename` should start with S3/GS/R2 prefix */
 	if (stmt->filename != NULL) {
-		if (CheckPrefix(stmt->filename, s3_filename_prefix) || CheckPrefix(stmt->filename, gcs_filename_prefix) ||
-		    CheckPrefix(stmt->filename, r2_filename_prefix)) {
+		if (CheckPrefix(stmt->filename, "s3://") || CheckPrefix(stmt->filename, "r2://") ||
+		    CheckPrefix(stmt->filename, "gcs://") || CheckPrefix(stmt->filename, "gs://") ||
+		    CheckPrefix(stmt->filename, "http://") || CheckPrefix(stmt->filename, "https://") ||
+		    CheckPrefix(stmt->filename, "az://") || CheckPrefix(stmt->filename, "azure://") ||
+		    CheckPrefix(stmt->filename, "abfs://") || CheckPrefix(stmt->filename, "abfss://")) {
+
 			return true;
 		}
+
 		if (pg_str_endswith(stmt->filename, ".parquet") || pg_str_endswith(stmt->filename, ".json") ||
 		    pg_str_endswith(stmt->filename, ".ndjson") || pg_str_endswith(stmt->filename, ".jsonl") ||
 		    pg_str_endswith(stmt->filename, ".gz") || pg_str_endswith(stmt->filename, ".zst")) {

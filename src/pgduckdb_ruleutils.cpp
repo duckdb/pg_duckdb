@@ -1,7 +1,9 @@
 #include "duckdb.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pg/relations.hpp"
+#include "pgduckdb/pg/locale.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -97,6 +99,27 @@ pgduckdb_is_fake_type(Oid type_oid) {
 }
 
 bool
+pgduckdb_is_duckdb_subscript_type(Oid type_oid) {
+	if (pgduckdb_is_unresolved_type(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb_is_duckdb_row(type_oid)) {
+		return true;
+	}
+
+	if (pgduckdb::DuckdbStructOid() == type_oid) {
+		return true;
+	}
+
+	if (pgduckdb::DuckdbMapOid() == type_oid) {
+		return true;
+	}
+
+	return false;
+}
+
+bool
 pgduckdb_var_is_duckdb_row(Var *var) {
 	if (!var) {
 		return false;
@@ -120,11 +143,11 @@ pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc) {
 }
 
 /*
- * Returns NULL if the expression is not a subscript on a duckdb row. Returns
- * the Var of the duckdb row if it is.
+ * Returns NULL if the expression is a subscript on a duckdb specific type.
+ * Returns the Var of the duckdb row if it is.
  */
 Var *
-pgduckdb_duckdb_row_subscript_var(Expr *expr) {
+pgduckdb_duckdb_subscript_var(Expr *expr) {
 	if (!expr) {
 		return NULL;
 	}
@@ -141,9 +164,10 @@ pgduckdb_duckdb_row_subscript_var(Expr *expr) {
 
 	Var *refexpr = (Var *)subscript->refexpr;
 
-	if (!pgduckdb_var_is_duckdb_row(refexpr)) {
+	if (!pgduckdb_is_duckdb_subscript_type(refexpr->vartype)) {
 		return NULL;
 	}
+
 	return refexpr;
 }
 
@@ -293,37 +317,43 @@ pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cel
 	return false;
 }
 
-/*
- * iceberg_scan needs to be wrapped in an additianol subquery to resolve a
- * bug where aliasses on iceberg_scan are ignored:
- * https://github.com/duckdb/duckdb-iceberg/issues/44
- *
- * By wrapping the iceberg_scan call the alias is given to the subquery,
- * instead of th call. This subquery is easily optimized away by DuckDB,
- * because it doesn't do anything.
- *
- * This problem is also true for the "query" function, which we use when
- * creating materialized views and CTAS.
- * https://github.com/duckdb/duckdb/issues/15570#issuecomment-2598419474
- *
- * TODO: Probably check this in a bit more efficient way and move it to
- * pgduckdb_ruleutils.cpp
- */
 bool
-pgduckdb_function_needs_subquery(Oid function_oid) {
-	if (!pgduckdb::IsDuckdbOnlyFunction(function_oid)) {
+pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf) {
+	FuncExpr *func_expr = pgduckdb::GetDuckdbViewExprFromQuery(query);
+	if (!func_expr) {
+		/* Not a duckdb.view query, so we don't need to do anything */
 		return false;
 	}
 
-	auto func_name = get_func_name(function_oid);
-	if (strcmp(func_name, "iceberg_scan") == 0) {
-		return true;
+	int i = 0;
+	foreach_ptr(Expr, expr, func_expr->args) {
+		if (i >= 3) {
+			break;
+		}
+
+		if (!IsA(expr, Const)) {
+			elog(ERROR, "Expected only constant argument to the view function");
+		}
+
+		Const *const_val = castNode(Const, expr);
+		if (const_val->consttype != TEXTOID) {
+			elog(ERROR, "Expected text arguments to the view function, got type %s",
+			     format_type_be(const_val->consttype));
+		}
+
+		if (const_val->constisnull) {
+			elog(ERROR, "Expected non-NULL arguments to the view function");
+		}
+
+		if (i > 0) {
+			appendStringInfoString(buf, ".");
+		}
+		appendStringInfoString(buf, quote_identifier(TextDatumGetCString(const_val->constvalue)));
+
+		i++;
 	}
 
-	if (strcmp(func_name, "query") == 0) {
-		return true;
-	}
-	return false;
+	return true;
 }
 
 /*
@@ -711,8 +741,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		 * this?
 		 */
 		Oid collation = column->attcollation;
-		if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && collation != C_COLLATION_OID &&
-		    collation != POSIX_COLLATION_OID) {
+		if (collation != InvalidOid && collation != DEFAULT_COLLATION_OID && !pgduckdb::pg::IsCLocale(collation)) {
 			elog(ERROR, "DuckDB does not support column collations");
 		}
 	}
@@ -764,6 +793,42 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	return buffer.data;
 }
 
+char *
+pgduckdb_get_viewdef(const ViewStmt *stmt, const char *postgres_schema_name, const char *view_name,
+                     const char *duckdb_query_string) {
+	StringInfoData buffer;
+	initStringInfo(&buffer);
+
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
+	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
+
+	appendStringInfoString(&buffer, "CREATE ");
+	if (stmt->replace) {
+		appendStringInfoString(&buffer, "OR REPLACE ");
+	}
+	appendStringInfo(&buffer, "VIEW %s.%s", db_and_schema, quote_identifier(view_name));
+	if (stmt->aliases) {
+		appendStringInfoChar(&buffer, '(');
+		bool first = true;
+#if PG_VERSION_NUM >= 150000
+		foreach_node(String, alias, stmt->aliases) {
+#else
+		foreach_ptr(Value, alias, stmt->aliases) {
+#endif
+			if (!first) {
+				appendStringInfoString(&buffer, ", ");
+			} else {
+				first = false;
+			}
+
+			appendStringInfoString(&buffer, quote_identifier(strVal(alias)));
+		}
+		appendStringInfoChar(&buffer, ')');
+	}
+	appendStringInfo(&buffer, " AS %s;", duckdb_query_string);
+	return buffer.data;
+}
+
 /*
  * Take a raw CHECK constraint expression and convert it to a cooked format
  * ready for storage.
@@ -804,27 +869,33 @@ cookConstraint(ParseState *pstate, Node *raw_constraint, char *relname) {
 }
 
 char *
-pgduckdb_get_rename_tabledef(Oid relation_oid, RenameStmt *rename_stmt) {
-	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_COLUMN) {
+pgduckdb_get_rename_relationdef(Oid relation_oid, RenameStmt *rename_stmt) {
+	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_VIEW &&
+	    rename_stmt->renameType != OBJECT_COLUMN) {
 		elog(ERROR, "Only renaming tables and columns is supported in DuckDB");
 	}
 
 	Relation relation = relation_open(relation_oid, AccessShareLock);
-	Assert(pgduckdb::IsDuckdbTable(relation));
+	Assert(pgduckdb::IsDuckdbTable(relation) || pgduckdb::IsMotherDuckView(relation));
 
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
 	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, true);
 	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
 
+	const char *relation_type = "TABLE";
+	if (relation->rd_rel->relkind == RELKIND_VIEW) {
+		relation_type = "VIEW";
+	}
+
 	StringInfoData buffer;
 	initStringInfo(&buffer);
 
 	if (rename_stmt->subname) {
-		appendStringInfo(&buffer, "ALTER TABLE %s RENAME COLUMN %s TO %s;", old_table_name,
+		appendStringInfo(&buffer, "ALTER %s %s RENAME COLUMN %s TO %s;", relation_type, old_table_name,
 		                 quote_identifier(rename_stmt->subname), quote_identifier(rename_stmt->newname));
 
 	} else {
-		appendStringInfo(&buffer, "ALTER TABLE %s RENAME TO %s;", old_table_name,
+		appendStringInfo(&buffer, "ALTER %s %s RENAME TO %s;", relation_type, old_table_name,
 		                 quote_identifier(rename_stmt->newname));
 	}
 
@@ -1147,5 +1218,89 @@ pgduckdb_add_tablesample_percent(const char *tsm_name, StringInfo buf, int num_a
 		return;
 	}
 	appendStringInfoChar(buf, '%');
+}
+
+/*
+DuckDB doesn't use an escape character in LIKE expressions by default.
+Cf.
+https://github.com/duckdb/duckdb/blob/12183c444dd729daad5cb463e59f3112a806a88b/src/function/scalar/string/like.cpp#L152
+
+So when converting the PG Query to string, we force the escape
+character (`\`) using the `xxx_escape` functions
+*/
+
+struct PGDuckDBGetOperExprContext {
+	const char *pg_op_name;
+	const char *duckdb_op_name;
+	const char *escape_pattern;
+	bool is_likeish_op;
+	bool is_negated;
+};
+
+void *
+pg_duckdb_get_oper_expr_make_ctx(const char *op_name, Node **, Node **arg2) {
+	auto ctx = (PGDuckDBGetOperExprContext *)palloc0(sizeof(PGDuckDBGetOperExprContext));
+	ctx->pg_op_name = op_name;
+	ctx->is_likeish_op = false;
+	ctx->is_negated = false;
+	ctx->escape_pattern = "'\\'";
+
+	if (AreStringEqual(op_name, "~~")) {
+		ctx->duckdb_op_name = "LIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = false;
+	} else if (AreStringEqual(op_name, "~~*")) {
+		ctx->duckdb_op_name = "ILIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = false;
+	} else if (AreStringEqual(op_name, "!~~")) {
+		ctx->duckdb_op_name = "LIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = true;
+	} else if (AreStringEqual(op_name, "!~~*")) {
+		ctx->duckdb_op_name = "ILIKE";
+		ctx->is_likeish_op = true;
+		ctx->is_negated = true;
+	}
+
+	if (ctx->is_likeish_op && IsA(*arg2, FuncExpr)) {
+		auto arg2_func = (FuncExpr *)*arg2;
+		auto func_name = get_func_name(arg2_func->funcid);
+		if (!AreStringEqual(func_name, "like_escape") && !AreStringEqual(func_name, "ilike_escape")) {
+			elog(ERROR, "Unexpected function in LIKE expression: '%s'", func_name);
+		}
+
+		*arg2 = (Node *)linitial(arg2_func->args);
+		ctx->escape_pattern = pgduckdb_deparse_expression((Node *)lsecond(arg2_func->args), nullptr, false, false);
+	}
+
+	return ctx;
+}
+
+void
+pg_duckdb_get_oper_expr_prefix(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_likeish_op && ctx->is_negated) {
+		appendStringInfo(buf, "NOT (");
+	}
+}
+
+void
+pg_duckdb_get_oper_expr_middle(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	auto op = ctx->duckdb_op_name ? ctx->duckdb_op_name : ctx->pg_op_name;
+	appendStringInfo(buf, " %s ", op);
+}
+
+void
+pg_duckdb_get_oper_expr_suffix(StringInfo buf, void *vctx) {
+	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_likeish_op) {
+		appendStringInfo(buf, " ESCAPE %s", ctx->escape_pattern);
+
+		if (ctx->is_negated) {
+			appendStringInfo(buf, ")");
+		}
+	}
 }
 }

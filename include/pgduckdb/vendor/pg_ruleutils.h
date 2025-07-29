@@ -43,6 +43,13 @@ extern List *pgduckdb_set_deparse_context_plan(List *dpcontext,
 									  struct Plan *plan, List *ancestors);
 extern List *pgduckdb_select_rtable_names_for_explain(List *rtable,
 											 Bitmapset *rels_used);
+#if PG_VERSION_NUM >= 180000
+extern char *get_window_frame_options_for_explain(int frameOptions,
+												  Node *startOffset,
+												  Node *endOffset,
+												  List *dpcontext,
+												  bool forceprefix);
+#endif
 extern char *pgduckdb_generate_collation_name(Oid collid);
 extern char *pgduckdb_generate_opclass_name(Oid opclass);
 extern char *pgduckdb_get_range_partbound_string(List *bound_datums);
@@ -50,5 +57,10 @@ extern char *pgduckdb_get_range_partbound_string(List *bound_datums);
 extern char *pgduckdb_pg_get_statisticsobjdef_string(Oid statextid);
 
 extern char *pgduckdb_get_list_partvalue_string(Const *val);
+
+extern void* pg_duckdb_get_oper_expr_make_ctx(const char*, Node**, Node**);
+extern void pg_duckdb_get_oper_expr_prefix(StringInfo buf, void* ctx);
+extern void pg_duckdb_get_oper_expr_middle(StringInfo buf, void* ctx);
+extern void pg_duckdb_get_oper_expr_suffix(StringInfo buf, void* ctx);
 
 #endif							/* RULEUTILS_H */

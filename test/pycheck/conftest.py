@@ -71,12 +71,12 @@ def pg(initialized_shared_pg, default_db_name):
                 # there's no indictaion of the crash except for the logs. So
                 # here we check that postgres did not crash during the last
                 # test.
-                assert (
-                    "was terminated by signal 6" not in logs
-                ), "Postgres crashed! Check the logs above."
-                assert (
-                    "was terminated by signal 11" not in logs
-                ), "Postgres crashed! Check the logs above."
+                assert "was terminated by signal 6" not in logs, (
+                    "Postgres crashed! Check the logs above."
+                )
+                assert "was terminated by signal 11" not in logs, (
+                    "Postgres crashed! Check the logs above."
+                )
 
 
 @pytest.fixture

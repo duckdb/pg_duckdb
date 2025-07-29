@@ -18,13 +18,17 @@ struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 	~PostgresScanGlobalState();
 	idx_t
 	MaxThreads() const override {
-		return 1;
+		return max_threads;
 	}
 	void ConstructTableScanQuery(const duckdb::TableFunctionInitInput &input);
+	bool RegisterLocalState();
+	void UnregisterLocalState();
 
 private:
 	int ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name, duckdb::string &filters,
 	                        bool is_optional_filter_parent);
+	PostgresScanGlobalState(const PostgresScanGlobalState &) = delete;
+	PostgresScanGlobalState &operator=(const PostgresScanGlobalState &) = delete;
 
 public:
 	Snapshot snapshot;
@@ -33,21 +37,29 @@ public:
 	bool count_tuples_only;
 	duckdb::vector<AttrNumber> output_columns;
 	std::atomic<std::uint32_t> total_row_count;
+	std::atomic<std::int32_t> registered_local_states;
 	std::ostringstream scan_query;
 	duckdb::shared_ptr<PostgresTableReader> table_reader_global_state;
 	MemoryContext duckdb_scan_memory_ctx;
+	idx_t max_threads;
 };
 
 // Local State
-
+#define LOCAL_STATE_SLOT_BATCH_SIZE 32
 struct PostgresScanLocalState : public duckdb::LocalTableFunctionState {
 	PostgresScanLocalState(PostgresScanGlobalState *global_state);
 	~PostgresScanLocalState() override;
 
 	PostgresScanGlobalState *global_state;
+	TupleTableSlot *slots[LOCAL_STATE_SLOT_BATCH_SIZE];
+	std::vector<uint8_t> minimal_tuple_buffer[LOCAL_STATE_SLOT_BATCH_SIZE];
 
 	size_t output_vector_size;
 	bool exhausted_scan;
+
+private:
+	PostgresScanLocalState(const PostgresScanLocalState &) = delete;
+	PostgresScanLocalState &operator=(const PostgresScanLocalState &) = delete;
 };
 
 // PostgresScanFunctionData
@@ -59,6 +71,10 @@ struct PostgresScanFunctionData : public duckdb::TableFunctionData {
 	Relation rel;
 	uint64_t cardinality;
 	Snapshot snapshot;
+
+private:
+	PostgresScanFunctionData(const PostgresScanFunctionData &) = delete;
+	PostgresScanFunctionData &operator=(const PostgresScanFunctionData &) = delete;
 };
 
 // PostgresScanTableFunction

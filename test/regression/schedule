@@ -28,6 +28,7 @@ test: issue_749
 test: issue_789
 test: issue_796
 test: issue_802
+test: issue_813
 test: json_functions_duckdb
 test: materialized_view
 test: non_superuser
@@ -47,8 +48,10 @@ test: timescale_conflict
 test: timestamp_timestamptz
 test: timestamp_with_interval
 test: transaction_errors
+test: transaction_isolation
 test: transactions
 test: type_support
 test: union_functions
 test: unresolved_type
 test: views
+test: parallel_postgres_scan
