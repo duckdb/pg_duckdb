@@ -112,6 +112,7 @@ InvalidateCaches(Datum /*arg*/, int /*cache_id*/, uint32 hash_value) {
 	cache.initializing = false;
 	cache.valid = false;
 	if (cache.installed) {
+		pgduckdb::ResetDuckDBManager();
 		list_free(cache.duckdb_only_functions);
 		cache.duckdb_only_functions = NIL;
 		cache.extension_oid = InvalidOid;
@@ -213,6 +214,8 @@ IsExtensionRegistered() {
 	if (IsAbortedTransactionBlockState()) {
 		elog(WARNING, "pgduckdb: IsExtensionRegistered called in an aborted transaction");
 		/* We need to run `get_extension_oid` in a valid transaction */
+		return false;
+	} else if (!IsTransactionState()) {
 		return false;
 	} else if (!ActiveSnapshotSet() && ActivePortal == nullptr) {
 		/* We're not in a transaction block, so we can't populate the cache */
