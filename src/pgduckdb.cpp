@@ -35,14 +35,3 @@ _PG_init(void) {
 	pgduckdb::RegisterDuckdbXactCallback();
 }
 } // extern "C"
-
-namespace pgduckdb {
-
-void
-ResetDuckDBManager(void) {
-	if (DuckDBManager::IsInitialized()) {
-		DuckDBManager::Get().Reset();
-	}
-}
-
-} // namespace pgduckdb

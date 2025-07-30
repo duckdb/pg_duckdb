@@ -252,6 +252,10 @@ find_option(const char *name, bool, bool, int) {
 
 static void
 DuckAssignTimezone_Cpp(const char *tz) {
+	if (!IsExtensionRegistered()) {
+		return;
+	}
+
 	if (!DuckDBManager::IsInitialized()) {
 		return;
 	}

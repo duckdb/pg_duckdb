@@ -1,3 +1,5 @@
+#include "pgduckdb/pgduckdb_duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 
@@ -112,7 +114,6 @@ InvalidateCaches(Datum /*arg*/, int /*cache_id*/, uint32 hash_value) {
 	cache.initializing = false;
 	cache.valid = false;
 	if (cache.installed) {
-		pgduckdb::ResetDuckDBManager();
 		list_free(cache.duckdb_only_functions);
 		cache.duckdb_only_functions = NIL;
 		cache.extension_oid = InvalidOid;
@@ -276,6 +277,14 @@ IsExtensionRegistered() {
 			cache.postgres_role_oid = BOOTSTRAP_SUPERUSERID;
 		}
 	} else {
+		/*
+		 * It's possible that a duckdb instance is still running, after we have
+		 * dropped the extension (possibly in a different session). This seems
+		 * like a good moment to clean that up if that's the case.
+		 */
+		if (pgduckdb::DuckDBManager::IsInitialized()) {
+			pgduckdb::DuckDBManager::Get().Reset();
+		}
 		elog(DEBUG1, "pgduckdb: extension is not registered in database '%s'", get_database_name(MyDatabaseId));
 	}
 
