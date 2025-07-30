@@ -48,10 +48,10 @@
 > **Important**: Advanced DuckDB types (`STRUCT`, `MAP`, `UNION`, `VARINT`) require a DuckDB execution context. Use them within `duckdb.query()` function calls or in DuckDB table operations. Direct usage in PostgreSQL `CREATE TABLE` statements or regular `SELECT` queries may not work.
 
 **Usage Patterns:**
-- ✅ `SELECT * FROM duckdb.query('SELECT {''key'': ''value''} AS my_struct')`
-- ✅ `CREATE TEMP TABLE foo USING duckdb AS SELECT * FROM duckdb.query('...')`
-- ❌ `SELECT {'key': 'value'} AS my_struct` (PostgreSQL context)
-- ❌ `CREATE TABLE foo AS SELECT {'key': 'value'}` (PostgreSQL context)
+- `SELECT * FROM duckdb.query('SELECT {''key'': ''value''} AS my_struct')`
+- `CREATE TEMP TABLE foo USING duckdb AS SELECT * FROM duckdb.query('...')`
+- `SELECT {'key': 'value'} AS my_struct` (PostgreSQL context)
+- `CREATE TABLE foo AS SELECT {'key': 'value'}` (PostgreSQL context)
 
 ### VARINT Type
 

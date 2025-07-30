@@ -43,23 +43,15 @@ DUCKDB_BUILD=ReleaseStatic make install
 
 ### Static vs Dynamic Linking
 
-| Aspect | Static (`ReleaseStatic`) | Dynamic (default) |
-|--------|-------------------------|------------------|
-| **Binary size** | Larger (~50MB+) | Smaller (~5MB) |
-| **Dependencies** | Self-contained | Requires libduckdb |
-| **Performance** | Slightly better | Standard |
-| **Memory usage** | Higher | Lower |
-| **Deployment** | Simpler | Requires library management |
+When to use static compilation:
 
-### When to Use Static Compilation
-
-Use static compilation when:
 - Deploying to environments without DuckDB libraries
 - Building Docker images from scratch
 - Need guaranteed DuckDB version consistency
 - Simplifying distribution and deployment
 
-Use dynamic compilation when:
+When to use dynamic compilation:
+
 - Development and testing
 - System has shared DuckDB libraries
 - Memory usage is a concern

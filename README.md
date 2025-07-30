@@ -7,7 +7,6 @@
 
 <p align="center">
     <strong>PostgreSQL extension for DuckDB</strong><br>
-    Columnar analytics meets relational excellence
 </p>
 
 <p align="center">
@@ -21,7 +20,7 @@
 
 # pg_duckdb: Official PostgreSQL Extension for DuckDB
 
-**pg_duckdb** seamlessly integrates DuckDB's columnar-vectorized analytics engine into PostgreSQL, enabling high-performance analytics and data-intensive applications. Built in collaboration with [Hydra][hydra] and [MotherDuck][motherduck].
+**pg_duckdb** integrates DuckDB's columnar-vectorized analytics engine into PostgreSQL, enabling high-performance analytics and data-intensive applications. Built in collaboration with [Hydra][hydra] and [MotherDuck][motherduck].
 
 ## Key Features
 
@@ -225,7 +224,6 @@ We welcome contributions! Please see:
 
 - **PostgreSQL**: 14, 15, 16, 17
 - **Operating Systems**: Ubuntu 22.04-24.04, macOS
-- **DuckDB Version**: 1.3.0 (embedded)
 
 ## License
 
