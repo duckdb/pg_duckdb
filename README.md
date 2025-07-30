@@ -34,7 +34,7 @@
 
 ## See It In Action
 
-### Instant Cloud Analytics
+### Instant Analytics
 
 Transform your PostgreSQL into a data lake powerhouse:
 
@@ -78,9 +78,9 @@ WHERE c.status = 'active'
 ORDER BY h.lifetime_value DESC;
 ```
 
-### Modern Data Lake Formats
+### Modern DataLake Formats
 
-Work with modern data formats effortlessly:
+Work with modern data formats like DuckLake, Iceberg and Delta Lake:
 
 ```sql
 -- Query Apache Iceberg tables with time travel
@@ -113,12 +113,12 @@ $$);
 COPY customer_metrics TO 's3://processed/customer_360/data.parquet';
 ```
 
-### MotherDuck Cloud Integration
+### MotherDuck Integration
 
 Scale to cloud instantly with MotherDuck:
 
 ```sql
--- Connect to MotherDuck cloud
+-- Connect to MotherDuck
 CALL duckdb.enable_motherduck('<your_token>');
 
 -- Your existing MotherDuck tables appear automatically
