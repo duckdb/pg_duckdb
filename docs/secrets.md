@@ -1,6 +1,6 @@
-# Data Lake Secrets Management
+# Secrets Management
 
-pg_duckdb provides secure credential management for accessing cloud storage, data lakes, and cloud analytics platforms. Secrets can be configured using simple utility functions or advanced Foreign Data Wrapper configurations.
+`pg_duckdb` provides secure credential management for accessing cloud storage, data lakes, and cloud analytics platforms. Secrets can be configured using simple utility functions or advanced Foreign Data Wrapper (FDW) configurations.
 
 ## Quick Start: Simple Secrets
 
@@ -53,13 +53,11 @@ SELECT duckdb.create_simple_secret(
 
 ### Azure Blob Storage
 
-```sql
-SELECT duckdb.create_azure_secret('<your_connection_string>');
-```
+To configure secrets for Azure Blob Storage, you must use the [Advanced Configuration](#advanced-configuration-foreign-data-wrapper) method with the `azure` secret type.
 
-**Note**: Azure write operations are not yet supported. See the [current discussion](https://github.com/duckdb/duckdb-azure/issues/44) for updates.
+> **Note**: Azure write operations are not yet supported. See the [current discussion](https://github.com/duckdb/duckdb-azure/issues/44) for updates.
 
-## MotherDuck Cloud Analytics
+## MotherDuck
 
 Connect to MotherDuck for cloud-scale analytics:
 
@@ -74,11 +72,11 @@ SELECT duckdb.enable_motherduck('your_motherduck_token', 'my_database');
 SELECT duckdb.is_motherduck_enabled();
 ```
 
-Once enabled, your MotherDuck databases and tables become automatically available in PostgreSQL. See the [MotherDuck documentation](motherduck.md) for complete details.
+Once enabled, your MotherDuck databases and tables become automatically available in PostgreSQL. See the [MotherDuck Integration guide](motherduck.md) for complete details.
 
 ## Advanced Configuration: Foreign Data Wrapper
 
-For advanced use cases, you can define secrets using PostgreSQL's Foreign Data Wrapper system:
+For advanced use cases, you can define secrets using PostgreSQL's Foreign Data Wrapper (FDW) system:
 
 ### Using Credential Chain (AWS)
 
@@ -91,7 +89,7 @@ FOREIGN DATA WRAPPER duckdb
 OPTIONS (provider 'credential_chain');
 ```
 
-This automatically uses AWS credential chain (environment variables, instance profile, etc.).
+This automatically uses the AWS credential chain (environment variables, instance profile, etc.).
 
 ### Using Explicit Credentials
 
@@ -137,9 +135,10 @@ You can use any DuckDB secret type, provided the related extension is installed:
 
 | Secret Type | Extension Required | Use Case |
 | :---------- | :----------------- | :------- |
-| S3 | httpfs (pre-installed) | AWS S3, MinIO, other S3-compatible storage |
-| GCS | httpfs (pre-installed) | Google Cloud Storage |
-| R2 | httpfs (pre-installed) | Cloudflare R2 |
+| `S3` | `httpfs` (pre-installed) | AWS S3, MinIO, other S3-compatible storage |
+| `GCS` | `httpfs` (pre-installed) | Google Cloud Storage |
+| `R2` | `httpfs` (pre-installed) | Cloudflare R2 |
+| `Azure` | `azure` | Azure Blob Storage |
 | Azure | azure | Azure Blob Storage |
 
 See the [DuckDB Secrets Manager documentation](https://duckdb.org/docs/configuration/secrets_manager.html) for complete details.
@@ -148,10 +147,10 @@ See the [DuckDB Secrets Manager documentation](https://duckdb.org/docs/configura
 
 Secrets are stored using PostgreSQL's Foreign Data Wrapper system:
 
-- **SERVER**: Stores non-sensitive configuration (endpoints, regions, providers)
-- **USER MAPPING**: Stores sensitive credentials (access keys, secrets, tokens)
+- **`SERVER`**: Stores non-sensitive configuration (e.g., endpoints, regions, providers).
+- **`USER MAPPING`**: Stores sensitive credentials (e.g., access keys, secrets, tokens).
 
-When a DuckDB instance is created or when secrets are modified, pg_duckdb automatically loads the secrets into DuckDB's secrets manager as non-persistent secrets.
+When a DuckDB instance is created or when secrets are modified, `pg_duckdb` automatically loads the secrets into DuckDB's secrets manager as non-persistent secrets.
 
 ## Complete Examples
 
@@ -285,8 +284,8 @@ SELECT * FROM duckdb.extensions WHERE name IN ('httpfs', 'azure');
 
 ## Further Reading
 
-- [pg_duckdb Functions](functions.md) - Complete function reference including secrets
-- [pg_duckdb MotherDuck](motherduck.md) - Cloud analytics integration guide
+- [Functions](functions.md) - Complete function reference including secrets.
+- [MotherDuck Integration](motherduck.md) - Cloud analytics integration guide.
 - [DuckDB Secrets Manager](https://duckdb.org/docs/configuration/secrets_manager.html)
 - [S3 API Support](https://duckdb.org/docs/extensions/httpfs/s3api.html)
 - [Google Cloud Storage Import](https://duckdb.org/docs/guides/network_cloud_storage/gcs_import.html)

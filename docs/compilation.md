@@ -1,6 +1,12 @@
-# Compiling pg_duckdb from Source
+# Building from Source
 
-This guide provides detailed instructions for building pg_duckdb from source on different platforms.
+This guide provides detailed instructions for building `pg_duckdb` from source on different platforms.
+After cloning the repository, follow the instructions for your operating system.
+
+```bash
+git clone https://github.com/duckdb/pg_duckdb
+cd pg_duckdb
+```
 
 ## Requirements
 
@@ -11,34 +17,12 @@ This guide provides detailed instructions for building pg_duckdb from source on 
 
 For full dependency details, see our [GitHub Actions workflow](../.github/workflows/build_and_test.yaml).
 
-## Quick Build
+## Build Options
 
-For experienced users with dependencies already installed:
-
-```bash
-git clone https://github.com/duckdb/pg_duckdb
-cd pg_duckdb
-make install
-```
-
-**Build Options:**
-- **Static linking**: `DUCKDB_BUILD=ReleaseStatic make install`
-- **Parallel build**: `make -j$(nproc) install`
-- **Debug build**: `DUCKDB_BUILD=Debug make install`
-- **Specific PostgreSQL version**: `PG_CONFIG=/path/to/pg_config make install`
-
-## Post-Installation Setup
-
-1. **Configure PostgreSQL:**
-   ```ini
-   # Add to postgresql.conf
-   shared_preload_libraries = 'pg_duckdb'
-   ```
-
-2. **Restart PostgreSQL and create extension:**
-   ```sql
-   CREATE EXTENSION pg_duckdb;
-   ```
+- **Parallel Build**: `make -j$(nproc) install`
+- **Static Linking**: `DUCKDB_BUILD=ReleaseStatic make install`
+- **Debug Build**: `DUCKDB_BUILD=Debug make install`
+- **Specific PostgreSQL Version**: `PG_CONFIG=/path/to/pg_config make install`
 
 ## Static Compilation (1.0.0+)
 
@@ -50,10 +34,9 @@ Starting with version 1.0.0, pg_duckdb supports statically linking the DuckDB li
 
 ### Building with Static Linking
 
-```bash
-git clone https://github.com/duckdb/pg_duckdb
-cd pg_duckdb
+To build with static linking, use the `DUCKDB_BUILD=ReleaseStatic` option:
 
+```bash
 # Build with static linking
 DUCKDB_BUILD=ReleaseStatic make install
 ```
@@ -94,9 +77,9 @@ third_party/duckdb/build/release/libduckdb_bundle.a  # Static library
 third_party/duckdb/build/release/src/libduckdb.so    # Shared library
 ```
 
-# Ubuntu 24.04
+# Build on Ubuntu 24.04
 
-This example uses Postgres 17. If you wish to use another version, substitute the version number in the commands as necessary.
+This example uses PostgreSQL 17. If you wish to use another version, substitute the version number in the commands as necessary.
 
 ### Set up Postgres
 
@@ -120,19 +103,10 @@ sudo apt install \
     liblz4-dev ninja-build
 ```
 
-### Clone, Build, and Install pg_duckdb
-
-Checkout pg_duckdb:
+### Build and Install
 
 ```sh
-git clone https://github.com/duckdb/pg_duckdb
-cd pg_duckdb
-```
-
-Build and install:
-
-```sh
-make -j16
+make -j$(nproc)
 sudo make install
 ```
 
@@ -152,7 +126,7 @@ sudo service postgresql restart
 
 ### Connect and Activate
 
-You may wish to now create databases and users as desired. To use pg_duckdb immediately, you can use
+You may wish to now create databases and users as desired. To use `pg_duckdb` immediately, you can use
 the `postgres` superuser to connect to the default `postgres` database:
 
 ```console
@@ -161,7 +135,7 @@ $ sudo -u postgres psql
 postgres=# CREATE EXTENSION pg_duckdb;
 ```
 
-# macOS
+# Build on macOS
 
 ## Prerequisites
 
@@ -199,15 +173,13 @@ brew install lz4
 
 ## Build and Install
 
-1. **Clone and build:**
-   ```bash
-   git clone https://github.com/duckdb/pg_duckdb
-   cd pg_duckdb
-   make -j$(sysctl -n hw.ncpu)
-   sudo make install
-   ```
+1.  **Build and Install:**
+    ```bash
+    make -j$(sysctl -n hw.ncpu)
+    sudo make install
+    ```
 
-2. **Configure PostgreSQL:**
+2.  **Configure PostgreSQL:**
    ```bash
    # Find PostgreSQL config directory
    postgres --help-config
@@ -237,14 +209,12 @@ brew install lz4
 
 # FAQ
 
-Q: How do I build for multiple versions of Postgres?<br />
-A: If you have multiple versions of Postgres installed, set `PG_CONFIG` to the path of the `pg_config`
-binary that you would like to use for building before compilation.
+Q: How do I build for multiple versions of Postgres?
+A: If you have multiple versions of Postgres installed, set `PG_CONFIG` to the path of the `pg_config` binary that you would like to use for building before compilation.
 
   ```sh
   export PG_CONFIG=/usr/bin/pg_config
   ```
 
-Q: `make clean` didn't remove all the build artifacts. How do I clean the entire project?<br />
-A: `make clean` will clean the pg_duckdb build files, but not libduckdb, which only needs to rebuilt on a DuckDB
-version change. To clean both pg_duckdb and libduckdb, use `make clean-all`.
+Q: `make clean` didn't remove all the build artifacts. How do I clean the entire project?
+A: `make clean` will clean the `pg_duckdb` build files, but not `libduckdb`, which only needs to be rebuilt on a DuckDB version change. To clean both `pg_duckdb` and `libduckdb`, use `make clean-all`.

@@ -1,6 +1,6 @@
-# Transactions in pg_duckdb
+# Transactions
 
-pg_duckdb supports multi-statement transactions with specific rules to ensure ACID guarantees and data consistency.
+`pg_duckdb` supports multi-statement transactions with specific rules to ensure ACID guarantees and data consistency.
 
 ## Transaction Rules
 
@@ -8,7 +8,7 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
 
 **Within the same transaction, you can:**
 
-1. **Read from both PostgreSQL and DuckDB tables:**
+1.  **Read from both PostgreSQL and DuckDB tables:**
    ```sql
    BEGIN;
    SELECT COUNT(*) FROM postgres_table;
@@ -17,7 +17,7 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
    COMMIT;
    ```
 
-2. **Write to PostgreSQL tables only:**
+2.  **Write to PostgreSQL tables only:**
    ```sql
    BEGIN;
    INSERT INTO postgres_table SELECT * FROM another_postgres_table;
@@ -25,7 +25,7 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
    COMMIT;
    ```
 
-3. **Write to DuckDB tables only:**
+3.  **Write to DuckDB tables only:**
    ```sql
    BEGIN;
    CREATE TABLE duckdb_table_new USING duckdb AS SELECT * FROM read_parquet('s3://data.parquet');
@@ -34,7 +34,7 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
    COMMIT;
    ```
 
-4. **DuckDB DDL operations (1.0.0+):**
+4.  **DuckDB DDL operations (1.0.0+):**
    ```sql
    BEGIN;
    -- Create DuckDB tables
@@ -60,7 +60,7 @@ pg_duckdb supports multi-statement transactions with specific rules to ensure AC
 
 ### Restricted Operations
 
-**The following is NOT allowed in the same transaction:**
+**The following operations are NOT allowed in the same transaction:**
 
 ```sql
 -- This will fail:
@@ -79,7 +79,7 @@ CREATE TABLE duckdb_table USING duckdb (id int, name text);  -- Error!
 COMMIT;
 ```
 
-## Advanced: Unsafe Mixed Transactions
+## Unsafe Mixed Transactions
 
 For advanced users who understand the risks, mixed transactions can be enabled:
 
@@ -94,10 +94,11 @@ COMMIT;
 
 ### Warning: Data Consistency Risks
 
-**This setting is dangerous** and can lead to:
-- **Partial commits**: DuckDB operations might succeed while PostgreSQL operations fail
-- **Data loss**: Operations might be committed in one system but not the other
-- **Inconsistent state**: Your application might see inconsistent data
+> **Warning**: This setting is dangerous and can lead to data consistency issues. Use it with extreme caution.
+>
+-   **Partial commits**: DuckDB operations might succeed while PostgreSQL operations fail.
+-   **Data loss**: Operations might be committed in one system but not the other.
+-   **Inconsistent state**: Your application might see inconsistent data.
 
 **Example of potential data loss:**
 ```sql
@@ -183,7 +184,7 @@ GROUP BY c.name;
 
 ## Best Practices
 
-1. **Separate transactions**: Use separate transactions for PostgreSQL and DuckDB writes
+1.  **Separate transactions**: Use separate transactions for PostgreSQL and DuckDB writes.
    ```sql
    -- Good: Separate transactions
    BEGIN;
@@ -195,7 +196,7 @@ GROUP BY c.name;
    COMMIT;
    ```
 
-2. **Use CTEs for complex operations:**
+2.  **Use CTEs for complex operations:**
    ```sql
    -- Good: Single read transaction with CTE
    BEGIN;
@@ -210,7 +211,7 @@ GROUP BY c.name;
    COMMIT;
    ```
 
-3. **Leverage DuckDB for ETL:**
+3.  **Leverage DuckDB for ETL:**
    ```sql
    -- Good: DuckDB-only ETL transaction
    BEGIN;
@@ -230,18 +231,18 @@ GROUP BY c.name;
 
 ## Transaction Isolation
 
-- **PostgreSQL tables**: Follow standard PostgreSQL isolation levels
-- **DuckDB tables**: Use DuckDB's transaction semantics
-- **Mixed reads**: Snapshot isolation applied per system
+-   **PostgreSQL tables**: Follow standard PostgreSQL isolation levels.
+-   **DuckDB tables**: Use DuckDB's transaction semantics.
+-   **Mixed reads**: Snapshot isolation is applied per system.
 
 ## Troubleshooting
 
 **Common error messages:**
 
-- `"cannot write to both DuckDB and PostgreSQL in the same transaction"`: Separate your writes into different transactions
-- `"DDL operations cannot be mixed"`: Avoid mixing DDL operations across systems
+-   `"cannot write to both DuckDB and PostgreSQL in the same transaction"`: Separate your writes into different transactions.
+-   `"DDL operations cannot be mixed"`: Avoid mixing DDL operations across systems.
 
 **Performance tips:**
-- Use `COPY` for bulk data movement between systems
-- Leverage temporary tables for intermediate results
-- Consider materializing complex joins in DuckDB tables
+-   Use `COPY` for bulk data movement between systems.
+-   Leverage temporary tables for intermediate results.
+-   Consider materializing complex joins in DuckDB tables.
