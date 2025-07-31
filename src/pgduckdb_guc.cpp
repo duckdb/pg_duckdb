@@ -252,16 +252,18 @@ find_option(const char *name, bool, bool, int) {
 
 static void
 DuckAssignTimezone_Cpp(const char *tz) {
-	if (IsExtensionRegistered()) {
-		if (!DuckDBManager::IsInitialized()) {
-			return;
-		}
-
-		// update duckdb tz
-		auto connection = pgduckdb::DuckDBManager::GetConnection(false);
-		pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
-		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
+	if (!IsExtensionRegistered()) {
+		return;
 	}
+
+	if (!DuckDBManager::IsInitialized()) {
+		return;
+	}
+
+	// update duckdb tz
+	auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+	pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
+	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
 }
 
 static void

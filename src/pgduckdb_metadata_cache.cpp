@@ -1,3 +1,5 @@
+#include "pgduckdb/pgduckdb_duckdb.hpp"
+
 extern "C" {
 #include "postgres.h"
 
@@ -214,6 +216,8 @@ IsExtensionRegistered() {
 		elog(WARNING, "pgduckdb: IsExtensionRegistered called in an aborted transaction");
 		/* We need to run `get_extension_oid` in a valid transaction */
 		return false;
+	} else if (!IsTransactionState()) {
+		return false;
 	} else if (!ActiveSnapshotSet() && ActivePortal == nullptr) {
 		/* We're not in a transaction block, so we can't populate the cache */
 		return get_extension_oid("pg_duckdb", true) != InvalidOid;
@@ -273,6 +277,14 @@ IsExtensionRegistered() {
 			cache.postgres_role_oid = BOOTSTRAP_SUPERUSERID;
 		}
 	} else {
+		/*
+		 * It's possible that a duckdb instance is still running, after we have
+		 * dropped the extension (possibly in a different session). This seems
+		 * like a good moment to clean that up if that's the case.
+		 */
+		if (pgduckdb::DuckDBManager::IsInitialized()) {
+			pgduckdb::DuckDBManager::Get().Reset();
+		}
 		elog(DEBUG1, "pgduckdb: extension is not registered in database '%s'", get_database_name(MyDatabaseId));
 	}
 
