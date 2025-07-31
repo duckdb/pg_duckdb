@@ -2,9 +2,7 @@
 
 ## Connect with MotherDuck
 
-`pg_duckdb` integrates with [MotherDuck][md] natively.
-To enable this support you first need to [generate an access token][md-access-token].
-Then you can enable it by simply using the `enable_motherduck` convenience method:
+`pg_duckdb` integrates natively with [MotherDuck][md]. To enable this support, you first need to [generate an access token][md-access-token]. Then, you can enable it using the `duckdb.enable_motherduck` convenience function:
 
 ```sql
 -- If not provided, the token will be read from the `motherduck_token` environment variable
@@ -12,19 +10,19 @@ Then you can enable it by simply using the `enable_motherduck` convenience metho
 CALL duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
 ```
 
-This convenience method creates a `motherduck` `SERVER` using the `pg_duckdb` Foreign Data Wrapper, which hosts the options for this integration. It also provides an `USER MAPPING` for the current user, which stores the provided MotherDuck token (if any).
+This function creates a `motherduck` `SERVER` using the `pg_duckdb` Foreign Data Wrapper, which hosts the options for this integration. It also provides a `USER MAPPING` for the current user, which stores the provided MotherDuck token (if any).
 
-You can refer to the [section](advanced-motherduck-configuration) below for more on the `SERVER` and `USER MAPPING` configuration.
+You can refer to the [Advanced MotherDuck Configuration](#advanced-motherduck-configuration) section below for more on the `SERVER` and `USER MAPPING` configuration.
 
-### Non-supersuer configuration
+### Non-Superuser Configuration
 
-If you want to use MotherDuck as a different user than a superuser you also have to configure:
+If you want to use MotherDuck as a non-superuser, you also have to configure the `duckdb.postgres_role` setting:
 
 ```ini
-duckdb.postgres_role = 'your_role_name'  # e.g. duckdb or duckdb_group
+duckdb.postgres_role = 'your_role_name'  # e.g., duckdb or duckdb_group
 ```
 
-You also likely want to make sure that this role has `CREATE` permissions on the `public` schema in Postgres, because this is where the tables in the `main` schema are created in. You can grant these permissions as follows:
+You also need to ensure that this role has `CREATE` permissions on the `public` schema in Postgres, as this is where tables from the MotherDuck `main` schema are created. You can grant these permissions as follows:
 
 ```sql
 GRANT CREATE ON SCHEMA public TO {your_role_name};
@@ -32,15 +30,17 @@ GRANT CREATE ON SCHEMA public TO {your_role_name};
 GRANT CREATE ON SCHEMA public TO duckdb;
 ```
 
-If you do this after starting postgres the initial sync of MotherDuck tables will probably have failed for the public schema. You can force a full resync of the tables by running:
+If you grant these permissions after starting Postgres, the initial sync of MotherDuck tables may have failed for the `public` schema. You can force a full resync of the tables by running:
 
 ```sql
-select * from pg_terminate_backend((select pid from pg_stat_activity where backend_type = 'pg_duckdb sync worker'));
+SELECT * FROM pg_terminate_backend((
+  SELECT pid FROM pg_stat_activity WHERE backend_type = 'pg_duckdb sync worker'
+));
 ```
 
-## Using `pg_duckdb` with MotherDuck
+## Using MotherDuck with `pg_duckdb`
 
-After doing the configuration (and possibly restarting Postgres). You can then you create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
+After completing the configuration (and possibly restarting Postgres), you can create tables in your MotherDuck database using the `duckdb` [Table Access Method (TAM)][tam]:
 
 ```sql
 CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
@@ -53,9 +53,9 @@ Any tables that you already had in MotherDuck are automatically available in Pos
 
 The default MotherDuck database will be easiest to use (see below for details), by default this is `my_db`.
 
-## Advanced MotherDuck configuration
+## Advanced MotherDuck Configuration
 
-If you want to specify which MotherDuck database is your default database, then you need to configure MotherDuck using a `SERVER` and a `USER MAPPING` as such:
+If you want to specify which MotherDuck database is your default, you need to configure MotherDuck using a `SERVER` and a `USER MAPPING`:
 
 ```sql
 CREATE SERVER motherduck
@@ -67,19 +67,19 @@ OPTIONS (default_database '<your database>');
 CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token '<your token>')
 ```
 
-Note: with the `duckdb.enable_motherduck` convenience method above, you can simply do:
+Note: The `duckdb.enable_motherduck` function simplifies this process:
 ```sql
 CALL duckdb.enable_motherduck('<token>', '<default database>');
 ```
 
-## How DuckDB schemas are mapped to Postgres schemas
+## Schema Mapping
 
-DuckDB and Postgres schema and database conventions are different. The mapping of database+schema to schema name is then done in the following way:
+DuckDB and Postgres have different schema and database conventions. The mapping from a DuckDB `database.schema` to a Postgres schema is done as follows:
 
-1. Each schema in your default MotherDuck database (see above on how to configure) is simply merged with the Postgres schema with the same name.
-2. Except for the `main` DuckDB schema in your default database, which is merged with the Postgres `public` schema.
-3. Tables in other databases are put into dedicated DuckDB-only schemas. These schemas are of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
-4. Except for the `main` schema in those other databases. That schema should be accessed using the shorter name `ddb$<db_name>` instead.
+1.  Each schema in your default MotherDuck database is merged with the Postgres schema of the same name.
+2.  The `main` DuckDB schema in your default database is merged with the Postgres `public` schema.
+3.  Tables in other databases are placed in dedicated schemas of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
+4.  The `main` schema in other databases can be accessed using the shorter name `ddb$<db_name>`.
 
 An example of each of these cases is shown below:
 
@@ -90,9 +90,9 @@ SELECT COUNT(*) FROM ddb$my_shared_db.aggregated_order_data; -- reads from my_sh
 SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.hn.hacker_news
 ```
 
-## Debugging issues
+## Debugging
 
-If some tables or schemas are not showing up as expected, it's best to check your Postgres log file. The background worker that automatically syncs tables might have run into an error when syncing some of the tables. It reports these failures in the log, often even including how the failure can be resolved.
+If some tables or schemas are not appearing as expected, check your Postgres log file. The background worker that automatically syncs tables may have encountered an error, which will be reported in the logs, often with information on how to resolve the issue.
 
 [md]: https://motherduck.com/
 [md-access-token]: https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/authenticating-to-motherduck/#authentication-using-an-access-token
