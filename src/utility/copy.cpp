@@ -284,7 +284,8 @@ IsAllowedStatement(CopyStmt *stmt, bool throw_error = false) {
 	}
 
 	if (!stmt->is_from && !is_absolute_path(stmt->filename) && !MatchesURIScheme(stmt->filename)) {
-		ereport(ERROR, (errcode(ERRCODE_INVALID_NAME), errmsg("relative path not allowed for COPY to file")));
+		ereport(elevel, (errcode(ERRCODE_INVALID_NAME), errmsg("relative path not allowed for COPY to file")));
+		return false;
 	}
 
 	return true;

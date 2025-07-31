@@ -36,6 +36,13 @@ def test_copy_to_local(cur: Cursor, tmp_path: Path):
             f"COPY test_table TO '{csv_path}' WITH (FORMAT CSV, UNKNOWN_OPTION true)"
         )
 
+    # copying to relative paths is not allowed though, in accordance with
+    # Postgres behaviour to avoid overwriting datababase file accidentally.
+    with pytest.raises(
+        psycopg.errors.InvalidName, match="relative path not allowed for COPY to file"
+    ):
+        cur.sql("COPY test_table TO 'test_copy.csv' WITH (FORMAT CSV)")
+
     # Disabling duckdb.force_execution makes the query fail with a different
     # error.
     cur.sql("SET duckdb.force_execution = false")
@@ -55,6 +62,14 @@ def test_copy_to_local(cur: Cursor, tmp_path: Path):
         (1, "Alice"),
         (2, "Bob"),
     ]
+
+    # Again relative paths are not allowed for COPY TO, this becomes an
+    # internal error though, due to our failure to propagate error codes
+    # correctly.
+    with pytest.raises(
+        psycopg.errors.InternalError, match="relative path not allowed for COPY to file"
+    ):
+        cur.sql("COPY test_table TO 'test_copy.parquet' WITH (FORMAT PARQUET)")
 
     # We can copy the result of a DuckDB query using Postgres its COPY logic
     cur.sql(
