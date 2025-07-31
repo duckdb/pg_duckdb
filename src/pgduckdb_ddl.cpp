@@ -1052,7 +1052,7 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 	    .objectSubId = 0,
 	};
 	pgduckdb::RecordDependencyOnMDServer(&view_address);
-	ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
+	ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUserOid(), false, AccessExclusiveLock);
 
 	pgduckdb::ClaimCurrentCommandId(true);
 }
@@ -1329,7 +1329,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		    .objectSubId = 0,
 		};
 		pgduckdb::RecordDependencyOnMDServer(&table_address);
-		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUser(), false, AccessExclusiveLock);
+		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUserOid(), false, AccessExclusiveLock);
 	}
 
 	AtEOXact_GUC(false, save_nestlevel);
