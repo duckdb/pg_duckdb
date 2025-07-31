@@ -235,6 +235,27 @@ StringOneOfInternal(const char *str, const char *compare_to[], int length_of_com
 	return false;
 }
 
+bool
+MatchesURIScheme(const char *str) {
+	if (str == NULL) {
+		return false;
+	}
+
+	const char *p = str;
+
+	// First character must be a letter
+	if (!isalpha(*p))
+		return false;
+	p++;
+
+	// Continue with alphanumeric
+	while (*p && (isalnum(*p)))
+		p++;
+
+	// Must be followed by ://
+	return (strncmp(p, "://", 3) == 0);
+}
+
 #define StringOneOf(str, compare_to) StringOneOfInternal(str, compare_to, lengthof(compare_to))
 
 static bool
@@ -259,6 +280,11 @@ IsAllowedStatement(CopyStmt *stmt, bool throw_error = false) {
 
 	if (stmt->filename == NULL) {
 		elog(elevel, "COPY ... TO STDOUT/FROM STDIN is not supported by DuckDB");
+		return false;
+	}
+
+	if (!stmt->is_from && !is_absolute_path(stmt->filename) && !MatchesURIScheme(stmt->filename)) {
+		ereport(elevel, (errcode(ERRCODE_INVALID_NAME), errmsg("relative path not allowed for COPY to file")));
 		return false;
 	}
 
