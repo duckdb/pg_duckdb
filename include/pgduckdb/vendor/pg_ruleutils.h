@@ -43,6 +43,13 @@ extern List *pgduckdb_set_deparse_context_plan(List *dpcontext,
 									  struct Plan *plan, List *ancestors);
 extern List *pgduckdb_select_rtable_names_for_explain(List *rtable,
 											 Bitmapset *rels_used);
+#if PG_VERSION_NUM >= 180000
+extern char *get_window_frame_options_for_explain(int frameOptions,
+												  Node *startOffset,
+												  Node *endOffset,
+												  List *dpcontext,
+												  bool forceprefix);
+#endif
 extern char *pgduckdb_generate_collation_name(Oid collid);
 extern char *pgduckdb_generate_opclass_name(Oid opclass);
 extern char *pgduckdb_get_range_partbound_string(List *bound_datums);

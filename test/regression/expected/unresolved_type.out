@@ -42,13 +42,13 @@ select r['a'] SIMILAR TO '%b%' from duckdb.query($$ SELECT 'abc' a $$) r;
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Catalog Error: Scalar Function with name similar_to_escape does not exist!
 Did you mean "list_sem"?
 
-LINE 1: SELECT (r.a ~ similar_to_escape('%b%'::text)) AS "?column?" FROM (FROM...
+LINE 1: SELECT (r.a ~ similar_to_escape('%b%'::text)) AS "?column?" FROM system...
                       ^
 select r['a'] NOT SIMILAR TO '%b%' from duckdb.query($$ SELECT 'abc' a $$) r;
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Catalog Error: Scalar Function with name similar_to_escape does not exist!
 Did you mean "list_sem"?
 
-LINE 1: SELECT (r.a !~ similar_to_escape('%b%'::text)) AS "?column?" FROM (FROM...
+LINE 1: SELECT (r.a !~ similar_to_escape('%b%'::text)) AS "?column?" FROM system...
                        ^
 select length(r['a']) from duckdb.query($$ SELECT 'abc' a $$) r;
  length 
@@ -110,12 +110,6 @@ select strftime(r['ts'], '%a, %-d %B %Y - %I:%M:%S %p') from duckdb.query($$ SEL
  Wed, 1 January 1992 - 08:38:40 PM
 (1 row)
 
-select epoch_ms(701222400000);
-         epoch_ms         
---------------------------
- Sun Mar 22 00:00:00 1992
-(1 row)
-
 select epoch_ms(TIMESTAMP '2021-08-03 11:59:44.123456');
    epoch_ms    
 ---------------
@@ -140,18 +134,10 @@ select epoch('2022-11-07 08:43:04'::TIMESTAMP);
  1667810584
 (1 row)
 
-select epoch_ms(r['a']) from duckdb.query($$ SELECT 701222400000 a $$) r;
-         epoch_ms         
---------------------------
- Sun Mar 22 00:00:00 1992
-(1 row)
-
-select epoch_ms(r['ts']) from duckdb.query($$ SELECT TIMESTAMP '2021-08-03 11:59:44.123456' ts $$) r;
-   epoch_ms    
----------------
- 1627991984123
-(1 row)
-
+-- TODO: Add this back after we start using DuckDB 1.4, which removes epoch_ms
+-- for bigint:
+--
+-- select epoch_ms(r['ts']) from duckdb.query($$ SELECT TIMESTAMP '2021-08-03 11:59:44.123456' ts $$) r;
 select epoch_ns(r['ts']) from duckdb.query($$ SELECT TIMESTAMP '2021-08-03 11:59:44.123456' ts $$) r;
       epoch_ns       
 ---------------------
@@ -168,5 +154,52 @@ select epoch(r['ts']) from duckdb.query($$ SELECT '2022-11-07 08:43:04'::TIMESTA
    epoch    
 ------------
  1667810584
+(1 row)
+
+-- Tests for make_timestamp[tz]. The ones with many arguments also exist in
+-- postgres, so we force duckdb execution by using duckdb.query.
+select make_timestamp(2023, 6, 12, 10, 30, 12.42) FROM duckdb.query($$ SELECT 1
+$$);
+       make_timestamp        
+-----------------------------
+ Mon Jun 12 10:30:12.42 2023
+(1 row)
+
+select make_timestamptz(2023, 6, 12, 10, 30, 12.42) FROM duckdb.query($$ SELECT 1
+$$);
+        make_timestamptz         
+---------------------------------
+ Mon Jun 12 10:30:12.42 2023 PDT
+(1 row)
+
+select make_timestamptz(2023, 6, 12, 10, 30, 12.42, 'CET') FROM duckdb.query($$ SELECT 1
+$$);
+        make_timestamptz         
+---------------------------------
+ Mon Jun 12 01:30:12.42 2023 PDT
+(1 row)
+
+select make_timestamp(1686570000000000);
+      make_timestamp      
+--------------------------
+ Mon Jun 12 11:40:00 2023
+(1 row)
+
+select make_timestamp(r['microseconds']) from duckdb.query($$ SELECT 1686570000000000 AS microseconds $$) r;
+      make_timestamp      
+--------------------------
+ Mon Jun 12 11:40:00 2023
+(1 row)
+
+select make_timestamptz(1686570000000000);
+       make_timestamptz       
+------------------------------
+ Mon Jun 12 04:40:00 2023 PDT
+(1 row)
+
+select make_timestamptz(r['microseconds']) from duckdb.query($$ SELECT 1686570000000000 AS microseconds $$) r;
+       make_timestamptz       
+------------------------------
+ Mon Jun 12 04:40:00 2023 PDT
 (1 row)
 

@@ -154,8 +154,8 @@ def make_new_duckdb_connection(db_name, token, reset=True, hint=None):
 
     for _ in wait_until(f"Database {db_name} did not appear in time", timeout=60):
         try:
-            return con.execute(f"USE {db_name}")
-        except duckdb.duckdb.CatalogException:
+            return con.execute(f"USE {db_name}.main")
+        except duckdb.CatalogException:
             con.execute("REFRESH DATABASES").fetchall()
 
     return con

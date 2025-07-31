@@ -13,7 +13,12 @@ extern "C" {
 #include "pgduckdb/pgduckdb_xact.hpp"
 
 extern "C" {
+
+#ifdef PG_MODULE_MAGIC_EXT
+PG_MODULE_MAGIC_EXT(.name = "pg_duckdb", .version = "1.0.0");
+#else
 PG_MODULE_MAGIC;
+#endif
 
 void
 _PG_init(void) {
@@ -23,6 +28,7 @@ _PG_init(void) {
 	}
 
 	pgduckdb::InitGUC();
+	pgduckdb::InitGUCHooks();
 	DuckdbInitHooks();
 	DuckdbInitNode();
 	pgduckdb::InitBackgroundWorkersShmem();

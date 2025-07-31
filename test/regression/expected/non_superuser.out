@@ -15,12 +15,12 @@ SELECT * FROM t;
 -- Should fail
 SET ROLE user2;
 SELECT * FROM t;
-ERROR:  permission denied for table t
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Executor Error: (PGDuckDB/Init) permission denied for table t
 -- Should fail because we're not allowed to read the internal tables by default
 SELECT * from duckdb.tables;
-ERROR:  permission denied for table tables
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Executor Error: (PGDuckDB/Init) permission denied for table tables
 SELECT * from duckdb.extensions;
-ERROR:  permission denied for table extensions
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Executor Error: (PGDuckDB/Init) permission denied for table extensions
 -- Should fail because any Postgres tables accesesd from DuckDB will have their
 -- permissions checked even if it happens straight from DuckDB.
 SET duckdb.force_execution = false;

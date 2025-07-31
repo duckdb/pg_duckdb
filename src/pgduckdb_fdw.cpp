@@ -36,7 +36,7 @@ typedef enum { ANY, MD, S3, GCS, SENTINEL } FdwType;
 
 struct PGDuckDBFdwOption {
 	const char *optname;
-	Oid context;  /* Oid of catalog in which option may appear */
+	Oid context; /* Oid of catalog in which option may appear */
 	bool required = false;
 };
 

@@ -223,16 +223,6 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
-CREATE FUNCTION @extschema@.epoch_ms(bigint) RETURNS timestamp
-SET search_path = pg_catalog, pg_temp
-AS 'MODULE_PATHNAME', 'duckdb_only_function'
-LANGUAGE C;
-
-CREATE FUNCTION @extschema@.epoch_ms(duckdb.unresolved_type) RETURNS duckdb.unresolved_type
-SET search_path = pg_catalog, pg_temp
-AS 'MODULE_PATHNAME', 'duckdb_only_function'
-LANGUAGE C;
-
 CREATE FUNCTION @extschema@.epoch_us(interval) RETURNS bigint
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
@@ -299,6 +289,26 @@ AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
 CREATE FUNCTION @extschema@.epoch_ns(duckdb.unresolved_type) RETURNS bigint
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.make_timestamp(microseconds bigint) RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.make_timestamp(microseconds duckdb.unresolved_type) RETURNS timestamp
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.make_timestamptz(microseconds bigint) RETURNS timestamptz
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+CREATE FUNCTION @extschema@.make_timestamptz(microseconds duckdb.unresolved_type) RETURNS timestamptz
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
@@ -771,3 +781,9 @@ LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_azure_secret';
 ALTER TABLE duckdb.extensions ADD COLUMN repository TEXT NOT NULL DEFAULT 'core';
 ALTER TABLE duckdb.extensions RENAME COLUMN enabled TO autoload;
 ALTER TABLE duckdb.extensions ALTER COLUMN autoload SET NOT NULL;
+
+CREATE FUNCTION duckdb.view(dbname text, schema text, view_name text, query text)
+RETURNS SETOF duckdb.row
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
