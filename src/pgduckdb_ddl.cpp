@@ -1063,11 +1063,6 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
                       QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
 	if (IsA(parsetree, CopyStmt)) {
-		CopyStmt *stmt = castNode(CopyStmt, parsetree);
-		char *filename = stmt->filename;
-		if (!is_absolute_path(filename))
-			ereport(ERROR, (errcode(ERRCODE_INVALID_NAME), errmsg("relative path not allowed for COPY to file")));
-
 		auto copy_query = PostgresFunctionGuard(MakeDuckdbCopyQuery, pstmt, query_string, query_env);
 		if (copy_query) {
 			auto res = pgduckdb::DuckDBQueryOrThrow(copy_query);
