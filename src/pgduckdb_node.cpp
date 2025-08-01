@@ -193,7 +193,11 @@ ExecuteQuery(DuckdbScanState *state) {
 		named_values[duckdb::to_string(i + 1)] = duckdb::BoundParameterData(duckdb_param);
 	}
 
-	auto pending = prepared.PendingQuery(named_values, true);
+	// Always set `allow_stream_result` to false to force a fully materialized DuckDB result.
+	// This is required for cases like CTAS from a Postgres table, where allowing streaming results
+	// could lead to race conditions on Postgres resources.
+	// Checkout discussion: https://github.com/duckdb/pg_duckdb/discussions/866
+	auto pending = prepared.PendingQuery(named_values, false);
 	if (pending->HasError()) {
 		return pending->ThrowError();
 	}

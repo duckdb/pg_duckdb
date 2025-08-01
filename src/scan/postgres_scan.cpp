@@ -422,6 +422,8 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
     : snapshot(_snapshot), rel(_rel), table_tuple_desc(RelationGetDescr(rel)), count_tuples_only(false),
       output_columns(), total_row_count(0), registered_local_states(0), scan_query(),
       table_reader_global_state(nullptr), duckdb_scan_memory_ctx(nullptr), max_threads(1) {
+	PostgresScopedStackReset scoped_stack_reset;
+	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	ConstructTableScanQuery(input);
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
 	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
@@ -578,6 +580,7 @@ ScanSingleTuple(duckdb::DataChunk &output, PostgresScanLocalState &local_state) 
 void
 PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb::TableFunctionInput &data,
                                                 duckdb::DataChunk &output) {
+	PostgresScopedStackReset scoped_stack_reset;
 	auto &local_state = data.local_state->Cast<PostgresScanLocalState>();
 
 	/* We have exhausted table scan */
