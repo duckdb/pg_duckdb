@@ -175,7 +175,7 @@ def generate_config(
     database_name,
     schema_name,
     scale_factor,
-    force_duckdb_execution,
+    engine,
     username,
     password,
 ):
@@ -190,7 +190,7 @@ def generate_config(
 
     # Build options string
     options = [f"-c search_path={schema_name}"]
-    if force_duckdb_execution:
+    if engine == "duckdb":
         options.append("-c duckdb.force_execution=true")
     options_str = quote(" ".join(options))
 
@@ -281,7 +281,7 @@ def create_comparison_chart(result_files, output_file="comparison.png"):
 
     x = range(len(comparison))
     width = 0.8 / len(dataframes)
-    colors = ["#336699", "#ff9933", "#66cc66", "#cc6666"]
+    colors = ["#336699", "#ff9933", "#66cc66", "#cc6666", "#9966cc"]
     labels = list(dataframes.keys())
 
     # Plot 1: Absolute times (linear or log scale based on data)
@@ -313,7 +313,7 @@ def create_comparison_chart(result_files, output_file="comparison.png"):
     ax1.legend()
     ax1.grid(axis="y", alpha=0.3)
 
-    # Plot 2: Speedup relative to PostgreSQL
+    # Plot 2: Speedup relative to PostgreSQL with symmetric scaling
     postgres_col = f"Latency (ms)_{postgres_label}"
 
     for i, label in enumerate(labels):
@@ -321,16 +321,18 @@ def create_comparison_chart(result_files, output_file="comparison.png"):
             continue  # Skip baseline
 
         col_name = f"Latency (ms)_{label}"
-        # Calculate speedup: postgres_time / other_time
-        # Values > 1 mean the other system is faster than PostgreSQL
-        speedups = comparison[postgres_col] / comparison[col_name]
+        # Calculate raw speedup: postgres_time / other_time
+        raw_speedups = comparison[postgres_col] / comparison[col_name]
+
+        # Transform to symmetric scale: speedup >= 1 stays as-is, speedup < 1 becomes -1/speedup
+        symmetric_speedups = [s if s >= 1.0 else -1 / s for s in raw_speedups]
 
         # Use different colors for speedup vs slowdown
-        bar_colors = ["#22cc22" if s >= 1.0 else "#cc2222" for s in speedups]
+        bar_colors = ["#22cc22" if s >= 0 else "#cc2222" for s in symmetric_speedups]
 
         bars = ax2.bar(
             [pos + (i - len(labels) / 2 + 0.5) * width for pos in x],
-            speedups,
+            symmetric_speedups,
             width,
             label=f"{label} vs {postgres_label}",
             alpha=0.8,
@@ -338,27 +340,32 @@ def create_comparison_chart(result_files, output_file="comparison.png"):
         )
 
         # Add speedup labels on bars
-        for j, bar in enumerate(bars):
+        for j, (bar, raw_speedup) in enumerate(zip(bars, raw_speedups)):
             height = bar.get_height()
-            if height >= 1.0:
-                label_text = f"{height:.1f}x"
+
+            if raw_speedup >= 1.0:
+                label_text = f"{raw_speedup:.1f}x"
             else:
-                label_text = f"{1 / height:.1f}x slower"
+                label_text = f"{1 / raw_speedup:.1f}x slower"
+
+            # Position label above positive bars, below negative bars
+            y_pos = height + 0.2 if height >= 0 else height - 0.2
+            va = "bottom" if height >= 0 else "top"
 
             ax2.text(
                 bar.get_x() + bar.get_width() / 2.0,
-                height + 0.05 if height >= 1 else height - 0.1,
+                y_pos,
                 label_text,
                 ha="center",
-                va="bottom" if height >= 1 else "top",
+                va=va,
                 fontsize=8,
                 rotation=90,
             )
 
-    # Add horizontal line at y=1 (no speedup/slowdown)
-    ax2.axhline(y=1, color="black", linestyle="--", alpha=0.7, linewidth=1)
+    # Add horizontal line at y=0 (no speedup/slowdown)
+    ax2.axhline(y=0, color="black", linestyle="--", alpha=0.7, linewidth=1)
     ax2.set_xlabel("Query")
-    ax2.set_ylabel(f"Speedup relative to {postgres_label}")
+    ax2.set_ylabel(f"Speedup relative to {postgres_label} (symmetric scale)")
     ax2.set_title(f"TPC-H Query Speedup vs {postgres_label}")
     ax2.set_xticks(x)
     ax2.set_xticklabels(comparison["Transaction Name"], rotation=45)
@@ -368,8 +375,6 @@ def create_comparison_chart(result_files, output_file="comparison.png"):
     plt.tight_layout()
     plt.savefig(output_file, dpi=300, bbox_inches="tight")
     plt.show()
-
-    eprint(f"Comparison chart saved to {output_file}")
 
     # Print detailed statistics
     print(f"\nDetailed Query Results (baseline: {postgres_label}):")
@@ -415,12 +420,21 @@ def create_comparison_chart(result_files, output_file="comparison.png"):
                 f"Total {label} time: {total:.0f} ms ({1 / speedup:.2f}x slower overall)"
             )
 
+    eprint(f"Comparison chart saved to {output_file}")
 
-def run_benchmark(args, force_duckdb=False, results_suffix=""):
+
+def run_benchmark(args, engine, temperature, results_suffix=""):
     """Run a single benchmark iteration"""
 
     dump_name = f"tpch{args.scale_factor}".replace(".", "")
-    schema_name = args.schema_name or dump_name
+
+    # For MotherDuck, use ddb prefix for schema name
+    if engine == "motherduck":
+        schema_name = args.schema_name or f"ddb${dump_name}"
+        database_name = args.motherduck_database or args.database_name
+    else:
+        schema_name = args.schema_name or dump_name
+        database_name = args.database_name
 
     config_template = "tpch_config_template.xml"
     username, password = get_pg_credentials(args.username, args.password)
@@ -434,15 +448,16 @@ def run_benchmark(args, force_duckdb=False, results_suffix=""):
         generate_config(
             config_template,
             config_file,
-            args.database_name,
+            database_name,
             schema_name,
             args.scale_factor,
-            force_duckdb or args.force_duckdb_execution,
+            engine,
             username,
             password,
         )
 
-        if not args.skip_generate and not args.skip_load:
+        # Skip data generation and loading for MotherDuck
+        if engine != "motherduck" and not args.skip_generate and not args.skip_load:
             run(
                 [
                     "duckdb",
@@ -451,10 +466,10 @@ def run_benchmark(args, force_duckdb=False, results_suffix=""):
                 ]
             )
 
-        if not args.skip_load:
+        if engine != "motherduck" and not args.skip_load:
             # Create schema using SQL files instead of benchbase
             create_tables(
-                args.database_name,
+                database_name,
                 schema_name,
                 username,
                 password,
@@ -469,7 +484,7 @@ def run_benchmark(args, force_duckdb=False, results_suffix=""):
                     [
                         "psql",
                         "-d",
-                        args.database_name,
+                        database_name,
                         "-v",
                         "ON_ERROR_STOP=1",
                         "-c",
@@ -513,13 +528,31 @@ def run_benchmark(args, force_duckdb=False, results_suffix=""):
         return find_latest_result_file()
 
 
+def get_engine_name(engine):
+    """Get display name for engine"""
+    if engine == "pg":
+        return "PostgreSQL"
+    elif engine == "duckdb":
+        return "DuckDB"
+    elif engine == "motherduck":
+        return "MotherDuck"
+    return engine
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Run TPCH generation script.")
+    parser = argparse.ArgumentParser(
+        description="Run TPCH benchmark with multiple engines."
+    )
     parser.add_argument(
         "--database-name",
         type=str,
         default="postgres",
         help="Database name to connect to.",
+    )
+    parser.add_argument(
+        "--motherduck-database",
+        type=str,
+        help="MotherDuck database name (overrides --database-name for MotherDuck).",
     )
     parser.add_argument(
         "--schema-name",
@@ -544,6 +577,27 @@ def main():
         type=str,
         help="PostgreSQL password (overrides PGPASSWORD env var).",
     )
+
+    # Engine selection
+    parser.add_argument(
+        "--pg-engine", action="store_true", help="Run benchmark with PostgreSQL engine"
+    )
+    parser.add_argument(
+        "--duckdb-engine", action="store_true", help="Run benchmark with DuckDB engine"
+    )
+    parser.add_argument(
+        "--motherduck", action="store_true", help="Run benchmark with MotherDuck"
+    )
+
+    # Temperature selection
+    parser.add_argument(
+        "--cold", action="store_true", help="Run cold benchmark (after data loading)"
+    )
+    parser.add_argument(
+        "--hot", action="store_true", help="Run hot benchmark (reusing loaded data)"
+    )
+
+    # Skip options
     parser.add_argument(
         "--skip-generate", action="store_true", help="Skip the data generation step."
     )
@@ -553,22 +607,8 @@ def main():
     parser.add_argument(
         "--skip-execute", action="store_true", help="Skip the benchmark execution step."
     )
-    parser.add_argument(
-        "--force-duckdb-execution",
-        action="store_true",
-        help="Set duckdb.force_execution to true",
-    )
-    parser.add_argument(
-        "--cold", action="store_true", help="Run cold benchmark (after data loading)"
-    )
-    parser.add_argument(
-        "--hot", action="store_true", help="Run hot benchmark (reusing loaded data)"
-    )
-    parser.add_argument(
-        "--compare",
-        action="store_true",
-        help="Run benchmark twice (PostgreSQL vs DuckDB) and create comparison chart",
-    )
+
+    # Schema options
     parser.add_argument(
         "--no-indexes",
         action="store_true",
@@ -587,6 +627,28 @@ def main():
         eprint("ERROR: --no-indexes and --pk-only cannot be used together")
         sys.exit(1)
 
+    # Default to --cold and --duckdb-engine if nothing specified
+    if not any([args.cold, args.hot]):
+        args.cold = True
+
+    if not any([args.pg_engine, args.duckdb_engine, args.motherduck]):
+        args.duckdb_engine = True
+
+    # Build lists of engines and temperatures to test
+    engines = []
+    if args.pg_engine:
+        engines.append("pg")
+    if args.duckdb_engine:
+        engines.append("duckdb")
+    if args.motherduck:
+        engines.append("motherduck")
+
+    temperatures = []
+    if args.cold:
+        temperatures.append("cold")
+    if args.hot:
+        temperatures.append("hot")
+
     # Build filename suffix for schema type
     schema_suffix = ""
     if args.no_indexes:
@@ -596,118 +658,52 @@ def main():
 
     file_prefix = f"tpch{args.scale_factor}".replace(".", "") + schema_suffix
 
-    # Default to hot run if neither --cold nor --hot specified
-    if not args.cold and not args.hot:
-        args.hot = True
+    # Run matrix of benchmarks
+    result_files = {}
 
-    if args.compare and args.cold and args.hot:
-        # Full comparison: PostgreSQL vs DuckDB, hot vs cold
-        eprint("Running full comparison: PostgreSQL vs DuckDB, hot vs cold")
-        if args.force_duckdb_execution:
-            eprint(
-                "WARNING: --force-duckdb-execution is ignored in full comparison mode"
-            )
-            args.force_duckdb_execution = False
+    for engine in engines:
+        for temperature in temperatures:
+            engine_name = get_engine_name(engine)
+            temp_name = temperature.capitalize()
+            label = f"{engine_name} ({temp_name})"
 
-        result_files = {}
+            eprint(f"=== Running {label} benchmark ===")
 
-        # PostgreSQL cold
-        eprint("=== Running PostgreSQL benchmark (cold) ===")
-        result_files["PostgreSQL (Cold)"] = run_benchmark(
-            args, force_duckdb=False, results_suffix="_pg_cold"
-        )
+            # Set up args for this run
+            run_args = argparse.Namespace(**vars(args))
 
-        # PostgreSQL hot
-        eprint("=== Running PostgreSQL benchmark (hot) ===")
-        args.skip_load = True  # Reuse loaded data for hot run
-        result_files["PostgreSQL (Hot)"] = run_benchmark(
-            args, force_duckdb=False, results_suffix="_pg_hot"
-        )
+            # For hot runs after the first cold run, skip loading
+            if temperature == "hot" and len(result_files) > 0:
+                run_args.skip_load = True
 
-        # DuckDB cold - need to reset skip_load for new engine
-        args.skip_load = False
-        # but reuse existing data
-        args.skip_generate = True
-        eprint("=== Running DuckDB benchmark (cold) ===")
-        result_files["DuckDB (Cold)"] = run_benchmark(
-            args, force_duckdb=True, results_suffix="_duck_cold"
-        )
+            # For subsequent engine runs after the first engine, skip generation
+            if (
+                len([e for e in engines[: engines.index(engine)] if e != "motherduck"])
+                > 0
+            ):
+                run_args.skip_generate = True
 
-        # DuckDB hot
-        eprint("=== Running DuckDB benchmark (hot) ===")
-        args.skip_load = True  # Reuse loaded data for hot run
-        result_files["DuckDB (Hot)"] = run_benchmark(
-            args, force_duckdb=True, results_suffix="_duck_hot"
-        )
+            results_suffix = f"_{engine}_{temperature}"
 
-        if all(result_files.values()):
-            create_comparison_chart(result_files, f"{file_prefix}_full_comparison.png")
-        else:
-            eprint("ERROR: Could not find all result files for comparison")
-            sys.exit(1)
+            result_file = run_benchmark(run_args, engine, temperature, results_suffix)
+            if result_file:
+                result_files[label] = result_file
+            else:
+                eprint(f"ERROR: Could not find result file for {label}")
 
-    elif args.compare:
-        eprint("Running comparison benchmark: PostgreSQL vs DuckDB")
-        if args.force_duckdb_execution:
-            eprint("WARNING: --force-duckdb-execution is ignored in comparison mode")
-            args.force_duckdb_execution = False
+    # Generate comparison chart if multiple results
+    if len(result_files) > 1:
+        # Build descriptive filename
+        engine_names = "_".join(engines)
+        temp_names = "_".join(temperatures)
+        output_file = f"{file_prefix}_{engine_names}_{temp_names}_comparison.png"
 
-        result_files = {}
-
-        # PostgreSQL
-        eprint("=== Running PostgreSQL benchmark ===")
-        result_files["PostgreSQL"] = run_benchmark(
-            args, force_duckdb=False, results_suffix="_postgres"
-        )
-
-        # DuckDB
-        eprint("=== Running DuckDB benchmark ===")
-        result_files["DuckDB"] = run_benchmark(
-            args, force_duckdb=True, results_suffix="_duckdb"
-        )
-
-        if all(result_files.values()):
-            create_comparison_chart(
-                result_files, f"{file_prefix}_postgres_duckdb_comparison.png"
-            )
-        else:
-            eprint("ERROR: Could not find result files for comparison")
-            sys.exit(1)
-
-    elif args.cold and args.hot:
-        # Both cold and hot runs for current configuration
-        eprint("Running both cold and hot benchmarks")
-        engine = "DuckDB" if args.force_duckdb_execution else "PostgreSQL"
-
-        result_files = {}
-
-        # Cold run first
-        eprint(f"=== Running {engine} benchmark (cold) ===")
-        result_files[f"{engine} (Cold)"] = run_benchmark(args, results_suffix="_cold")
-
-        # Hot run - reuse loaded data
-        eprint(f"=== Running {engine} benchmark (hot) ===")
-        args.skip_load = True
-        result_files[f"{engine} (Hot)"] = run_benchmark(args, results_suffix="_hot")
-
-        if all(result_files.values()):
-            create_comparison_chart(
-                result_files, f"{file_prefix}_{engine.lower()}_cold_hot.png"
-            )
-        else:
-            eprint("ERROR: Could not find result files for comparison")
-            sys.exit(1)
-
+        create_comparison_chart(result_files, output_file)
+    elif len(result_files) == 1:
+        eprint("Single benchmark completed successfully")
     else:
-        # Single benchmark run
-        if args.cold:
-            eprint("Running cold benchmark")
-        else:
-            eprint("Running hot benchmark")
-            if not args.skip_load:
-                eprint("Note: For true hot run, consider using --skip-load")
-
-        run_benchmark(args)
+        eprint("ERROR: No benchmark results found")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
