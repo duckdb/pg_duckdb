@@ -4,6 +4,7 @@
 # dependencies = [
 #     "pandas",
 #     "matplotlib",
+#     "psycopg[binary]",
 # ]
 # ///
 import argparse
@@ -15,21 +16,21 @@ import tempfile
 import pandas as pd
 import matplotlib.pyplot as plt
 import glob
+import time
+import csv
+import psycopg
 from contextlib import contextmanager
 from pathlib import Path
-from urllib.parse import quote
 
 
 def eprint(*args, **kwargs):
     """eprint prints to stderr"""
-
     print(*args, file=sys.stderr, **kwargs)
 
 
 @contextmanager
 def cd(path: Path | str):
     """Sets the cwd within the context"""
-
     origin = Path().resolve()
     try:
         eprint(f"+ cd {shlex.quote(str(path))}")
@@ -42,7 +43,6 @@ def cd(path: Path | str):
 
 def run(command, *args, check=True, shell=None, silent=False, **kwargs):
     """Runs the given command and prints it to stderr"""
-
     if shell is None:
         shell = isinstance(command, str)
 
@@ -59,49 +59,14 @@ def run(command, *args, check=True, shell=None, silent=False, **kwargs):
     return subprocess.run(command, *args, check=check, shell=shell, **kwargs)
 
 
-def fails(command, *args, **kwargs):
-    return run(command, *args, check=False, **kwargs).returncode != 0
-
-
 def capture(command, *args, stdout=subprocess.PIPE, encoding="utf-8", **kwargs):
     return run(
         command, *args, stdout=stdout, encoding=encoding, **kwargs
     ).stdout.removesuffix("\n")
 
 
-def confirm(question, default=True):
-    valid = {"yes": True, "y": True, "ye": True, "no": False, "n": False}
-    if default is None:
-        prompt = " [y/n] "
-    elif default is True:
-        prompt = " [Y/n] "
-    elif default is False:
-        prompt = " [y/N] "
-    else:
-        raise ValueError("invalid default answer: '%s'" % default)
-
-    while True:
-        sys.stdout.write(question + prompt)
-        choice = input().lower()
-        if default is not None and choice == "":
-            return default
-        elif choice in valid:
-            return valid[choice]
-        else:
-            sys.stdout.write("Please respond with 'yes' or 'no' (or 'y' or 'n').\n")
-
-
-def choose(question, choices):
-    while True:
-        choice = input(question + " [" + "/".join(choices) + "]\n").strip()
-        if choice in choices:
-            return choice
-        eprint("Please respond with one of the following:", choices)
-
-
 def get_pg_credentials(username=None, password=None):
     """Get consistent PostgreSQL credentials with CLI args taking precedence"""
-
     final_username = username or os.environ.get("PGUSER", "postgres")
     final_password = password or os.environ.get("PGPASSWORD", "")
     return final_username, final_password
@@ -109,7 +74,6 @@ def get_pg_credentials(username=None, password=None):
 
 def build_pg_env(username, password):
     """Build environment variables for PostgreSQL authentication"""
-
     env = {**os.environ}
     if username:
         env["PGUSER"] = username
@@ -122,7 +86,6 @@ def create_tables(
     database_name, schema_name, username, password, no_indexes=False, pk_only=False
 ):
     """Create tables using SQL files"""
-
     pg_env = build_pg_env(username, password)
 
     # Create schema if it doesn't exist
@@ -169,68 +132,142 @@ def create_tables(
     )
 
 
-def generate_config(
-    template_path,
-    output_path,
+def execute_tpch_queries(
     database_name,
     schema_name,
-    scale_factor,
-    engine,
     username,
     password,
+    queries_dir,
+    engine="pg",
+    host="localhost",
+    port=5432,
 ):
-    """Generate config file from template"""
+    """Execute TPC-H queries using psycopg and time them"""
+    results = []
 
-    if not os.path.exists(template_path):
-        eprint(f"Template file {template_path} not found")
-        sys.exit(1)
-
-    with open(template_path, "r") as f:
-        content = f.read()
-
-    # Build options string
-    options = [f"-c search_path={schema_name}"]
-    if engine == "duckdb":
-        options.append("-c duckdb.force_execution=true")
-    options_str = quote(" ".join(options))
-
-    # Format template with values
-    content = content.format(
-        database=database_name,
-        options=options_str,
-        scalefactor=scale_factor,
-        username=username,
-        password=password,
+    # Find all query files
+    query_files = sorted(
+        [f for f in os.listdir(queries_dir) if f.startswith("q") and f.endswith(".sql")]
     )
 
-    with open(output_path, "w") as f:
-        f.write(content)
+    if not query_files:
+        eprint(f"ERROR: No query files found in {queries_dir}")
+        sys.exit(1)
 
-    eprint(f"Generated config file: {output_path}")
+    eprint(f"Found {len(query_files)} query files")
+
+    # Build connection string
+    conn_params = {
+        "host": host,
+        "port": port,
+        "dbname": database_name,
+        "user": username,
+    }
+    if password:
+        conn_params["password"] = password
+
+    try:
+        # Connect to database
+        eprint(f"Connecting to {database_name} as {username}@{host}:{port}")
+        with psycopg.connect(**conn_params, autocommit=True) as conn:
+            with conn.cursor() as cursor:
+                # Set search path (can't use parameters for schema names)
+                cursor.execute(f"SET search_path = '{schema_name}'")
+
+                for query_file in query_files:
+                    query_path = os.path.join(queries_dir, query_file)
+                    query_name = query_file.replace(".sql", "").upper()
+
+                    eprint(f"Executing {query_name}...")
+
+                    try:
+                        # Read query from file
+                        with open(query_path, "r") as f:
+                            query = f.read().strip()
+
+                        # Skip empty queries
+                        if not query:
+                            eprint(f"WARNING: {query_name} is empty, skipping")
+                            continue
+
+                        # Time the query execution
+                        start_time = time.time()
+                        cursor.execute(query)
+
+                        # Fetch all results to ensure query completion
+                        try:
+                            rows = cursor.fetchall()
+                            row_count = len(rows) if rows else 0
+                        except psycopg.ProgrammingError:
+                            # Query didn't return results (e.g., DDL)
+                            row_count = cursor.rowcount if cursor.rowcount >= 0 else 0
+
+                        end_time = time.time()
+
+                        execution_time_ms = (end_time - start_time) * 1000
+                        eprint(
+                            f"{query_name}: {execution_time_ms:.1f} ms ({row_count} rows)"
+                        )
+
+                        results.append(
+                            {
+                                "Transaction Name": query_name,
+                                "Latency (microseconds)": execution_time_ms
+                                * 1000,  # Convert to microseconds for compatibility
+                                "Latency (ms)": execution_time_ms,
+                                "Rows": row_count,
+                            }
+                        )
+
+                    except Exception as e:
+                        eprint(f"ERROR executing {query_name}: {e}")
+                        # Add failed query with very high latency
+                        results.append(
+                            {
+                                "Transaction Name": query_name,
+                                "Latency (microseconds)": 999999999,
+                                "Latency (ms)": 999999.999,
+                                "Rows": 0,
+                            }
+                        )
+
+    except psycopg.Error as e:
+        eprint(f"Database connection error: {e}")
+        sys.exit(1)
+
+    return results
 
 
-def find_latest_result_file():
-    """Find the most recent tpch result file"""
+def save_results(results, output_file):
+    """Save results to CSV file"""
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
-    pattern = "results/tpch_*.raw.csv"
-    files = glob.glob(pattern)
-    if not files:
-        return None
-    return max(files, key=os.path.getctime)
+    with open(output_file, "w", newline="") as csvfile:
+        fieldnames = [
+            "Transaction Name",
+            "Latency (microseconds)",
+            "Latency (ms)",
+            "Rows",
+        ]
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(results)
+
+    eprint(f"Results saved to {output_file}")
+    return output_file
 
 
 def parse_results(csv_file):
     """Parse benchmark results from CSV file"""
-
     df = pd.read_csv(csv_file)
-    # Convert latency from microseconds to milliseconds
-    df["Latency (ms)"] = df["Latency (microseconds)"] / 1000
+    # Ensure we have the ms column
+    if "Latency (ms)" not in df.columns:
+        df["Latency (ms)"] = df["Latency (microseconds)"] / 1000
     return df
 
 
 def create_comparison_chart(result_files, output_file="comparison.png"):
     """Create a bar chart comparing query runtimes across multiple configurations"""
-
     # Parse all result files
     dataframes = {}
     for label, file_path in result_files.items():
@@ -425,7 +462,6 @@ def create_comparison_chart(result_files, output_file="comparison.png"):
 
 def run_benchmark(args, engine, temperature, results_suffix=""):
     """Run a single benchmark iteration"""
-
     dump_name = f"tpch{args.scale_factor}".replace(".", "")
 
     # For MotherDuck, use ddb prefix for schema name
@@ -436,96 +472,72 @@ def run_benchmark(args, engine, temperature, results_suffix=""):
         schema_name = args.schema_name or dump_name
         database_name = args.database_name
 
-    config_template = "tpch_config_template.xml"
     username, password = get_pg_credentials(args.username, args.password)
-    pg_env = build_pg_env(username, password)
 
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=f"_tpch_config{results_suffix}.xml"
-    ) as temp_config:
-        config_file = temp_config.name
-
-        generate_config(
-            config_template,
-            config_file,
-            database_name,
-            schema_name,
-            args.scale_factor,
-            engine,
-            username,
-            password,
+    # Skip data generation and loading for MotherDuck
+    if engine != "motherduck" and not args.skip_generate and not args.skip_load:
+        run(
+            [
+                "duckdb",
+                "-c",
+                f"CALL dbgen(sf={args.scale_factor}); EXPORT DATABASE '{dump_name}' (FORMAT CSV, DELIMITER '|')",
+            ]
         )
 
-        # Skip data generation and loading for MotherDuck
-        if engine != "motherduck" and not args.skip_generate and not args.skip_load:
+    if engine != "motherduck" and not args.skip_load:
+        # Create schema using SQL files
+        create_tables(
+            database_name,
+            schema_name,
+            username,
+            password,
+            args.no_indexes,
+            args.pk_only,
+        )
+
+        # Load data
+        dump_dir = schema_name
+        if os.path.exists(dump_dir):
+            pg_env = build_pg_env(username, password)
             run(
                 [
-                    "duckdb",
-                    "-c",
-                    f"CALL dbgen(sf={args.scale_factor}); EXPORT DATABASE '{dump_name}' (FORMAT CSV, DELIMITER '|')",
-                ]
-            )
-
-        if engine != "motherduck" and not args.skip_load:
-            # Create schema using SQL files instead of benchbase
-            create_tables(
-                database_name,
-                schema_name,
-                username,
-                password,
-                args.no_indexes,
-                args.pk_only,
-            )
-
-            # Load data
-            dump_dir = schema_name
-            if os.path.exists(dump_dir):
-                run(
-                    [
-                        "psql",
-                        "-d",
-                        database_name,
-                        "-v",
-                        "ON_ERROR_STOP=1",
-                        "-c",
-                        f"SET search_path = '{schema_name}'",
-                        "-f",
-                        "../load-psql.sql",
-                    ],
-                    cwd=dump_dir,
-                    env=pg_env,
-                )
-            else:
-                eprint(f"ERROR: Dump directory {dump_dir} not found")
-                sys.exit(1)
-
-        if not args.skip_execute:
-            run(
-                [
-                    "docker",
-                    "run",
-                    "--network=host",
-                    "--rm",
-                    "--env",
-                    "BENCHBASE_PROFILE=postgres",
-                    "--user",
-                    f"{os.getuid()}:{os.getgid()}",
+                    "psql",
+                    "-d",
+                    database_name,
                     "-v",
-                    "./results:/benchbase/results",
-                    "-v",
-                    f"{os.path.dirname(config_file)}:/tmp_config/",
-                    "benchbase.azurecr.io/benchbase",
-                    "--bench",
-                    "tpch",
+                    "ON_ERROR_STOP=1",
                     "-c",
-                    f"/tmp_config/{os.path.basename(config_file)}",
-                    "--execute=true",
-                    "--directory",
-                    "/benchbase/results",
-                ]
+                    f"SET search_path = '{schema_name}'",
+                    "-f",
+                    "../load-psql.sql",
+                ],
+                cwd=dump_dir,
+                env=pg_env,
             )
+        else:
+            eprint(f"ERROR: Dump directory {dump_dir} not found")
+            sys.exit(1)
 
-        return find_latest_result_file()
+    if not args.skip_execute:
+        # Execute TPC-H queries directly
+        results = execute_tpch_queries(
+            database_name,
+            schema_name,
+            username,
+            password,
+            args.queries_dir,
+            engine,
+            args.host,
+            args.port,
+        )
+
+        # Save results to CSV
+        os.makedirs("results", exist_ok=True)
+        timestamp = int(time.time())
+        result_file = f"results/tpch_{timestamp}{results_suffix}.raw.csv"
+        return save_results(results, result_file)
+
+    return None
 
 
 def get_engine_name(engine):
@@ -541,7 +553,7 @@ def get_engine_name(engine):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Run TPCH benchmark with multiple engines."
+        description="Run TPCH benchmark with multiple engines using direct query execution."
     )
     parser.add_argument(
         "--database-name",
@@ -576,6 +588,24 @@ def main():
         "--password",
         type=str,
         help="PostgreSQL password (overrides PGPASSWORD env var).",
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="localhost",
+        help="PostgreSQL host (default: localhost)",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=5432,
+        help="PostgreSQL port (default: 5432)",
+    )
+    parser.add_argument(
+        "--queries-dir",
+        type=str,
+        default="../../third_party/duckdb/extension/tpch/dbgen/queries/",
+        help="Directory containing TPC-H query SQL files",
     )
 
     # Engine selection
@@ -627,12 +657,17 @@ def main():
         eprint("ERROR: --no-indexes and --pk-only cannot be used together")
         sys.exit(1)
 
-    # Default to --cold and --duckdb-engine if nothing specified
+    # Check if queries directory exists
+    if not os.path.exists(args.queries_dir):
+        eprint(f"ERROR: Queries directory {args.queries_dir} not found")
+        sys.exit(1)
+
+    # Default to --cold and --pg-engine if nothing specified
     if not any([args.cold, args.hot]):
         args.cold = True
 
     if not any([args.pg_engine, args.duckdb_engine, args.motherduck]):
-        args.duckdb_engine = True
+        args.pg_engine = True
 
     # Build lists of engines and temperatures to test
     engines = []
@@ -701,6 +736,14 @@ def main():
         create_comparison_chart(result_files, output_file)
     elif len(result_files) == 1:
         eprint("Single benchmark completed successfully")
+        # Print results for single run
+        result_file = list(result_files.values())[0]
+        df = parse_results(result_file)
+        print("\nQuery Results:")
+        print("=" * 40)
+        for _, row in df.iterrows():
+            print(f"{row['Transaction Name']:4}: {row['Latency (ms)']:8.1f} ms")
+        print(f"\nTotal time: {df['Latency (ms)'].sum():.0f} ms")
     else:
         eprint("ERROR: No benchmark results found")
         sys.exit(1)
