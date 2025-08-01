@@ -5,7 +5,8 @@
 namespace pgduckdb {
 void InitUserDataCache();
 bool IsMotherDuckEnabled();
-Oid MotherDuckPostgresUser();
+Oid MotherDuckPostgresUserOid();
+char *MotherDuckPostgresUserName();
 void InvalidateUserDataCache();
 Oid GetMotherduckForeignServerOid();
 Oid GetMotherDuckUserMappingOid();

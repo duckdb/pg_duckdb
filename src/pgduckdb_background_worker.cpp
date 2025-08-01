@@ -829,7 +829,7 @@ CreateView(const char *postgres_schema_name, const char *view_name, const char *
 	Oid saved_userid;
 	int sec_context;
 	GetUserIdAndSecContext(&saved_userid, &sec_context);
-	SetUserIdAndSecContext(MotherDuckPostgresUser(), sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	SetUserIdAndSecContext(MotherDuckPostgresUserOid(), sec_context | SECURITY_LOCAL_USERID_CHANGE);
 	bool create_table_succeeded = SPI_run_utility_command(create_view_query);
 	SetUserIdAndSecContext(saved_userid, sec_context);
 	/* Revert back to original privileges */
@@ -933,7 +933,7 @@ CreateTable(const char *postgres_schema_name, const char *table_name, const char
 	Oid saved_userid;
 	int sec_context;
 	GetUserIdAndSecContext(&saved_userid, &sec_context);
-	SetUserIdAndSecContext(MotherDuckPostgresUser(), sec_context | SECURITY_LOCAL_USERID_CHANGE);
+	SetUserIdAndSecContext(MotherDuckPostgresUserOid(), sec_context | SECURITY_LOCAL_USERID_CHANGE);
 	bool create_table_succeeded = SPI_run_utility_command(create_table_query);
 	SetUserIdAndSecContext(saved_userid, sec_context);
 	/* Revert back to original privileges */
@@ -998,7 +998,7 @@ DropRelation(const char *fully_qualified_table, char relation_kind, bool drop_wi
  */
 static bool
 GrantAccessToSchema(const char *postgres_schema_name) {
-	if (pgduckdb::MotherDuckPostgresUser() == BOOTSTRAP_SUPERUSERID) {
+	if (pgduckdb::MotherDuckPostgresUserOid() == BOOTSTRAP_SUPERUSERID) {
 		/*
 		 * We don't need to grant access to the bootstrap superuser. It already
 		 * has every access it might need.
@@ -1006,9 +1006,9 @@ GrantAccessToSchema(const char *postgres_schema_name) {
 		return true;
 	}
 
-	/* Grant access to the schema to the current user */
+	/* Grant access to the schema to the duckdb user on the tables */
 	const char *grant_query = psprintf("GRANT ALL ON SCHEMA %s TO %s", quote_identifier(postgres_schema_name),
-	                                   quote_identifier(duckdb_postgres_role));
+	                                   quote_identifier(MotherDuckPostgresUserName()));
 	if (!SPI_run_utility_command(grant_query)) {
 		ereport(WARNING,
 		        (errmsg("Failed to grant access to MotherDuck schema %s", postgres_schema_name),
@@ -1031,15 +1031,15 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 	Oid schema_oid = get_namespace_oid(postgres_schema_name, true);
 	if (schema_oid != InvalidOid) {
 		/*
-		 * Let's check if the duckdb.postgres_user can actually create tables
-		 * in this schema. Surprisingly the USAGE permission is not needed to
-		 * create tables in a schema, only to list the tables. So we dont' need
-		 * to check for that one.
+		 * Let's check if the MotherDuck Postgres user can actually create
+		 * tables in this schema. Surprisingly the USAGE permission is not
+		 * needed to create tables in a schema, only to list the tables. So we
+		 * dont need to check for that one.
 		 */
 
 #if PG_VERSION_NUM >= 160000
 		bool user_has_create_access =
-		    object_aclcheck(NamespaceRelationId, schema_oid, MotherDuckPostgresUser(), ACL_CREATE) == ACLCHECK_OK;
+		    object_aclcheck(NamespaceRelationId, schema_oid, MotherDuckPostgresUserOid(), ACL_CREATE) == ACLCHECK_OK;
 #else
 		bool user_has_create_access =
 		    pg_namespace_aclcheck(schema_oid, MotherDuckPostgresUser(), ACL_CREATE) == ACLCHECK_OK;
@@ -1050,16 +1050,18 @@ CreateSchemaIfNotExists(const char *postgres_schema_name, bool is_default_db) {
 		if (is_default_db) {
 			/*
 			 * For non $ddb schemas that already exist we don't want to give
-			 * CREATE privileges to the duckdb.posgres_role automatically. It
-			 * might be some restricted and an attacker with MotherDuck access
-			 * should not be able to create tables in it unless the DBA has
-			 * configured access this way.
+			 * CREATE privileges to the MotherDuck Postgres role automatically.
+			 * It might be some restricted and an attacker with MotherDuck
+			 * access should not be able to create tables in it unless the DBA
+			 * has configured access this way.
 			 */
-			ereport(WARNING, (errmsg("MotherDuck schema %s already exists, but duckdb.postgres_user does not have "
-			                         "CREATE privileges on it",
-			                         postgres_schema_name),
-			                  errhint("You might want to grant ALL privileges to the user '%s' on this schema.",
-			                          duckdb_postgres_role)));
+			ereport(
+			    WARNING,
+			    (errmsg("MotherDuck schema %s already exists, but the configured motherduck table owner does not have "
+			            "CREATE privileges on it",
+			            postgres_schema_name),
+			     errhint("You might want to grant ALL privileges to the user '%s' on this schema.",
+			             MotherDuckPostgresUserName())));
 			return false;
 		}
 
