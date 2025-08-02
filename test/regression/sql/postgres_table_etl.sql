@@ -1,5 +1,6 @@
 
 -- Prepare source table
+SET duckdb.force_execution = off;
 CREATE TABLE tbl (id int, d float, c text);
 INSERT INTO tbl SELECT i, 0.1, 'hello world' FROM generate_series(1, 1000000) i;
 

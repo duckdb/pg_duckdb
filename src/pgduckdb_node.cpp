@@ -3,6 +3,7 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/exception.hpp"
 
+#include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
@@ -193,11 +194,12 @@ ExecuteQuery(DuckdbScanState *state) {
 		named_values[duckdb::to_string(i + 1)] = duckdb::BoundParameterData(duckdb_param);
 	}
 
-	// Always set `allow_stream_result` to false to force a fully materialized DuckDB result.
-	// This is required for cases like CTAS from a Postgres table, where allowing streaming results
-	// could lead to race conditions on Postgres resources.
+	// Set `allow_stream_result` to false if the query contains a Postgres table to force a fully materialized DuckDB
+	// result. This is required for cases like CTAS from a Postgres table, where allowing streaming results could lead
+	// to race conditions on Postgres resources.
 	// Checkout discussion: https://github.com/duckdb/pg_duckdb/discussions/866
-	auto pending = prepared.PendingQuery(named_values, false);
+	bool allow_stream_result = !pgduckdb::ContainsPostgresTable(state->query);
+	auto pending = prepared.PendingQuery(named_values, allow_stream_result);
 	if (pending->HasError()) {
 		return pending->ThrowError();
 	}

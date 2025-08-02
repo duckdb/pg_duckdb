@@ -143,6 +143,20 @@ namespace pgduckdb {
 int64_t executor_nest_level = 0;
 
 bool
+ContainsPostgresTable(const Query *query) {
+	List *rtable = query->rtable;
+	foreach_node(RangeTblEntry, rte, rtable) {
+		if (rte->relid == InvalidOid) {
+			continue;
+		}
+		if (!::IsDuckdbTable(rte->relid)) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool
 ShouldTryToUseDuckdbExecution(Query *query) {
 	if (top_level_duckdb_ddl_type == DDLType::REFRESH_MATERIALIZED_VIEW) {
 		/* When refreshing materialized views, we only want to use DuckDB
