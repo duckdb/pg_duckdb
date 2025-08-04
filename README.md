@@ -45,7 +45,7 @@ This is the most common and straightforward use case. If you have a standard Pos
 
 **Example:**
 
-Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/syntax_guide.md#create-a-table)). To run an analytical query, you just write standard SQL and `pg_duckdb` will handle the rest.
+Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/gotchas_and_syntax.md#create-a-table)). To run an analytical query, you just write standard SQL and `pg_duckdb` will handle the rest.
 
 ```sql
 SELECT
@@ -207,7 +207,7 @@ See [settings documentation](docs/settings.md) for complete configuration option
 | Topic | Description |
 |-------|-------------|
 | [Functions](docs/functions.md) | Complete function reference |
-| [Syntax Guide](docs/syntax_guide.md) | Quick reference for common SQL patterns |
+| [Syntax Guide & Gotchas](docs/gotchas_and_syntax.md) | Quick reference for common SQL patterns and things to know |
 | [Types](docs/types.md) | Supported data types and advanced types usage |
 | [MotherDuck](docs/motherduck.md) | Cloud integration guide |
 | [Secrets](docs/secrets.md) | Credential management |
