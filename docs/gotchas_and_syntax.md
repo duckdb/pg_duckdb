@@ -128,9 +128,9 @@ For all standard analytical queries, prefer the direct SQL syntax shown in the s
 
 ---
 
-## Gotchas: Things to Know
+## Things to Know
 
-This section outlines key behaviors and limitations in `pg_duckdb`. Understanding these points will help you use the extension effectively.
+This section outlines behaviors and limitations in `pg_duckdb`, things to know to use the extension effectively.
 
 ### Querying
 
