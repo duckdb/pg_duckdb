@@ -76,10 +76,10 @@ CALL duckdb.enable_motherduck('<token>', '<default database>');
 
 DuckDB and Postgres have different schema and database conventions. The mapping from a DuckDB `database.schema` to a Postgres schema is done as follows:
 
-1.  Each schema in your default MotherDuck database is merged with the Postgres schema of the same name.
-2.  The `main` DuckDB schema in your default database is merged with the Postgres `public` schema.
-3.  Tables in other databases are placed in dedicated schemas of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
-4.  The `main` schema in other databases can be accessed using the shorter name `ddb$<db_name>`.
+1. Each schema in your default MotherDuck database is merged with the Postgres schema of the same name.
+2. The `main` DuckDB schema in your default database is merged with the Postgres `public` schema.
+3. Tables in other databases are placed in dedicated schemas of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
+4. The `main` schema in other databases can be accessed using the shorter name `ddb$<db_name>`.
 
 An example of each of these cases is shown below:
 

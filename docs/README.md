@@ -7,6 +7,7 @@ Complete documentation for the pg_duckdb PostgreSQL extension.
 | Topic | Description |
 |-------|-------------|
 | [**Functions**](functions.md) | Complete reference for all available functions |
+| [**Syntax Guide**](syntax_guide.md) | Quick reference for common SQL patterns |
 | [**Types**](types.md) | Supported data types and type mappings |
 | [**Extensions**](extensions.md) | DuckDB extension installation and usage |
 | [**Settings**](settings.md) | Configuration options and parameters |
