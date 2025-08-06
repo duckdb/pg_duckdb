@@ -172,7 +172,9 @@ def execute_tpch_queries(
         with psycopg.connect(**conn_params, autocommit=True) as conn:
             with conn.cursor() as cursor:
                 # Set search path (can't use parameters for schema names)
-                cursor.execute(f"SET search_path = '{schema_name}'")
+                cursor.execute("SET search_path = '{schema_name}'")
+                # Warm-up the connection
+                cursor.execute("SELECT 1 FROM customer LIMIT 0")
 
                 for query_file in query_files:
                     query_path = os.path.join(queries_dir, query_file)
