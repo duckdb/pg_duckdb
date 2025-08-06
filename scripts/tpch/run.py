@@ -141,8 +141,9 @@ def execute_tpch_queries(
     engine="pg",
     host="localhost",
     port=5432,
+    timeout_seconds=300,
 ):
-    """Execute TPC-H queries using psycopg and time them"""
+    """Execute TPC-H queries using psycopg and time them with configurable timeout"""
     results = []
 
     # Find all query files
@@ -169,10 +170,13 @@ def execute_tpch_queries(
     try:
         # Connect to database
         eprint(f"Connecting to {database_name} as {username}@{host}:{port}")
+        eprint(f"Query timeout set to {timeout_seconds} seconds")
         with psycopg.connect(**conn_params, autocommit=True) as conn:
             with conn.cursor() as cursor:
                 # Set search path (can't use parameters for schema names)
                 cursor.execute(f"SET search_path = '{schema_name}'")
+                # Set statement timeout
+                cursor.execute(f"SET statement_timeout = '{timeout_seconds}s'")
                 # Warm-up the connection
                 cursor.execute("SELECT 1 FROM customer LIMIT 0")
 
@@ -221,6 +225,17 @@ def execute_tpch_queries(
                             }
                         )
 
+                    except psycopg.errors.QueryCanceled as e:
+                        eprint(f"TIMEOUT executing {query_name} (exceeded {timeout_seconds}s): {e}")
+                        # Add timed out query with timeout latency
+                        results.append(
+                            {
+                                "Transaction Name": query_name,
+                                "Latency (microseconds)": timeout_seconds * 1000000,
+                                "Latency (ms)": timeout_seconds * 1000,
+                                "Rows": 0,
+                            }
+                        )
                     except Exception as e:
                         eprint(f"ERROR executing {query_name}: {e}")
                         # Add failed query with very high latency
@@ -531,6 +546,7 @@ def run_benchmark(args, engine, temperature, results_suffix=""):
             engine,
             args.host,
             args.port,
+            args.timeout,
         )
 
         # Save results to CSV
@@ -608,6 +624,12 @@ def main():
         type=str,
         default="../../third_party/duckdb/extension/tpch/dbgen/queries/",
         help="Directory containing TPC-H query SQL files",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        default=300,
+        help="Query timeout in seconds (default: 300 = 5 minutes)",
     )
 
     # Engine selection
