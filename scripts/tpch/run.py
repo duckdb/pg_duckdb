@@ -177,6 +177,8 @@ def execute_tpch_queries(
                 cursor.execute(f"SET search_path = '{schema_name}'")
                 # Set statement timeout
                 cursor.execute(f"SET statement_timeout = '{timeout_seconds}s'")
+                if engine == "duckdb":
+                    cursor.execute("SET duckdb.force_execution = true")
                 # Warm-up the connection
                 cursor.execute("SELECT 1 FROM customer LIMIT 0")
 
@@ -226,7 +228,9 @@ def execute_tpch_queries(
                         )
 
                     except psycopg.errors.QueryCanceled as e:
-                        eprint(f"TIMEOUT executing {query_name} (exceeded {timeout_seconds}s): {e}")
+                        eprint(
+                            f"TIMEOUT executing {query_name} (exceeded {timeout_seconds}s): {e}"
+                        )
                         # Add timed out query with timeout latency
                         results.append(
                             {
