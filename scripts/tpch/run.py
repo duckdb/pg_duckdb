@@ -142,6 +142,8 @@ def execute_tpch_queries(
     host="localhost",
     port=5432,
     timeout_seconds=300,
+    enable_pg_nested_loop_join=False,
+    pg_work_mem="64MB",
 ):
     """Execute TPC-H queries using psycopg and time them with configurable timeout"""
     results = []
@@ -177,6 +179,14 @@ def execute_tpch_queries(
                 cursor.execute(f"SET search_path = '{schema_name}'")
                 # Set statement timeout
                 cursor.execute(f"SET statement_timeout = '{timeout_seconds}s'")
+                
+                # Configure PostgreSQL settings for better performance
+                cursor.execute(f"SET work_mem = '{pg_work_mem}'")
+                
+                # Configure nested loop joins for PostgreSQL (disabled by default for better performance)
+                if not enable_pg_nested_loop_join:
+                    cursor.execute("SET enable_nestloop = off")
+                
                 if engine == "duckdb":
                     cursor.execute("SET duckdb.force_execution = true")
                 # Warm-up the connection
@@ -551,6 +561,8 @@ def run_benchmark(args, engine, temperature, results_suffix=""):
             args.host,
             args.port,
             args.timeout,
+            args.enable_pg_nested_loop_join,
+            args.pg_work_mem,
         )
 
         # Save results to CSV
@@ -676,6 +688,19 @@ def main():
         "--pk-only",
         action="store_true",
         help="Create schema with primary keys only (uses create-schema-pk.sql)",
+    )
+
+    # PostgreSQL optimization options
+    parser.add_argument(
+        "--enable-pg-nested-loop-join",
+        action="store_true",
+        help="Enable nested loop joins in PostgreSQL (disabled by default for better performance)",
+    )
+    parser.add_argument(
+        "--pg-work-mem",
+        type=str,
+        default="64MB",
+        help="Set PostgreSQL work_mem setting (default: 64MB)",
     )
 
     args = parser.parse_args()
