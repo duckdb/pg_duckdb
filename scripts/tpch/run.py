@@ -179,16 +179,16 @@ def execute_tpch_queries(
                 cursor.execute(f"SET search_path = '{schema_name}'")
                 # Set statement timeout
                 cursor.execute(f"SET statement_timeout = '{timeout_seconds}s'")
-                
+
                 # Configure PostgreSQL settings for better performance
                 cursor.execute(f"SET work_mem = '{pg_work_mem}'")
-                
+
                 # Configure nested loop joins for PostgreSQL (disabled by default for better performance)
                 if enable_pg_nested_loop_join:
                     cursor.execute("SET enable_nestloop = on")
                 else:
                     cursor.execute("SET enable_nestloop = off")
-                
+
                 if engine == "duckdb":
                     cursor.execute("SET duckdb.force_execution = true")
                 # Warm-up the connection
@@ -239,30 +239,33 @@ def execute_tpch_queries(
                             }
                         )
 
-                    except psycopg.errors.QueryCanceled as e:
-                        eprint(
-                            f"TIMEOUT executing {query_name} (exceeded {timeout_seconds}s): {e}"
-                        )
-                        # Add timed out query with timeout latency
-                        results.append(
-                            {
-                                "Transaction Name": query_name,
-                                "Latency (microseconds)": timeout_seconds * 1000000,
-                                "Latency (ms)": timeout_seconds * 1000,
-                                "Rows": 0,
-                            }
-                        )
                     except Exception as e:
-                        eprint(f"ERROR executing {query_name}: {e}")
-                        # Add failed query with very high latency
-                        results.append(
-                            {
-                                "Transaction Name": query_name,
-                                "Latency (microseconds)": 999999999,
-                                "Latency (ms)": 999999.999,
-                                "Rows": 0,
-                            }
-                        )
+                        if isinstance(
+                            e, psycopg.errors.QueryCanceled
+                        ) or "Query cancelled" in str(e):
+                            eprint(
+                                f"TIMEOUT executing {query_name} (exceeded {timeout_seconds}s): {e}"
+                            )
+                            # Add timed out query with timeout latency
+                            results.append(
+                                {
+                                    "Transaction Name": query_name,
+                                    "Latency (microseconds)": timeout_seconds * 1000000,
+                                    "Latency (ms)": timeout_seconds * 1000,
+                                    "Rows": 0,
+                                }
+                            )
+                        else:
+                            eprint(f"ERROR executing {query_name}: {e}")
+                            # Add failed query with very high latency
+                            results.append(
+                                {
+                                    "Transaction Name": query_name,
+                                    "Latency (microseconds)": 999999999,
+                                    "Latency (ms)": 999999.999,
+                                    "Rows": 0,
+                                }
+                            )
 
     except psycopg.Error as e:
         eprint(f"Database connection error: {e}")
