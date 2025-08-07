@@ -184,7 +184,9 @@ def execute_tpch_queries(
                 cursor.execute(f"SET work_mem = '{pg_work_mem}'")
                 
                 # Configure nested loop joins for PostgreSQL (disabled by default for better performance)
-                if not enable_pg_nested_loop_join:
+                if enable_pg_nested_loop_join:
+                    cursor.execute("SET enable_nestloop = on")
+                else:
                     cursor.execute("SET enable_nestloop = off")
                 
                 if engine == "duckdb":
