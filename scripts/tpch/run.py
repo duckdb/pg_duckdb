@@ -142,7 +142,7 @@ def execute_tpch_queries(
     host="localhost",
     port=5432,
     timeout_seconds=300,
-    disable_pg_nested_loop_join=False,
+    enable_pg_nested_loop_join=False,
     pg_work_mem="64MB",
 ):
     """Execute TPC-H queries using psycopg and time them with configurable timeout"""
@@ -183,11 +183,11 @@ def execute_tpch_queries(
                 # Configure PostgreSQL settings for better performance
                 cursor.execute(f"SET work_mem = '{pg_work_mem}'")
                 
-                # Configure nested loop joins for PostgreSQL (enabled by default)
-                if disable_pg_nested_loop_join:
-                    cursor.execute("SET enable_nestloop = off")
-                else:
+                # Configure nested loop joins for PostgreSQL (disabled by default for better performance)
+                if enable_pg_nested_loop_join:
                     cursor.execute("SET enable_nestloop = on")
+                else:
+                    cursor.execute("SET enable_nestloop = off")
                 
                 if engine == "duckdb":
                     cursor.execute("SET duckdb.force_execution = true")
@@ -563,7 +563,7 @@ def run_benchmark(args, engine, temperature, results_suffix=""):
             args.host,
             args.port,
             args.timeout,
-            args.disable_pg_nested_loop_join,
+            args.enable_pg_nested_loop_join,
             args.pg_work_mem,
         )
 
@@ -694,9 +694,9 @@ def main():
 
     # PostgreSQL optimization options
     parser.add_argument(
-        "--disable-pg-nested-loop-join",
+        "--enable-pg-nested-loop-join",
         action="store_true",
-        help="Disable nested loop joins in PostgreSQL (enabled by default)",
+        help="Enable nested loop joins in PostgreSQL (disabled by default for better performance)",
     )
     parser.add_argument(
         "--pg-work-mem",
