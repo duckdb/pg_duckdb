@@ -116,6 +116,7 @@ DefineCustomDuckDBVariable(const char *name, const char *short_desc, T *var, T m
 } // namespace
 
 bool duckdb_force_execution = false;
+bool duckdb_unsafe_allow_execution_inside_functions = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
 bool duckdb_convert_unsupported_numeric_to_double = false;
 bool duckdb_log_pg_explain = false;
@@ -142,6 +143,9 @@ void
 InitGUC() {
 	/* pg_duckdb specific GUCs */
 	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
+
+	DefineCustomVariable("duckdb.unsafe_allow_execution_inside_functions", "Allow DuckDB execution inside functions",
+	                     &duckdb_unsafe_allow_execution_inside_functions);
 
 	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
 	                     "Allow mixed transactions between DuckDB and Postgres",
