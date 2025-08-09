@@ -211,7 +211,7 @@ IsAllowedStatement(Query *query, bool throw_error) {
 		}
 	}
 
-	if (pgduckdb::executor_nest_level > 0) {
+	if (pgduckdb::executor_nest_level > 0 && !duckdb_unsafe_allow_execution_inside_functions) {
 		elog(elevel, "DuckDB execution is not supported inside functions");
 		return false;
 	}

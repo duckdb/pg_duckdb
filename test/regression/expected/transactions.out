@@ -1,5 +1,6 @@
 -- For this test we duckdb set execution to false
 SET duckdb.force_execution = false;
+SET duckdb.unsafe_allow_execution_inside_functions = true;
 CREATE TABLE t(a int);
 INSERT INTO t VALUES (1);
 CREATE TEMP TABLE t_ddb(a int) USING duckdb;
@@ -117,9 +118,8 @@ $$;
 -- After executing the function the table should not contain the value 8,
 -- because that change was rolled back
 SELECT * FROM f(true);
-ERROR:  DuckDB execution is not supported inside functions
-CONTEXT:  SQL statement "INSERT INTO t_ddb VALUES (8)"
-PL/pgSQL function f(boolean) line 3 at SQL statement
+ERROR:  fail
+CONTEXT:  PL/pgSQL function f(boolean) line 5 at RAISE
 SELECT * FROM t_ddb ORDER BY a;
  a 
 ---
@@ -136,9 +136,11 @@ SELECT * FROM t_ddb ORDER BY a;
 
 -- But if the function succeeds we should see the new value
 SELECT * FROM f(false);
-ERROR:  DuckDB execution is not supported inside functions
-CONTEXT:  SQL statement "INSERT INTO t_ddb VALUES (8)"
-PL/pgSQL function f(boolean) line 3 at SQL statement
+ f 
+---
+ 
+(1 row)
+
 SELECT * FROM t_ddb ORDER BY a;
  a 
 ---
@@ -151,7 +153,8 @@ SELECT * FROM t_ddb ORDER BY a;
  5
  5
  6
-(9 rows)
+ 8
+(10 rows)
 
 -- DuckDB DDL in transactions is allowed
 BEGIN;
@@ -191,11 +194,12 @@ BEGIN
 END;
 $$;
 SELECT * FROM f2();
-ERROR:  DuckDB execution is not supported inside functions
-CONTEXT:  SQL statement "CREATE TEMP TABLE t_ddb3(a) USING duckdb AS SELECT 1"
-PL/pgSQL function f2() line 4 at SQL statement
+ f2 
+----
+ 
+(1 row)
+
 DROP TABLE t_ddb4;
-ERROR:  table "t_ddb4" does not exist
 -- ...unless there's also PG only changes happing in the same transaction (no matter the order of statements).
 BEGIN;
     CREATE TABLE t_x(a int);
