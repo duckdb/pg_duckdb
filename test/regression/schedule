@@ -52,6 +52,7 @@ test: transaction_isolation
 test: transactions
 test: type_support
 test: union_functions
+test: map_functions
 test: unresolved_type
 test: views
 test: parallel_postgres_scan
