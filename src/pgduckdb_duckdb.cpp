@@ -107,8 +107,10 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(extension_directory);
 
 	if (duckdb_maximum_memory > 0) {
-		/* Convert MB to string format that DuckDB can parse */
-		std::string memory_limit = std::to_string(duckdb_maximum_memory) + "MB";
+		// Convert the memory limit from MB (as set by Postgres GUC_UNIT_MB, which is actually MiB; see
+		// memory_unit_conversion_table in guc.c) to a string with the "MiB" suffix, as required by DuckDB's memory
+		// parser. This ensures the value is interpreted correctly by DuckDB.
+		std::string memory_limit = std::to_string(duckdb_maximum_memory) + "MiB";
 		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(memory_limit);
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%dMB", duckdb_maximum_memory);
 	}

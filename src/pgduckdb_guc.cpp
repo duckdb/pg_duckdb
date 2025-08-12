@@ -193,11 +193,11 @@ InitGUC() {
 	    &duckdb_autoload_known_extensions, PGC_SUSET);
 
 	DefineCustomDuckDBVariable("duckdb.max_memory", "The maximum memory DuckDB can use in MB (e.g., 4096 for 4GB)",
-	                           &duckdb_maximum_memory, 1, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
+	                           &duckdb_maximum_memory, 0, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
 	DefineCustomDuckDBVariable(
 	    "duckdb.memory_limit",
 	    "The maximum memory DuckDB can use in MB (e.g., 4096 for 4GB), alias for duckdb.max_memory",
-	    &duckdb_maximum_memory, 1, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
+	    &duckdb_maximum_memory, 0, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
 
 	DefineCustomDuckDBVariable(
 	    "duckdb.temporary_directory",
