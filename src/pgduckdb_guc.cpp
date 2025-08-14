@@ -145,7 +145,7 @@ InitGUC() {
 	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
 
 	DefineCustomVariable("duckdb.unsafe_allow_execution_inside_functions", "Allow DuckDB execution inside functions",
-	                     &duckdb_unsafe_allow_execution_inside_functions);
+	                     &duckdb_unsafe_allow_execution_inside_functions, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
 	                     "Allow mixed transactions between DuckDB and Postgres",
