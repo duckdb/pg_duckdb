@@ -1,5 +1,6 @@
 -- For this test we duckdb set execution to false
 SET duckdb.force_execution = false;
+SET duckdb.unsafe_allow_execution_inside_functions = true;
 CREATE TABLE t(a int);
 INSERT INTO t VALUES (1);
 
