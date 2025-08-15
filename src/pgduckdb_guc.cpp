@@ -1,4 +1,5 @@
 #include <type_traits>
+#include <climits>
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
@@ -127,7 +128,7 @@ char *duckdb_postgres_role = strdup("");
 bool duckdb_force_motherduck_views = false;
 
 int duckdb_maximum_threads = -1;
-char *duckdb_maximum_memory = strdup("4GB");
+int duckdb_maximum_memory = 4096; /* 4GB in MB */
 char *duckdb_disabled_filesystems = strdup("");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_community_extensions = false;
@@ -195,11 +196,12 @@ InitGUC() {
 	    "Whether known extensions are allowed to be automatically loaded when a DuckDB query depends on them",
 	    &duckdb_autoload_known_extensions, PGC_SUSET);
 
-	DefineCustomDuckDBVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)",
-	                           &duckdb_maximum_memory, PGC_SUSET);
-	DefineCustomDuckDBVariable("duckdb.memory_limit",
-	                           "The maximum memory DuckDB can use (e.g., 1GB), alias for duckdb.max_memory",
-	                           &duckdb_maximum_memory, PGC_SUSET);
+	DefineCustomDuckDBVariable("duckdb.max_memory", "The maximum memory DuckDB can use in MB (e.g., 4096 for 4GB)",
+	                           &duckdb_maximum_memory, 0, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
+	DefineCustomDuckDBVariable(
+	    "duckdb.memory_limit",
+	    "The maximum memory DuckDB can use in MB (e.g., 4096 for 4GB), alias for duckdb.max_memory",
+	    &duckdb_maximum_memory, 0, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
 
 	DefineCustomDuckDBVariable(
 	    "duckdb.temporary_directory",

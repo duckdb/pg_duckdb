@@ -106,9 +106,13 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(temporary_directory);
 	SET_DUCKDB_OPTION(extension_directory);
 
-	if (duckdb_maximum_memory != NULL && strlen(duckdb_maximum_memory) != 0) {
-		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(duckdb_maximum_memory);
-		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%s", duckdb_maximum_memory);
+	if (duckdb_maximum_memory > 0) {
+		// Convert the memory limit from MB (as set by Postgres GUC_UNIT_MB, which is actually MiB; see
+		// memory_unit_conversion_table in guc.c) to a string with the "MiB" suffix, as required by DuckDB's memory
+		// parser. This ensures the value is interpreted correctly by DuckDB.
+		std::string memory_limit = std::to_string(duckdb_maximum_memory) + "MiB";
+		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(memory_limit);
+		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%dMB", duckdb_maximum_memory);
 	}
 	if (duckdb_max_temp_directory_size != NULL && strlen(duckdb_max_temp_directory_size) != 0) {
 		config.SetOptionByName("max_temp_directory_size", duckdb_max_temp_directory_size);
