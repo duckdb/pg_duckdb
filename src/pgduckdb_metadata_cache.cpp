@@ -177,7 +177,10 @@ BuildDuckdbOnlyFunctions() {
 	                                "make_timestamptz",
 	                                "time_bucket",
 	                                "union_extract",
-	                                "union_tag"};
+	                                "union_tag",
+	                                "map_extract",
+	                                "map_keys",
+	                                "map_values"};
 
 	for (uint32_t i = 0; i < lengthof(function_names); i++) {
 		CatCList *catlist = SearchSysCacheList1(PROCNAMEARGSNSP, CStringGetDatum(function_names[i]));

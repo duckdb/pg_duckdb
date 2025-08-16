@@ -20,6 +20,16 @@ Note: `ALTER EXTENSION pg_duckdb WITH SCHEMA schema` is not currently supported.
 
 All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). Postgres JSON/JSONB functions are not supported.
 
+## MAP Functions
+
+All of the DuckDB [map functions](https://duckdb.org/docs/sql/data_types/map.html#map-functions). These functions work with DuckDB's MAP data type.
+
+| Name | Description |
+| :--- | :---------- |
+| [`map_extract`](#map_extract) | Extract a value from a map using a key |
+| [`map_keys`](#map_keys) | Get all keys from a map as a list |
+| [`map_values`](#map_values) | Get all values from a map as a list |
+
 ## Aggregates
 
 |Name|Description|
@@ -327,3 +337,47 @@ CALL duckdb.force_motherduck_sync(drop_with_cascade := true);
 ```
 
 NOTE: Dropping with cascade will drop all objects that depend on the MotherDuck tables. This includes all views, functions, and tables that depend on the MotherDuck tables. This can be a destructive operation, so use with caution.
+
+#### <a name="map_extract"></a>`map_extract(map_col duckdb.map, key TEXT) -> duckdb.unresolved_type`
+
+Extracts a value from a map using the specified key. If the key doesn't exist, returns NULL.
+
+```sql
+SELECT map_extract(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns 1
+SELECT map_extract(MAP(['a', 'b'], [1, 2]), 'c');  -- Returns NULL
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract from |
+| key | text | The key to look up in the map |
+
+#### <a name="map_keys"></a>`map_keys(map_col duckdb.map) -> duckdb.unresolved_type`
+
+Returns all keys from a map as a list.
+
+```sql
+SELECT map_keys(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns ['a', 'b', 'c']
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract keys from |
+
+#### <a name="map_values"></a>`map_values(map_col duckdb.map) -> duckdb.unresolved_type`
+
+Returns all values from a map as a list.
+
+```sql
+SELECT map_values(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns [1, 2, 3]
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract values from |
