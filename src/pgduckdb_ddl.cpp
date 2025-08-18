@@ -706,7 +706,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 				// Handle ALTER TABLE SET SCHEMA for DuckDB tables
 				DuckdbHandleAlterTableSetSchema(stmt, rel);
 				RelationClose(rel);
-				return true; 
+				return true;
 			}
 			RelationClose(rel);
 		}
