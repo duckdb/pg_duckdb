@@ -13,7 +13,7 @@ ERROR:  relation "test_schema1.non_existent_table" does not exist
 -- Try to move a table to a non-existent schema
 ALTER TABLE test_schema1.duckdb_table SET SCHEMA non_existent_schema;
 ERROR:  relation "test_schema1.duckdb_table" does not exist
--- Test with temporary tables (these should work)
+-- Test with temporary tables
 CREATE TEMP TABLE temp_duckdb_table (
     id INT,
     name TEXT
