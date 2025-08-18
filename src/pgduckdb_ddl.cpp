@@ -406,6 +406,7 @@ static void DuckdbHandleCreateForeignServerStmt(Node *parsetree);
 static void DuckdbHandleAlterForeignServerStmt(Node *parsetree);
 static void DuckdbHandleCreateUserMappingStmt(Node *parsetree);
 static void DuckdbHandleAlterUserMappingStmt(Node *parsetree);
+static void DuckdbHandleAlterTableSetSchema(AlterObjectSchemaStmt *stmt, Relation rel);
 static bool DuckdbHandleRenameViewPre(RenameStmt *stmt);
 static bool DuckdbHandleViewStmtPre(Node *parsetree, PlannedStmt *pstmt, const char *query_string);
 static void DuckdbHandleViewStmtPost(Node *parsetree);
@@ -702,8 +703,10 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 			Relation rel = RelationIdGetRelation(relation_oid);
 
 			if (pgduckdb::IsDuckdbTable(rel)) {
-				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-				                errmsg("Changing the schema of a duckdb table is currently not supported")));
+				// Handle ALTER TABLE SET SCHEMA for DuckDB tables
+				DuckdbHandleAlterTableSetSchema(stmt, rel);
+				RelationClose(rel);
+				return true;
 			}
 			RelationClose(rel);
 		}
@@ -787,6 +790,45 @@ DuckdbHandleCreateUserMappingStmt(Node *parsetree) {
 	}
 
 	pgduckdb::CurrentServerOid = server->serverid;
+}
+
+static void
+DuckdbHandleAlterTableSetSchema(AlterObjectSchemaStmt *stmt, Relation rel) {
+	// Get the current schema and table name
+	const char *current_schema = get_namespace_name_or_temp(rel->rd_rel->relnamespace);
+	const char *table_name = RelationGetRelationName(rel);
+	const char *new_schema = stmt->newschema;
+
+	// Check if the target schema exists
+	Oid new_schema_oid = get_namespace_oid(new_schema, true);
+	if (!OidIsValid(new_schema_oid)) {
+		ereport(ERROR, (errcode(ERRCODE_UNDEFINED_SCHEMA), errmsg("schema \"%s\" does not exist", new_schema)));
+	}
+
+	// Get DuckDB connection
+	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+
+	// Build the SQL to move the table to the new schema
+	// We'll use CREATE TABLE AS SELECT to copy the data to the new schema
+	StringInfoData sql;
+	initStringInfo(&sql);
+
+	// First, create the schema if it doesn't exist
+	appendStringInfo(&sql, "CREATE SCHEMA IF NOT EXISTS %s; ", quote_identifier(new_schema));
+
+	// Then, create the new table in the target schema
+	appendStringInfo(&sql, "CREATE TABLE %s.%s AS SELECT * FROM %s.%s;", quote_identifier(new_schema),
+	                 quote_identifier(table_name), quote_identifier(current_schema), quote_identifier(table_name));
+
+	// Then drop the old table
+	appendStringInfo(&sql, " DROP TABLE %s.%s;", quote_identifier(current_schema), quote_identifier(table_name));
+
+	// Execute the SQL
+	elog(DEBUG1, "Executing ALTER TABLE SET SCHEMA: %s", sql.data);
+	auto res = pgduckdb::DuckDBQueryOrThrow(*connection, sql.data);
+
+	// Clean up
+	pfree(sql.data);
 }
 
 #if PG_VERSION_NUM >= 150000
