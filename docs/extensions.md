@@ -12,7 +12,7 @@
 | `spatial` | Geospatial functions and types | Installable |
 | Community | Various community extensions | Installable (requires configuration) |
 
-Installing other extensions may work, but is at your own risk.
+Installing other extensions may work, but they have not been thoroughly tested and are used at your own risk
 
 ## Installing Extensions
 
