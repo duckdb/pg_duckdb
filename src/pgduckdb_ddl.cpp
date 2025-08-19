@@ -968,7 +968,7 @@ DuckdbHandleViewStmtPre(Node *parsetree, PlannedStmt *pstmt, const char *query_s
 	/* END OF COPIED LOGIC */
 
 	char *duckdb_query_string = pgduckdb_get_querydef((Query *)copyObjectImpl(viewParse));
-	List *db_and_schema = pgduckdb_db_and_schema(schema_name, true);
+	List *db_and_schema = pgduckdb_db_and_schema(schema_name, "duckdb");
 
 	char *duckdb_db = (char *)linitial(db_and_schema);
 	char *duckdb_schema = (char *)lsecond(db_and_schema);
@@ -1002,7 +1002,7 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 	auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
 	char *postgres_schema_name = get_namespace_name(rel->rd_rel->relnamespace);
 
-	const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
+	const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, "duckdb"));
 	relation_close(rel, NoLock);
 
 	Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
@@ -1294,7 +1294,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		Oid saved_userid;
 		int sec_context;
 		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
-		const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, true));
+		const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, "duckdb"));
 		auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
 
 		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
@@ -1588,7 +1588,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 			char *object_type = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 3);
 			char *drop_query =
 			    psprintf("DROP %s IF EXISTS %s.%s", object_type,
-			             pgduckdb_db_and_schema_string(postgres_schema_name, true), quote_identifier(table_name));
+			             pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb"), quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 
 			deleted_duckdb_relations++;
