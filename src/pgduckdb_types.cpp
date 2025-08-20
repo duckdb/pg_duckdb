@@ -567,6 +567,18 @@ DatumGetTimeTz(Datum value) {
 	return duck_time_tz;
 }
 
+static hugeint_t
+DatumGetUUID(Datum value) {
+	const Pointer pg_uuid = DatumGetPointer(value);
+	hugeint_t duck_uuid;
+	D_ASSERT(UUID_LEN == sizeof(hugeint_t));
+	for (idx_t i = 0; i < UUID_LEN; i++) {
+		((uint8_t *)&duck_uuid)[UUID_LEN - 1 - i] = ((uint8_t *)pg_uuid)[i];
+	}
+	duck_uuid.upper ^= (uint64_t(1) << 63);
+	return duck_uuid;
+}
+
 template <int32_t OID>
 struct PostgresTypeTraits;
 
@@ -1745,6 +1757,8 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
 	case FLOAT8OID:
 		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
+	case UUIDOID:
+		return duckdb::Value::UUID(DatumGetUUID(value));
 	default:
 		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
 	}
@@ -1852,14 +1866,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		break;
 	}
 	case duckdb::LogicalTypeId::UUID: {
-		auto uuid = DatumGetPointer(value);
-		hugeint_t duckdb_uuid;
-		D_ASSERT(UUID_LEN == sizeof(hugeint_t));
-		for (idx_t i = 0; i < UUID_LEN; i++) {
-			((uint8_t *)&duckdb_uuid)[UUID_LEN - 1 - i] = ((uint8_t *)uuid)[i];
-		}
-		duckdb_uuid.upper ^= (uint64_t(1) << 63);
-		Append(result, duckdb_uuid, offset);
+		Append(result, DatumGetUUID(value), offset);
 		break;
 	}
 	case duckdb::LogicalTypeId::BLOB: {

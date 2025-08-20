@@ -3,6 +3,7 @@ from .utils import Cursor, Connection
 import datetime
 import psycopg.types.json
 import pytest
+import uuid
 
 
 def test_prepared(cur: Cursor):
@@ -58,7 +59,8 @@ def test_extended(cur: Cursor):
             d DATE,
             ts TIMESTAMP,
             tstz TIMESTAMP WITH TIME ZONE,
-            json_obj JSON);
+            json_obj JSON,
+            u UUID);
         """)
 
     row = (
@@ -78,9 +80,10 @@ def test_extended(cur: Cursor):
         datetime.datetime(2020, 1, 1, 1, 2, 3),
         datetime.datetime(2020, 1, 1, 1, 2, 3, tzinfo=datetime.timezone.utc),
         psycopg.types.json.Json({"a": 1}),
+        uuid.UUID("12345678-1234-5678-1234-567812345678"),
     )
     cur.sql(
-        "INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+        "INSERT INTO t VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
         row,
     )
 
@@ -102,7 +105,8 @@ def test_extended(cur: Cursor):
             d = %s,
             ts = %s,
             tstz = %s,
-            json_obj::text = %s::text
+            json_obj::text = %s::text,
+            u = %s
         FROM t;
         """,
         row,
