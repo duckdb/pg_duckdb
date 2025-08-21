@@ -733,6 +733,8 @@ CREATE FOREIGN DATA WRAPPER duckdb
   HANDLER pgduckdb_fdw_handler
   VALIDATOR pgduckdb_fdw_validator;
 
+GRANT USAGE ON FOREIGN DATA WRAPPER duckdb TO PUBLIC;
+
 CREATE PROCEDURE duckdb.enable_motherduck(TEXT DEFAULT '::FROM_ENV::', TEXT DEFAULT '')
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_enable_motherduck';
 
