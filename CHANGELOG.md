@@ -1,3 +1,78 @@
+# 1.0.0 (2025-05-14)
+
+## Added
+
+- Add support for statically compiling the duckdb library into the pg_duckdb extension. (#618)
+- Add support for `DOMAIN`, `VARINT`, `TIME`, `TIMETZ`, `BIT`, `VARBIT`, `UNION`, `MAP`, `STRUCT` types. (#532, #626, #627, #628, #636, #678, #689, #669)
+- Add support for installing community extensions. (#647)
+- Add support for DDL on DuckDB tables in transactions. (#632)
+- Make `duckdb.unresolved_type` support `min`, `date_trunc`, `length`, `regexp_replace`, `LIKE`, `ILIKE`, `SIMILAR TO`. (#643)
+- Add cast from `duckdb.unresolved_type` to `bytea`. (#643)
+- Add support for the DuckDB date/time functions: `strftime`, `strptime`, `epoch`, `epoch_ms`, `epoch_us`, `epoch_ns`, `time_bucket`, `make_timestamp`, `make_timestamptz`. (#643)
+- Add support for using MotherDuck in multiple Postgres databases. (#544, #545)
+- Add ALTER TABLE support for DuckDB tables. (#652)
+- Add support to `COPY ... TO` and `COPY ... FROM` for DuckDB tables. (#665)
+- Add support for `EXPLAIN (FORMAT JSON)` for DuckDB queries. (#654)
+- Add support for single dimension `ARRAY` types from DuckDB, before only `LIST` was supported. (#655)
+- Add support for `TABLESAMPLE`. (#559)
+- Add `duckdb.extension_directory`, `duckdb.temporary_directory` and `duckdb.max_temporary_directory_size` settings. (#704)
+- Add source locations to error messages. (#758)
+- Add basic collation support by allowing users to configure `duckdb.default_collation`. (#814)
+- Add support for converting Postgres table values in parallel. This can speed up large scans a lot. (#762)
+- Add support for MotherDuck views. You can now create views inside MotherDuck and query views that are already stored in MotherDuck. (#822)
+- Add support for Postgres 18 Beta 2. Since Postgres 18 has not had a final release yet, this is still considered an experimental feature. (#788)
+
+## Changed
+
+- Update to DuckDB 1.3.0. (#754)
+- Change the way MotherDuck is configured. It's not done anymore through the Postgres configuration file. Instead, you should now enable MotherDuck using `CALL duckdb.enable_motherduck(...)` or equivalent `CREATE SERVER` and `CREATE USER MAPPING` commands. (#668)
+- Change the way secrets are added to DuckDB. You'll need to recreate your secrets using the new method `duckdb.create_simple_secret` or `duckdb.create_azure_secret` functions. Internally secrets are now stored `SERVER` and `USER MAPPING` for the `duckdb` foreign data wrapper. (#697)
+- Disallow DuckDB execution inside functions. This feature had issues and is intended to be re-enabled in a future release. (#764)
+- Don't convert Postgres NUMERICs with a precision that's unsupported in DuckDB to double by default. Instead it will throw an error. If you want the lossy conversion to DOUBLE to happen, you can enable `duckdb.convert_unsupported_numeric_to_double`. (#795)
+- Remove custom HTTP caching logic. (#644)
+- When creating a table in a `ddb$` schema that table now uses the `duckdb` table access method by default. (#650)
+- Do not allow creating non-`duckdb` tables in a `ddb$` schema. (#650)
+- When creating MotherDuck tables from Postgres, automatically make them be created by the table creation. Before you had to set the ROLE manually before issuing the CREATE TABLE command. (#650)
+- Add automated tests for MotherDuck integration. (#649)
+- Sync the Postgres timezone to DuckDB when initializing the DuckDB connection. This makes some date parsing/formatting behave better. (#643, #853)
+- Support `FORMAT JSON` for `COPY` commands. (#665)
+- Force `COPY` to use DuckDB execution when using `duckdb.force_execution`. (#665)
+- Automatically use DuckDB execution for COPY when file extensions are used for filetypes that DuckDB understands (`.parquet`, `.json`, `.ndjson`, `jsonl`, `.gz`, `.zst`). (#665)
+- Return `TEXT` columns instead of `VARCHAR` columns when using DuckDB execution. (#583)
+- Extensions in `duckdb.extensions` now get automatically installed before running any DuckDB query if `duckdb.autoinstall_known_extensions` is set to `true`. This helps with read-replica setups, where the extension gets installed on the primary and but the replica is queried. (#801)
+- By default `duckdb.disabled_filesystems` is now empty. To keep the default installation secure, `LocalFileSystem` will now be appended for any user that does not have the `pg_read_server_files` and `pg_write_server_files` privileges. (#802)
+- Push down `LIKE` expressions and `upper()`/`lower()` calls to Postgres storage. These expressions can sometimes be pushed down to the index. (#808)
+-
+
+## Fixed
+
+- Fix possible crash when querying two Postgres tables in the same query. (#604)
+- Fix crash when loading the `postgres` extension for DuckDB  (a.k.a. postgres_scanner) into pg_duckdb (#607)
+- Do not set the `max_memory` in Postgres if `duckdb.max_memory`/`duckdb.memory_limit` is set to the empty string. (#614)
+- Handle PG columns with arrays with 0 dimensions correctly. We now assume such an array has a single dimension. (#616)
+- Fix valgrind issue in `DatumToString`. (#639)
+- Fix read of uninitialized memory when using DuckDB functions. (#638)
+- Fix escaping of MotherDuck schema names when syncing them. (#650)
+- Fix crash that could happen when EXPLAINing a prepared statement in certain cases. (#660)
+- Fix memory leak that could happen on query failure. (#663)
+- Add boundary checks when converting DuckDB date/timestamps to PG date/timestamps. DuckDB and Postgres don't support the exact same range of dates/timestamps, so now pg_duckdb only supports the intersection of these two ranges. (#653)
+- Fail nicely when syncing MotherDuck tables result in too long names being synced. (#680) TODO: FIX FOR TABLES CURRENTLY ONLY DONE FOR SCHEMAS
+- Disallow installing `pg_duckdb` in databases with different encoding than `UTF8`. (#703)
+- Fix crashes or data corruption that could occur when using `CREATE TABLE AS` and materialized views if DuckDB execution and Postgres execution did not agree on the types that a query would return. (#706)
+- Fix various issues when using functions that returned `duckdb.row` (like `read_csv` & `read_parquet`) in a CTE. (#718)
+- Fix a crash when using a `CREATE TABLE AS` statement in a `plpgqsl` function (#735)
+- Throw error when trying to change DuckDB settings after the DuckDB connection has been initialized. (#743)
+- Fix crash for CREATE TABLE ... AS EXECUTE (#757)
+- Handle issues when DuckDB query would return different types between planning and execution phase. (#759)
+- Disallow DuckDB tables as a partition. This wasn't supported, and would fail in weird ways when attempted. Now a clear error is thrown. (#778)
+- Fix memory leak when reading LIST/JSON/JSONB columns from Postgres tables. (#784)
+- Fix dropping the Postgres side of a MotherDuck table, when the table does not exist anymore in MotherDuck. (#784)
+- Don't show hints about misuse of functions that return `duckdb.row` for queries that don't use those those functions. (#811)
+- Fix LIKE expressions involving a backslash (`\`) or `LIKE ... ESCAPE` expressions. (#815)
+- Fix errors for transactions that use `SET TRANSACTION ISOLATION`. (#834)
+- Fix compatibility issue with TimescaleDB extension. (#846)
+
+
 # 0.3.1 (2025-02-13)
 
 ## Fixed
