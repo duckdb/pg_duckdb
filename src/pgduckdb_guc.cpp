@@ -136,7 +136,7 @@ bool duckdb_autoload_known_extensions = true;
 char *duckdb_temporary_directory = MakeDirName("temp");
 char *duckdb_extension_directory = MakeDirName("extensions");
 char *duckdb_max_temp_directory_size = strdup("");
-char *duckdb_default_collation = strdup("C");
+char *duckdb_default_collation = strdup("");
 
 void
 InitGUC() {
