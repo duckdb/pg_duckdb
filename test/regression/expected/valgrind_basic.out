@@ -1,0 +1,27 @@
+CREATE EXTENSION pg_duckdb;
+SELECT * FROM duckdb.query('SELECT 42 as answer');
+ answer
+--------
+     42
+(1 row)
+
+SELECT * FROM duckdb.query('SELECT generate_series(1, 10) as num');
+ num
+-----
+   1
+   2
+   3
+   4
+   5
+   6
+   7
+   8
+   9
+  10
+(10 rows)
+
+SELECT * FROM duckdb.query('SELECT ''Hello, Valgrind!'' as message');
+     message
+------------------
+ Hello, Valgrind!
+(1 row)
