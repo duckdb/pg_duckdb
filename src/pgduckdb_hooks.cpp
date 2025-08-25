@@ -66,14 +66,7 @@ ContainsCatalogTable(List *rtes) {
 
 static bool
 IsDuckdbTable(Oid relid) {
-	if (relid == InvalidOid) {
-		return false;
-	}
-
-	auto rel = RelationIdGetRelation(relid);
-	bool result = pgduckdb::IsDuckdbTableAm(rel->rd_tableam);
-	RelationClose(rel);
-	return result;
+	return pgduckdb::DuckdbTableAmGetName(relid) != nullptr;
 }
 
 static bool
