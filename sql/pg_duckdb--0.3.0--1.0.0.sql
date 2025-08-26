@@ -767,13 +767,14 @@ CREATE FUNCTION duckdb.create_simple_secret(
     region        TEXT DEFAULT '',
     url_style     TEXT DEFAULT '',
     provider      TEXT DEFAULT '',
-    endpoint      TEXT DEFAULT ''
+    endpoint      TEXT DEFAULT '',
+    scope         TEXT DEFAULT ''
 )
 RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_simple_secret';
 
-CREATE FUNCTION duckdb.create_azure_secret(TEXT) -- connection string
+CREATE FUNCTION duckdb.create_azure_secret(connection_string TEXT, scope TEXT DEFAULT '')
 RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_azure_secret';

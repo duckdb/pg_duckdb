@@ -130,7 +130,8 @@ SELECT duckdb.create_simple_secret(
     session_token := 'foo',
     url_style := 'path',
     provider := 'credential_chain',
-    endpoint := 'my-endpoint.com'
+    endpoint := 'my-endpoint.com',
+    scope := 's3://my-bucket'
 );
 
 -- Alter SERVER (public options only)
@@ -154,7 +155,7 @@ SELECT duckdb.create_simple_secret('BadType', '-', '-');
 
 -- 2. Azure
 
-SELECT duckdb.create_azure_secret('hello world');
+SELECT duckdb.create_azure_secret('hello world', scope := 'az://myaccount.blob.core.windows.net/');
 
 -- Now check everything.
 
