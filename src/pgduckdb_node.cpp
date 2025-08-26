@@ -198,7 +198,7 @@ ExecuteQuery(DuckdbScanState *state) {
 	// result. This is required for cases like CTAS from a Postgres table, where allowing streaming results could lead
 	// to race conditions on Postgres resources.
 	// Checkout discussion: https://github.com/duckdb/pg_duckdb/discussions/866
-	bool allow_stream_result = !pgduckdb::ContainsPostgresTable(state->query);
+	bool allow_stream_result = !pgduckdb::ContainsPostgresTable((Node *)state->query, NULL);
 	auto pending = prepared.PendingQuery(named_values, allow_stream_result);
 	if (pending->HasError()) {
 		return pending->ThrowError();

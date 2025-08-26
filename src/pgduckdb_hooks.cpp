@@ -143,17 +143,34 @@ namespace pgduckdb {
 int64_t executor_nest_level = 0;
 
 bool
-ContainsPostgresTable(const Query *query) {
-	List *rtable = query->rtable;
-	foreach_node(RangeTblEntry, rte, rtable) {
-		if (rte->relid == InvalidOid) {
-			continue;
+ContainsPostgresTable(Node *node, void *context) {
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query)) {
+		Query *query = (Query *)node;
+		List *rtable = query->rtable;
+		foreach_node(RangeTblEntry, rte, rtable) {
+			if (rte->relid == InvalidOid) {
+				continue;
+			}
+			if (!::IsDuckdbTable(rte->relid)) {
+				return true;
+			}
 		}
-		if (!::IsDuckdbTable(rte->relid)) {
-			return true;
-		}
+
+#if PG_VERSION_NUM >= 160000
+		return query_tree_walker(query, ContainsPostgresTable, context, 0);
+#else
+		return query_tree_walker(query, (bool (*)())((void *)ContainsPostgresTable), context, 0);
+#endif
 	}
-	return false;
+
+#if PG_VERSION_NUM >= 160000
+	return expression_tree_walker(node, ContainsPostgresTable, context);
+#else
+	return expression_tree_walker(node, (bool (*)())((void *)ContainsPostgresTable), context);
+#endif
 }
 
 bool
