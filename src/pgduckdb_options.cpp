@@ -162,7 +162,7 @@ DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 		std::ostringstream create_server_query;
 		create_server_query << "CREATE SERVER " << server_name << " TYPE '" << type << "' FOREIGN DATA WRAPPER duckdb";
 
-		auto options = pgduckdb::pg::ReadOptions(fcinfo, 4, {"region", "url_style", "provider", "endpoint"});
+		auto options = pgduckdb::pg::ReadOptions(fcinfo, 4, {"region", "url_style", "provider", "endpoint", "scope"});
 		if (!options.empty()) {
 			create_server_query << " OPTIONS (" << options << ")";
 		}
@@ -202,8 +202,15 @@ DECLARE_PG_FUNCTION(pgduckdb_create_azure_secret) {
 	SPI_connect();
 	auto server_name = pgduckdb::FindServerName("azure_secret");
 	{
-		auto create_server_query = "CREATE SERVER " + server_name + " TYPE 'azure' FOREIGN DATA WRAPPER duckdb";
-		auto ret = SPI_exec(create_server_query.c_str(), 0);
+		std::ostringstream create_server_query;
+		create_server_query << "CREATE SERVER " << server_name << " TYPE 'azure' FOREIGN DATA WRAPPER duckdb";
+
+		auto options = pgduckdb::pg::ReadOptions(fcinfo, 1, {"scope"});
+		if (!options.empty()) {
+			create_server_query << " OPTIONS (" << options << ")";
+		}
+
+		auto ret = SPI_exec(create_server_query.str().c_str(), 0);
 		if (ret != SPI_OK_UTILITY) {
 			elog(ERROR, "Could not create 'azure' SERVER: %s", SPI_result_code_string(ret));
 		}
