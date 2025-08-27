@@ -27,6 +27,25 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | [`union_extract`](#union_extract) | Extracts a value from a union type by tag name. |
 | [`union_tag`](#union_tag) | Gets the tag name of the active member in a union type. |
 
+## MAP Functions
+
+All of the DuckDB [map functions](https://duckdb.org/docs/sql/data_types/map.html#map-functions).
+
+| Name | Description |
+| :--- | :---------- |
+| [`cardinality`](#cardinality) | Return the size of the map |
+| [`element_at`](#element_at) | Return the value for a given key as a list |
+| [`map_concat`](#map_concat) | Merge multiple maps |
+| [`map_contains`](#map_contains) | Check if a map contains a given key |
+| [`map_contains_entry`](#map_contains_entry) | Check if a map contains a given key-value pair |
+| [`map_contains_value`](#map_contains_value) | Check if a map contains a given value |
+| [`map_entries`](#map_entries) | Return a list of struct(k, v) for each key-value pair |
+| [`map_extract`](#map_extract) | Extract a value from a map using a key |
+| [`map_extract_value`](#map_extract_value) | Return the value for a given key or NULL |
+| [`map_from_entries`](#map_from_entries) | Create a map from an array of struct(k, v) |
+| [`map_keys`](#map_keys) | Get all keys from a map as a list |
+| [`map_values`](#map_values) | Get all values from a map as a list |
+
 ## Aggregates
 
 |Name|Description|
@@ -664,6 +683,14 @@ FROM events;
 -- Filter using epoch time
 SELECT * FROM events
 WHERE epoch(created_at) > 1640995200; -- After 2022-01-01
+
+#### <a name="map_extract"></a>`map_extract(map_col duckdb.map, key TEXT) -> duckdb.unresolved_type`
+
+Extracts a value from a map using the specified key. If the key doesn't exist, returns NULL.
+
+```sql
+SELECT map_extract(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns 1
+SELECT map_extract(MAP(['a', 'b'], [1, 2]), 'c');  -- Returns NULL
 ```
 
 ##### Required Arguments
@@ -686,6 +713,16 @@ SELECT
     epoch_ms(reading_time) AS timestamp_ms,
     value
 FROM sensor_readings;
+
+| map_col | duckdb.map | The map to extract from |
+| key | text | The key to look up in the map |
+
+#### <a name="map_keys"></a>`map_keys(map_col duckdb.map) -> duckdb.unresolved_type`
+
+Returns all keys from a map as a list.
+
+```sql
+SELECT map_keys(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns ['a', 'b', 'c']
 ```
 
 ##### Required Arguments
@@ -707,6 +744,15 @@ SELECT
     event_id,
     epoch_ms(timestamp_ms) AS event_time
 FROM events;
+
+| map_col | duckdb.map | The map to extract keys from |
+
+#### <a name="map_values"></a>`map_values(map_col duckdb.map) -> duckdb.unresolved_type`
+
+Returns all values from a map as a list.
+
+```sql
+SELECT map_values(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns [1, 2, 3]
 ```
 
 ##### Required Arguments
@@ -904,3 +950,77 @@ FROM orders;
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | expression | any | The expression to count distinct values for |
+
+| map_col | duckdb.map | The map to extract values from |
+
+#### <a name="cardinality"></a>`cardinality(map_col duckdb.map) -> integer`
+
+Returns the size of the map.
+
+```sql
+SELECT cardinality(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns 3
+```
+
+#### <a name="element_at"></a>`element_at(map_col duckdb.map, key TEXT) -> duckdb.unresolved_type`
+
+Returns the value for a given key as a list. Alias for `map_extract`.
+
+```sql
+SELECT element_at(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns [1]
+```
+
+#### <a name="map_concat"></a>`map_concat(map_col duckdb.map, map_col2 duckdb.map) -> duckdb.unresolved_type`
+
+Merges multiple maps. On key collision, the value is taken from the last map.
+
+```sql
+SELECT map_concat(MAP(['a', 'b'], [1, 2]), MAP(['b', 'c'], [3, 4]));  -- Returns {'a': 1, 'b': 3, 'c': 4}
+```
+
+#### <a name="map_contains"></a>`map_contains(map_col duckdb.map, key TEXT) -> boolean`
+
+Checks if a map contains a given key.
+
+```sql
+SELECT map_contains(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns true
+```
+
+#### <a name="map_contains_entry"></a>`map_contains_entry(map_col duckdb.map, key TEXT, value TEXT) -> boolean`
+
+Checks if a map contains a given key-value pair.
+
+```sql
+SELECT map_contains_entry(MAP(['a', 'b'], [1, 2]), 'a', '1');  -- Returns true
+```
+
+#### <a name="map_contains_value"></a>`map_contains_value(map_col duckdb.map, value TEXT) -> boolean`
+
+Checks if a map contains a given value.
+
+```sql
+SELECT map_contains_value(MAP(['a', 'b'], [1, 2]), '1');  -- Returns true
+```
+
+#### <a name="map_entries"></a>`map_entries(map_col duckdb.map) -> duckdb.unresolved_type`
+
+Returns a list of struct(k, v) for each key-value pair in the map.
+
+```sql
+SELECT map_entries(MAP(['a', 'b'], [1, 2]));  -- Returns [{'key': 'a', 'value': 1}, {'key': 'b', 'value': 2}]
+```
+
+#### <a name="map_extract_value"></a>`map_extract_value(map_col duckdb.map, key TEXT) -> duckdb.unresolved_type`
+
+Returns the value for a given key or NULL if the key is not contained in the map.
+
+```sql
+SELECT map_extract_value(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns 1
+```
+
+#### <a name="map_from_entries"></a>`map_from_entries(entries duckdb.unresolved_type) -> duckdb.unresolved_type`
+
+Creates a map from an array of struct(k, v).
+
+```sql
+SELECT map_from_entries([{'k': 'a', 'v': 1}, {'k': 'b', 'v': 2}]);  -- Returns {'a': 1, 'b': 2}
+```
