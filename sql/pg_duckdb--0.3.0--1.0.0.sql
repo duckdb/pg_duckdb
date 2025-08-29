@@ -10,6 +10,10 @@ ALTER FUNCTION duckdb_unresolved_type_state_trans(state duckdb.unresolved_type, 
 ALTER FUNCTION duckdb_unresolved_type_state_trans(state duckdb.unresolved_type, value duckdb.unresolved_type, other "any") SET SCHEMA duckdb;
 ALTER FUNCTION duckdb_unresolved_type_state_trans(state duckdb.unresolved_type, value duckdb.unresolved_type, other "any", another "any") SET SCHEMA duckdb;
 ALTER FUNCTION duckdb_unresolved_type_final(state duckdb.unresolved_type) SET SCHEMA duckdb;
+ALTER FUNCTION duckdb_unresolved_type_btree_cmp(duckdb.unresolved_type,duckdb.unresolved_type) SET SCHEMA duckdb;
+ALTER FUNCTION duckdb_unresolved_type_hash(duckdb.unresolved_type) SET SCHEMA duckdb;
+ALTER OPERATOR CLASS duckdb_unresolved_type_ops USING btree SET SCHEMA duckdb;
+ALTER OPERATOR CLASS duckdb_unresolved_type_hash_ops USING hash SET SCHEMA duckdb;
 
 ALTER FUNCTION duckdb.duckdb_unresolved_type_operator(duckdb.unresolved_type, "any") RENAME TO unresolved_type_operator;
 ALTER FUNCTION duckdb.duckdb_unresolved_type_operator_bool(duckdb.unresolved_type, "any") RENAME TO unresolved_type_operator_bool;
@@ -22,6 +26,10 @@ ALTER FUNCTION duckdb.duckdb_unresolved_type_state_trans(state duckdb.unresolved
 ALTER FUNCTION duckdb.duckdb_unresolved_type_state_trans(state duckdb.unresolved_type, value duckdb.unresolved_type, other "any") RENAME TO unresolved_type_state_trans;
 ALTER FUNCTION duckdb.duckdb_unresolved_type_state_trans(state duckdb.unresolved_type, value duckdb.unresolved_type, other "any", another "any") RENAME TO unresolved_type_state_trans;
 ALTER FUNCTION duckdb.duckdb_unresolved_type_final(state duckdb.unresolved_type) RENAME TO unresolved_type_final;
+ALTER FUNCTION duckdb.duckdb_unresolved_type_btree_cmp(duckdb.unresolved_type,duckdb.unresolved_type) RENAME TO unresolved_type_btree_cmp;
+ALTER FUNCTION duckdb.duckdb_unresolved_type_hash(duckdb.unresolved_type) RENAME TO unresolved_type_hash;
+ALTER OPERATOR CLASS duckdb.duckdb_unresolved_type_ops USING btree RENAME TO unresolved_type_ops;
+ALTER OPERATOR CLASS duckdb.duckdb_unresolved_type_hash_ops USING hash RENAME TO unresolved_type_hash_ops;
 
 -- Ensure UTF8 encoding
 DO $$
@@ -798,3 +806,10 @@ RETURNS SETOF duckdb.row
 SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
+
+ALTER FUNCTION duckdb.duckdb_alter_table_trigger RENAME TO _alter_table_trigger;
+ALTER FUNCTION duckdb.duckdb_am_handler RENAME TO _am_handler;
+ALTER FUNCTION duckdb.duckdb_create_table_trigger RENAME TO _create_table_trigger;
+ALTER FUNCTION duckdb.duckdb_drop_trigger RENAME TO _drop_trigger;
+ALTER FUNCTION duckdb.duckdb_grant_trigger RENAME TO _grant_trigger;
+ALTER FUNCTION duckdb.duckdb_update_extensions_table_seq RENAME TO _update_extensions_table_seq;
