@@ -143,6 +143,37 @@ namespace pgduckdb {
 int64_t executor_nest_level = 0;
 
 bool
+ContainsPostgresTable(Node *node, void *context) {
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query)) {
+		Query *query = (Query *)node;
+		List *rtable = query->rtable;
+		foreach_node(RangeTblEntry, rte, rtable) {
+			if (rte->relid == InvalidOid) {
+				continue;
+			}
+			if (!::IsDuckdbTable(rte->relid)) {
+				return true;
+			}
+		}
+
+#if PG_VERSION_NUM >= 160000
+		return query_tree_walker(query, ContainsPostgresTable, context, 0);
+#else
+		return query_tree_walker(query, (bool (*)())((void *)ContainsPostgresTable), context, 0);
+#endif
+	}
+
+#if PG_VERSION_NUM >= 160000
+	return expression_tree_walker(node, ContainsPostgresTable, context);
+#else
+	return expression_tree_walker(node, (bool (*)())((void *)ContainsPostgresTable), context);
+#endif
+}
+
+bool
 ShouldTryToUseDuckdbExecution(Query *query) {
 	if (top_level_duckdb_ddl_type == DDLType::REFRESH_MATERIALIZED_VIEW) {
 		/* When refreshing materialized views, we only want to use DuckDB
