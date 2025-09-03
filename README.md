@@ -23,12 +23,9 @@
 
 ## Key Features
 
-- **Execute analytics queries without changes**: run your existing SQL analytics queries as you normally would, and `pg_duckdb` will automagically use DuckDB's SQL engine to execute them.
-- **Read/write data from data lakes**: Read/write Parquet, CSV, JSON from S3, GCS, Azure, R2.
-- **Native support for modern data formats**: [DuckLake](https://ducklake.select/), Iceberg, Delta Lake.
+- **Execute analytics queries without changes**: run your existing SQL analytics queries as you normally would, and `pg_duckdb` will automatically use DuckDB's SQL engine to execute them when you set `duckdb.force_execution=true`.
+- **Read/write data from data lakes**: Read/write* Parquet, CSV, JSON, Iceberg & Delta Lake from S3, GCS, Azure & R2.
 - **Integration with cloud analytics**: Out-of-the-box support of [MotherDuck](https://motherduck.com/) as compute provider.
-- **Support for advanced types**: STRUCT, MAP, UNION, arrays, and JSON
-- **Extension Ecosystem**: Install DuckDB extensions (iceberg, delta, azure, etc. soon)
 
 ## How `pg_duckdb` works
 
@@ -45,9 +42,10 @@ This is the most common and straightforward use case. If you have a standard Pos
 
 **Example:**
 
-Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/gotchas_and_syntax.md#create-a-table)). To run an analytical query, you just write standard SQL and `pg_duckdb` will handle the rest.
+Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/gotchas_and_syntax.md#create-a-table)). To run an analytical query, you just write standard SQL, configure `duckdb.force_exectunio` and `pg_duckdb` will handle the rest.
 
 ```sql
+SET duckdb.force_execution = true;
 SELECT
     order_date,
     COUNT(*) AS number_of_orders,
@@ -148,37 +146,37 @@ SELECT region, COUNT(*) FROM my_cloud_analytics_table;
 
 -- Create cloud tables that sync across teams
 CREATE TABLE real_time_kpis USING duckdb AS
-SELECT 
+SELECT
     date_trunc('day', created_at) as date,
     COUNT(*) as daily_signups,
     SUM(revenue) as daily_revenue
-FROM user_events 
+FROM user_events
 GROUP BY date;
 ```
 
 ## Quick Start
 
-### Try with Hydra (Recommended)
-
-The fastest way to get started:
-
-```bash
-pip install hydra-cli
-hydra
-```
-
 ### Docker
 
-Run PostgreSQL with pg_duckdb pre-installed:
+Run PostgreSQL with pg_duckdb pre-installed in a docker container:
 
 ```bash
-docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:16-main
+docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:17-1.0.0
 ```
 
 With MotherDuck:
 ```bash
 export MOTHERDUCK_TOKEN=<your_token>
-docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:16-main
+docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:17-1.0.0
+```
+
+### Try with Hydra
+
+You can also get started using [Hydra][hydra]:
+
+```bash
+pip install hydra-cli
+hydra
 ```
 
 ### Package Managers
