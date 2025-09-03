@@ -1,4 +1,5 @@
 #include <type_traits>
+#include <climits>
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
@@ -116,6 +117,7 @@ DefineCustomDuckDBVariable(const char *name, const char *short_desc, T *var, T m
 } // namespace
 
 bool duckdb_force_execution = false;
+bool duckdb_unsafe_allow_execution_inside_functions = false;
 bool duckdb_unsafe_allow_mixed_transactions = false;
 bool duckdb_convert_unsupported_numeric_to_double = false;
 bool duckdb_log_pg_explain = false;
@@ -126,7 +128,7 @@ char *duckdb_postgres_role = strdup("");
 bool duckdb_force_motherduck_views = false;
 
 int duckdb_maximum_threads = -1;
-char *duckdb_maximum_memory = strdup("4GB");
+int duckdb_maximum_memory = 4096; /* 4GB in MB */
 char *duckdb_disabled_filesystems = strdup("");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_community_extensions = false;
@@ -136,12 +138,15 @@ bool duckdb_autoload_known_extensions = true;
 char *duckdb_temporary_directory = MakeDirName("temp");
 char *duckdb_extension_directory = MakeDirName("extensions");
 char *duckdb_max_temp_directory_size = strdup("");
-char *duckdb_default_collation = strdup("C");
+char *duckdb_default_collation = strdup("");
 
 void
 InitGUC() {
 	/* pg_duckdb specific GUCs */
 	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
+
+	DefineCustomVariable("duckdb.unsafe_allow_execution_inside_functions", "Allow DuckDB execution inside functions",
+	                     &duckdb_unsafe_allow_execution_inside_functions, PGC_SUSET);
 
 	DefineCustomVariable("duckdb.unsafe_allow_mixed_transactions",
 	                     "Allow mixed transactions between DuckDB and Postgres",
@@ -191,11 +196,12 @@ InitGUC() {
 	    "Whether known extensions are allowed to be automatically loaded when a DuckDB query depends on them",
 	    &duckdb_autoload_known_extensions, PGC_SUSET);
 
-	DefineCustomDuckDBVariable("duckdb.max_memory", "The maximum memory DuckDB can use (e.g., 1GB)",
-	                           &duckdb_maximum_memory, PGC_SUSET);
-	DefineCustomDuckDBVariable("duckdb.memory_limit",
-	                           "The maximum memory DuckDB can use (e.g., 1GB), alias for duckdb.max_memory",
-	                           &duckdb_maximum_memory, PGC_SUSET);
+	DefineCustomDuckDBVariable("duckdb.max_memory", "The maximum memory DuckDB can use in MB (e.g., 4096 for 4GB)",
+	                           &duckdb_maximum_memory, 0, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
+	DefineCustomDuckDBVariable(
+	    "duckdb.memory_limit",
+	    "The maximum memory DuckDB can use in MB (e.g., 4096 for 4GB), alias for duckdb.max_memory",
+	    &duckdb_maximum_memory, 0, INT_MAX, PGC_SUSET, GUC_UNIT_MB);
 
 	DefineCustomDuckDBVariable(
 	    "duckdb.temporary_directory",
@@ -252,16 +258,18 @@ find_option(const char *name, bool, bool, int) {
 
 static void
 DuckAssignTimezone_Cpp(const char *tz) {
-	if (IsExtensionRegistered()) {
-		if (!DuckDBManager::IsInitialized()) {
-			return;
-		}
-
-		// update duckdb tz
-		auto connection = pgduckdb::DuckDBManager::GetConnection(false);
-		pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
-		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
+	if (!IsExtensionRegistered()) {
+		return;
 	}
+
+	if (!DuckDBManager::IsInitialized()) {
+		return;
+	}
+
+	// update duckdb tz
+	auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+	pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
+	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
 }
 
 static void

@@ -10,6 +10,9 @@
  * Portions Copyright (c) 1994, Regents of the University of California
  */
 
+#include "duckdb/common/string.hpp"
+#include "duckdb/common/unordered_map.hpp"
+
 #include "pgduckdb/pgduckdb_ddl.hpp"
 
 extern "C" {
@@ -492,9 +495,35 @@ duckdb_am_handler(FunctionCallInfo /*funcinfo*/) {
 }
 }
 
+static duckdb::unordered_map<const TableAmRoutine * /*am*/, duckdb::string /*name*/> duckdb_table_ams = {
+    {&duckdb_methods, "duckdb"}};
+
+extern "C" __attribute__((visibility("default"))) bool
+RegisterDuckdbTableAm(const char *name, const TableAmRoutine *am) {
+	return duckdb_table_ams.emplace(am, name).second;
+}
+
 namespace pgduckdb {
 bool
 IsDuckdbTableAm(const TableAmRoutine *am) {
 	return am == &duckdb_methods;
+}
+
+const char *
+DuckdbTableAmGetName(const TableAmRoutine *am) {
+	auto it = duckdb_table_ams.find(am);
+	return it == duckdb_table_ams.end() ? nullptr : it->second.c_str();
+}
+
+const char *
+DuckdbTableAmGetName(Oid relid) {
+	if (relid == InvalidOid) {
+		return nullptr;
+	}
+
+	auto rel = RelationIdGetRelation(relid);
+	const char *name = DuckdbTableAmGetName(rel->rd_tableam);
+	RelationClose(rel);
+	return name;
 }
 } // namespace pgduckdb
