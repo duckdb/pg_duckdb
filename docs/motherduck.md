@@ -40,7 +40,7 @@ SELECT * FROM pg_terminate_backend((
 
 ## Using MotherDuck with `pg_duckdb`
 
-After completing the configuration (and possibly restarting Postgres), you can create tables in your MotherDuck database using the `duckdb` [Table Access Method (TAM)][tam]:
+After completing the configuration, you can create tables in your MotherDuck database using the `duckdb` [Table Access Method (TAM)][tam]:
 
 ```sql
 CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
