@@ -1,4 +1,4 @@
-# 1.0.0 (2025-05-14)
+# 1.0.0 (2025-09-03)
 
 ## Added
 
@@ -20,14 +20,15 @@
 - Add basic collation support by allowing users to configure `duckdb.default_collation`. (#814)
 - Add support for converting Postgres table values in parallel. This can speed up large scans a lot. (#762)
 - Add support for MotherDuck views. You can now create views inside MotherDuck and query views that are already stored in MotherDuck. (#822)
-- Add support for Postgres 18 Beta 2. Since Postgres 18 has not had a final release yet, this is still considered an experimental feature. (#788)
+- Add support for Postgres 18 Release Candidate 1. Since Postgres 18 has not had a final release yet, this is still considered an experimental feature. (#788)
+- Add support for UUIDs in prepared statement arguments.
 
 ## Changed
 
-- Update to DuckDB 1.3.0. (#754)
+- Update to DuckDB 1.3.2. (#754, #858)
 - Change the way MotherDuck is configured. It's not done anymore through the Postgres configuration file. Instead, you should now enable MotherDuck using `CALL duckdb.enable_motherduck(...)` or equivalent `CREATE SERVER` and `CREATE USER MAPPING` commands. (#668)
 - Change the way secrets are added to DuckDB. You'll need to recreate your secrets using the new method `duckdb.create_simple_secret` or `duckdb.create_azure_secret` functions. Internally secrets are now stored `SERVER` and `USER MAPPING` for the `duckdb` foreign data wrapper. (#697)
-- Disallow DuckDB execution inside functions. This feature had issues and is intended to be re-enabled in a future release. (#764)
+- Disallow DuckDB execution inside functions by default. This feature can cause crashes in rare cases and is intended to be re-enabled in a future release. For now you can use `duckdb.unsafe_allow_execution_inside_function` to allow functions anyway. (#764, #884)
 - Don't convert Postgres NUMERICs with a precision that's unsupported in DuckDB to double by default. Instead it will throw an error. If you want the lossy conversion to DOUBLE to happen, you can enable `duckdb.convert_unsupported_numeric_to_double`. (#795)
 - Remove custom HTTP caching logic. (#644)
 - When creating a table in a `ddb$` schema that table now uses the `duckdb` table access method by default. (#650)
@@ -38,11 +39,13 @@
 - Support `FORMAT JSON` for `COPY` commands. (#665)
 - Force `COPY` to use DuckDB execution when using `duckdb.force_execution`. (#665)
 - Automatically use DuckDB execution for COPY when file extensions are used for filetypes that DuckDB understands (`.parquet`, `.json`, `.ndjson`, `jsonl`, `.gz`, `.zst`). (#665)
+- Automatically use DuckDB execution for `COPY` when copying from Azure and HTTP locations. (#872)
 - Return `TEXT` columns instead of `VARCHAR` columns when using DuckDB execution. (#583)
 - Extensions in `duckdb.extensions` now get automatically installed before running any DuckDB query if `duckdb.autoinstall_known_extensions` is set to `true`. This helps with read-replica setups, where the extension gets installed on the primary and but the replica is queried. (#801)
 - By default `duckdb.disabled_filesystems` is now empty. To keep the default installation secure, `LocalFileSystem` will now be appended for any user that does not have the `pg_read_server_files` and `pg_write_server_files` privileges. (#802)
 - Push down `LIKE` expressions and `upper()`/`lower()` calls to Postgres storage. These expressions can sometimes be pushed down to the index. (#808)
--
+- Changed `duckdb.max_memory`/`duckdb.memory_limit` to accept integer values instead of a string, to avoid users entering values that DuckDB does not understand. This breaks backwards compatibility slightly: `MiB`, `GiB` etc suffixes are now not supported anymore,  only `MB`, `GB` etc suffixes are now allowed. (#883)
+- Add support for sub-extensions. This allows other Postgres extensions to build on top of pg_duckdb. (#893)
 
 ## Fixed
 
@@ -71,7 +74,9 @@
 - Fix LIKE expressions involving a backslash (`\`) or `LIKE ... ESCAPE` expressions. (#815)
 - Fix errors for transactions that use `SET TRANSACTION ISOLATION`. (#834)
 - Fix compatibility issue with TimescaleDB extension. (#846)
-
+- Fix potential infinite loop during query cancelation (#875)
+- Fix do not allow relative path in DuckDB COPY statements. This is to provide the same protections as vanilla Postgres, so users don't accidentally overwrite database files. (#827)
+- Fix crashes involving postgres tables, by always materializing the entire DuckDB result set if the query involves Postgres tables. (#877)
 
 # 0.3.1 (2025-02-13)
 
