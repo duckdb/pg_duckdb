@@ -34,23 +34,23 @@
    COMMIT;
    ```
 
-4.  **DuckDB DDL operations (1.0.0+):**
+4.  **DuckDB DDL operations:**
    ```sql
    BEGIN;
    -- Create DuckDB tables
-   CREATE TABLE analytics USING duckdb AS 
-     SELECT region, COUNT(*) as sales_count 
-     FROM read_csv('s3://sales/*.csv') 
+   CREATE TABLE analytics USING duckdb AS
+     SELECT region, COUNT(*) as sales_count
+     FROM read_csv('s3://sales/*.csv')
      GROUP BY region;
-   
+
    -- ALTER TABLE operations on DuckDB tables
    ALTER TABLE analytics ADD COLUMN created_at TIMESTAMP DEFAULT NOW();
    ALTER TABLE analytics RENAME COLUMN sales_count TO total_sales;
-   
+
    -- COPY operations with DuckDB tables
    COPY analytics TO 's3://output/analytics.parquet';
    COPY analytics FROM 's3://backup/analytics_restore.parquet';
-   
+
    -- Multiple DDL operations in sequence
    CREATE TABLE temp_staging USING duckdb AS SELECT * FROM analytics WHERE total_sales > 100;
    DROP TABLE analytics;
@@ -122,7 +122,7 @@ BEGIN;
 -- Create table with complex types (requires DuckDB execution context)
 CREATE TEMP TABLE user_profiles USING duckdb AS
 SELECT * FROM duckdb.query($$
-  SELECT 
+  SELECT
       user_id,
       {'name': first_name, 'email': email} AS profile,
       ARRAY[interest1, interest2, interest3] AS interests,
@@ -149,7 +149,7 @@ SELECT * FROM read_parquet('s3://data-lake/sales/**/*.parquet');
 
 -- Export to different formats
 COPY sales_data TO 's3://exports/sales_summary.parquet';
-COPY (SELECT region, SUM(amount) FROM sales_data GROUP BY region) 
+COPY (SELECT region, SUM(amount) FROM sales_data GROUP BY region)
 TO 's3://exports/regional_summary.csv' (FORMAT CSV, HEADER);
 
 -- Backup and restore operations
@@ -169,7 +169,7 @@ Analyze query execution plans with enhanced EXPLAIN capabilities:
 
 ```sql
 -- Get execution plan in JSON format
-EXPLAIN (FORMAT JSON) 
+EXPLAIN (FORMAT JSON)
 SELECT r['customer_id'], COUNT(*) as order_count
 FROM read_parquet('s3://orders/*.parquet') r
 GROUP BY r['customer_id'];
@@ -190,7 +190,7 @@ GROUP BY c.name;
    BEGIN;
    INSERT INTO postgres_table SELECT * FROM source_table;
    COMMIT;
-   
+
    BEGIN;
    INSERT INTO duckdb_table SELECT * FROM read_parquet('s3://data.parquet');
    COMMIT;
@@ -205,8 +205,8 @@ GROUP BY c.name;
        UNION ALL
        SELECT * FROM read_parquet('s3://external.parquet')
    )
-   SELECT region, SUM(amount) 
-   FROM combined_data 
+   SELECT region, SUM(amount)
+   FROM combined_data
    GROUP BY region;
    COMMIT;
    ```
@@ -216,14 +216,14 @@ GROUP BY c.name;
    -- Good: DuckDB-only ETL transaction
    BEGIN;
    CREATE TEMP TABLE processed_data USING duckdb AS
-   SELECT 
+   SELECT
        customer_id,
        SUM(amount) as total_spend,
        COUNT(*) as order_count
    FROM read_parquet('s3://raw-data/*.parquet')
    WHERE date >= '2024-01-01'
    GROUP BY customer_id;
-   
+
    -- Export results
    COPY processed_data TO 's3://processed/customer_summary.parquet';
    COMMIT;

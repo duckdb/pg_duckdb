@@ -6,7 +6,7 @@
 
 - **Integer types**: `smallint`, `integer`, `bigint`, `tinyint` (from DuckDB)
 - **Floating point types**: `real`, `double precision`
-- **Numeric types**: `numeric`/`decimal` (with limitations, see below), `varint` (1.0.0+)
+- **Numeric types**: `numeric`/`decimal` (with limitations, see below), `varint`
 - **String types**: `text`, `varchar`, `char`, `bpchar`
 - **Binary types**: `bytea`, `blob`
 - **Boolean**: `boolean`
@@ -15,12 +15,12 @@
 ## Date/Time Types
 
 - **Date**: `date`
-- **Time**: `time`, `timetz` (from 1.0.0+)
+- **Time**: `time`, `timetz`
 - **Timestamp**: `timestamp`, `timestamptz`
 - **Interval**: `interval`
 - **High-precision timestamps**: `timestamp_ns`, `timestamp_ms`, `timestamp_s`
 
-## Bit String Types (1.0.0+)
+## Bit String Types
 
 - **Fixed-length bit strings**: `bit(n)` - stores exactly n bits (PostgreSQL only)
   ```sql
@@ -43,7 +43,7 @@
 - **Arrays**: Single and multi-dimensional arrays for all basic types
 - **Domain types**: Custom domain types based on supported base types
 
-## Advanced DuckDB Types (1.0.0+)
+## Advanced DuckDB Types
 
 > **Important**: Advanced DuckDB types (`STRUCT`, `MAP`, `UNION`, `VARINT`) require a DuckDB execution context. Use them within `duckdb.query()` function calls or in DuckDB table operations. Direct usage in PostgreSQL `CREATE TABLE` statements or regular `SELECT` queries may not work.
 
@@ -88,7 +88,7 @@ $$);
 
 -- Access STRUCT fields
 SELECT * FROM duckdb.query($$
-  SELECT person.name, person.age 
+  SELECT person.name, person.age
   FROM (SELECT {'name': 'Bob', 'age': 25} AS person) t
 $$);
 

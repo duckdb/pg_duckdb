@@ -26,13 +26,13 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | :--- | :---------- |
 | `approx_count_distinct` | Approximates the count of distinct elements using HyperLogLog. |
 
-## Sampling Functions (1.0.0+)
+## Sampling Functions
 
 |Name|Description|
 | :--- | :---------- |
 | `TABLESAMPLE` | Samples a subset of rows from a table or query result. |
 
-## Time Functions (1.0.0+)
+## Time Functions
 
 |Name|Description|
 | :--- | :---------- |

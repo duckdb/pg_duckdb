@@ -92,7 +92,7 @@ Converts `NUMERIC` types with unsupported precision/scale to `DOUBLE` instead of
 - **Default**: `false`
 - **Access**: General
 
-## File System and Storage (1.0.0+)
+## File System and Storage
 
 ### `duckdb.temporary_directory`
 
