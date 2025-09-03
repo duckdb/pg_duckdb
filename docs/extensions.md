@@ -91,6 +91,6 @@ SELECT * FROM delta_scan('s3://bucket/delta-table/');
 
 ## Security Considerations
 
-By default, executing `duckdb.install_extension` and `duckdb.autoload_extension` is only allowed for superusers. This is to prevent users from installing extensions that may have security implications or interfere with the database's operation.
+By default, executing `duckdb.install_extension(...)` and `duckdb.autoload_extension(...)` is only allowed for superusers. This is to prevent users from installing extensions that may have security implications or interfere with the database's operation.
 
 This means that users can only use extensions that DuckDB has marked as "auto-installable". If you want to restrict the use of those extensions to a specific list, you can set [`duckdb.autoinstall_known_extensions`](settings.md#duckdbautoinstall_known_extensions) to `false`. This will prevent users from automatically installing any known extensions. Note that this requires that any extensions you **do** want to allow are already installed by a superuser.
