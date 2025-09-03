@@ -4,259 +4,262 @@
         <img width="800" src="logo-light.svg" alt="pg_duckdb logo" />
     </picture>
 </p>
+
 <p align="center">
-	0.3.0 release is here 🎉<br />
-	Please <a href="#try-it-out">try</a> it out!
+    <strong>PostgreSQL extension for DuckDB</strong><br>
 </p>
 
-# pg_duckdb: Official Postgres extension for DuckDB
+<p align="center">
+    <a href="https://hub.docker.com/r/pgduckdb/pgduckdb"><img src="https://img.shields.io/docker/pulls/pgduckdb/pgduckdb?style=flat-square&logo=docker" alt="Docker Pulls"></a>
+    <a href="https://github.com/duckdb/pg_duckdb/releases"><img src="https://img.shields.io/github/v/release/duckdb/pg_duckdb?style=flat-square&logo=github" alt="GitHub Release"></a>
+    <a href="https://github.com/duckdb/pg_duckdb/blob/main/LICENSE"><img src="https://img.shields.io/github/license/duckdb/pg_duckdb?style=flat-square" alt="License"></a>
+</p>
 
-pg_duckdb is a Postgres extension that embeds DuckDB's columnar-vectorized analytics engine and features into Postgres. We recommend using pg_duckdb to build high performance analytics and data-intensive applications.
+---
 
-pg_duckdb was developed in collaboration with our partners, [Hydra][] and [MotherDuck][].
+# pg_duckdb: Official PostgreSQL Extension for DuckDB
 
-## Try It Out
+**pg_duckdb** integrates DuckDB's columnar-vectorized analytics engine into PostgreSQL, enabling high-performance analytics and data-intensive applications. Built in collaboration with [Hydra][hydra] and [MotherDuck][motherduck].
 
-An easy way to try pg_duckdb is using the Hydra python package. Try now locally or deploy to the cloud:
+## Key Features
 
+- **Execute analytics queries without changes**: run your existing SQL analytics queries as you normally would, and `pg_duckdb` will automatically use DuckDB's SQL engine to execute them when you set `duckdb.force_execution=true`.
+- **Read/write data from data lakes**: Read/write* Parquet, CSV, JSON, Iceberg & Delta Lake from S3, GCS, Azure & R2.
+- **Integration with cloud analytics**: Out-of-the-box support of [MotherDuck](https://motherduck.com/) as compute provider.
+
+## How `pg_duckdb` works
+
+`pg_duckdb` automatically accelerates your existing analytical queries.
+
+- **No special syntax needed:** for queries on your regular PostgreSQL tables, you don't need to change your SQL. Just run your `SELECT` statements as you normally would, and `pg_duckdb` will use DuckDB's engine to execute them.
+- **No data export required:** You do not need to export your data to Parquet or any other format. `pg_duckdb` works directly with your existing PostgreSQL tables.
+
+## See it in action
+
+### Querying your existing PostgreSQL data
+
+This is the most common and straightforward use case. If you have a standard PostgreSQL table, you can query it using standard SQL.
+
+**Example:**
+
+Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/gotchas_and_syntax.md#create-a-table)). To run an analytical query, you just write standard SQL, configure `duckdb.force_exectunio` and `pg_duckdb` will handle the rest.
+
+```sql
+SET duckdb.force_execution = true;
+SELECT
+    order_date,
+    COUNT(*) AS number_of_orders,
+    SUM(amount) AS total_revenue
+FROM
+    orders
+GROUP BY
+    order_date
+ORDER BY
+    order_date;
 ```
+
+### Querying external data (your first data lake query)
+
+`pg_duckdb` allows you to query external files (like Parquet or CSV) as if they were tables in your database. This is perfect for querying data lakes from `pg_duckdb`. To learn more on these functions, see [read functions documentation](docs/functions.md#read-functions).
+
+```sql
+-- Setup S3 access in seconds directly from SQL
+SELECT duckdb.create_simple_secret(
+    type := 'S3', key_id := 'your_key', secret := 'your_secret', region := 'us-east-1'
+);
+
+SELECT
+    r['product_name'], -- 'r' is to iterate on the row object returned from read_parquet()
+    AVG(r['rating']) AS average_rating
+FROM
+    read_parquet('s3://your-bucket/reviews.parquet') r
+GROUP BY
+    r['product_name']
+ORDER BY
+    average_rating DESC;
+```
+
+### Combining PostgreSQL and DuckDB data
+
+You can easily join your PostgreSQL tables with external data from your data lake.
+
+```sql
+-- Join a PostgreSQL table with a remote Parquet file
+SELECT
+    o.product_name,
+    o.total_revenue,
+    r.average_rating
+FROM
+    (
+        -- First, aggregate our local orders data
+        SELECT
+            product_name,
+            SUM(amount) AS total_revenue
+        FROM
+            orders
+        GROUP BY
+            product_name
+    ) o
+JOIN
+    (
+        -- Then, aggregate our remote reviews data
+        SELECT
+            r['product_name'] AS product_name,
+            AVG(r['rating']) AS average_rating
+        FROM
+            read_parquet('s3://your-bucket/reviews.parquet') r
+        GROUP BY
+            r['product_name']
+    ) r ON o.product_name = r.product_name
+ORDER BY
+    o.total_revenue DESC;
+```
+
+### Modern DataLake Formats
+
+Work with modern data formats like DuckLake, Iceberg and Delta Lake. To learn more, see [extensions documentation](docs/extensions.md).
+
+```sql
+-- Query Apache Iceberg tables with time travel
+SELECT duckdb.install_extension('iceberg');
+SELECT * FROM iceberg_scan('s3://warehouse/sales_iceberg', version := '2024-03-15-snapshot')
+
+-- Process Delta Lake with schema evolution
+SELECT duckdb.install_extension('delta');
+SELECT * FROM delta_scan('s3://lakehouse/user_events')
+```
+
+### MotherDuck integration (optional)
+
+`pg_duckdb` integrates with [MotherDuck](https://motherduck.com/), a cloud analytics platform. This allows you to run your queries on MotherDuck's powerful compute infrastructure, while still using your existing PostgreSQL tables.
+
+To learn more, see [MotherDuck documentation](docs/motherduck.md).
+
+```sql
+-- Connect to MotherDuck
+CALL duckdb.enable_motherduck('<your_motherduck_token>');
+```
+
+```sql
+-- Your existing MotherDuck tables appear automatically
+SELECT region, COUNT(*) FROM my_cloud_analytics_table;
+
+-- Create cloud tables that sync across teams
+CREATE TABLE real_time_kpis USING duckdb AS
+SELECT
+    date_trunc('day', created_at) as date,
+    COUNT(*) as daily_signups,
+    SUM(revenue) as daily_revenue
+FROM user_events
+GROUP BY date;
+```
+
+## Quick Start
+
+### Docker
+
+Run PostgreSQL with pg_duckdb pre-installed in a docker container:
+
+```bash
+docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:17-1.0.0
+```
+
+With MotherDuck:
+```bash
+export MOTHERDUCK_TOKEN=<your_token>
+docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:17-1.0.0
+```
+
+### Try with Hydra
+
+You can also get started using [Hydra][hydra]:
+
+```bash
 pip install hydra-cli
 hydra
 ```
 
-## Features
+### Package Managers
 
-See our [official documentation][docs] for further details.
-
-- `SELECT` queries executed by the DuckDB engine can directly read Postgres tables. (If you only query Postgres tables you need to run `SET duckdb.force_execution TO true`, see the **IMPORTANT** section above for details)
-	- Able to read [data types](https://www.postgresql.org/docs/current/datatype.html) that exist in both Postgres and DuckDB. The following data types are supported: numeric, character, binary, date/time, boolean, uuid, json, domain, and arrays.
-	- If DuckDB cannot support the query for any reason, execution falls back to Postgres.
-- Read and Write support for object storage (AWS S3, Azure, Cloudflare R2, or Google GCS):
-	- Read parquet, CSV and JSON files:
-		- `SELECT * FROM read_parquet('s3://bucket/file.parquet')`
-		- `SELECT r['id'], r['name'] FROM read_csv('s3://bucket/file.csv') r`
-		- `SELECT count(*) FROM read_json('s3://bucket/file.json')`
-		- You can pass globs and arrays to these functions, just like in DuckDB
-	- Enable the DuckDB Iceberg extension using `SELECT duckdb.install_extension('iceberg')` and read Iceberg files with `iceberg_scan`.
-	- Enable the DuckDB Delta extension using `SELECT duckdb.install_extension('delta')` and read Delta files with `delta_scan`.
-	- Write a query — or an entire table — to parquet in object storage.
-		- `COPY (SELECT foo, bar FROM baz) TO 's3://...'`
-		- `COPY table TO 's3://...'`
-		- Read and write to Parquet format in a single query
-
-			```sql
-			COPY (
-				SELECT count(*), r['name']
-				FROM read_parquet('s3://bucket/file.parquet') r
-				GROUP BY name
-				ORDER BY count DESC
-			) TO 's3://bucket/results.parquet';
-			```
-- Read and Write support for data stored in MotherDuck
-- Query and `JOIN` data in object storage/MotherDuck with Postgres tables, views, and materialized views.
-- Create temporary tables in DuckDB its columnar storage format using `CREATE TEMP TABLE ... USING duckdb`.
-- Install DuckDB extensions using `SELECT duckdb.install_extension('extension_name');`
-- Toggle DuckDB execution on/off with a setting:
-	- `SET duckdb.force_execution = true|false`
-- Cache remote object locally for faster execution using `SELECT duckdb.cache('path', 'type');` where
-	- 'path' is HTTPFS/S3/GCS/R2 remote object
-	- 'type' specify remote object type: 'parquet' or 'csv'
-
-## Installation
-
-### Docker
-
-Docker images are [available on Dockerhub](https://hub.docker.com/r/pgduckdb/pgduckdb) and are based on the official Postgres image. Use of this image is [the same as the Postgres image](https://hub.docker.com/_/postgres/). For example, you can run the image directly:
-
-```shell
-docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:16-main
-```
-
-And with MotherDuck, you only need a [a MotherDuck access token][md-access-token] and then it is as simple as:
-```shell
-$ export MOTHERDUCK_TOKEN=<your personal MD token>
-$ docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:16-main
-```
-
-Or you can use the docker compose in this repo:
-
-```shell
-git clone https://github.com/duckdb/pg_duckdb && cd pg_duckdb && docker compose up -d
-```
-
-Once started, connect to the database using psql:
-
-```shell
-psql postgres://postgres:duckdb@127.0.0.1:5432/postgres
-# Or if using docker compose
-docker compose exec db psql
-```
-
-For other usages see our [Docker specific README][docker readme].
-
-[docker readme]: https://github.com/duckdb/pg_duckdb/blob/main/docker/README.md
-### pgxman (apt)
-
-Pre-built apt binaries are [available via pgxman](https://pgx.sh/pg_duckdb). After installation, you will need to add pg_duckdb to `shared_preload_libraries` and create the extension.
-
-```shell
+**pgxman (apt):**
+```bash
 pgxman install pg_duckdb
 ```
 
-Note: due to the use of `shared_preload_libraries`, pgxman's container support is not currently compatible with pg_duckdb.
+**Compile from source:**
 
-### Compile from source
-
-To build pg_duckdb, you need:
-
-* Postgres 14-17
-* Ubuntu 22.04-24.04 or MacOS
-* Standard set of build tools for building Postgres extensions
-* [Build tools that are required to build DuckDB](https://duckdb.org/docs/dev/building/build_instructions)
-
-To build and install, run:
-
-```sh
+```bash
+git clone https://github.com/duckdb/pg_duckdb
+cd pg_duckdb
 make install
 ```
 
-Add `pg_duckdb` to the `shared_preload_libraries` in your `postgresql.conf` file:
+*See [compilation guide](docs/compilation.md) for detailed instructions.*
 
-```ini
-shared_preload_libraries = 'pg_duckdb'
-```
+## Configuration
 
-Next, create the `pg_duckdb` extension:
+See [settings documentation](docs/settings.md) for complete configuration options.
 
-```sql
-CREATE EXTENSION pg_duckdb;
-```
+## Documentation
 
-**IMPORTANT:** DuckDB execution is usually enabled automatically when needed. It's enabled whenever you use DuckDB functions (such as `read_csv`), when you query DuckDB tables, and when running `COPY table TO 's3://...'`. However, if you want queries which only touch Postgres tables to use DuckDB execution you need to run `SET duckdb.force_execution TO true`'. This feature is _opt-in_ to avoid breaking existing queries. To avoid doing that for every session, you can configure it for a certain user by doing `ALTER USER my_analytics_user SET duckdb.force_execution TO true`.
+| Topic | Description |
+|-------|-------------|
+| [Functions](docs/functions.md) | Complete function reference |
+| [Syntax Guide & Gotchas](docs/gotchas_and_syntax.md) | Quick reference for common SQL patterns and things to know |
+| [Types](docs/types.md) | Supported data types and advanced types usage |
+| [MotherDuck](docs/motherduck.md) | Cloud integration guide |
+| [Secrets](docs/secrets.md) | Credential management |
+| [Extensions](docs/extensions.md) | DuckDB extension usage |
+| [Transactions](docs/transactions.md) | Transaction behavior |
+| [Compilation](docs/compilation.md) | Build from source |
 
-## Getting Started
+**Note**: Advanced DuckDB types (STRUCT, MAP, UNION) require DuckDB execution context. Use `duckdb.query()` for complex type operations and `TEMP` tables for DuckDB table creation in most cases. See [Types documentation](docs/types.md) for details.
 
-See our [official documentation][docs] for more usage information.
+## Performance
 
-pg_duckdb relies on DuckDB's vectorized execution engine to read and write data to object storage bucket (AWS S3, Azure, Cloudflare R2, or Google GCS) and/or MotherDuck. The follow two sections describe how to get started with these destinations.
+pg_duckdb excels at:
 
-### Object storage bucket (AWS S3, Azure, Cloudflare R2, or Google GCS)
-
-Querying data stored in Parquet, CSV, JSON, Iceberg and Delta format can be done with `read_parquet`, `read_csv`, `read_json`, `iceberg_scan` and `delta_scan` respectively.
-
-1. Add a credential to enable DuckDB's httpfs support.
-
-	```sql
-	SELECT duckdb.create_simple_secret(
-		type          := 'S3',          -- Type: one of (S3, GCS, R2)
-		key_id        := 'access_key_id',
-		secret        := 'xxx',
-		session_token := 'yyy',         -- (optional)
-		region        := 'us-east-1',   -- (optional)
-		url_style     := 'xxx',         -- (optional)
-		provider      := 'xxx',         -- (optional)
-		endpoint      := 'xxx'          -- (optional)
-	)
-	```
-
-2. Copy data directly to your bucket - no ETL pipeline!
-
-	```sql
-	COPY (SELECT user_id, item_id, price, purchased_at FROM purchases)
-	TO 's3://your-bucket/purchases.parquet;
-	```
-
-3. Perform analytics on your data.
-
-	```sql
-	SELECT SUM(r['price']) AS total, r['item_id']
-	FROM read_parquet('s3://your-bucket/purchases.parquet') r
-	GROUP BY item_id
-	ORDER BY total DESC
-	LIMIT 100;
-	```
-
-Note, for Azure, we provide a dedicated function:
-```sql
-SELECT duckdb.create_azure_secret('< connection string >');
-```
-
-Note: writes to Azure are not yet supported, please see [the current discussion](https://github.com/duckdb/duckdb-azure/issues/44) for more information.
-
-### Connect with MotherDuck
-
-`pg_duckdb` also integrates with [MotherDuck][md].
-To enable this support you first need to [generate an access token][md-access-token].
-Then you can enable it by simply using the `enable_motherduck` convenience method:
-
-```sql
--- If not provided, the token will be read from the `motherduck_token` environment variable
--- If not provided, the default MD database name is `my_db`
-CALL duckdb.enable_motherduck('<optional token>', '<optional MD database name>');
-```
-
-Read more [here][md-docs] about MotherDuck integration.
-
-You can now create tables in the MotherDuck database by using the `duckdb` [Table Access Method][tam] like this:
-```sql
-CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
-CREATE TABLE users_md_copy USING duckdb AS SELECT * FROM users;
-```
-
-[tam]: https://www.postgresql.org/docs/current/tableam.html
-[md-docs]: docs/motherduck.md
-
-
-Any tables that you already had in MotherDuck are automatically available in Postgres. Since DuckDB and MotherDuck allow accessing multiple databases from a single connection and Postgres does not, we map database+schema in DuckDB to a schema name in Postgres.
-
-This is done in the following way:
-1. Each schema in your default MotherDuck database (see above on how to specify which database is the default) are simply merged with the Postgres schemas with the same name.
-2. Except for the `main` DuckDB schema in your default database, which is merged with the Postgres `public` schema.
-3. Tables in other databases are put into dedicated DuckDB-only schemas. These schemas are of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
-4. Except for the `main` schema in those other databases. That schema should be accessed using the shorter name `ddb$<db_name>` instead.
-
-An example of each of these cases is shown below:
-
-```sql
-INSERT INTO my_table VALUES (1, 'abc'); -- inserts into my_db.main.my_table
-INSERT INTO your_schema.tab1 VALUES (1, 'abc'); -- inserts into my_db.your_schema.tab1
-SELECT COUNT(*) FROM ddb$my_shared_db.aggregated_order_data; -- reads from my_shared_db.main.aggregated_order_data
-SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.hn.hacker_news
-```
-
-[md]: https://motherduck.com/
-[md-access-token]: https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/authenticating-to-motherduck/#authentication-using-an-access-token
-
-## Roadmap
-
-Please see the [project milestones][milestones] for upcoming planned tasks and features.
+- **Analytical Workloads**: Aggregations, window functions, complex JOINs
+- **Data Lake Queries**: Scanning large Parquet/CSV files
+- **Mixed Workloads**: Combining OLTP (PostgreSQL) with OLAP (DuckDB)
+- **ETL Pipelines**: Transform and load data at scale
 
 ## Contributing
 
-pg_duckdb was developed in collaboration with our partners, [Hydra][] and [MotherDuck][]. We look forward to their continued contributions and leadership.
+We welcome contributions! Please see:
 
-[Hydra][] is a Y Combinator-backed database company, focused on DuckDB-Powered Postgres for app developers.
-
-[MotherDuck][] is the cloud-based data warehouse that extends the power of DuckDB.
-
-We welcome all contributions big and small:
-
-- [Vote on or suggest features][discussions] for our roadmap.
-- [Open a PR][prs].
-- [Submit a feature request or bug report][issues].
-- [Improve the docs][docs].
-
-## Resources
-
-- [Read the pg_duckdb documentation][docs].
-- Please see the [project milestones][milestones] for upcoming planned tasks and features.
-- [GitHub Issues][issues] for bug reports
+- [Contributing Guidelines](CONTRIBUTING.md)
+- [Code of Conduct](CODE_OF_CONDUCT.md)
+- [Project Milestones][milestones] for upcoming features
+- [Discussions][discussions] for feature requests
+- [Issues][issues] for bug reports
 - [Join the DuckDB Discord community](https://discord.duckdb.org/) then chat in [the #pg_duckdb channel](https://discord.com/channels/909674491309850675/1289177578237857802).
+
+## Support
+
+- **Documentation**: [Complete documentation][docs]
+- **Community**: [DuckDB Discord #pg_duckdb channel](https://discord.com/channels/909674491309850675/1289177578237857802)
+- **Issues**: [GitHub Issues][issues]
+- **Commercial**: [Hydra][hydra] and [MotherDuck][motherduck] offer commercial support
+
+## Requirements
+
+- **PostgreSQL**: 14, 15, 16, 17
+- **Operating Systems**: Ubuntu 22.04-24.04, macOS
+
+## License
+
+Licensed under the [MIT License](LICENSE).
+
+---
+
+<p align="center">
+    <strong>Built with ❤️</strong><br> in collaboration with <a href="https://hydra.so">Hydra</a> and <a href="https://motherduck.com">MotherDuck</a>
+</p>
 
 [milestones]: https://github.com/duckdb/pg_duckdb/milestones
 [discussions]: https://github.com/duckdb/pg_duckdb/discussions
-[prs]: https://github.com/duckdb/pg_duckdb/pulls
 [issues]: https://github.com/duckdb/pg_duckdb/issues
-[Hydra]: https://hydra.so/
-[Motherduck]: https://motherduck.com/
 [docs]: https://github.com/duckdb/pg_duckdb/tree/main/docs
+[hydra]: https://hydra.so/
+[motherduck]: https://motherduck.com/

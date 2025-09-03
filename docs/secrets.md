@@ -2,9 +2,24 @@
 
 DuckDB secrets can be configured either using utility functions or with a Foreign Data Wrapper for more advanced cases.
 
-## Simple secrets
+## Quick Start: Simple Secrets
 
-For example with utility functions:
+The easiest way to configure credentials is using the utility functions:
+
+### AWS S3 / Compatible Storage
+
+```sql
+-- Basic S3 secret (most common)
+SELECT duckdb.create_simple_secret(
+    type := 'S3',
+    key_id := 'your_access_key_id',
+    secret := 'your_secret_access_key',
+    region := 'us-east-1'
+);
+```
+
+
+There are many more arguments to this function:
 
 ```sql
 SELECT duckdb.create_simple_secret(
@@ -15,13 +30,17 @@ SELECT duckdb.create_simple_secret(
     region        := 'us-east-1',   -- (optional)
     url_style     := 'xxx',         -- (optional)
     provider      := 'xxx',         -- (optional)
-    endpoint      := 'xxx'          -- (optional)
+    endpoint      := 'xxx',         -- (optional)
+    scope         := 'xxx'          -- (optional)
 )
 ```
 
 For Azure secrets you may use:
 ```sql
-SELECT duckdb.create_azure_secret('< connection string >');
+SELECT duckdb.create_azure_secret(
+    '< connection string >',
+    scope := 'xxx'          -- (optional)
+);
 ```
 
 ## Secrets with `credential_chain` provider:
