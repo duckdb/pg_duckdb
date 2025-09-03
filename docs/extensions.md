@@ -9,7 +9,6 @@
 | `iceberg` | Apache Iceberg support | Installable |
 | `delta` | Delta Lake support | Installable |
 | `azure` | Azure Blob Storage connectivity | Installable |
-| `spatial` | Geospatial functions and types | Installable |
 | Community | Various community extensions | Installable (requires configuration) |
 
 Installing other extensions may work, but they have not been thoroughly tested and are used at your own risk
@@ -78,9 +77,6 @@ Apache Iceberg support adds functions to read Iceberg tables and metadata. For a
 #### `delta`
 Delta Lake support adds the ability to read Delta Lake files via [delta_scan](functions.md#delta_scan).
 
-#### `spatial`
-Geospatial functions and data types for working with geometric data.
-
 ### Extension Usage Examples
 
 ```sql
@@ -91,10 +87,6 @@ SELECT * FROM iceberg_scan('s3://bucket/iceberg-table/');
 -- Install and use Delta
 SELECT duckdb.install_extension('delta');
 SELECT * FROM delta_scan('s3://bucket/delta-table/');
-
--- Install spatial extension for geospatial queries
-SELECT duckdb.install_extension('spatial');
-SELECT ST_Distance(point1, point2) FROM locations;
 ```
 
 ## Security Considerations

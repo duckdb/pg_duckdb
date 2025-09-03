@@ -342,7 +342,7 @@ GRANT ALL ON FUNCTION duckdb.install_extension(TEXT, TEXT) TO my_admin;
 Loads a DuckDB extension for the current session only. Unlike `install_extension`, this doesn't configure the extension to be loaded automatically in future sessions.
 
 ```sql
-SELECT duckdb.load_extension('spatial');
+SELECT duckdb.load_extension('iceberg');
 ```
 
 ##### Required Arguments
@@ -357,10 +357,10 @@ Configures whether an installed extension should be automatically loaded in new 
 
 ```sql
 -- Disable auto-loading for an extension
-SELECT duckdb.autoload_extension('spatial', false);
+SELECT duckdb.autoload_extension('iceberg', false);
 
 -- Enable auto-loading for an extension
-SELECT duckdb.autoload_extension('spatial', true);
+SELECT duckdb.autoload_extension('iceberg', true);
 ```
 
 ##### Required Arguments
@@ -543,7 +543,7 @@ Formats timestamps as strings using standard format codes. This function provide
 SELECT strftime(NOW(), '%Y-%m-%d %H:%M:%S') AS formatted_time;
 
 -- Format timestamps in different formats
-SELECT 
+SELECT
     order_id,
     strftime(created_at, '%Y-%m-%d') AS order_date,
     strftime(created_at, '%H:%M') AS order_time,
@@ -584,13 +584,13 @@ Parses strings into timestamps using format codes. This is the inverse of `strft
 SELECT strptime('2024-01-15 14:30:00', '%Y-%m-%d %H:%M:%S') AS parsed_timestamp;
 
 -- Parse different formats
-SELECT 
+SELECT
     strptime('Jan 15, 2024', '%b %d, %Y') AS date1,
     strptime('15/01/2024', '%d/%m/%Y') AS date2,
     strptime('2024-01-15T14:30:00Z', '%Y-%m-%dT%H:%M:%SZ') AS iso_date;
 
 -- Parse log timestamps
-SELECT 
+SELECT
     log_id,
     strptime(timestamp_string, '%Y-%m-%d %H:%M:%S') AS parsed_time,
     message
@@ -616,13 +616,13 @@ Converts timestamps to Unix epoch seconds (seconds since 1970-01-01 00:00:00 UTC
 SELECT epoch(NOW()) AS current_epoch;
 
 -- Convert timestamps for API usage
-SELECT 
+SELECT
     event_id,
     epoch(event_timestamp) AS epoch_seconds
 FROM events;
 
 -- Filter using epoch time
-SELECT * FROM events 
+SELECT * FROM events
 WHERE epoch(created_at) > 1640995200; -- After 2022-01-01
 ```
 
@@ -641,7 +641,7 @@ Converts timestamps to Unix epoch milliseconds.
 SELECT epoch_ms(NOW()) AS timestamp_ms;
 
 -- For time-series data
-SELECT 
+SELECT
     sensor_id,
     epoch_ms(reading_time) AS timestamp_ms,
     value
@@ -699,7 +699,7 @@ SELECT * FROM events TABLESAMPLE SYSTEM(1000 ROWS);
 SELECT * FROM read_parquet('s3://datalake/**/*.parquet') TABLESAMPLE SYSTEM(5);
 
 -- Use sampling for quick data profiling
-SELECT 
+SELECT
     region,
     COUNT(*) as sample_count,
     AVG(revenue) as avg_revenue
@@ -709,7 +709,7 @@ GROUP BY region;
 -- Sample from joins for performance
 SELECT c.name, COUNT(o.id) as order_count
 FROM customers c
-JOIN orders o TABLESAMPLE SYSTEM(10) ON c.id = o.customer_id  
+JOIN orders o TABLESAMPLE SYSTEM(10) ON c.id = o.customer_id
 GROUP BY c.name;
 ```
 
@@ -730,7 +730,7 @@ SELECT * FROM medium_table TABLESAMPLE BERNOULLI(5);
 
 - **Data exploration**: Quick analysis of large datasets
 - **Performance testing**: Test queries on sample data
-- **Data profiling**: Understand data distribution patterns  
+- **Data profiling**: Understand data distribution patterns
 - **ETL development**: Develop pipelines on sample data
 - **Quality checks**: Validate data quality on samples
 
@@ -744,7 +744,7 @@ Further information:
 | sampling_method | keyword | Either `SYSTEM` or `BERNOULLI` |
 | percentage | numeric | Percentage of rows to sample (0-100) |
 
-##### Optional Arguments  
+##### Optional Arguments
 
 | Name | Type | Description |
 | :--- | :--- | :---------- |
