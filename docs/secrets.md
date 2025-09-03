@@ -73,6 +73,12 @@ Please refer to this page for more: https://duckdb.org/docs/stable/configuration
 Secrets are stored in a combination of `SERVER` and `USER MAPPING` on `duckdb` Foreign Data Wrapper. The `USER MAPPING` hosts the sensitive elements like `token`, `session_token` and `secret`.
 Each time a DuckDB instance is created by pg_duckdb, and when a secret is modified, the secrets are loaded into the DuckDB secrets manager as non-persistent secrets.
 
+## Security Considerations
+
+**Important:** Do not grant `USAGE` permission on the `duckdb` foreign data wrapper to regular users.
+
+The owner of a foreign server can create user mappings for that server for **any user**, so only grant this to access to administrative users. Otherwise a regular user could create secrets for certain scopes for unsuspecting users.
+
 ## Further reading
 
 * [DuckDB Secrets Manager](https://duckdb.org/docs/configuration/secrets_manager.html)
