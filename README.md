@@ -213,8 +213,6 @@ See [settings documentation](docs/settings.md) for complete configuration option
 | [Transactions](docs/transactions.md) | Transaction behavior |
 | [Compilation](docs/compilation.md) | Build from source |
 
-**Note**: Advanced DuckDB types (STRUCT, MAP, UNION) require DuckDB execution context. Use `duckdb.query()` for complex type operations and `TEMP` tables for DuckDB table creation in most cases. See [Types documentation](docs/types.md) for details.
-
 ## Performance
 
 pg_duckdb excels at:
