@@ -294,6 +294,12 @@ DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 		                                          duckdb::KeywordHelper::WriteQuoted(disabled_filesystems));
 	}
 
+	if (strlen(duckdb_azure_transport_option_type) > 0) {
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET azure_transport_option_type=" +
+		                                 duckdb::KeywordHelper::WriteQuoted(duckdb_azure_transport_option_type));
+	}
+
 	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");
 	if (IsExtensionsSeqLessThan(extensions_table_last_seq)) {
 		LoadExtensions(context);
