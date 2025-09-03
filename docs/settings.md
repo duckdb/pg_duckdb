@@ -11,6 +11,15 @@ Forces queries to use DuckDB execution. This is only necessary when accessing on
 - **Default**: `false`
 - **Access**: General
 
+
+### `duckdb.default_collation`
+
+Sets the default collation to use for DuckDB string operations and sorting. This allows you to configure locale-specific string comparison behavior.
+
+- **Examples**: `"en_us"`, `"de_de"`
+- **Default**: `"C"`
+- **Access**: Superuser-only
+
 ## Security
 
 ### `duckdb.postgres_role`
@@ -48,6 +57,14 @@ Determines whether community extensions can be installed.
 - **Default**: `false`
 - **Access**: Superuser-only
 
+### `duckdb.unsafe_allow_execution_inside_function`
+
+Allows DuckDB execution inside PostgreSQL functions. This feature can cause crashes in rare cases and is disabled by default. Use with caution.
+
+- **Default**: `false`
+- **Access**: Superuser-only
+
+
 ### `duckdb.enable_external_access` (Experimental)
 
 Allows DuckDB to access external resources (e.g., HTTP, S3). This setting is not yet well-tested, and disabling it may break unintended `pg_duckdb` functionality.
@@ -80,7 +97,30 @@ The maximum number of PostgreSQL workers used for a single Postgres scan, simila
 - **Default**: `2`
 - **Access**: General
 
-## Data Type Conversion
+### `duckdb.threads_for_postgres_scan`
+
+The maximum number of DuckDB threads used for a single Postgres scan. This setting controls parallelism within DuckDB when scanning PostgreSQL tables.
+
+- **Default**: `2`
+- **Access**: General
+
+## MotherDuck
+
+### `duckdb.force_motherduck_views`
+
+Forces all views to be created in MotherDuck, even if they don't use MotherDuck tables. This setting is useful when you want to ensure all views are stored in the cloud database for consistency.
+
+- **Default**: `false`
+- **Access**: General
+
+### `duckdb.motherduck_session_hint`
+
+The session hint to use for MotherDuck connections. This setting allows you to provide additional connection parameters or hints for MotherDuck integration.
+
+- **Default**: `""` (empty string)
+- **Access**: General
+
+## Advanced Usage
 
 ### `duckdb.convert_unsupported_numeric_to_double`
 
@@ -88,6 +128,13 @@ Converts `NUMERIC` types with unsupported precision/scale to `DOUBLE` instead of
 
 - **When `true`**: Unsupported `NUMERIC`s are converted to `DOUBLE` (may cause precision loss).
 - **When `false`**: Unsupported `NUMERIC`s cause an error.
+
+- **Default**: `false`
+- **Access**: General
+
+### `duckdb.unsafe_allow_mixed_transactions`
+
+Allows mixed transactions between DuckDB and PostgreSQL. This experimental setting enables transactions that modify data in both databases, but it may cause consistency issues and is not recommended for production use.
 
 - **Default**: `false`
 - **Access**: General
@@ -101,7 +148,7 @@ Sets the directory where DuckDB writes temporary files. By default, DuckDB uses 
 - **Default**: `"DataDir/pg_duckdb/temp"`
 - **Access**: Superuser-only
 
-### `duckdb.max_temp_directory_size`
+### `duckdb.max_temp_directory_size` / `duckdb.max_temporary_directory_size`
 
 The maximum amount of data that can be stored in DuckDB's temporary directory. This setting helps prevent runaway queries from consuming all available disk space. When set to an empty string, no limit is enforced.
 
@@ -124,3 +171,10 @@ Allows DuckDB to load extensions with invalid or missing signatures. This is mos
 
 - **Default**: `false`
 - **Access**: Superuser-only
+
+### `duckdb.log_pg_explain`
+
+Logs the EXPLAIN plan of a PostgreSQL scan at the NOTICE log level. This is useful for debugging query execution and understanding how DuckDB interacts with PostgreSQL tables.
+
+- **Default**: `false`
+- **Access**: General

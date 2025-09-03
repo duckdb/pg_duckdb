@@ -20,6 +20,13 @@ By default, functions are installed into the `public` schema. You can choose an 
 
 All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/json/json_functions.html). Postgres JSON/JSONB functions are not supported.
 
+## Union Type Functions
+
+|Name|Description|
+| :--- | :---------- |
+| `union_extract` | Extracts a value from a union type by tag name. |
+| `union_tag` | Gets the tag name of the active member in a union type. |
+
 ## Aggregates
 
 |Name|Description|
@@ -43,6 +50,8 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | `epoch_ms` | Converts timestamps to Unix epoch milliseconds. |
 | `epoch_us` | Converts timestamps to Unix epoch microseconds. |
 | `epoch_ns` | Converts timestamps to Unix epoch nanoseconds. |
+| `make_timestamp` | Creates a timestamp from microseconds since epoch. |
+| `make_timestamptz` | Creates a timestamp with timezone from microseconds since epoch. |
 
 ## DuckDB Administration Functions
 
@@ -60,6 +69,7 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | Name | Description |
 | :--- | :---------- |
 | `duckdb.create_simple_secret` | Creates a simple secret for cloud storage access. |
+| `duckdb.create_azure_secret` | Creates an Azure secret using a connection string. |
 
 ## Motherduck Functions
 
@@ -466,6 +476,23 @@ SELECT duckdb.create_simple_secret(
 | url_style | text | URL style ('vhost' or 'path') |
 | use_ssl | text | Whether to use SSL ('true' or 'false') |
 
+#### <a name="create_azure_secret"></a>`duckdb.create_azure_secret(connection_string TEXT)` -> `TEXT`
+
+Creates an Azure secret using an Azure Blob Storage connection string.
+
+```sql
+-- Create an Azure secret
+SELECT duckdb.create_azure_secret(
+    'DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=mykey;EndpointSuffix=core.windows.net'
+);
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| connection_string | text | The Azure Blob Storage connection string |
+
 #### <a name="force_motherduck_sync"></a>`duckdb.force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)`
 
 > **Warning**: There are known issues with this function. To re-trigger a sync, it is recommended to use the following command instead:
@@ -683,6 +710,42 @@ SELECT epoch_ns(NOW()) AS timestamp_ns;
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | timestamp_expr | timestamp | The timestamp to convert to epoch nanoseconds |
+
+#### <a name="make_timestamp"></a>`make_timestamp(microseconds)` -> `TIMESTAMP`
+
+Creates a timestamp from microseconds since Unix epoch (1970-01-01 00:00:00 UTC).
+
+```sql
+-- Create timestamp from current epoch microseconds
+SELECT make_timestamp(epoch_us(NOW())) AS reconstructed_timestamp;
+
+-- Create specific timestamps
+SELECT make_timestamp(1640995200000000) AS new_years_2022; -- 2022-01-01 00:00:00
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| microseconds | bigint | Microseconds since Unix epoch |
+
+#### <a name="make_timestamptz"></a>`make_timestamptz(microseconds)` -> `TIMESTAMPTZ`
+
+Creates a timestamp with timezone from microseconds since Unix epoch.
+
+```sql
+-- Create timestamptz from current epoch microseconds
+SELECT make_timestamptz(epoch_us(NOW())) AS reconstructed_timestamptz;
+
+-- Create specific timestamptz
+SELECT make_timestamptz(1640995200000000) AS new_years_2022_tz;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| microseconds | bigint | Microseconds since Unix epoch |
 
 #### <a name="tablesample"></a>`TABLESAMPLE (sampling_method(percentage | rows))`
 
