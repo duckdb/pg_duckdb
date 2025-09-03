@@ -640,7 +640,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		// allowed
 	} else if (relation->rd_rel->relpersistence != RELPERSISTENCE_PERMANENT) {
 		elog(ERROR, "Only TEMP and non-UNLOGGED tables are supported in DuckDB");
-	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUser()) {
+	} else if (relation->rd_rel->relowner != pgduckdb::MotherDuckPostgresUserOid()) {
 		elog(ERROR, "MotherDuck tables must be owned by the duckb.postgres_role");
 	}
 

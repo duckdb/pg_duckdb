@@ -110,9 +110,14 @@ IsMotherDuckEnabled() {
 }
 
 Oid
-MotherDuckPostgresUser() {
+MotherDuckPostgresUserOid() {
 	Assert(cache.valid);
 	return cache.motherduck_postgres_role_oid;
+}
+
+char *
+MotherDuckPostgresUserName() {
+	return GetUserNameFromId(MotherDuckPostgresUserOid(), false);
 }
 
 Oid
