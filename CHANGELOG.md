@@ -22,6 +22,7 @@
 - Add support for MotherDuck views. You can now create views inside MotherDuck and query views that are already stored in MotherDuck. ([#822])
 - Add support for Postgres 18 Release Candidate 1. Since Postgres 18 has not had a final release yet, this is still considered an experimental feature. ([#788])
 - Add support for UUIDs in prepared statement arguments. ([#863])
+- Add `duckdb.azure_transport_option_type` setting to configure Azure extension transport options, which can be used to workaround [issue #882](https://github.com/duckdb/pg_duckdb/issues/882). ([#910])
 
 ## Changed
 
@@ -148,6 +149,7 @@
 [#872]: https://github.com/duckdb/pg_duckdb/pull/872
 [#877]: https://github.com/duckdb/pg_duckdb/pull/877
 [#863]: https://github.com/duckdb/pg_duckdb/pull/863
+[#910]: https://github.com/duckdb/pg_duckdb/pull/910
 
 # 0.3.1 (2025-02-13)
 

@@ -72,6 +72,13 @@ Allows DuckDB to access external resources (e.g., HTTP, S3). This setting is not
 - **Default**: `true`
 - **Access**: Superuser-only
 
+### `duckdb.azure_transport_option_type`
+
+Sets the azure_transport_option_type for DuckDB Azure extension. Can be used to workaround [issue #882](https://github.com/duckdb/pg_duckdb/issues/882) by setting it to `'curl'`. Only affects connections when the Azure extension is loaded.
+
+- **Default**: `""` (empty string)
+- **Access**: Superuser-only
+
 ## Resource Management
 
 Since any connection that uses DuckDB will have its own DuckDB instance, these settings are per-connection. When using `pg_duckdb` in many concurrent connections, it can be a good idea to set some of these more conservatively than their defaults.
