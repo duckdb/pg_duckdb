@@ -475,8 +475,9 @@ SELECT duckdb.create_simple_secret(
 | endpoint | text | Custom endpoint URL |
 | url_style | text | URL style ('vhost' or 'path') |
 | use_ssl | text | Whether to use SSL ('true' or 'false') |
+| scope | text | Scope for the secret (default: '') |
 
-#### <a name="create_azure_secret"></a>`duckdb.create_azure_secret(connection_string TEXT)` -> `TEXT`
+#### <a name="create_azure_secret"></a>`duckdb.create_azure_secret(connection_string TEXT, scope TEXT DEFAULT '')` -> `TEXT`
 
 Creates an Azure secret using an Azure Blob Storage connection string.
 
@@ -485,6 +486,12 @@ Creates an Azure secret using an Azure Blob Storage connection string.
 SELECT duckdb.create_azure_secret(
     'DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=mykey;EndpointSuffix=core.windows.net'
 );
+
+-- Create an Azure secret with specific scope
+SELECT duckdb.create_azure_secret(
+    'DefaultEndpointsProtocol=https;AccountName=myaccount;AccountKey=mykey;EndpointSuffix=core.windows.net',
+    'my_scope'
+);
 ```
 
 ##### Required Arguments
@@ -492,6 +499,12 @@ SELECT duckdb.create_azure_secret(
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | connection_string | text | The Azure Blob Storage connection string |
+
+##### Optional Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| scope | text | Scope for the secret (default: '') |
 
 #### <a name="force_motherduck_sync"></a>`duckdb.force_motherduck_sync(drop_with_cascade BOOLEAN DEFAULT false)`
 
@@ -680,6 +693,27 @@ FROM sensor_readings;
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | timestamp_expr | timestamp | The timestamp to convert to epoch milliseconds |
+
+#### `epoch_ms(milliseconds)` -> `TIMESTAMP`
+
+Converts Unix epoch milliseconds to a timestamp. This is the inverse of the above function.
+
+```sql
+-- Convert epoch milliseconds to timestamp
+SELECT epoch_ms(1640995200000) AS timestamp_from_ms; -- 2022-01-01 00:00:00
+
+-- Convert stored milliseconds back to timestamps
+SELECT
+    event_id,
+    epoch_ms(timestamp_ms) AS event_time
+FROM events;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| milliseconds | bigint | Milliseconds since Unix epoch |
 
 #### <a name="epoch_us"></a>`epoch_us(timestamp_expr)` -> `BIGINT`
 

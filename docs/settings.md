@@ -16,8 +16,8 @@ Forces queries to use DuckDB execution. This is only necessary when accessing on
 
 Sets the default collation to use for DuckDB string operations and sorting. This allows you to configure locale-specific string comparison behavior.
 
-- **Examples**: `"en_us"`, `"de_de"`
-- **Default**: `"C"`
+- **Examples**: `"en_us"`, `"de_de"`, `"C"`
+- **Default**: `""` (empty - uses DuckDB default)
 - **Access**: Superuser-only
 
 ## Security
@@ -78,9 +78,10 @@ Since any connection that uses DuckDB will have its own DuckDB instance, these s
 
 ### `duckdb.max_memory` / `duckdb.memory_limit`
 
-The maximum memory DuckDB can use within a single Postgres connection, comparable to Postgres's `work_mem` setting. When set to an empty string, this will use DuckDB's default, which is 80% of RAM.
+The maximum memory DuckDB can use within a single Postgres connection, comparable to Postgres's `work_mem` setting. The value is specified in megabytes. When set to 0, this will use DuckDB's default, which is 80% of RAM.
 
-- **Default**: `"4GB"`
+- **Examples**: `4096` (4GB), `8192` (8GB), `1024` (1GB)
+- **Default**: `4096` (4GB)
 - **Access**: Superuser-only
 
 ### `duckdb.threads` / `duckdb.worker_threads`
