@@ -88,9 +88,9 @@ ORDER BY
     total_spent DESC;
 ```
 
-### Creating DuckDB-backed tables
+### Creating MotherDuck-backed tables
 
-To persist the results of an analytical query, you can create a new table that uses DuckDB's fast columnar storage. Use the `USING duckdb` clause.
+To persist the results of an analytical query, you can create a new table that uses MotherDuck to store the data in columnar format. Use the `USING duckdb` clause.
 
 ```sql
 -- Create a new table 'sales_summary' with DuckDB storage
@@ -135,13 +135,15 @@ This section outlines behaviors and limitations in `pg_duckdb`, things to know t
 
 ### Querying
 
-- **Standard SQL is the default**. For analytical queries on your PostgreSQL tables, use standard SQL. `pg_duckdb` accelerates them automatically. No special functions are needed.
+- **Standard SQL is the default**. For analytical queries on your PostgreSQL tables, use standard SQL. `pg_duckdb` accelerates them automatically as long as you configure `duckdb.force_excecution=true`. No special functions are needed.
 
 - **Use `r['column']` for external files**. When using `read_parquet()`, `read_csv()`, etc., you must access columns with the `r['column_name']` syntax, where `r` is the alias for the function call.
 
 - **`duckdb.query()` is for special cases**. Only use `duckdb.query()` when you need DuckDB-specific syntax that PostgreSQL does not support, like `PIVOT`. It is not needed for regular queries.
 
 - **CTE and subquery behavior**. When using `read_parquet()` inside a CTE or subquery, column references can behave differently. You may need to explicitly alias your columns (`SELECT r['col'] AS col`) or continue using the `r['col']` syntax outside the CTE.
+
+- **Data type limitations**. [There are bunch of limitations in how data types behave because of differences between PostgreSQL and DuckDB](docs/types.md#known-limitations)
 
 ### Transactions
 
@@ -151,15 +153,6 @@ This section outlines behaviors and limitations in `pg_duckdb`, things to know t
 
 - **Avoid mixed transactions**. There is a setting `duckdb.unsafe_allow_mixed_transactions` to bypass the separate-write rule. This is not recommended as it can lead to data inconsistency if one part of the transaction fails.
 
-### Data Types
-
-- **Advanced types need a DuckDB context**. `STRUCT`, `MAP`, and `UNION` types are only available within a DuckDB execution context. This means using them inside `duckdb.query()` or in tables created with `USING duckdb`. In PostgreSQL, they are represented as text.
-
-- **Numeric precision differs**. DuckDB's `DECIMAL` type has a smaller precision range than PostgreSQL's `NUMERIC`. If a PostgreSQL `NUMERIC` value is outside DuckDB's supported range, it will either cause an error or be converted to a `DOUBLE`, which may cause precision loss.
-
-- **Timestamp precision loss**. DuckDB's high-precision `TIMESTAMP_NS` is truncated to microsecond precision when converted to a PostgreSQL `TIMESTAMP`.
-
-- **JSONB becomes JSON**. When reading from DuckDB, `JSONB` columns are converted to the `JSON` type. You must also use DuckDB's JSON functions, not PostgreSQL's.
 
 ### MotherDuck
 
