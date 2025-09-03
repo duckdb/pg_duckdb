@@ -8,13 +8,13 @@ By default, functions are installed into the `public` schema. You can choose an 
 
 | Name | Description |
 | :--- | :---------- |
-| `read_parquet` | Read a Parquet file |
-| `read_csv` | Read a CSV file |
-| `read_json` | Read a JSON file |
-| `iceberg_scan` | Read an Iceberg dataset |
-| `iceberg_metadata` | Read Iceberg metadata |
-| `iceberg_snapshots` | Read Iceberg snapshot information |
-| `delta_scan` | Read a Delta dataset |
+| [`read_parquet`](#read_parquet) | Read a Parquet file |
+| [`read_csv`](#read_csv) | Read a CSV file |
+| [`read_json`](#read_json) | Read a JSON file |
+| [`iceberg_scan`](#iceberg_scan) | Read an Iceberg dataset |
+| [`iceberg_metadata`](#iceberg_metadata) | Read Iceberg metadata |
+| [`iceberg_snapshots`](#iceberg_snapshots) | Read Iceberg snapshot information |
+| [`delta_scan`](#delta_scan) | Read a Delta dataset |
 
 ## JSON Functions
 
@@ -24,60 +24,60 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 
 |Name|Description|
 | :--- | :---------- |
-| `union_extract` | Extracts a value from a union type by tag name. |
-| `union_tag` | Gets the tag name of the active member in a union type. |
+| [`union_extract`](#union_extract) | Extracts a value from a union type by tag name. |
+| [`union_tag`](#union_tag) | Gets the tag name of the active member in a union type. |
 
 ## Aggregates
 
 |Name|Description|
 | :--- | :---------- |
-| `approx_count_distinct` | Approximates the count of distinct elements using HyperLogLog. |
+| [`approx_count_distinct`](#approx_count_distinct) | Approximates the count of distinct elements using HyperLogLog. |
 
 ## Sampling Functions
 
 |Name|Description|
 | :--- | :---------- |
-| `TABLESAMPLE` | Samples a subset of rows from a table or query result. |
+| [`TABLESAMPLE`](#tablesample) | Samples a subset of rows from a table or query result. |
 
 ## Time Functions
 
 |Name|Description|
 | :--- | :---------- |
-| `time_bucket` | Buckets timestamps into time intervals for time-series analysis. |
-| `strftime` | Formats timestamps as strings using format codes. |
-| `strptime` | Parses strings into timestamps using format codes. |
-| `epoch` | Converts timestamps to Unix epoch seconds. |
-| `epoch_ms` | Converts timestamps to Unix epoch milliseconds. |
-| `epoch_us` | Converts timestamps to Unix epoch microseconds. |
-| `epoch_ns` | Converts timestamps to Unix epoch nanoseconds. |
-| `make_timestamp` | Creates a timestamp from microseconds since epoch. |
-| `make_timestamptz` | Creates a timestamp with timezone from microseconds since epoch. |
+| [`time_bucket`](#time_bucket) | Buckets timestamps into time intervals for time-series analysis. |
+| [`strftime`](#strftime) | Formats timestamps as strings using format codes. |
+| [`strptime`](#strptime) | Parses strings into timestamps using format codes. |
+| [`epoch`](#epoch) | Converts timestamps to Unix epoch seconds. |
+| [`epoch_ms`](#epoch_ms) | Converts timestamps to Unix epoch milliseconds. |
+| [`epoch_us`](#epoch_us) | Converts timestamps to Unix epoch microseconds. |
+| [`epoch_ns`](#epoch_ns) | Converts timestamps to Unix epoch nanoseconds. |
+| [`make_timestamp`](#make_timestamp) | Creates a timestamp from microseconds since epoch. |
+| [`make_timestamptz`](#make_timestamptz) | Creates a timestamp with timezone from microseconds since epoch. |
 
 ## DuckDB Administration Functions
 
 | Name | Description |
 | :--- | :---------- |
-| `duckdb.install_extension` | Installs a DuckDB extension. |
-| `duckdb.load_extension` | Loads a DuckDB extension for the current session. |
-| `duckdb.autoload_extension` | Configures whether an extension should be auto-loaded. |
-| `duckdb.query` | Runs a `SELECT` query directly against DuckDB. |
-| `duckdb.raw_query` | Runs any query directly against DuckDB (for debugging). |
-| `duckdb.recycle_ddb` | Resets the DuckDB instance in the current connection (for debugging). |
+| [`duckdb.install_extension`](#install_extension) | Installs a DuckDB extension. |
+| [`duckdb.load_extension`](#load_extension) | Loads a DuckDB extension for the current session. |
+| [`duckdb.autoload_extension`](#autoload_extension) | Configures whether an extension should be auto-loaded. |
+| [`duckdb.query`](#query) | Runs a `SELECT` query directly against DuckDB. |
+| [`duckdb.raw_query`](#raw_query) | Runs any query directly against DuckDB (for debugging). |
+| [`duckdb.recycle_ddb`](#recycle_ddb) | Resets the DuckDB instance in the current connection (for debugging). |
 
 ## Secrets Management Functions
 
 | Name | Description |
 | :--- | :---------- |
-| `duckdb.create_simple_secret` | Creates a simple secret for cloud storage access. |
-| `duckdb.create_azure_secret` | Creates an Azure secret using a connection string. |
+| [`duckdb.create_simple_secret`](#create_simple_secret) | Creates a simple secret for cloud storage access. |
+| [`duckdb.create_azure_secret`](#create_azure_secret) | Creates an Azure secret using a connection string. |
 
 ## Motherduck Functions
 
 | Name | Description |
 | :--- | :---------- |
-| `duckdb.enable_motherduck` | Enables MotherDuck integration with a token. |
-| `duckdb.is_motherduck_enabled` | Checks if MotherDuck integration is enabled. |
-| `duckdb.force_motherduck_sync` | Forces a full resync of MotherDuck databases and schemas to Postgres (for debugging). |
+| [`duckdb.enable_motherduck`](#enable_motherduck) | Enables MotherDuck integration with a token. |
+| [`duckdb.is_motherduck_enabled`](#is_motherduck_enabled) | Checks if MotherDuck integration is enabled. |
+| [`duckdb.force_motherduck_sync`](#force_motherduck_sync) | Forces a full resync of MotherDuck databases and schemas to Postgres (for debugging). |
 
 ## Detailed Descriptions
 
@@ -812,3 +812,61 @@ Further information:
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | rows | integer | Approximate number of rows to sample (use with `ROWS` keyword) |
+
+#### <a name="union_extract"></a>`union_extract(union_col, tag)` -> `duckdb.unresolved_type`
+
+Extracts a value from a union type by specifying the tag name of the member you want to access.
+
+```sql
+-- Extract the string value if the union contains a string
+SELECT union_extract(my_union_column, 'string') FROM my_table;
+
+-- Extract integer value from union
+SELECT union_extract(data_field, 'integer') AS extracted_int FROM mixed_data;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| union_col | duckdb.union or duckdb.unresolved_type | The union column to extract from |
+| tag | text | The tag name of the union member to extract |
+
+#### <a name="union_tag"></a>`union_tag(union_col)` -> `duckdb.unresolved_type`
+
+Returns the tag name of the currently active member in a union type.
+
+```sql
+-- Get the active tag for each row
+SELECT union_tag(my_union_column) AS active_type FROM my_table;
+
+-- Filter rows based on union tag
+SELECT * FROM my_table WHERE union_tag(data_field) = 'string';
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| union_col | duckdb.union or duckdb.unresolved_type | The union column to get the tag from |
+
+#### <a name="approx_count_distinct"></a>`approx_count_distinct(expression)` -> `BIGINT`
+
+Approximates the count of distinct elements using the HyperLogLog algorithm. This is much faster than `COUNT(DISTINCT ...)` for large datasets, with a small error rate.
+
+```sql
+-- Approximate distinct count of customer IDs
+SELECT approx_count_distinct(customer_id) FROM orders;
+
+-- Compare with exact count
+SELECT
+    approx_count_distinct(customer_id) AS approx_distinct,
+    COUNT(DISTINCT customer_id) AS exact_distinct
+FROM orders;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| expression | any | The expression to count distinct values for |
