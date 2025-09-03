@@ -1,73 +1,37 @@
 # Building from Source
 
 This guide provides detailed instructions for building `pg_duckdb` from source on different platforms.
-After cloning the repository, follow the instructions for your operating system.
+
+**First things first, clone the repo**:
 
 ```bash
 git clone https://github.com/duckdb/pg_duckdb
 cd pg_duckdb
 ```
 
+And then you can follow the instructions for your operating system below
+
+
 ## Requirements
 
 - **PostgreSQL**: 14, 15, 16, or 17
 - **Operating Systems**: Ubuntu 22.04-24.04, macOS, or other UNIX-like systems
 - **Build Tools**: Standard PostgreSQL extension build tools
-- **DuckDB Dependencies**: [DuckDB build requirements](https://duckdb.org/docs/dev/building/build_instructions)
+- **DuckDB Dependencies**: [DuckDB build requirements](https://duckdb.org/docs/stable/dev/building/overview.html)
 
 For full dependency details, see our [GitHub Actions workflow](../.github/workflows/build_and_test.yaml).
 
 ## Build Options
 
-- **Parallel Build**: `make -j$(nproc) install`
-- **Static Linking**: `DUCKDB_BUILD=ReleaseStatic make install`
+- **Dynamically Linked Release Build**: `make install`
+- **Statically Linked Release Build**: `DUCKDB_BUILD=ReleaseStatic make install`
 - **Debug Build**: `DUCKDB_BUILD=Debug make install`
 - **Specific PostgreSQL Version**: `PG_CONFIG=/path/to/pg_config make install`
 
-## Static Compilation (1.0.0+)
+## Static Compilation
 
-Starting with version 1.0.0, pg_duckdb supports statically linking the DuckDB library into the extension. This can be beneficial for:
+pg_duckdb supports statically linking the DuckDB library into the extension. This is mostly useful to ensure that the right DuckDB version if you have installed different version, and/or to avoid installation conflicts with other Postgres extensions that require different versions of DuckDB.
 
-- **Deployment simplicity**: Single binary with all dependencies included
-- **Version consistency**: Ensures specific DuckDB version regardless of system libraries
-- **Isolated environments**: Reduces runtime dependency requirements
-
-### Building with Static Linking
-
-To build with static linking, use the `DUCKDB_BUILD=ReleaseStatic` option:
-
-```bash
-# Build with static linking
-DUCKDB_BUILD=ReleaseStatic make install
-```
-
-### Static vs Dynamic Linking
-
-When to use static compilation:
-
-- Deploying to environments without DuckDB libraries
-- Building Docker images from scratch
-- Need guaranteed DuckDB version consistency
-- Simplifying distribution and deployment
-
-When to use dynamic compilation:
-
-- Development and testing
-- System has shared DuckDB libraries
-- Memory usage is a concern
-- Building multiple extensions that use DuckDB
-
-### Build Artifacts
-
-Static compilation produces different build artifacts:
-
-```bash
-# Static build creates
-third_party/duckdb/build/release/libduckdb_bundle.a  # Static library
-
-# Dynamic build creates  
-third_party/duckdb/build/release/src/libduckdb.so    # Shared library
-```
 
 # Build on Ubuntu 24.04
 
@@ -83,7 +47,7 @@ sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh
 sudo apt install postgresql-17 postgresql-server-dev-17
 ```
 
-If you do not install from PGDG, please note that you must have the `server-dev` package installed to compile extensions.
+If you do not install from PGDG, please note that you must have the **`server-dev`** package installed to compile extensions.
 
 ### Install Build Dependencies
 
@@ -145,10 +109,10 @@ postgres=# CREATE EXTENSION pg_duckdb;
    ```bash
    # Install PostgreSQL (latest version)
    brew install postgresql@17
-   
+
    # Start PostgreSQL service
    brew services start postgresql@17
-   
+
    # Add PostgreSQL to PATH (add to ~/.zshrc or ~/.bash_profile)
    export PATH="/opt/homebrew/opt/postgresql@17/bin:$PATH"
    ```
@@ -175,7 +139,7 @@ brew install lz4
    ```bash
    # Find PostgreSQL config directory
    postgres --help-config
-   
+
    # Edit postgresql.conf (adjust path as needed)
    echo "shared_preload_libraries = 'pg_duckdb'" >> /opt/homebrew/var/postgresql@17/postgresql.conf
    ```
