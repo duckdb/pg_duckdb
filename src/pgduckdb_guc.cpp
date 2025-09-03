@@ -139,6 +139,7 @@ char *duckdb_temporary_directory = MakeDirName("temp");
 char *duckdb_extension_directory = MakeDirName("extensions");
 char *duckdb_max_temp_directory_size = strdup("");
 char *duckdb_default_collation = strdup("");
+char *duckdb_azure_transport_option_type = strdup("");
 
 void
 InitGUC() {
@@ -235,6 +236,11 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                           &duckdb_disabled_filesystems, PGC_SUSET);
+
+	DefineCustomDuckDBVariable("duckdb.azure_transport_option_type",
+	                           "Set the azure_transport_option_type for DuckDB Azure extension. Can be used to "
+	                           "workaround issue #882: https://github.com/duckdb/pg_duckdb/issues/882",
+	                           &duckdb_azure_transport_option_type, PGC_SUSET);
 }
 
 #if PG_VERSION_NUM < 160000
