@@ -23,9 +23,10 @@ VALUES ('Laptop', 1200.00, '2024-07-01'),
 
 ### Querying standard PostgreSQL tables
 
-For analytical queries on your existing PostgreSQL tables, use **standard SQL**. No special syntax is needed. `pg_duckdb` automatically accelerates these queries.
+For analytical queries on your existing PostgreSQL tables, use **standard SQL**. No special syntax is needed. `pg_duckdb` automatically accelerates these queries when you configure `duckdb.force_execution = true`.
 
 ```sql
+SET duckdb.force_execution = true;
 -- Standard SELECT on a PostgreSQL table
 SELECT
     category,
