@@ -19,6 +19,7 @@ You can refer to the [Advanced MotherDuck Configuration](#advanced-motherduck-co
 If you want to use MotherDuck as a non-superuser, you also have to configure the `duckdb.postgres_role` setting:
 
 ```ini
+# Changing this requires a Postgres restart
 duckdb.postgres_role = 'your_role_name'  # e.g., duckdb or duckdb_group
 ```
 
@@ -40,7 +41,7 @@ SELECT * FROM pg_terminate_backend((
 
 ## Using MotherDuck with `pg_duckdb`
 
-After completing the configuration, you can create tables in your MotherDuck database using the `duckdb` [Table Access Method (TAM)][tam]:
+After completing the configuration (and possibly restarting Postgres in case you changed `duckdb.postgres_role`), you can create tables in your MotherDuck database using the `duckdb` [Table Access Method (TAM)][tam]:
 
 ```sql
 CREATE TABLE orders(id bigint, item text, price NUMERIC(10, 2)) USING duckdb;
@@ -76,10 +77,10 @@ CALL duckdb.enable_motherduck('<token>', '<default database>');
 
 DuckDB and Postgres have different schema and database conventions. The mapping from a DuckDB `database.schema` to a Postgres schema is done as follows:
 
-1. Each schema in your default MotherDuck database is merged with the Postgres schema of the same name.
-2. The `main` DuckDB schema in your default database is merged with the Postgres `public` schema.
-3. Tables in other databases are placed in dedicated schemas of the form `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
-4. The `main` schema in other databases can be accessed using the shorter name `ddb$<db_name>`.
+1. The `main` DuckDB schema in your default database is merged with the Postgres `public` schema.
+2. All other schemas in your default MotherDuck database is merged with the Postgres schema of the same name.
+3. The `main` schema in other databases can be accessed using the name `ddb$<db_name>` (including the literal `$` character).
+4. All other schemas in non-default MotherDuck databases are accessible through `ddb$<duckdb_db_name>$<duckdb_schema_name>` (including the literal `$` characters).
 
 An example of each of these cases is shown below:
 
