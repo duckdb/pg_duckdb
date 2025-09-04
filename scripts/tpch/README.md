@@ -39,6 +39,14 @@ factors of 1 or higher):
 ./run.py --scale-factor 0.01 --duckdb-engine --pg-engine --pk-only
 ```
 
+## Results
+
+The results will then create a nice graph. These are from a run with all the indexes with scale factor 10 on a c6a.8xlarge instance with the settings from example above:
+![Comparison between Postgres and DuckDB engine with all indexes](tpch10_pg_duckdb_cold_hot_comparison.png)
+
+And this is the same setup, but with only primary keys created. Here you can see that the left graph automatically switches to log-scale if the differences are large enough:
+![Comparison between Postgres and DuckDB engine with only primary keys](tpch10_pk_only_pg_duckdb_cold_hot_comparison.png)
+
 ## MotherDuck
 
 If you want to compare to MotherDuck you should first create a database for the
