@@ -161,13 +161,13 @@ GROUP BY date;
 Run PostgreSQL with pg_duckdb pre-installed in a docker container:
 
 ```bash
-docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:17-1.0.0
+docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:17-v1.0.0
 ```
 
 With MotherDuck:
 ```bash
 export MOTHERDUCK_TOKEN=<your_token>
-docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:17-1.0.0
+docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:17-v1.0.0
 ```
 
 ### Try with Hydra
