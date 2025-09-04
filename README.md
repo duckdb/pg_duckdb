@@ -42,7 +42,7 @@ This is the most common and straightforward use case. If you have a standard Pos
 
 **Example:**
 
-Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/gotchas_and_syntax.md#create-a-table)). To run an analytical query, you just write standard SQL, configure `duckdb.force_exectunio` and `pg_duckdb` will handle the rest.
+Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/gotchas_and_syntax.md#create-a-table)). To run an analytical query, you just write standard SQL, configure `duckdb.force_execution` and `pg_duckdb` will handle the rest.
 
 ```sql
 SET duckdb.force_execution = true;
