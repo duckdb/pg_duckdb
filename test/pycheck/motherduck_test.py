@@ -111,6 +111,9 @@ def test_md_default_db_escape(pg: Postgres, ddb, default_db_name, md_test_user):
             WHERE fdw.fdwname = 'duckdb' AND fs.srvtype = 'motherduck';
         """) == ("motherduck", "motherduck", [f"default_database={weird_db_name}"])
 
+    # Cleanup MD setup with weird db name as default db name
+    pg.sql("DROP SERVER IF EXISTS motherduck CASCADE;")
+
 
 def test_md_session_hint(pg: Postgres, ddb, default_db_name, md_test_user):
     pg.search_path = f"ddb${default_db_name}, public"
