@@ -211,9 +211,9 @@ DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
 
 void
 DuckDBManager::Reset() {
-	connection = nullptr;
-	delete database;
-	database = nullptr;
+	manager_instance.connection = nullptr;
+	delete manager_instance.database;
+	manager_instance.database = nullptr;
 	UnclaimBgwSessionHint();
 }
 

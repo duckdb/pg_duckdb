@@ -234,6 +234,9 @@ BgwMainLoop() {
 		ResetLatch(MyLatch);
 	}
 
+	ddb_connection.reset();
+	DuckDBManager::Reset();
+
 	elog(LOG, "pg_duckdb background worker for database '%s' (%u) has now terminated.", db_name, MyDatabaseId);
 }
 

@@ -51,7 +51,7 @@ public:
 		return *database;
 	}
 
-	void Reset();
+	static void Reset();
 
 private:
 	DuckDBManager()
