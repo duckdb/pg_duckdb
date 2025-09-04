@@ -491,6 +491,15 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_tabl
 		return list_make2((void *)dbname, (void *)"main");
 	}
 
+	/* These are MotherDuck tables, so we need credentials to access them */
+	if (!pgduckdb::IsMotherDuckEnabled()) {
+		ereport(ERROR,
+		        (errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
+		         errmsg("MotherDuck tables cannot be accessed without MotherDuck credentials"),
+		         errhint("Configure MotherDuck credentials for this user using: CREATE USER MAPPING FOR CURRENT_USER "
+		                 "SERVER motherduck OPTIONS (token '<your token>');")));
+	}
+
 	if (!pgduckdb::IsDuckdbSchemaName(postgres_schema_name)) {
 		auto dbname = pgduckdb::DuckDBManager::Get().GetDefaultDBName().c_str();
 		return list_make2((void *)dbname, (void *)postgres_schema_name);
