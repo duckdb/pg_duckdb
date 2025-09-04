@@ -7,7 +7,7 @@
 - Add support for installing community extensions. ([#647])
 - Add support for DDL on DuckDB tables in transactions. ([#632])
 - Make `duckdb.unresolved_type` support `min`, `date_trunc`, `length`, `regexp_replace`, `LIKE`, `ILIKE`, `SIMILAR TO`. ([#643])
-- Add cast from `duckdb.unresolved_type` to `bytea`. ([#643])
+- Add cast from `duckdb.unresolved_type` to `bytea` and `text`. ([#643], [#915])
 - Add support for the DuckDB date/time functions: `strftime`, `strptime`, `epoch`, `epoch_ms`, `epoch_us`, `epoch_ns`, `time_bucket`, `make_timestamp`, `make_timestamptz`. ([#643])
 - Add support for using MotherDuck in multiple Postgres databases. ([#544], [#545])
 - Add ALTER TABLE support for DuckDB tables. ([#652])
@@ -150,6 +150,7 @@
 [#877]: https://github.com/duckdb/pg_duckdb/pull/877
 [#863]: https://github.com/duckdb/pg_duckdb/pull/863
 [#910]: https://github.com/duckdb/pg_duckdb/pull/910
+[#915]: https://github.com/duckdb/pg_duckdb/pull/915
 
 # 0.3.1 (2025-02-13)
 

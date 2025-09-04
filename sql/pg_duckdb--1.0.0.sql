@@ -721,7 +721,7 @@ CREATE CAST (duckdb.unresolved_type AS bigint)
 CREATE CAST (duckdb.unresolved_type AS bigint[])
     WITH INOUT;
 
--- VARCHAR (BPCHAR, TEXT, VARCHAR)
+-- VARCHAR
 CREATE CAST (duckdb.unresolved_type AS varchar)
     WITH INOUT;
 CREATE CAST (duckdb.unresolved_type AS varchar[])
@@ -1661,6 +1661,11 @@ CREATE CAST (duckdb.unresolved_type AS bit[])
 CREATE CAST (duckdb.unresolved_type AS bytea)
     WITH INOUT;
 CREATE CAST (duckdb.unresolved_type AS bytea[])
+    WITH INOUT;
+
+CREATE CAST (duckdb.unresolved_type AS text)
+    WITH INOUT;
+CREATE CAST (duckdb.unresolved_type AS text[])
     WITH INOUT;
 
 CREATE OPERATOR pg_catalog.~ (

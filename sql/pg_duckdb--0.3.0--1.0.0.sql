@@ -587,6 +587,11 @@ CREATE CAST (duckdb.unresolved_type AS bytea)
 CREATE CAST (duckdb.unresolved_type AS bytea[])
     WITH INOUT;
 
+CREATE CAST (duckdb.unresolved_type AS text)
+    WITH INOUT;
+CREATE CAST (duckdb.unresolved_type AS text[])
+    WITH INOUT;
+
 CREATE OPERATOR pg_catalog.~ (
     LEFTARG = duckdb.unresolved_type,
     RIGHTARG = duckdb.unresolved_type,
