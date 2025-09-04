@@ -283,7 +283,7 @@ IsExtensionRegistered() {
 		 * like a good moment to clean that up if that's the case.
 		 */
 		if (pgduckdb::DuckDBManager::IsInitialized()) {
-			pgduckdb::DuckDBManager::Get().Reset();
+			pgduckdb::DuckDBManager::Reset();
 		}
 		elog(DEBUG1, "pgduckdb: extension is not registered in database '%s'", get_database_name(MyDatabaseId));
 	}

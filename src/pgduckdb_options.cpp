@@ -255,7 +255,7 @@ DECLARE_PG_FUNCTION(pgduckdb_recycle_ddb) {
 	 * violate our assumptions about DuckDB its transaction lifecycle
 	 */
 	pgduckdb::pg::PreventInTransactionBlock("duckdb.recycle_ddb()");
-	pgduckdb::DuckDBManager::Get().Reset();
+	pgduckdb::DuckDBManager::Reset();
 	PG_RETURN_BOOL(true);
 }
 
