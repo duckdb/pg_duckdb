@@ -1,7 +1,7 @@
-from .utils import Cursor, PG_MAJOR_VERSION
-
-import pytest
 import psycopg.errors
+import pytest
+
+from .utils import PG_MAJOR_VERSION, Cursor
 
 
 def test_temporary_table_alter_table(cur: Cursor):

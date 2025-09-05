@@ -1,8 +1,8 @@
-from .utils import Postgres
-
-import pytest
 import psycopg.errors
 import psycopg.sql
+import pytest
+
+from .utils import Postgres
 
 
 def test_community_extensions(pg: Postgres):

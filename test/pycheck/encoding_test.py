@@ -1,7 +1,7 @@
-from .utils import Cursor, Postgres
-
-import pytest
 import psycopg
+import pytest
+
+from .utils import Cursor, Postgres
 
 
 def test_non_utf8_encoding(pg: Postgres, cur: Cursor):
