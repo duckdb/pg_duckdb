@@ -19,3 +19,6 @@ norecursedirs = [
 
 [tool.ruff]
 extend-exclude = ["third_party"]
+
+[tool.ruff.lint]
+extend-select = ["I"]

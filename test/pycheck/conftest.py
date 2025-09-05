@@ -1,9 +1,10 @@
 import os
-import pytest
-import psycopg.errors
 
-from .utils import Postgres, Duckdb, make_new_duckdb_connection
+import psycopg.errors
+import pytest
+
 from .motherduck_token_helper import create_test_user
+from .utils import Duckdb, Postgres, make_new_duckdb_connection
 
 
 @pytest.fixture(scope="session")

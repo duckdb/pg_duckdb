@@ -8,17 +8,18 @@
 # ]
 # ///
 import argparse
+import csv
+import os
+import shlex
 import subprocess
 import sys
-import shlex
-import os
-import pandas as pd
-import matplotlib.pyplot as plt
 import time
-import csv
-import psycopg
 from contextlib import contextmanager
 from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+import psycopg
 
 
 def eprint(*args, **kwargs):

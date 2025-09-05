@@ -1,6 +1,6 @@
-from urllib.request import urlopen, Request
 import json
 import os
+from urllib.request import Request, urlopen
 
 # Remove any normal user token from the environment so that we don't
 # accidentally use it.

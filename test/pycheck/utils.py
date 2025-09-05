@@ -1,26 +1,24 @@
-import subprocess
-from contextlib import closing, contextmanager, asynccontextmanager, suppress
-from pathlib import Path
-
 import asyncio
 import os
 import platform
 import re
 import shlex
 import socket
+import subprocess
 import sys
 import time
 import typing
-from typing import Any
+from contextlib import asynccontextmanager, closing, contextmanager, suppress
+from pathlib import Path
 from tempfile import gettempdir
-
-import filelock
-import psycopg
-import psycopg.sql
-import psycopg.conninfo
-from psycopg import sql
+from typing import Any
 
 import duckdb
+import filelock
+import psycopg
+import psycopg.conninfo
+import psycopg.sql
+from psycopg import sql
 
 TEST_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
 os.chdir(TEST_DIR)

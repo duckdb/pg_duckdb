@@ -7,21 +7,20 @@ library for that purpose.
 """
 
 import datetime
-import duckdb
 import uuid
+from contextlib import suppress
 
-from .utils import wait_until, Cursor, Postgres, Duckdb, PG_MAJOR_VERSION
+import duckdb
+import psycopg.errors
+import pytest
+
 from .motherduck_token_helper import (
     can_run_md_multi_user_tests,
     can_run_md_tests,
     create_read_scaling_token,
 )
 from .multi_duckdb_helper import MDClient
-from contextlib import suppress
-
-import pytest
-import psycopg.errors
-
+from .utils import PG_MAJOR_VERSION, Cursor, Duckdb, Postgres, wait_until
 
 if not can_run_md_tests():
     pytestmark = pytest.mark.skip(reason="Skipping all motherduck tests")
