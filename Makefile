@@ -51,6 +51,12 @@ endif
 
 PG_DUCKDB_LINK_FLAGS += -Wl,-rpath,$(PG_LIB)/ -L$(DUCKDB_BUILD_DIR)/src -L$(PG_LIB) -lstdc++ -llz4
 
+# Ensure -lstdcc++fs is included for GCC 8 builds
+GCC_VERSION_MAJOR := $(shell g++ -dumpversion | cut -f1 -d.)
+ifeq ($(shell [ $(GCC_VERSION_MAJOR) -eq 8 ] && echo true),true)
+  PG_DUCKDB_LINK_FLAGS += -lstdc++fs
+endif
+
 ERROR_ON_WARNING ?=
 ifeq ($(ERROR_ON_WARNING), 1)
 	ERROR_ON_WARNING = -Werror
