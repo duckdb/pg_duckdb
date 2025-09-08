@@ -356,7 +356,7 @@ SELECT r['sepal.length'], r['filename']
 (5 rows)
 
 SELECT * FROM read_csv('../../non-existing-file.csv');
-ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'IO Error: No files found that match the pattern "../../non-existing-file.csv"
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: IO Error: No files found that match the pattern "../../non-existing-file.csv"
 -- We override Postgres its default column name for subscript expressions. In
 -- the following example the column would normally be named "r", which is
 -- pretty non-descriptive especially when selecting multiple columns from the

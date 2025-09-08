@@ -11,7 +11,7 @@ LINE 1:  SELECT (a)::integer AS a FROM pgduckdb.public.int_as_varchar
 DROP TABLE int_as_varchar;
 \set VERBOSITY verbose
 select * from duckdb.raw_query('aaaaa');
-WARNING:  01000: (PGDuckDB/CreatePlan) Prepared query returned an error: 'Catalog Error: Table Function with name raw_query does not exist!
+WARNING:  01000: (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: Table Function with name raw_query does not exist!
 Did you mean "main.pragma_user_agent"?
 
 LINE 1: SELECT raw_query FROM duckdb.raw_query('aaaaa'::text) raw_query(raw_query)

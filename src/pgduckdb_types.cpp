@@ -894,6 +894,16 @@ GetDuckDBListDimensionality(const duckdb::LogicalType &nested_type, idx_t depth 
 
 namespace {
 
+static duckdb::LogicalType
+CreateUnsupportedPostgresType(std::string error_message) {
+	duckdb::LogicalType type = duckdb::LogicalType::INVALID;
+	type.SetAlias("UnsupportedPostgresType");
+	auto info = duckdb::make_uniq<duckdb::ExtensionTypeInfo>();
+	info->modifiers.emplace_back(duckdb::Value(error_message));
+	type.SetExtensionInfo(std::move(info));
+	return type;
+}
+
 template <class OP>
 struct PostgresArrayAppendState {
 public:
@@ -1299,19 +1309,19 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 
 			/* We don't allow conversion then! */
 			if (type_modifier == -1) {
-				return duckdb::LogicalType::USER(
+				return CreateUnsupportedPostgresType(
 				    "DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to "
 				    "a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else if (precision < 1 || precision > 38) {
-				return duckdb::LogicalType::USER(
+				return CreateUnsupportedPostgresType(
 				    "DuckDB only supports NUMERIC with a precision of 1-38. You can choose to convert these NUMERICs "
 				    "to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else if (scale < 0 || scale > 38) {
-				return duckdb::LogicalType::USER(
+				return CreateUnsupportedPostgresType(
 				    "DuckDB only supports NUMERIC with a scale of 0-38. You can choose to convert these NUMERICs to a "
 				    "DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'");
 			} else {
-				return duckdb::LogicalType::USER(
+				return CreateUnsupportedPostgresType(
 				    "DuckDB does not support NUMERIC with a scale that is larger than the precision. You can choose to "
 				    "convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = "
 				    "true'");
@@ -1340,14 +1350,17 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 		} else if (typoid == pgduckdb::DuckdbStructOid()) {
 			return duckdb::LogicalTypeId::STRUCT;
 		}
-		return duckdb::LogicalType::USER(
-		    "No conversion to DuckDB available for type with oid=" + std::to_string(attribute->atttypid) + ")");
+		return CreateUnsupportedPostgresType("Oid=" + std::to_string(attribute->atttypid));
 	}
 }
 
 duckdb::LogicalType
 ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute) {
 	auto base_type = ConvertPostgresToBaseDuckColumnType(attribute);
+	if (base_type.id() == duckdb::LogicalTypeId::INVALID) {
+		return base_type;
+	}
+
 	if (!pg::IsArrayType(attribute->atttypid)) {
 		if (!pg::IsArrayDomainType(attribute->atttypid)) {
 			return base_type;
@@ -1433,15 +1446,6 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return BYTEAARRAYOID;
 	case duckdb::LogicalTypeId::VARINT:
 		return NUMERICARRAYOID;
-	case duckdb::LogicalTypeId::USER: {
-		std::string type_name = duckdb::UserType::GetTypeName(type);
-		if (throw_error) {
-			throw duckdb::NotImplementedException("Unsupported Postgres type: " + type_name);
-		} else {
-			pd_log(WARNING, "Unsupported Postgres type: %s", type_name.c_str());
-			return InvalidOid;
-		}
-	}
 	default: {
 		if (throw_error) {
 			throw duckdb::NotImplementedException("Unsupported DuckDB `LIST` subtype: " + type.ToString());
@@ -1453,8 +1457,27 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 	}
 }
 
+// Check if this expression has UnsupportedPostgresType
+void
+CheckForUnsupportedPostgresType(duckdb::LogicalType type) {
+	if (type.id() == duckdb::LogicalTypeId::INVALID && type.GetAlias() == "UnsupportedPostgresType") {
+		// Extract and include any modifier information from the type
+		auto info = type.GetExtensionInfo();
+		if (info && info->modifiers.size() > 0) {
+			// Use the first modifier as the error message
+			auto modifier_value = info->modifiers[0];
+			throw duckdb::NotImplementedException("Unsupported PostgreSQL type found in query: %s",
+			                                      modifier_value.ToString());
+		} else {
+			// Fallback to the alias if no modifiers are available
+			throw duckdb::NotImplementedException("Unsupported PostgreSQL type found in query");
+		}
+	}
+}
+
 Oid
 GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
+	CheckForUnsupportedPostgresType(type);
 	switch (type.id()) {
 	case duckdb::LogicalTypeId::BOOLEAN:
 		return BOOLOID;
@@ -1524,15 +1547,6 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbMapOid();
 	case duckdb::LogicalTypeId::ENUM:
 		return VARCHAROID;
-	case duckdb::LogicalTypeId::USER: {
-		std::string type_name = duckdb::UserType::GetTypeName(type);
-		if (throw_error) {
-			throw duckdb::NotImplementedException("Unsupported Postgres type: " + type_name);
-		} else {
-			pd_log(WARNING, "Unsupported Postgres type: %s", type_name.c_str());
-			return InvalidOid;
-		}
-	}
 	default: {
 		if (throw_error) {
 			throw duckdb::NotImplementedException("Could not convert DuckDB type: " + type.ToString() +

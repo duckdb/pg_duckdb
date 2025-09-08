@@ -144,7 +144,10 @@ INSERT INTO numeric_as_double SELECT a FROM (VALUES
     (NULL),
     (458234502034234234234.000012)
 ) t(a);
+-- Should fail
 SELECT * FROM numeric_as_double;
+-- Expressions involving such columns should also fail
+SELECT 'yes' FROM numeric_as_double WHERE a > 10;
 SET duckdb.convert_unsupported_numeric_to_double = true;
 SELECT * FROM numeric_as_double;
 RESET duckdb.convert_unsupported_numeric_to_double;
