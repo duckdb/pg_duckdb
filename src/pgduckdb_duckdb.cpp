@@ -18,6 +18,7 @@
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_extensions.hpp"
 #include "pgduckdb/pgduckdb_secrets_helper.hpp"
+#include "pgduckdb/pgduckdb_unsupported_type_optimizer.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
@@ -171,6 +172,10 @@ DuckDBManager::Initialize() {
 
 	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
 	dbconfig.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>();
+
+	// Register the unsupported type optimizer to run after all other optimizations
+	dbconfig.optimizer_extensions.push_back(UnsupportedTypeOptimizer::GetOptimizerExtension());
+
 	duckdb::ExtensionInstallInfo extension_install_info;
 	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
 
@@ -195,18 +200,10 @@ DuckDBManager::Initialize() {
 		}
 	}
 
-	LoadFunctions(context);
 	if (duckdb_autoinstall_known_extensions) {
 		InstallExtensions(context);
 	}
 	LoadExtensions(context);
-}
-
-void
-DuckDBManager::LoadFunctions(duckdb::ClientContext &context) {
-	context.transaction.BeginTransaction();
-	duckdb::ExtensionUtil::RegisterType(*database->instance, "UnsupportedPostgresType", duckdb::LogicalTypeId::VARCHAR);
-	context.transaction.Commit();
 }
 
 void

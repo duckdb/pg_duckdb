@@ -326,14 +326,23 @@ INSERT INTO numeric_as_double SELECT a FROM (VALUES
     (NULL),
     (458234502034234234234.000012)
 ) t(a);
+-- Should fail
 SELECT * FROM numeric_as_double;
-WARNING:  Unsupported Postgres type: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'
+WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error: Not implemented Error: Unsupported PostgreSQL type found in query: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'
               a               
 ------------------------------
                   0.234234234
                              
  458234502034234234234.000012
 (3 rows)
+
+-- Expressions involving such columns should also fail
+SELECT 'yes' FROM numeric_as_double WHERE a > 10;
+WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error: Not implemented Error: Unsupported PostgreSQL type found in query: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'
+ ?column? 
+----------
+ yes
+(1 row)
 
 SET duckdb.convert_unsupported_numeric_to_double = true;
 SELECT * FROM numeric_as_double;

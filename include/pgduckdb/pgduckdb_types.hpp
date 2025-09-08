@@ -30,6 +30,7 @@ const duckdb::date_t PGDUCKDB_PG_MAX_DATE_VALUE = duckdb::Date::FromDate(PG_MAXY
 constexpr int64_t PGDUCKDB_MAX_TIMESTAMP_VALUE = 9223371244800000000;
 constexpr int64_t PGDUCKDB_MIN_TIMESTAMP_VALUE = -210866803200000000;
 
+void CheckForUnsupportedPostgresType(duckdb::LogicalType type);
 duckdb::LogicalType ConvertPostgresToDuckColumnType(Form_pg_attribute &attribute);
 Oid GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error = false);
 int32_t GetPostgresDuckDBTypemod(const duckdb::LogicalType &type);

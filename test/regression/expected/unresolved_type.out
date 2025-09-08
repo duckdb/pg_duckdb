@@ -39,13 +39,13 @@ select r['a'] NOT ILIKE '%X%' from duckdb.query($$ SELECT 'abc' a $$) r;
 -- Currently not working, we need to add the similar_to_escape function to
 -- DuckDB to make this work.
 select r['a'] SIMILAR TO '%b%' from duckdb.query($$ SELECT 'abc' a $$) r;
-ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Catalog Error: Scalar Function with name similar_to_escape does not exist!
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: Scalar Function with name similar_to_escape does not exist!
 Did you mean "list_sem"?
 
 LINE 1: SELECT (r.a ~ similar_to_escape('%b%'::text)) AS "?column?" FROM system...
                       ^
 select r['a'] NOT SIMILAR TO '%b%' from duckdb.query($$ SELECT 'abc' a $$) r;
-ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: 'Catalog Error: Scalar Function with name similar_to_escape does not exist!
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: Scalar Function with name similar_to_escape does not exist!
 Did you mean "list_sem"?
 
 LINE 1: SELECT (r.a !~ similar_to_escape('%b%'::text)) AS "?column?" FROM system...
