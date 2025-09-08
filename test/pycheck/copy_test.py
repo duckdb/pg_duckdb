@@ -1,9 +1,10 @@
-from .utils import Cursor
-
-import pytest
-import psycopg.errors
-from pathlib import Path
 import json
+from pathlib import Path
+
+import psycopg.errors
+import pytest
+
+from .utils import Cursor
 
 
 def test_copy_to_local(cur: Cursor, tmp_path: Path):

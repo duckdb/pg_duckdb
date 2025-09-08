@@ -1,10 +1,10 @@
 import shutil
 
-from .utils import Cursor, Postgres
-
-import pytest
 import psycopg.errors
 import psycopg.sql
+import pytest
+
+from .utils import Cursor, Postgres
 
 
 def test_autoinstall_known_extensions(pg: Postgres, cur: Cursor):

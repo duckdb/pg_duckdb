@@ -6,10 +6,10 @@ contains timings, so the output is not deterministic.
 
 import json
 
-from .utils import Cursor
-
-import pytest
 import psycopg.errors
+import pytest
+
+from .utils import Cursor
 
 
 def test_explain(cur: Cursor):

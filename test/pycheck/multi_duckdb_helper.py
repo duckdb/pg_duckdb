@@ -1,6 +1,6 @@
 from contextlib import contextmanager
-from threading import Thread
 from queue import Queue
+from threading import Thread
 
 from .motherduck_token_helper import create_test_user
 from .utils import make_new_duckdb_connection

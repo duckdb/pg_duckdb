@@ -1,9 +1,10 @@
-from .utils import Cursor, Connection
-
 import datetime
+import uuid
+
 import psycopg.types.json
 import pytest
-import uuid
+
+from .utils import Connection, Cursor
 
 
 def test_prepared(cur: Cursor):
