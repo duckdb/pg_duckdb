@@ -51,6 +51,16 @@ endif
 
 PG_DUCKDB_LINK_FLAGS += -Wl,-rpath,$(PG_LIB)/ -L$(DUCKDB_BUILD_DIR)/src -L$(PG_LIB) -lstdc++ -llz4
 
+# Ensure -lstdc++fs is included for GCC 8 builds
+CXX ?= c++
+IS_GCC := $(shell $(CXX) --version 2>/dev/null | grep -q "Free Software Foundation" && echo true || echo false)
+ifeq ($(IS_GCC),true)
+  GCC_MAJOR := $(shell $(CXX) -dumpversion 2>/dev/null | cut -d. -f1)
+  ifeq ($(GCC_MAJOR),8)
+    PG_DUCKDB_LINK_FLAGS += -lstdc++fs
+  endif
+endif
+
 ERROR_ON_WARNING ?=
 ifeq ($(ERROR_ON_WARNING), 1)
 	ERROR_ON_WARNING = -Werror
