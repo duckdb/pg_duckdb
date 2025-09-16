@@ -289,7 +289,7 @@ DuckAssignTimezone(const char *newval, void *extra) {
 
 /*
  * Initialize GUC hooks.
- *  some guc shoule be set to duckdb instance, such as timezone
+ *  some guc should be set to duckdb instance, such as timezone
  *  is there any other guc should be set to duckdb instance?
  */
 void
