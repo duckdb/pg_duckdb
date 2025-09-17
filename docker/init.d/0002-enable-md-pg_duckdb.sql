@@ -1,10 +1,18 @@
 -- This script is used to enable MotherDuck support if
 -- the token is provided in the environment variables.
 
-\set md_token `echo $motherduck_token` `echo $MOTHERDUCK_TOKEN`
+\set lc_token `echo $motherduck_token`
+\set uc_token `echo $MOTHERDUCK_TOKEN`
 
-\if :{?md_token}
-    CALL duckdb.enable_motherduck(:'md_token'::TEXT);
+SELECT
+    LENGTH(:'lc_token') > 0 as lc_token_set,
+    LENGTH(:'uc_token') > 0 as uc_token_set
+\gset
+
+\if :lc_token_set
+    CALL duckdb.enable_motherduck(:'lc_token'::TEXT);
+\elif :uc_token_set
+    CALL duckdb.enable_motherduck(:'uc_token'::TEXT);
 \else
     -- MotherDuck was not enabled, so we can skip the rest of the script
     \q
