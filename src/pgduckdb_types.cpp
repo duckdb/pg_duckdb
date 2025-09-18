@@ -49,12 +49,22 @@ struct NumericAsDouble : public duckdb::ExtraTypeInfo {
 public:
 	NumericAsDouble() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {
 	}
+
+	duckdb::shared_ptr<ExtraTypeInfo>
+	Copy() const override {
+		return duckdb::make_shared_ptr<NumericAsDouble>(*this);
+	}
 };
 
 // FIXME: perhaps we want to just make a generic ExtraTypeInfo that holds the Postgres type OID
 struct IsBpChar : public duckdb::ExtraTypeInfo {
 public:
 	IsBpChar() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {
+	}
+
+	duckdb::shared_ptr<ExtraTypeInfo>
+	Copy() const override {
+		return duckdb::make_shared_ptr<IsBpChar>(*this);
 	}
 };
 
@@ -444,9 +454,9 @@ static Datum
 ConvertNumericDatum(const duckdb::Value &value) {
 	auto value_type_id = value.type().id();
 
-	// Special handle duckdb VARINT type.
-	if (value.type().id() == duckdb::LogicalTypeId::VARINT) {
-		// The performant way to handle the translation is to parse VARINT out, here we leverage string conversion and
+	// Special handle duckdb BIGNUM type.
+	if (value.type().id() == duckdb::LogicalTypeId::BIGNUM) {
+		// The performant way to handle the translation is to parse BIGNUM out, here we leverage string conversion and
 		// parsing mainly for code simplicity.
 		const std::string value_str = value.ToString();
 		Datum pg_numeric = pgduckdb::pg::StringToNumeric(value_str.c_str());
@@ -1501,7 +1511,7 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return UUIDARRAYOID;
 	case duckdb::LogicalTypeId::BLOB:
 		return BYTEAARRAYOID;
-	case duckdb::LogicalTypeId::VARINT:
+	case duckdb::LogicalTypeId::BIGNUM:
 		return NUMERICARRAYOID;
 	case duckdb::LogicalTypeId::STRUCT:
 		return pgduckdb::DuckdbStructArrayOid();
@@ -1589,7 +1599,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::UUID:
 		return UUIDOID;
-	case duckdb::LogicalTypeId::VARINT:
+	case duckdb::LogicalTypeId::BIGNUM:
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::STRUCT:
 		return pgduckdb::DuckdbStructOid();
