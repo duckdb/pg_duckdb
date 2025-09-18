@@ -11,13 +11,12 @@ class PostgresSchema;
 
 class PostgresCatalog : public duckdb::Catalog {
 public:
-	PostgresCatalog(duckdb::AttachedDatabase &db, const duckdb::string &connection_string,
-	                duckdb::AccessMode access_mode);
+	PostgresCatalog(duckdb::AttachedDatabase &db, const duckdb::string &connection_string);
 
-	static duckdb::unique_ptr<duckdb::Catalog> Attach(duckdb::StorageExtensionInfo *storage_info,
-	                                                  duckdb::ClientContext &context, duckdb::AttachedDatabase &db,
-	                                                  const duckdb::string &name, duckdb::AttachInfo &info,
-	                                                  duckdb::AccessMode access_mode);
+	static duckdb::unique_ptr<duckdb::Catalog> Attach(duckdb::optional_ptr<duckdb::StorageExtensionInfo>,
+	                                                  duckdb::ClientContext &, duckdb::AttachedDatabase &db,
+	                                                  const duckdb::string &, duckdb::AttachInfo &info,
+	                                                  duckdb::AttachOptions &options);
 
 	// -- Catalog API --
 	void Initialize(bool load_builtin) override;
@@ -48,7 +47,6 @@ public:
 	void DropSchema(duckdb::ClientContext &context, duckdb::DropInfo &info) override;
 
 	duckdb::string path;
-	duckdb::AccessMode access_mode;
 
 private:
 	duckdb::case_insensitive_map_t<duckdb::unique_ptr<PostgresSchema>> schemas;
