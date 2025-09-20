@@ -9,15 +9,15 @@
 
 namespace pgduckdb {
 
-PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &_db, const duckdb::string &connection_string,
-                                 duckdb::AccessMode _access_mode)
-    : Catalog(_db), path(connection_string), access_mode(_access_mode), schemas() {
+PostgresCatalog::PostgresCatalog(duckdb::AttachedDatabase &_db, const duckdb::string &connection_string)
+    : Catalog(_db), path(connection_string), schemas() {
 }
 
 duckdb::unique_ptr<duckdb::Catalog>
-PostgresCatalog::Attach(duckdb::StorageExtensionInfo *, duckdb::ClientContext &, duckdb::AttachedDatabase &db,
-                        const duckdb::string &, duckdb::AttachInfo &info, duckdb::AccessMode access_mode) {
-	return duckdb::make_uniq<PostgresCatalog>(db, info.path, access_mode);
+PostgresCatalog::Attach(duckdb::optional_ptr<duckdb::StorageExtensionInfo>, duckdb::ClientContext &,
+                        duckdb::AttachedDatabase &db, const duckdb::string &, duckdb::AttachInfo &info,
+                        duckdb::AttachOptions &) {
+	return duckdb::make_uniq<PostgresCatalog>(db, info.path);
 }
 
 // ------------------ Catalog API ---------------------
