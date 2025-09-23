@@ -6519,9 +6519,8 @@ get_rule_orderby(List *orderList, List *targetList,
 		else if (srt->sortop == typentry->gt_opr)
 		{
 			appendStringInfoString(buf, " DESC");
-			if (srt->nulls_first)
-				appendStringInfoString(buf, " NULLS FIRST");
-			else
+			/* DESC defaults to NULLS FIRST */
+			if (!srt->nulls_first)
 				appendStringInfoString(buf, " NULLS LAST");
 		}
 		else
