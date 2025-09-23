@@ -56,3 +56,4 @@ test: unresolved_type
 test: views
 test: parallel_postgres_scan
 test: postgres_table_etl
+test: order_by

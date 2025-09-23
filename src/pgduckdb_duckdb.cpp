@@ -98,6 +98,7 @@ DuckDBManager::Initialize() {
 
 	duckdb::DBConfig config;
 	config.SetOptionByName("custom_user_agent", "pg_duckdb");
+	config.SetOptionByName("default_null_order", "postgres");
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
 	SET_DUCKDB_OPTION(enable_external_access);
