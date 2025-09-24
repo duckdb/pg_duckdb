@@ -95,6 +95,10 @@ pgduckdb_is_fake_type(Oid type_oid) {
 		return true;
 	}
 
+	if (pgduckdb::DuckdbStructOid() == type_oid) {
+		return true;
+	}
+
 	return false;
 }
 

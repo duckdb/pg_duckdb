@@ -155,6 +155,7 @@ BuildDuckdbOnlyFunctions() {
 	                                "approx_count_distinct",
 	                                "query",
 	                                "view",
+	                                "eval",
 	                                "json_exists",
 	                                "json_extract",
 	                                "json_extract_string",

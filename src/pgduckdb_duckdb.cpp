@@ -1,11 +1,18 @@
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 
+#include <duckdb/common/types.hpp>
+#include <duckdb/common/unique_ptr.hpp>
+#include <duckdb/planner/expression/bound_function_expression.hpp>
 #include <filesystem>
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/parser/parsed_data/create_scalar_function_info.hpp"
+#include "duckdb/parser/parser.hpp"
+#include "duckdb/parser/parser_options.hpp"
+#include "duckdb/planner/expression_binder.hpp"
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/pg/guc.hpp"
@@ -82,6 +89,48 @@ template <>
 std::string
 ToString(char *value) {
 	return std::string(value);
+}
+
+struct EvalBindData : duckdb::FunctionData {
+	explicit EvalBindData(duckdb::unique_ptr<duckdb::Expression> expr_p) : expr(std::move(expr_p)) {
+	}
+	duckdb::unique_ptr<duckdb::Expression> expr;
+
+	duckdb::unique_ptr<FunctionData>
+	Copy() const override {
+		auto copy_expr = expr->Copy();
+		return nullptr;
+	}
+
+	bool
+	Equals(const FunctionData &other_p) const override {
+		return expr == other_p.Cast<EvalBindData>().expr;
+	}
+};
+
+static void
+EvalFunc(duckdb::DataChunk &args, duckdb::ExpressionState &state, duckdb::Vector &result) {
+	auto &func_expr = state.expr.Cast<duckdb::BoundFunctionExpression>();
+	const auto &info = func_expr.bind_info->Cast<EvalBindData>();
+	auto expr_executor = duckdb::make_uniq<duckdb::ExpressionExecutor>(state.GetContext(), *info.expr);
+	expr_executor->ExecuteExpression(args, result);
+}
+
+static duckdb::unique_ptr<duckdb::FunctionData>
+EvalBind(duckdb::ScalarFunctionBindInput &bind_input, duckdb::ScalarFunction &bound_function,
+         duckdb::vector<duckdb::unique_ptr<duckdb::Expression>> &arguments) {
+	std::string expr = bound_function.arguments[0].ToString();
+	auto expression_list = duckdb::Parser::ParseExpressionList(expr, bind_input.binder.context.GetParserOptions());
+	if (expression_list.size() != 1) {
+		throw duckdb::ParserException("Expected a single expression as eval parameter");
+	}
+
+	auto expression = std::move(expression_list[0]);
+
+	auto bound_expression = bind_input.binder.GetActiveBinder().Bind(expression);
+	bound_function.return_type = bound_expression->return_type;
+
+	return duckdb::make_uniq<EvalBindData>(bound_expression);
 }
 
 #define SET_DUCKDB_OPTION(ddb_option_name)                                                                             \
@@ -199,6 +248,25 @@ DuckDBManager::Initialize() {
 			                                          quoted_timeout);
 		}
 	}
+
+	// duckdb::DefaultMacro eval_macro = {
+	//     DEFAULT_SCHEMA,
+	//     "eval",
+	//     {"expression", nullptr},
+	//     {{nullptr, nullptr}},
+	//     "(SELECT * FROM query('SELECT ' || expression || ' FROM (select 1)'))",
+	// };
+	// auto eval_info = duckdb::DefaultFunctionGenerator::CreateInternalMacroInfo(eval_macro);
+	// duckdb::ExtensionUtil::RegisterFunction(*database->instance, *eval_info);
+
+	duckdb::CreateScalarFunctionInfo eval_info(duckdb::ScalarFunction(
+	    "eval", {duckdb::LogicalType::VARCHAR}, duckdb::LogicalType::UNKNOWN, EvalFunc, nullptr, EvalBind));
+
+	// create a scalar function
+	auto &catalog = duckdb::Catalog::GetSystemCatalog(context);
+	connection->BeginTransaction();
+	catalog.CreateFunction(context, eval_info);
+	connection->Commit();
 
 	if (duckdb_autoinstall_known_extensions) {
 		InstallExtensions(context);
