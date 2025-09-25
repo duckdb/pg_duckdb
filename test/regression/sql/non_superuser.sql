@@ -89,7 +89,22 @@ SELECT * FROM duckdb.install_extension('iceberg');
 TRUNCATE duckdb.extensions;
 SET duckdb.force_execution = true;
 
+-- Test Issue #931
 RESET ROLE;
+CALL duckdb.recycle_ddb();
+ALTER SYSTEM SET duckdb.disabled_filesystems = 'LocalFileSystem';
+SELECT pg_reload_conf();
+CREATE USER admin_user IN ROLE duckdb_group;
+SET ROLE admin_user;
+CREATE TEMP TABLE duckdb_tbl (id int) USING DUCKDB;
+DROP TABLE duckdb_tbl;
+
+-- Cleanup
+RESET ROLE;
+CALL duckdb.recycle_ddb();
+ALTER SYSTEM SET duckdb.disabled_filesystems = '';
+SELECT pg_reload_conf();
+DROP USER admin_user;
 DROP TABLE t;
 DROP OWNED BY user1;
 DROP USER user1, user2, user3;

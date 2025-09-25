@@ -272,6 +272,15 @@ DisabledFileSystems() {
 		return "LocalFileSystem";
 	}
 
+	/* Ensure LocalFileSystem is added only when it's absent from duckdb_disabled_filesystems. */
+	std::vector<std::string> fs_list = duckdb::StringUtil::Split(duckdb_disabled_filesystems, ',');
+	for (auto &fs : fs_list) {
+		std::string trimmed_fs = fs;
+		duckdb::StringUtil::Trim(trimmed_fs);
+		if (duckdb::StringUtil::CIEquals(trimmed_fs, "LocalFileSystem")) {
+			return duckdb_disabled_filesystems;
+		}
+	}
 	return "LocalFileSystem," + std::string(duckdb_disabled_filesystems);
 }
 
