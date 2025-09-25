@@ -20,6 +20,7 @@
 #include "pgduckdb/pgduckdb_unsupported_type_optimizer.hpp"
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pgduckdb_external_tables.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 
@@ -229,6 +230,7 @@ DuckDBManager::Reset() {
 	delete manager_instance.database;
 	manager_instance.database = nullptr;
 	UnclaimBgwSessionHint();
+	ResetLoadedExternalTableCache();
 }
 
 int64

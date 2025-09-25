@@ -4,6 +4,7 @@
 #include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_hooks.hpp"
+#include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 
@@ -12,6 +13,7 @@ extern "C" {
 #include "access/tableam.h"
 #include "access/relation.h"
 #include "catalog/pg_type.h"
+#include "commands/defrem.h"
 #include "commands/event_trigger.h"
 #include "fmgr.h"
 #include "catalog/pg_authid_d.h"
@@ -35,12 +37,14 @@ extern "C" {
 #include "miscadmin.h"
 #include "rewrite/rewriteHandler.h"
 #include "utils/ruleutils.h"
+#include "utils/jsonb.h"
 
 #include "pgduckdb/vendor/pg_ruleutils.h"
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/pgduckdb_external_tables.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
@@ -54,6 +58,215 @@ extern "C" {
 namespace pgduckdb {
 DDLType top_level_duckdb_ddl_type = DDLType::NONE;
 bool refreshing_materialized_view = false;
+
+struct ExternalCreateTableOptions {
+	ExternalCreateTableOptions()
+	    : is_external(false), reader(nullptr), location(nullptr), options(nullptr), format(nullptr) {
+	}
+
+	bool is_external;
+	char *reader;
+	char *location;
+	Jsonb *options;
+	char *format;
+};
+
+ExternalCreateTableOptions pending_external_create_table_options;
+
+static void
+ResetPendingExternalCreateTableOptions() {
+	if (pending_external_create_table_options.reader) {
+		pfree(pending_external_create_table_options.reader);
+	}
+	if (pending_external_create_table_options.location) {
+		pfree(pending_external_create_table_options.location);
+	}
+	if (pending_external_create_table_options.options) {
+		pfree(pending_external_create_table_options.options);
+	}
+	if (pending_external_create_table_options.format) {
+		pfree(pending_external_create_table_options.format);
+	}
+	pending_external_create_table_options.is_external = false;
+	pending_external_create_table_options.reader = nullptr;
+	pending_external_create_table_options.location = nullptr;
+	pending_external_create_table_options.options = nullptr;
+	pending_external_create_table_options.format = nullptr;
+}
+
+static void
+StorePendingExternalCreateTableOptions(const pgduckdb::ExternalCreateTableOptions &src) {
+	ResetPendingExternalCreateTableOptions();
+	if (!src.is_external) {
+		return;
+	}
+
+	MemoryContext old_context = MemoryContextSwitchTo(TopMemoryContext);
+	pending_external_create_table_options.is_external = true;
+	if (src.reader) {
+		pending_external_create_table_options.reader = pstrdup(src.reader);
+	}
+	if (src.location) {
+		pending_external_create_table_options.location = pstrdup(src.location);
+	}
+	if (src.options) {
+		pending_external_create_table_options.options = DatumGetJsonbPCopy(JsonbPGetDatum(src.options));
+	}
+	if (src.format) {
+		pending_external_create_table_options.format = pstrdup(src.format);
+	}
+	MemoryContextSwitchTo(old_context);
+}
+
+static List *
+InferExternalTableColumns(const pgduckdb::ExternalCreateTableOptions &opts) {
+	std::string function_call = pgduckdb::BuildExternalTableFunctionCall(opts.reader, opts.location, opts.options);
+	std::string query = "SELECT * FROM " + function_call + " LIMIT 0";
+	auto connection = pgduckdb::DuckDBManager::GetConnection();
+	elog(DEBUG1, "duckdb external column inference query: %s", query.c_str());
+	auto prepared = connection->Prepare(query);
+	if (prepared->HasError()) {
+		ereport(ERROR,
+		        (errcode(ERRCODE_SYNTAX_ERROR), errmsg("unable to prepare DuckDB query for external table inference"),
+		         errdetail("%s", prepared->GetError().c_str())));
+	}
+	const auto &types = prepared->GetTypes();
+	const auto &names = prepared->GetNames();
+	if (types.empty()) {
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("could not infer columns from external source")));
+	}
+
+	List *columns = NIL;
+	for (duckdb::idx_t i = 0; i < types.size(); i++) {
+		const std::string &col_name = names[i];
+
+		// Check if column name exceeds PostgreSQL's maximum identifier length
+		if (col_name.length() >= NAMEDATALEN) {
+			ereport(ERROR, (errcode(ERRCODE_NAME_TOO_LONG), errmsg("column name \"%s\" is too long", col_name.c_str()),
+			                errdetail("Column name length is %zu bytes, maximum is %d bytes.", col_name.length(),
+			                          NAMEDATALEN - 1)));
+		}
+
+		Oid postgres_type = pgduckdb::GetPostgresDuckDBType(types[i], true);
+		int32 typmod = pgduckdb::GetPostgresDuckDBTypemod(types[i]);
+		TypeName *type_name = makeTypeNameFromOid(postgres_type, typmod);
+		ColumnDef *column_def = makeNode(ColumnDef);
+		column_def->colname = pstrdup(col_name.c_str());
+		column_def->typeName = type_name;
+		column_def->inhcount = 0;
+		column_def->is_local = true;
+		column_def->is_not_null = false;
+		column_def->is_from_type = false;
+		column_def->storage = 0;
+		column_def->raw_default = NULL;
+		column_def->cooked_default = NULL;
+		column_def->collClause = NULL;
+		column_def->constraints = NIL;
+		columns = lappend(columns, column_def);
+	}
+	return columns;
+}
+
+static bool
+ParseExternalTableOptions(List **options_ptr, pgduckdb::ExternalCreateTableOptions &out) {
+	if (options_ptr == nullptr || *options_ptr == NULL) {
+		out.is_external = false;
+		return false;
+	}
+
+	List *options = *options_ptr;
+	ListCell *cell;
+
+	foreach (cell, options) {
+		DefElem *def = (DefElem *)lfirst(cell);
+		bool remove = false;
+
+		if (strcmp(def->defname, "duckdb_external_location") == 0) {
+			if (out.location != nullptr) {
+				ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("duplicate duckdb_external_location option")));
+			}
+			const char *value = defGetString(def);
+			if (value[0] == '\0') {
+				ereport(ERROR,
+				        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("duckdb_external_location cannot be empty")));
+			}
+			out.location = pstrdup(value);
+			out.is_external = true;
+			remove = true;
+		} else if (strcmp(def->defname, "duckdb_external_reader") == 0) {
+			if (out.reader != nullptr) {
+				ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("duplicate duckdb_external_reader option")));
+			}
+			const char *value = defGetString(def);
+			if (value[0] == '\0') {
+				ereport(ERROR,
+				        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("duckdb_external_reader cannot be empty")));
+			}
+			// Validate reader is one of the allowed values
+			if (strcmp(value, "read_csv") != 0 && strcmp(value, "read_parquet") != 0 &&
+			    strcmp(value, "read_json") != 0) {
+				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+				                errmsg("invalid duckdb_external_reader: \"%s\"", value),
+				                errhint("Valid readers are: read_csv, read_parquet, read_json")));
+			}
+			out.reader = pstrdup(value);
+			remove = true;
+		} else if (strcmp(def->defname, "duckdb_external_options") == 0) {
+			if (out.options != nullptr) {
+				ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("duplicate duckdb_external_options option")));
+			}
+			const char *value = defGetString(def);
+			const char *json_value = (value[0] == '\0') ? "{}" : value;
+			Datum json_datum = DirectFunctionCall1(jsonb_in, CStringGetDatum(json_value));
+			out.options = DatumGetJsonbP(json_datum);
+			remove = true;
+		} else if (strcmp(def->defname, "duckdb_external_format") == 0) {
+			if (out.format != nullptr) {
+				ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("duplicate duckdb_external_format option")));
+			}
+			const char *value = defGetString(def);
+			if (value[0] == '\0') {
+				ereport(ERROR,
+				        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("duckdb_external_format cannot be empty")));
+			}
+			out.format = pstrdup(value);
+			for (char *ptr = out.format; ptr && *ptr != '\0'; ++ptr) {
+				*ptr = static_cast<char>(std::tolower(static_cast<unsigned char>(*ptr)));
+			}
+			remove = true;
+		}
+
+		if (remove) {
+			options = foreach_delete_current(options, cell);
+		}
+	}
+
+	*options_ptr = options;
+
+	if (!out.is_external) {
+		if (out.reader != nullptr || out.options != nullptr || out.format != nullptr) {
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			                errmsg("duckdb external options require duckdb_external_location")));
+		}
+		return false;
+	}
+
+	if (out.reader == nullptr) {
+		if (out.format == nullptr || strcmp(out.format, "parquet") == 0) {
+			out.reader = pstrdup("read_parquet");
+		} else if (strcmp(out.format, "csv") == 0) {
+			out.reader = pstrdup("read_csv");
+		} else if (strcmp(out.format, "json") == 0) {
+			out.reader = pstrdup("read_json");
+		} else {
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			                errmsg("Unsupported duckdb_external_format '%s'", out.format),
+			                errhint("Supported formats are parquet, csv, and json.")));
+		}
+	}
+
+	return true;
+}
 
 bool
 IsMotherDuckView(Form_pg_class relation) {
@@ -434,6 +647,7 @@ DuckdbHandleDDLPost(PlannedStmt *pstmt) {
 static bool
 DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 	Node *parsetree = pstmt->utilityStmt;
+	pgduckdb::ResetPendingExternalCreateTableOptions();
 
 	/*
 	 * Time to check for disallowed mixed writes here. The handling for some of
@@ -459,6 +673,13 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 
 		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
+
+		pgduckdb::ExternalCreateTableOptions external_options;
+		if (ParseExternalTableOptions(&stmt->options, external_options) && !is_duckdb_table) {
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+			                errmsg("duckdb_external_location requires USING duckdb")));
+		}
+
 		if (is_duckdb_table) {
 			if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
 				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -466,11 +687,32 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 			}
 			pgduckdb::top_level_duckdb_ddl_type = pgduckdb::DDLType::CREATE_TABLE;
 			pgduckdb::ClaimCurrentCommandId();
+
+			if (external_options.is_external) {
+				if (stmt->tableElts != NIL) {
+					ereport(ERROR,
+					        (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+					         errmsg("column definitions are not allowed when duckdb_external_location is used")));
+				}
+				if (stmt->inhRelations != NIL || stmt->partspec != NULL || stmt->partbound != NULL ||
+				    stmt->ofTypename != NULL || stmt->constraints != NIL) {
+					ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+					                errmsg("duckdb_external_location does not support table inheritance, partitions, "
+					                       "constraints, or typed tables")));
+				}
+				stmt->tableElts = InferExternalTableColumns(external_options);
+				StorePendingExternalCreateTableOptions(external_options);
+			}
 		}
 
 		return false;
 	} else if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
+		pgduckdb::ExternalCreateTableOptions external_options;
+		if (ParseExternalTableOptions(&stmt->into->options, external_options)) {
+			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
+			                errmsg("duckdb_external_location is not supported in CREATE TABLE AS")));
+		}
 
 		/* Default to duckdb AM for ddb$ schemas and disallow other AMs */
 		Oid schema_oid = RangeVarGetCreationNamespace(stmt->into->rel);
@@ -968,7 +1210,7 @@ DuckdbHandleViewStmtPre(Node *parsetree, PlannedStmt *pstmt, const char *query_s
 	/* END OF COPIED LOGIC */
 
 	char *duckdb_query_string = pgduckdb_get_querydef((Query *)copyObjectImpl(viewParse));
-	List *db_and_schema = pgduckdb_db_and_schema(schema_name, "duckdb");
+	List *db_and_schema = pgduckdb_db_and_schema(schema_name, "duckdb", false);
 
 	char *duckdb_db = (char *)linitial(db_and_schema);
 	char *duckdb_schema = (char *)lsecond(db_and_schema);
@@ -1002,7 +1244,7 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 	auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
 	char *postgres_schema_name = get_namespace_name(rel->rd_rel->relnamespace);
 
-	const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, "duckdb"));
+	const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, "duckdb", false));
 	relation_close(rel, NoLock);
 
 	Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
@@ -1202,6 +1444,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		 * We're not installed, so don't mess with the query. Normally this
 		 * shouldn't happen, but better safe than sorry.
 		 */
+		pgduckdb::ResetPendingExternalCreateTableOptions();
 		PG_RETURN_NULL();
 	}
 
@@ -1214,6 +1457,9 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 
 	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
 	Node *parsetree = trigger_data->parsetree;
+	const pgduckdb::ExternalCreateTableOptions external_options_snapshot =
+	    pgduckdb::pending_external_create_table_options;
+	const bool is_external_table = external_options_snapshot.is_external;
 
 	SPI_connect();
 
@@ -1250,6 +1496,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		/* No DuckDB tables were created so we don't need to do anything */
 		AtEOXact_GUC(false, save_nestlevel);
 		SPI_finish();
+		pgduckdb::ResetPendingExternalCreateTableOptions();
 		PG_RETURN_NULL();
 	}
 
@@ -1287,14 +1534,15 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	if (is_temporary) {
 		pgduckdb::RegisterDuckdbTempTable(relid);
 	} else {
-		if (!pgduckdb::IsMotherDuckEnabled()) {
+		if (!is_external_table && !pgduckdb::IsMotherDuckEnabled()) {
 			elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
 		}
 
 		Oid saved_userid;
 		int sec_context;
 		const char *postgres_schema_name = get_namespace_name_or_temp(get_rel_namespace(relid));
-		const char *duckdb_db = (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, "duckdb"));
+		const char *duckdb_db =
+		    (const char *)linitial(pgduckdb_db_and_schema(postgres_schema_name, "duckdb", is_external_table));
 		auto default_db = pgduckdb::DuckDBManager::Get().GetDefaultDBName();
 
 		Oid arg_types[] = {OIDOID, TEXTOID, TEXTOID, TEXTOID};
@@ -1323,13 +1571,21 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 			elog(ERROR, "SPI_exec failed: error code %s", SPI_result_code_string(ret));
 		}
 
-		ObjectAddress table_address = {
-		    .classId = RelationRelationId,
-		    .objectId = relid,
-		    .objectSubId = 0,
-		};
-		pgduckdb::RecordDependencyOnMDServer(&table_address);
-		ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUserOid(), false, AccessExclusiveLock);
+		if (is_external_table) {
+			pgduckdb::EnsureExternalTablesCatalogExists();
+			pgduckdb::UpsertExternalTableMetadata(relid, external_options_snapshot.reader,
+			                                      external_options_snapshot.location,
+			                                      JsonbPGetDatum(external_options_snapshot.options));
+			pgduckdb::RegisterExternalTableDependency(relid);
+		} else {
+			ObjectAddress table_address = {
+			    .classId = RelationRelationId,
+			    .objectId = relid,
+			    .objectSubId = 0,
+			};
+			pgduckdb::RecordDependencyOnMDServer(&table_address);
+			ATExecChangeOwner(relid, pgduckdb::MotherDuckPostgresUserOid(), false, AccessExclusiveLock);
+		}
 	}
 
 	AtEOXact_GUC(false, save_nestlevel);
@@ -1340,6 +1596,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		 * We don't want to forward DDL to DuckDB because we're syncing the
 		 * tables that are already there.
 		 */
+		pgduckdb::ResetPendingExternalCreateTableOptions();
 		PG_RETURN_NULL();
 	}
 
@@ -1355,30 +1612,32 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(parsetree));
 	}
 
-	/*
-	 * pgduckdb_get_tabledef does a bunch of checks to see if creating the
-	 * table is supported. So, we do call that function first, before creating
-	 * the DuckDB connection and possibly transactions.
-	 */
-	std::string create_table_string(pgduckdb_get_tabledef(relid));
+	if (is_external_table) {
+		pgduckdb::EnsureExternalTableLoaded(relid);
+		pgduckdb::ResetPendingExternalCreateTableOptions();
+	} else {
+		/*
+		 * pgduckdb_get_tabledef does a bunch of checks to see if creating the
+		 * table is supported. So, we do call that function first, before creating
+		 * the DuckDB connection and possibly transactions.
+		 */
+		std::string create_table_string(pgduckdb_get_tabledef(relid));
+		/* We're going to run multiple queries in DuckDB, so we need to start a
+		 * transaction to ensure ACID guarantees hold. */
+		auto connection = pgduckdb::DuckDBManager::GetConnection(true);
+		Query *ctas_query = nullptr;
 
-	/* We're going to run multiple queries in DuckDB, so we need to start a
-	 * transaction to ensure ACID guarantees hold. */
-	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
-	Query *ctas_query = nullptr;
+		if (IsA(parsetree, CreateTableAsStmt) && !ctas_skip_data) {
+			auto stmt = castNode(CreateTableAsStmt, parsetree);
+			ctas_query = (Query *)stmt->query;
+		}
 
-	if (IsA(parsetree, CreateTableAsStmt) && !ctas_skip_data) {
-		auto stmt = castNode(CreateTableAsStmt, parsetree);
-		ctas_query = (Query *)stmt->query;
-	}
-
-	pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
-	if (ctas_query) {
-		const char *ctas_query_string = pgduckdb_get_querydef(ctas_query);
-
-		std::string insert_string =
-		    std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
-		pgduckdb::DuckDBQueryOrThrow(*connection, insert_string);
+		pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
+		if (ctas_query) {
+			const char *ctas_query_string = pgduckdb_get_querydef(ctas_query);
+			std::string insert_string = std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
+			pgduckdb::DuckDBQueryOrThrow(*connection, insert_string);
+		}
 	}
 
 	PG_RETURN_NULL();
@@ -1538,7 +1797,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 			WHERE object_type in ('table', 'view')
 		) objs
 		WHERE relid = objid
-		RETURNING objs.schema_name, objs.object_name, objs.object_type
+		RETURNING objs.objid, objs.schema_name, objs.object_name, objs.object_type
 		)",
 	               0);
 	pgduckdb::pg::SetForceAllowWrites(false);
@@ -1573,25 +1832,40 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * actually cause the tables to be dropped in MotherDuck as well, even if
 	 * the DROP is only meant to replace the existing Postgres shell table with
 	 * a new version.
+	 * 
+	 * External tables are dropped from DuckDB regardless of MotherDuck state.
 	 */
-	if (pgduckdb::IsMotherDuckEnabled() && !pgduckdb::doing_motherduck_sync) {
-		for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
+	for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
+		HeapTuple tuple = SPI_tuptable->vals[proc];
+
+		bool isnull;
+		Oid relid = DatumGetObjectId(SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull));
+		Assert(!isnull);
+		bool local_is_external = pgduckdb::pgduckdb_is_external_relation(relid);
+		bool should_drop_in_duckdb =
+		    !pgduckdb::doing_motherduck_sync && (pgduckdb::IsMotherDuckEnabled() || local_is_external);
+
+		if (should_drop_in_duckdb) {
 			if (!connection) {
 				/* We're going to run multiple queries in DuckDB, so we need to
 				 * start a transaction to ensure ACID guarantees hold. */
 				connection = pgduckdb::DuckDBManager::GetConnection(true);
 			}
-			HeapTuple tuple = SPI_tuptable->vals[proc];
-
-			char *postgres_schema_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 1);
-			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
-			char *object_type = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 3);
+			char *postgres_schema_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
+			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 3);
+			char *object_type = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 4);
 			char *drop_query =
-			    psprintf("DROP %s IF EXISTS %s.%s", object_type,
-			             pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb"), quote_identifier(table_name));
+			    psprintf("DROP %s IF EXISTS %s.%s", local_is_external ? "view" : object_type,
+			             pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", local_is_external),
+			             quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 
 			deleted_duckdb_relations++;
+		}
+
+		if (local_is_external) {
+			pgduckdb::DeleteExternalTableMetadata(relid);
+			pgduckdb::ForgetLoadedExternalTable(relid);
 		}
 	}
 
@@ -1633,6 +1907,8 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		pgduckdb::DuckDBQueryOrThrow(*connection,
 		                             std::string("DROP TABLE pg_temp.main.") + quote_identifier(table_name));
 		pgduckdb::UnregisterDuckdbTempTable(relid);
+		pgduckdb::DeleteExternalTableMetadata(relid);
+		pgduckdb::ForgetLoadedExternalTable(relid);
 		deleted_duckdb_relations++;
 	}
 

@@ -33,6 +33,7 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
+#include "pgduckdb/pgduckdb_external_tables.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
@@ -79,6 +80,17 @@ ContainsDuckdbTables(List *rte_list) {
 	return false;
 }
 
+
+static void
+LoadDuckdbExternalTables(List *rte_list) {
+	foreach_node(RangeTblEntry, rte, rte_list) {
+		if (!IsDuckdbTable(rte->relid)) {
+			continue;
+		}
+		pgduckdb::EnsureExternalTableLoaded(rte->relid);
+	}
+}
+
 static bool
 ContainsDuckdbItems(Node *node, void *context) {
 	if (node == NULL)
@@ -114,6 +126,33 @@ ContainsDuckdbItems(Node *node, void *context) {
 	return expression_tree_walker(node, ContainsDuckdbItems, context);
 #else
 	return expression_tree_walker(node, (bool (*)())((void *)ContainsDuckdbItems), context);
+#endif
+}
+
+/*
+ * Tree walker to ensure all external tables in the query are loaded into DuckDB.
+ * This traverses the query tree and loads any external tables found in range tables.
+ */
+static Node *
+LoadExternalTablesWalker(Node *node, void *context) {
+	if (node == NULL)
+		return node;
+
+	if (IsA(node, Query)) {
+		Query *query = castNode(Query, node);
+		LoadDuckdbExternalTables(query->rtable);
+#if PG_VERSION_NUM >= 160000
+		query_tree_mutator(query, LoadExternalTablesWalker, context, 0);
+#else
+		query_tree_mutator(query, (Node * (*)())((void *)LoadExternalTablesWalker), context, 0);
+#endif
+		return node;
+	}
+
+#if PG_VERSION_NUM >= 160000
+	return expression_tree_mutator(node, LoadExternalTablesWalker, context);
+#else
+	return expression_tree_mutator(node, (Node * (*)())((void *)LoadExternalTablesWalker), context);
 #endif
 }
 
@@ -259,6 +298,7 @@ static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (pgduckdb::NeedsDuckdbExecution(parse)) {
+			::LoadExternalTablesWalker((Node *)parse, NULL);
 			pgduckdb::TriggerActivity();
 			pgduckdb::IsAllowedStatement(parse, true);
 

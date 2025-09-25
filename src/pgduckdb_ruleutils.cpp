@@ -10,6 +10,7 @@ extern "C" {
 
 #include "access/relation.h"
 #include "access/htup_details.h"
+#include "catalog/namespace.h"
 #include "catalog/pg_class.h"
 #include "catalog/heap.h"
 #include "catalog/pg_collation.h"
@@ -39,6 +40,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
+#include "pgduckdb/pgduckdb_external_tables.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
@@ -472,7 +474,7 @@ pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level) {
  * are not escaped yet.
  */
 List *
-pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_table_am_name) {
+pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_table_am_name, bool is_ddb_external) {
 	if (duckdb_table_am_name == nullptr) {
 		return list_make2((void *)"pgduckdb", (void *)postgres_schema_name);
 	}
@@ -492,7 +494,7 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_tabl
 	}
 
 	/* These are MotherDuck tables, so we need credentials to access them */
-	if (!pgduckdb::IsMotherDuckEnabled()) {
+	if (!is_ddb_external && !pgduckdb::IsMotherDuckEnabled()) {
 		ereport(ERROR,
 		        (errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 		         errmsg("MotherDuck tables cannot be accessed without MotherDuck credentials"),
@@ -551,8 +553,9 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_tabl
  * database are quoted if necessary.
  */
 const char *
-pgduckdb_db_and_schema_string(const char *postgres_schema_name, const char *duckdb_table_am_name) {
-	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, duckdb_table_am_name);
+pgduckdb_db_and_schema_string(const char *postgres_schema_name, const char *duckdb_table_am_name,
+                              bool is_ddb_external) {
+	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, duckdb_table_am_name, is_ddb_external);
 	const char *db_name = (const char *)linitial(db_and_schema);
 	const char *schema_name = (const char *)lsecond(db_and_schema);
 	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
@@ -573,7 +576,8 @@ pgduckdb_relation_name(Oid relation_oid) {
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
 	const char *duckdb_table_am_name = pgduckdb::DuckdbTableAmGetName(relation_oid);
 
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, duckdb_table_am_name);
+	bool is_external = duckdb_table_am_name && pgduckdb::pgduckdb_is_external_relation(relation_oid);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, duckdb_table_am_name, is_external);
 
 	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
@@ -625,7 +629,7 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 	const char *relation_name = pgduckdb_relation_name(relation_oid);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
 	const char *duckdb_table_am_name = pgduckdb::DuckdbTableAmGetName(relation->rd_tableam);
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, duckdb_table_am_name);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, duckdb_table_am_name, false);
 
 	StringInfoData buffer;
 	initStringInfo(&buffer);
@@ -813,7 +817,7 @@ pgduckdb_get_viewdef(const ViewStmt *stmt, const char *postgres_schema_name, con
 	StringInfoData buffer;
 	initStringInfo(&buffer);
 
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb");
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", false);
 	appendStringInfo(&buffer, "CREATE SCHEMA IF NOT EXISTS %s; ", db_and_schema);
 
 	appendStringInfoString(&buffer, "CREATE ");
@@ -893,11 +897,11 @@ pgduckdb_get_rename_relationdef(Oid relation_oid, RenameStmt *rename_stmt) {
 	Assert(pgduckdb::IsDuckdbTable(relation) || pgduckdb::IsMotherDuckView(relation));
 
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb");
+	const bool is_external_relation = pgduckdb::pgduckdb_is_external_relation(relation_oid);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", is_external_relation);
 	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
-
 	const char *relation_type = "TABLE";
-	if (relation->rd_rel->relkind == RELKIND_VIEW) {
+	if (relation->rd_rel->relkind == RELKIND_VIEW || is_external_relation) {
 		relation_type = "VIEW";
 	}
 
