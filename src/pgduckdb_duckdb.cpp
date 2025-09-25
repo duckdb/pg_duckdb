@@ -25,6 +25,7 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 
 #include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/utility/signal_guard.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 extern "C" {
@@ -91,6 +92,9 @@ ToString(char *value) {
 void
 DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
+
+	// Block signals before initializing DuckDB to ensure signal is handled by the Postgres main thread only
+	pgduckdb::ThreadSignalBlockGuard guard;
 
 	// Make sure directories provided in config exists
 	std::filesystem::create_directories(duckdb_temporary_directory);
