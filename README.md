@@ -45,6 +45,8 @@ This is the most common and straightforward use case. If you have a standard Pos
 Let's say you have a PostgreSQL table named `orders` (to create it, see [syntax guide](docs/gotchas_and_syntax.md#create-a-table)). To run an analytical query, you just write standard SQL, configure `duckdb.force_execution` and `pg_duckdb` will handle the rest.
 
 ```sql
+-- For NUMERIC columns, specify precision (e.g. NUMERIC(10, 2)) when creating tables,
+-- or set duckdb.convert_unsupported_numeric_to_double = true
 SET duckdb.force_execution = true;
 SELECT
     order_date,
