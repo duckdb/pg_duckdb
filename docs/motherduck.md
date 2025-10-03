@@ -93,7 +93,7 @@ Alternative: if you only need to query tables from a different database occasion
 
 ## Schema Mapping
 
-DuckDB and Postgres have different schema and database conventions. While you specify a _default_ MotherDuck database when connecting, **you can access tables from any MotherDuck database in your account** using the schema mapping described below.
+DuckDB and Postgres have different schema and database conventions. While you specify a _default_ MotherDuck database when connecting, you can access tables from **any** MotherDuck database in your account using the schema mapping described below.
 
 The mapping from a DuckDB `database.schema` to a Postgres schema is done as follows:
 
