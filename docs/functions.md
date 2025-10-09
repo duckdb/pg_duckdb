@@ -683,6 +683,13 @@ FROM events;
 -- Filter using epoch time
 SELECT * FROM events
 WHERE epoch(created_at) > 1640995200; -- After 2022-01-01
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch seconds |
 
 #### <a name="map_extract"></a>`map_extract(map_col duckdb.map, key duckdb.unresolved_type) -> duckdb.unresolved_type`
 
@@ -954,3 +961,236 @@ FROM duckdb.query($$ SELECT MAP(['x', 'y'], [10, 20]) as map_col $$) r;
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | entries | duckdb.struct[] | Array of structs with 'k' (key) and 'v' (value) fields |
+
+#### <a name="epoch_ms"></a>`epoch_ms(timestamp_expr)` -> `BIGINT`
+
+Converts timestamps to Unix epoch milliseconds.
+
+```sql
+-- High-precision timestamp for JavaScript
+SELECT epoch_ms(NOW()) AS timestamp_ms;
+
+-- For time-series data
+SELECT
+    sensor_id,
+    epoch_ms(reading_time) AS timestamp_ms,
+    value
+FROM sensor_readings;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch milliseconds |
+
+#### `epoch_ms(milliseconds)` -> `TIMESTAMP`
+
+Converts Unix epoch milliseconds to a timestamp. This is the inverse of the above function.
+
+```sql
+-- Convert epoch milliseconds to timestamp
+SELECT epoch_ms(1640995200000) AS timestamp_from_ms; -- 2022-01-01 00:00:00
+
+-- Convert stored milliseconds back to timestamps
+SELECT
+    event_id,
+    epoch_ms(timestamp_ms) AS event_time
+FROM events;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| milliseconds | bigint | Milliseconds since Unix epoch |
+
+#### <a name="epoch_us"></a>`epoch_us(timestamp_expr)` -> `BIGINT`
+
+Converts timestamps to Unix epoch microseconds.
+
+```sql
+-- Microsecond precision timestamps
+SELECT epoch_us(NOW()) AS timestamp_us;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch microseconds |
+
+#### <a name="epoch_ns"></a>`epoch_ns(timestamp_expr)` -> `BIGINT`
+
+Converts timestamps to Unix epoch nanoseconds.
+
+```sql
+-- Nanosecond precision timestamps
+SELECT epoch_ns(NOW()) AS timestamp_ns;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| timestamp_expr | timestamp | The timestamp to convert to epoch nanoseconds |
+
+#### <a name="make_timestamp"></a>`make_timestamp(microseconds)` -> `TIMESTAMP`
+
+Creates a timestamp from microseconds since Unix epoch (1970-01-01 00:00:00 UTC).
+
+```sql
+-- Create timestamp from current epoch microseconds
+SELECT make_timestamp(epoch_us(NOW())) AS reconstructed_timestamp;
+
+-- Create specific timestamps
+SELECT make_timestamp(1640995200000000) AS new_years_2022; -- 2022-01-01 00:00:00
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| microseconds | bigint | Microseconds since Unix epoch |
+
+#### <a name="make_timestamptz"></a>`make_timestamptz(microseconds)` -> `TIMESTAMPTZ`
+
+Creates a timestamp with timezone from microseconds since Unix epoch.
+
+```sql
+-- Create timestamptz from current epoch microseconds
+SELECT make_timestamptz(epoch_us(NOW())) AS reconstructed_timestamptz;
+
+-- Create specific timestamptz
+SELECT make_timestamptz(1640995200000000) AS new_years_2022_tz;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| microseconds | bigint | Microseconds since Unix epoch |
+
+#### <a name="tablesample"></a>`TABLESAMPLE (sampling_method(percentage | rows))`
+
+Samples a subset of rows from a table or query result. This is useful for analyzing large datasets by working with representative samples, improving query performance for exploratory data analysis.
+
+```sql
+-- Sample 10% of rows from a table
+SELECT * FROM large_table TABLESAMPLE SYSTEM(10);
+
+-- Sample approximately 1000 rows
+SELECT * FROM events TABLESAMPLE SYSTEM(1000 ROWS);
+
+-- Sample from data lake files
+SELECT * FROM read_parquet('s3://datalake/**/*.parquet') TABLESAMPLE SYSTEM(5);
+
+-- Use sampling for quick data profiling
+SELECT
+    region,
+    COUNT(*) as sample_count,
+    AVG(revenue) as avg_revenue
+FROM sales_data TABLESAMPLE SYSTEM(2)
+GROUP BY region;
+
+-- Sample from joins for performance
+SELECT c.name, COUNT(o.id) as order_count
+FROM customers c
+JOIN orders o TABLESAMPLE SYSTEM(10) ON c.id = o.customer_id
+GROUP BY c.name;
+```
+
+**Sampling Methods:**
+
+- **SYSTEM**: Random sampling at the storage level (faster, approximate percentage)
+- **BERNOULLI**: Row-by-row random sampling (slower, exact percentage)
+
+```sql
+-- System sampling (recommended for large tables)
+SELECT * FROM huge_table TABLESAMPLE SYSTEM(1);
+
+-- Bernoulli sampling (exact percentage)
+SELECT * FROM medium_table TABLESAMPLE BERNOULLI(5);
+```
+
+**Use Cases:**
+
+- **Data exploration**: Quick analysis of large datasets
+- **Performance testing**: Test queries on sample data
+- **Data profiling**: Understand data distribution patterns
+- **ETL development**: Develop pipelines on sample data
+- **Quality checks**: Validate data quality on samples
+
+Further information:
+* [DuckDB TABLESAMPLE documentation](https://duckdb.org/docs/sql/query_syntax/sample.html)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| sampling_method | keyword | Either `SYSTEM` or `BERNOULLI` |
+| percentage | numeric | Percentage of rows to sample (0-100) |
+
+##### Optional Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| rows | integer | Approximate number of rows to sample (use with `ROWS` keyword) |
+
+#### <a name="union_extract"></a>`union_extract(union_col, tag)` -> `duckdb.unresolved_type`
+
+Extracts a value from a union type by specifying the tag name of the member you want to access.
+
+```sql
+-- Extract the string value if the union contains a string
+SELECT union_extract(my_union_column, 'string') FROM my_table;
+
+-- Extract integer value from union
+SELECT union_extract(data_field, 'integer') AS extracted_int FROM mixed_data;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| union_col | duckdb.union or duckdb.unresolved_type | The union column to extract from |
+| tag | text | The tag name of the union member to extract |
+
+#### <a name="union_tag"></a>`union_tag(union_col)` -> `duckdb.unresolved_type`
+
+Returns the tag name of the currently active member in a union type.
+
+```sql
+-- Get the active tag for each row
+SELECT union_tag(my_union_column) AS active_type FROM my_table;
+
+-- Filter rows based on union tag
+SELECT * FROM my_table WHERE union_tag(data_field) = 'string';
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| union_col | duckdb.union or duckdb.unresolved_type | The union column to get the tag from |
+
+#### <a name="approx_count_distinct"></a>`approx_count_distinct(expression)` -> `BIGINT`
+
+Approximates the count of distinct elements using the HyperLogLog algorithm. This is much faster than `COUNT(DISTINCT ...)` for large datasets, with a small error rate.
+
+```sql
+-- Approximate distinct count of customer IDs
+SELECT approx_count_distinct(customer_id) FROM orders;
+
+-- Compare with exact count
+SELECT
+    approx_count_distinct(customer_id) AS approx_distinct,
+    COUNT(DISTINCT customer_id) AS exact_distinct
+FROM orders;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| expression | any | The expression to count distinct values for |
