@@ -684,343 +684,273 @@ FROM events;
 SELECT * FROM events
 WHERE epoch(created_at) > 1640995200; -- After 2022-01-01
 
-#### <a name="map_extract"></a>`map_extract(map_col duckdb.map, key TEXT) -> duckdb.unresolved_type`
+#### <a name="map_extract"></a>`map_extract(map_col duckdb.map, key duckdb.unresolved_type) -> duckdb.unresolved_type`
 
-Extracts a value from a map using the specified key. If the key doesn't exist, returns NULL.
+Extracts a value from a map using the specified key. If the key doesn't exist, returns an empty array.
 
 ```sql
-SELECT map_extract(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns 1
-SELECT map_extract(MAP(['a', 'b'], [1, 2]), 'c');  -- Returns NULL
+-- Extract value from a map
+SELECT map_extract(r['map_col'], 'a') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {1}
+
+-- Extract non-existent key
+SELECT map_extract(r['map_col'], 'c') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {}
 ```
 
 ##### Required Arguments
 
 | Name | Type | Description |
 | :--- | :--- | :---------- |
-| timestamp_expr | timestamp | The timestamp to convert to epoch seconds |
-
-#### <a name="epoch_ms"></a>`epoch_ms(timestamp_expr)` -> `BIGINT`
-
-Converts timestamps to Unix epoch milliseconds.
-
-```sql
--- High-precision timestamp for JavaScript
-SELECT epoch_ms(NOW()) AS timestamp_ms;
-
--- For time-series data
-SELECT
-    sensor_id,
-    epoch_ms(reading_time) AS timestamp_ms,
-    value
-FROM sensor_readings;
-
 | map_col | duckdb.map | The map to extract from |
-| key | text | The key to look up in the map |
+| key | duckdb.unresolved_type | The key to look up in the map |
 
 #### <a name="map_keys"></a>`map_keys(map_col duckdb.map) -> duckdb.unresolved_type`
 
-Returns all keys from a map as a list.
+Returns all keys from a map as an array.
 
 ```sql
-SELECT map_keys(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns ['a', 'b', 'c']
+-- Get all keys from a map
+SELECT map_keys(r['map_col']) as keys 
+FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
+-- Returns: {a,b,c}
+
+-- Empty map
+SELECT map_keys(r['map_col']) as keys 
+FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
+-- Returns: {}
 ```
 
 ##### Required Arguments
 
 | Name | Type | Description |
 | :--- | :--- | :---------- |
-| timestamp_expr | timestamp | The timestamp to convert to epoch milliseconds |
-
-#### `epoch_ms(milliseconds)` -> `TIMESTAMP`
-
-Converts Unix epoch milliseconds to a timestamp. This is the inverse of the above function.
-
-```sql
--- Convert epoch milliseconds to timestamp
-SELECT epoch_ms(1640995200000) AS timestamp_from_ms; -- 2022-01-01 00:00:00
-
--- Convert stored milliseconds back to timestamps
-SELECT
-    event_id,
-    epoch_ms(timestamp_ms) AS event_time
-FROM events;
-
 | map_col | duckdb.map | The map to extract keys from |
 
 #### <a name="map_values"></a>`map_values(map_col duckdb.map) -> duckdb.unresolved_type`
 
-Returns all values from a map as a list.
+Returns all values from a map as an array.
 
 ```sql
-SELECT map_values(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns [1, 2, 3]
+-- Get all values from a map
+SELECT map_values(r['map_col']) as values 
+FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
+-- Returns: {1,2,3}
+
+-- Empty map
+SELECT map_values(r['map_col']) as values 
+FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
+-- Returns: {}
 ```
 
 ##### Required Arguments
 
 | Name | Type | Description |
 | :--- | :--- | :---------- |
-| milliseconds | bigint | Milliseconds since Unix epoch |
-
-#### <a name="epoch_us"></a>`epoch_us(timestamp_expr)` -> `BIGINT`
-
-Converts timestamps to Unix epoch microseconds.
-
-```sql
--- Microsecond precision timestamps
-SELECT epoch_us(NOW()) AS timestamp_us;
-```
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| timestamp_expr | timestamp | The timestamp to convert to epoch microseconds |
-
-#### <a name="epoch_ns"></a>`epoch_ns(timestamp_expr)` -> `BIGINT`
-
-Converts timestamps to Unix epoch nanoseconds.
-
-```sql
--- Nanosecond precision timestamps
-SELECT epoch_ns(NOW()) AS timestamp_ns;
-```
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| timestamp_expr | timestamp | The timestamp to convert to epoch nanoseconds |
-
-#### <a name="make_timestamp"></a>`make_timestamp(microseconds)` -> `TIMESTAMP`
-
-Creates a timestamp from microseconds since Unix epoch (1970-01-01 00:00:00 UTC).
-
-```sql
--- Create timestamp from current epoch microseconds
-SELECT make_timestamp(epoch_us(NOW())) AS reconstructed_timestamp;
-
--- Create specific timestamps
-SELECT make_timestamp(1640995200000000) AS new_years_2022; -- 2022-01-01 00:00:00
-```
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| microseconds | bigint | Microseconds since Unix epoch |
-
-#### <a name="make_timestamptz"></a>`make_timestamptz(microseconds)` -> `TIMESTAMPTZ`
-
-Creates a timestamp with timezone from microseconds since Unix epoch.
-
-```sql
--- Create timestamptz from current epoch microseconds
-SELECT make_timestamptz(epoch_us(NOW())) AS reconstructed_timestamptz;
-
--- Create specific timestamptz
-SELECT make_timestamptz(1640995200000000) AS new_years_2022_tz;
-```
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| microseconds | bigint | Microseconds since Unix epoch |
-
-#### <a name="tablesample"></a>`TABLESAMPLE (sampling_method(percentage | rows))`
-
-Samples a subset of rows from a table or query result. This is useful for analyzing large datasets by working with representative samples, improving query performance for exploratory data analysis.
-
-```sql
--- Sample 10% of rows from a table
-SELECT * FROM large_table TABLESAMPLE SYSTEM(10);
-
--- Sample approximately 1000 rows
-SELECT * FROM events TABLESAMPLE SYSTEM(1000 ROWS);
-
--- Sample from data lake files
-SELECT * FROM read_parquet('s3://datalake/**/*.parquet') TABLESAMPLE SYSTEM(5);
-
--- Use sampling for quick data profiling
-SELECT
-    region,
-    COUNT(*) as sample_count,
-    AVG(revenue) as avg_revenue
-FROM sales_data TABLESAMPLE SYSTEM(2)
-GROUP BY region;
-
--- Sample from joins for performance
-SELECT c.name, COUNT(o.id) as order_count
-FROM customers c
-JOIN orders o TABLESAMPLE SYSTEM(10) ON c.id = o.customer_id
-GROUP BY c.name;
-```
-
-**Sampling Methods:**
-
-- **SYSTEM**: Random sampling at the storage level (faster, approximate percentage)
-- **BERNOULLI**: Row-by-row random sampling (slower, exact percentage)
-
-```sql
--- System sampling (recommended for large tables)
-SELECT * FROM huge_table TABLESAMPLE SYSTEM(1);
-
--- Bernoulli sampling (exact percentage)
-SELECT * FROM medium_table TABLESAMPLE BERNOULLI(5);
-```
-
-**Use Cases:**
-
-- **Data exploration**: Quick analysis of large datasets
-- **Performance testing**: Test queries on sample data
-- **Data profiling**: Understand data distribution patterns
-- **ETL development**: Develop pipelines on sample data
-- **Quality checks**: Validate data quality on samples
-
-Further information:
-* [DuckDB TABLESAMPLE documentation](https://duckdb.org/docs/sql/query_syntax/sample.html)
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| sampling_method | keyword | Either `SYSTEM` or `BERNOULLI` |
-| percentage | numeric | Percentage of rows to sample (0-100) |
-
-##### Optional Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| rows | integer | Approximate number of rows to sample (use with `ROWS` keyword) |
-
-#### <a name="union_extract"></a>`union_extract(union_col, tag)` -> `duckdb.unresolved_type`
-
-Extracts a value from a union type by specifying the tag name of the member you want to access.
-
-```sql
--- Extract the string value if the union contains a string
-SELECT union_extract(my_union_column, 'string') FROM my_table;
-
--- Extract integer value from union
-SELECT union_extract(data_field, 'integer') AS extracted_int FROM mixed_data;
-```
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| union_col | duckdb.union or duckdb.unresolved_type | The union column to extract from |
-| tag | text | The tag name of the union member to extract |
-
-#### <a name="union_tag"></a>`union_tag(union_col)` -> `duckdb.unresolved_type`
-
-Returns the tag name of the currently active member in a union type.
-
-```sql
--- Get the active tag for each row
-SELECT union_tag(my_union_column) AS active_type FROM my_table;
-
--- Filter rows based on union tag
-SELECT * FROM my_table WHERE union_tag(data_field) = 'string';
-```
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| union_col | duckdb.union or duckdb.unresolved_type | The union column to get the tag from |
-
-#### <a name="approx_count_distinct"></a>`approx_count_distinct(expression)` -> `BIGINT`
-
-Approximates the count of distinct elements using the HyperLogLog algorithm. This is much faster than `COUNT(DISTINCT ...)` for large datasets, with a small error rate.
-
-```sql
--- Approximate distinct count of customer IDs
-SELECT approx_count_distinct(customer_id) FROM orders;
-
--- Compare with exact count
-SELECT
-    approx_count_distinct(customer_id) AS approx_distinct,
-    COUNT(DISTINCT customer_id) AS exact_distinct
-FROM orders;
-```
-
-##### Required Arguments
-
-| Name | Type | Description |
-| :--- | :--- | :---------- |
-| expression | any | The expression to count distinct values for |
-
 | map_col | duckdb.map | The map to extract values from |
 
-#### <a name="cardinality"></a>`cardinality(map_col duckdb.map) -> integer`
+#### <a name="cardinality"></a>`cardinality(map_col duckdb.map) -> numeric`
 
-Returns the size of the map.
-
-```sql
-SELECT cardinality(MAP(['a', 'b', 'c'], [1, 2, 3]));  -- Returns 3
-```
-
-#### <a name="element_at"></a>`element_at(map_col duckdb.map, key TEXT) -> duckdb.unresolved_type`
-
-Returns the value for a given key as a list. Alias for `map_extract`.
+Returns the size of the map (number of key-value pairs).
 
 ```sql
-SELECT element_at(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns [1]
+-- Get the number of entries in a map
+SELECT cardinality(r['map_col']) as size 
+FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
+-- Returns: 3
+
+-- Empty map
+SELECT cardinality(r['map_col']) as size 
+FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
+-- Returns: 0
 ```
 
-#### <a name="map_concat"></a>`map_concat(map_col duckdb.map, map_col2 duckdb.map) -> duckdb.unresolved_type`
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to get the size of |
+
+#### <a name="element_at"></a>`element_at(map_col duckdb.map, key duckdb.unresolved_type) -> duckdb.unresolved_type`
+
+Returns the value for a given key as an array.
+
+```sql
+-- Get value for a specific key
+SELECT element_at(r['map_col'], 'a') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {1}
+
+-- Non-existent key
+SELECT element_at(r['map_col'], 'c') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {}
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract from |
+| key | duckdb.unresolved_type | The key to look up in the map |
+
+#### <a name="map_concat"></a>`map_concat(map_col duckdb.map, map_col2 duckdb.map) -> duckdb.map`
 
 Merges multiple maps. On key collision, the value is taken from the last map.
 
 ```sql
-SELECT map_concat(MAP(['a', 'b'], [1, 2]), MAP(['b', 'c'], [3, 4]));  -- Returns {'a': 1, 'b': 3, 'c': 4}
+-- Merge two maps
+SELECT map_concat(r1['map1'], r2['map2']) as merged 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map1 $$) r1, 
+     duckdb.query($$ SELECT MAP(['b', 'c'], [3, 4]) as map2 $$) r2;
+-- Returns: {a=1, b=3, c=4}
+
+-- Note: 'b' value from map2 (3) overwrites map1's value (2)
 ```
 
-#### <a name="map_contains"></a>`map_contains(map_col duckdb.map, key TEXT) -> boolean`
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The first map |
+| map_col2 | duckdb.map | The second map to merge |
+
+#### <a name="map_contains"></a>`map_contains(map_col duckdb.map, key duckdb.unresolved_type) -> boolean`
 
 Checks if a map contains a given key.
 
 ```sql
-SELECT map_contains(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns true
+-- Check if key exists
+SELECT map_contains(r['map_col'], 'a') as has_key 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: t (true)
+
+-- Check for non-existent key
+SELECT map_contains(r['map_col'], 'c') as has_key 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: f (false)
 ```
 
-#### <a name="map_contains_entry"></a>`map_contains_entry(map_col duckdb.map, key TEXT, value TEXT) -> boolean`
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to check |
+| key | duckdb.unresolved_type | The key to search for |
+
+#### <a name="map_contains_entry"></a>`map_contains_entry(map_col duckdb.map, key duckdb.unresolved_type, value duckdb.unresolved_type) -> boolean`
 
 Checks if a map contains a given key-value pair.
 
 ```sql
-SELECT map_contains_entry(MAP(['a', 'b'], [1, 2]), 'a', '1');  -- Returns true
+-- Check if key-value pair exists
+SELECT map_contains_entry(r['map_col'], 'a', 1) as has_entry 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: t (true)
+
+-- Check with wrong value for existing key
+SELECT map_contains_entry(r['map_col'], 'a', 2) as has_entry 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: f (false)
 ```
 
-#### <a name="map_contains_value"></a>`map_contains_value(map_col duckdb.map, value TEXT) -> boolean`
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to check |
+| key | duckdb.unresolved_type | The key to search for |
+| value | duckdb.unresolved_type | The value to match with the key |
+
+#### <a name="map_contains_value"></a>`map_contains_value(map_col duckdb.map, value duckdb.unresolved_type) -> boolean`
 
 Checks if a map contains a given value.
 
 ```sql
-SELECT map_contains_value(MAP(['a', 'b'], [1, 2]), '1');  -- Returns true
+-- Check if value exists
+SELECT map_contains_value(r['map_col'], 1) as has_value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: t (true)
+
+-- Check for non-existent value
+SELECT map_contains_value(r['map_col'], 3) as has_value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: f (false)
 ```
 
-#### <a name="map_entries"></a>`map_entries(map_col duckdb.map) -> duckdb.unresolved_type`
+##### Required Arguments
 
-Returns a list of struct(k, v) for each key-value pair in the map.
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to check |
+| value | duckdb.unresolved_type | The value to search for |
+
+#### <a name="map_entries"></a>`map_entries(map_col duckdb.map) -> duckdb.struct[]`
+
+Returns an array of struct(key, value) for each key-value pair in the map.
 
 ```sql
-SELECT map_entries(MAP(['a', 'b'], [1, 2]));  -- Returns [{'key': 'a', 'value': 1}, {'key': 'b', 'value': 2}]
+-- Get all key-value pairs as structs
+SELECT map_entries(r['map_col']) as entries 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {"(a,1)","(b,2)"}
+
+-- Access individual struct fields
+SELECT unnest(map_entries(r['map_col'])) as entry 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
 ```
 
-#### <a name="map_extract_value"></a>`map_extract_value(map_col duckdb.map, key TEXT) -> duckdb.unresolved_type`
+##### Required Arguments
 
-Returns the value for a given key or NULL if the key is not contained in the map.
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract entries from |
+
+#### <a name="map_extract_value"></a>`map_extract_value(map_col duckdb.map, key duckdb.unresolved_type) -> duckdb.unresolved_type`
+
+Returns the value for a given key or NULL if the key is not contained in the map. 
 
 ```sql
-SELECT map_extract_value(MAP(['a', 'b'], [1, 2]), 'a');  -- Returns 1
+-- Extract single value (not as array)
+SELECT map_extract_value(r['map_col'], 'a') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: 1
+
+-- Non-existent key returns NULL
+SELECT map_extract_value(r['map_col'], 'c') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: NULL
 ```
 
-#### <a name="map_from_entries"></a>`map_from_entries(entries duckdb.unresolved_type) -> duckdb.unresolved_type`
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract from |
+| key | duckdb.unresolved_type | The key to look up in the map |
+
+#### <a name="map_from_entries"></a>`map_from_entries(entries duckdb.struct[]) -> duckdb.map`
 
 Creates a map from an array of struct(k, v).
 
 ```sql
-SELECT map_from_entries([{'k': 'a', 'v': 1}, {'k': 'b', 'v': 2}]);  -- Returns {'a': 1, 'b': 2}
+-- Create map from array of structs
+SELECT map_from_entries(r['entries']) as new_map 
+FROM duckdb.query($$ 
+    SELECT [{'k': 'a', 'v': 1}, {'k': 'b', 'v': 2}] as entries 
+$$) r;
+-- Returns: {a=1, b=2}
+
+-- This is the inverse operation of map_entries
+SELECT map_from_entries(map_entries(r['map_col'])) as reconstructed 
+FROM duckdb.query($$ SELECT MAP(['x', 'y'], [10, 20]) as map_col $$) r;
+-- Returns: {x=10, y=20}
 ```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| entries | duckdb.struct[] | Array of structs with 'k' (key) and 'v' (value) fields |
