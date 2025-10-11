@@ -40,8 +40,14 @@ CREATE TABLE external_json () USING duckdb WITH (
 SELECT count(*) FROM external_json;
 SELECT sum(a), min(b), max(c) FROM external_json;
 
+-- CTAS from external table
+CREATE TABLE json_tbl AS SELECT * FROM external_json;
+SELECT count(*) FROM json_tbl;
+SELECT sum(a), min(b), max(c) FROM json_tbl;
+
 DROP TABLE external_parquet_renamed;
 DROP TABLE external_csv;
 DROP TABLE external_json;
+DROP TABLE json_tbl;
 
 SELECT count(*) FROM duckdb.external_tables;
