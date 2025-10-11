@@ -24,11 +24,12 @@ extern "C" {
 #include "catalog/indexing.h"
 #include "catalog/namespace.h"
 #include "utils/builtins.h"
+#include "utils/fmgroids.h"
 #include "utils/jsonb.h"
 #include "utils/lsyscache.h"
-#include "utils/rel.h"
 #include "utils/numeric.h"
-#include "utils/fmgroids.h"
+#include "utils/rel.h"
+#include "utils/snapmgr.h"
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
