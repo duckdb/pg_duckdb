@@ -384,7 +384,7 @@ EnsureExternalTableLoaded(Oid relid) {
 	pfree(qualified_relation_name);
 	pfree((void *)duckdb_schema_name);
 
-	auto connection = DuckDBManager::GetConnection(true);
+	auto connection = DuckDBManager::GetConnection();
 	DuckDBQueryOrThrow(*connection, schema_query);
 	DuckDBQueryOrThrow(*connection, view_query);
 
