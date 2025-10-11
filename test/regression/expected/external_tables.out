@@ -76,9 +76,24 @@ SELECT sum(a), min(b), max(c) FROM external_json;
  5050 | json_1 | 100.5
 (1 row)
 
+-- CTAS from external table
+CREATE TABLE json_tbl AS SELECT * FROM external_json;
+SELECT count(*) FROM json_tbl;
+ count 
+-------
+   100
+(1 row)
+
+SELECT sum(a), min(b), max(c) FROM json_tbl;
+ sum  |  min   |  max  
+------+--------+-------
+ 5050 | json_1 | 100.5
+(1 row)
+
 DROP TABLE external_parquet_renamed;
 DROP TABLE external_csv;
 DROP TABLE external_json;
+DROP TABLE json_tbl;
 SELECT count(*) FROM duckdb.external_tables;
  count 
 -------
