@@ -1635,7 +1635,8 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
 		if (ctas_query) {
 			const char *ctas_query_string = pgduckdb_get_querydef(ctas_query);
-			std::string insert_string = std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
+			std::string insert_string =
+			    std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
 			pgduckdb::DuckDBQueryOrThrow(*connection, insert_string);
 		}
 	}
@@ -1832,7 +1833,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * actually cause the tables to be dropped in MotherDuck as well, even if
 	 * the DROP is only meant to replace the existing Postgres shell table with
 	 * a new version.
-	 * 
+	 *
 	 * External tables are dropped from DuckDB regardless of MotherDuck state.
 	 */
 	for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
