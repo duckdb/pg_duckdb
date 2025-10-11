@@ -81,7 +81,11 @@ static std::unordered_set<Oid> loaded_external_tables;
  */
 static inline SysScanDesc
 BeginExternalTablesScan(Relation external_rel, Oid relid, Oid *index_oid_out) {
+#if PG_VERSION_NUM >= 180000
+	Oid index_oid = RelationGetPrimaryKeyIndex(external_rel, false);
+#else
 	Oid index_oid = RelationGetPrimaryKeyIndex(external_rel);
+#endif
 	bool has_index = OidIsValid(index_oid);
 
 	ScanKeyData skey;
