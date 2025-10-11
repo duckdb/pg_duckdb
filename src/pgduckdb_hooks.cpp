@@ -80,7 +80,6 @@ ContainsDuckdbTables(List *rte_list) {
 	return false;
 }
 
-
 static void
 LoadDuckdbExternalTables(List *rte_list) {
 	foreach_node(RangeTblEntry, rte, rte_list) {
