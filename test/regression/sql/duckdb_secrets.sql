@@ -47,6 +47,11 @@ SELECT * FROM duckdb.query($$ SELECT name, type FROM duckdb_secrets(); $$);
 -- PROVIDER option needs the `aws` extension
 SELECT duckdb.install_extension('aws');
 
+CREATE SERVER valid_s3_cred_chain
+TYPE 's3'
+FOREIGN DATA WRAPPER duckdb
+OPTIONS (PROVIDER 'credential_chain', VALIDATION 'none'); -- use empty chain otherwise it takes too much time
+
 -- Drop some
 DROP SERVER valid_r2_server;
 DROP SERVER valid_hf_server;
@@ -70,6 +75,7 @@ SELECT * FROM duckdb.query($$
 $$);
 
 DROP SERVER valid_s3_server;
+DROP SERVER valid_s3_cred_chain;
 
 -- Nothing
 SELECT * FROM duckdb.query($$ SELECT name, type FROM duckdb_secrets(); $$);
@@ -115,6 +121,26 @@ SELECT * FROM duckdb.query($$ SELECT name, type FROM duckdb_secrets(); $$);
 SELECT duckdb.create_simple_secret('S3', 'my first key', 'my secret', 'my session token', 'my-region-42');
 SELECT duckdb.create_simple_secret('S3', 'my other key', 'my secret', 'my session token'); -- Default region
 SELECT duckdb.create_simple_secret('S3', 'my third key', 'my secret'); -- No session token, default region
+
+-- With named arguments (simple_s3_secret_3)
+SELECT duckdb.create_simple_secret(
+    'S3',
+    key_id := 'my named key',
+    secret := 'my secret',
+    session_token := 'foo',
+    url_style := 'path',
+    provider := 'credential_chain',
+    validation := 'none',
+    endpoint := 'my-endpoint.com',
+    scope := 's3://my-bucket'
+);
+
+-- Alter SERVER (public options only)
+ALTER SERVER simple_s3_secret_3 OPTIONS (SET endpoint 'my_other_endoint', SET url_style 'true');
+
+-- Alter USER MAPPING
+ALTER USER MAPPING FOR CURRENT_USER
+SERVER simple_s3_secret_3 OPTIONS (SET secret 'a better secret');
 
 -- R2
 SELECT duckdb.create_simple_secret('R2', 'my r2 key1', 'my secret', 'my session token', 'my-region-42');
@@ -169,6 +195,7 @@ DROP SERVER
     simple_s3_secret,
     simple_s3_secret_1,
     simple_s3_secret_2,
+    simple_s3_secret_3,
     simple_r2_secret,
     simple_r2_secret_1,
     simple_gcs_secret,
