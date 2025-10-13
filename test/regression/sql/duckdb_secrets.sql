@@ -130,9 +130,9 @@ SELECT duckdb.create_simple_secret(
     session_token := 'foo',
     url_style := 'path',
     provider := 'credential_chain',
-    validation := 'none',
     endpoint := 'my-endpoint.com',
-    scope := 's3://my-bucket'
+    scope := 's3://my-bucket',
+    validation := 'none'
 );
 
 -- Alter SERVER (public options only)

@@ -1,5 +1,5 @@
 DROP FUNCTION duckdb.create_simple_secret(
-    type          TEXT, -- One of (S3, GCS, R2)
+    type          TEXT,
     key_id        TEXT,
     secret        TEXT,
     session_token TEXT,
@@ -18,9 +18,9 @@ CREATE FUNCTION duckdb.create_simple_secret(
     region        TEXT DEFAULT '',
     url_style     TEXT DEFAULT '',
     provider      TEXT DEFAULT '',
-    validation    TEXT DEFAULT '',
     endpoint      TEXT DEFAULT '',
-    scope         TEXT DEFAULT ''
+    scope         TEXT DEFAULT '',
+    validation    TEXT DEFAULT ''
 )
 RETURNS TEXT
 SET search_path = pg_catalog, pg_temp

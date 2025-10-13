@@ -163,7 +163,7 @@ DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 		create_server_query << "CREATE SERVER " << server_name << " TYPE '" << type << "' FOREIGN DATA WRAPPER duckdb";
 
 		auto options = pgduckdb::pg::ReadOptions(
-		    fcinfo, 4, {"region", "url_style", "provider", "validation", "endpoint", "scope"});
+		    fcinfo, 4, {"region", "url_style", "provider", "endpoint", "scope", "validation"});
 		if (!options.empty()) {
 			create_server_query << " OPTIONS (" << options << ")";
 		}

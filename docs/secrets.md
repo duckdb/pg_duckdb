@@ -30,9 +30,9 @@ SELECT duckdb.create_simple_secret(
     region        := 'us-east-1',   -- (optional)
     url_style     := 'xxx',         -- (optional)
     provider      := 'xxx',         -- (optional)
-    validation    := 'xxx',         -- (optional)
     endpoint      := 'xxx',         -- (optional)
-    scope         := 'xxx'          -- (optional)
+    scope         := 'xxx',         -- (optional)
+    validation    := 'xxx'          -- (optional)
 )
 ```
 
