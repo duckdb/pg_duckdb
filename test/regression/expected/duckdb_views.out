@@ -1,0 +1,12 @@
+CREATE USER duckdb_view_admin IN ROLE duckdb_group;
+SET ROLE duckdb_view_admin;
+CREATE USER duckdb_view_user1;
+CREATE VIEW duckdb_view AS SELECT * FROM read_parquet('/nonexisting.parquet');
+SET ROLE duckdb_view_user1;
+SELECT * from duckdb_view LIMIT 1;
+ERROR:  permission denied for view duckdb_view
+SET ROLE duckdb_view_admin;
+GRANT SELECT ON duckdb_view TO duckdb_view_user1;
+SET ROLE duckdb_view_user1;
+SELECT * from duckdb_view LIMIT 1;
+ERROR:  DuckDB execution is not allowed because you have not been granted the duckdb.postgres_role
