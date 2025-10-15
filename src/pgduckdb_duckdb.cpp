@@ -4,7 +4,6 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
@@ -177,8 +176,11 @@ DuckDBManager::Initialize() {
 	// Register the unsupported type optimizer to run after all other optimizations
 	dbconfig.optimizer_extensions.push_back(UnsupportedTypeOptimizer::GetOptimizerExtension());
 
+	auto &extension_manager = database->instance->GetExtensionManager();
+	auto extension_active_load = extension_manager.BeginLoad("pgduckdb");
+	D_ASSERT(extension_active_load);
 	duckdb::ExtensionInstallInfo extension_install_info;
-	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
+	extension_active_load->FinishLoad(extension_install_info);
 
 	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 

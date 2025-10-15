@@ -50,7 +50,7 @@ SELECT duckdb.install_extension('aws');
 CREATE SERVER valid_s3_cred_chain
 TYPE 's3'
 FOREIGN DATA WRAPPER duckdb
-OPTIONS (PROVIDER 'credential_chain', CHAIN ''); -- use empty chain otherwise it takes too much time
+OPTIONS (PROVIDER 'credential_chain', VALIDATION 'none'); -- use empty chain otherwise it takes too much time
 
 -- Drop some
 DROP SERVER valid_r2_server;
@@ -131,7 +131,8 @@ SELECT duckdb.create_simple_secret(
     url_style := 'path',
     provider := 'credential_chain',
     endpoint := 'my-endpoint.com',
-    scope := 's3://my-bucket'
+    scope := 's3://my-bucket',
+    validation := 'none'
 );
 
 -- Alter SERVER (public options only)
