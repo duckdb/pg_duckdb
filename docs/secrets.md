@@ -32,7 +32,8 @@ SELECT duckdb.create_simple_secret(
     provider      := 'xxx',         -- (optional)
     endpoint      := 'xxx',         -- (optional)
     scope         := 'xxx',         -- (optional)
-    validation    := 'xxx'          -- (optional)
+    validation    := 'xxx',         -- (optional)
+    use_ssl       := 'xxx'          -- (optional)
 )
 ```
 

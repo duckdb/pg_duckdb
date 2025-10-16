@@ -20,7 +20,8 @@ CREATE FUNCTION duckdb.create_simple_secret(
     provider      TEXT DEFAULT '',
     endpoint      TEXT DEFAULT '',
     scope         TEXT DEFAULT '',
-    validation    TEXT DEFAULT ''
+    validation    TEXT DEFAULT '',
+    use_ssl       TEXT DEFAULT ''
 )
 RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
