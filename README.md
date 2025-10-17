@@ -161,13 +161,13 @@ GROUP BY date;
 Run PostgreSQL with pg_duckdb pre-installed in a docker container:
 
 ```bash
-docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:17-v1.0.0
+docker run -d -e POSTGRES_PASSWORD=duckdb pgduckdb/pgduckdb:18-v1.0.0
 ```
 
 With MotherDuck:
 ```bash
 export MOTHERDUCK_TOKEN=<your_token>
-docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:17-v1.0.0
+docker run -d -e POSTGRES_PASSWORD=duckdb -e MOTHERDUCK_TOKEN pgduckdb/pgduckdb:18-v1.0.0
 ```
 
 ### Try with Hydra
@@ -244,7 +244,7 @@ We welcome contributions! Please see:
 
 ## Requirements
 
-- **PostgreSQL**: 14, 15, 16, 17
+- **PostgreSQL**: 14, 15, 16, 17, 18
 - **Operating Systems**: Ubuntu 22.04-24.04, macOS
 
 ## License

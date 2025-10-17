@@ -45,15 +45,15 @@ jobs:
           type: Release
         - version: REL_16_STABLE
           type: Release
-        # For PG17 we build DuckDB as a static library. There's nothing special
-        # about the static library, nor PG17. This is only done so that we have
-        # CI coverage for our logic to build a static library version.
         - version: REL_17_STABLE
-          type: ReleaseStatic
-        - version: REL_17_STABLE
-          type: Debug
-        - version: REL_18_STABLE
           type: Release
+        # For PG18 we build DuckDB as a static library. There's nothing special
+        # about the static library, nor PG18. This is only done so that we have
+        # CI coverage for our logic to build a static library version.
+        - version: REL_18_STABLE
+          type: ReleaseStatic
+        - version: REL_18_STABLE
+          type: Debug
 
     runs-on: ubuntu-24.04
 
