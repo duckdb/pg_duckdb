@@ -7,6 +7,7 @@ Any tagged release are built and pushed with the tag `$POSTGRES_VERSION-$TAG`, f
 * `15-v0.1.0`
 * `16-v0.1.0`
 * `17-v0.1.0`
+* `18-v0.1.0`
 
 ### Nightly builds
 
@@ -15,6 +16,7 @@ Nightly builds of the `main` branch are available for their respective Postgres 
 * `15-main`
 * `16-main`
 * `17-main`
+* `18-main`
 
 A corresponding tag with the git sha of the build is also pushed.
 

@@ -6,7 +6,7 @@ easiest way to do this is using docker:
 ```bash
 # Simply run this to enable motherduck:
 docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgduck -e MOTHERDUCK_TOKEN \
-    pgduckdb/pgduckdb:17-main
+    pgduckdb/pgduckdb:18-main
 # For real benchmarks it's recommended to configure Postgres its its settings,
 # as well as docker its --shm-size to be a good match for your machine. For the
 # best results this obviously requires tuning.
@@ -14,7 +14,7 @@ docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgdu
 # is something like this:
 docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgduck -e MOTHERDUCK_TOKEN \
     --shm-size=64g \
-    pgduckdb/pgduckdb:17-main \
+    pgduckdb/pgduckdb:18-main \
     -c shared_buffers=32GB \
     -c max_parallel_workers=32 \
     -c max_parallel_workers_per_gather=8 \
