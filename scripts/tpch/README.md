@@ -23,6 +23,13 @@ docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgdu
 ```
 
 Then clone this repository and install the dependencies:
+```bash
+git clone https://github.com/duckdb/pg_duckdb
+cd pg_duckdb/scripts/tpch
+# Install uv if not already installed (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Or use pip to install dependencies manually:
+# pip install pandas matplotlib psycopg[binary]
 ```
 
 After that you can use `./run.py` (see `run.py --help` for details) to run a
@@ -79,3 +86,4 @@ runtime**:
 
 ```bash
 ./run.py --scale-factor 0.01 --duckdb-engine --pg-engine --motherduck
+```

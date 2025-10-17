@@ -30,7 +30,7 @@ For full dependency details, see our [GitHub Actions workflow](../.github/workfl
 
 ## Static Compilation
 
-pg_duckdb supports statically linking the DuckDB library into the extension. This is mostly useful to ensure that the right DuckDB version if you have installed different version, and/or to avoid installation conflicts with other Postgres extensions that require different versions of DuckDB.
+pg_duckdb supports statically linking the DuckDB library into the extension. This is mostly useful to ensure that the right DuckDB version is used if you have installed different versions, and/or to avoid installation conflicts with other Postgres extensions that require different versions of DuckDB.
 
 
 # Build on Ubuntu 24.04
