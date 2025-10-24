@@ -1,6 +1,6 @@
 services:
   db:
-    image: pgduckdb/pgduckdb:16-main
+    image: pgduckdb/pgduckdb:18-main
     ports:
       - ${PORT:-5432}:5432
     environment:
