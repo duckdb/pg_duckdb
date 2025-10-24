@@ -29,7 +29,7 @@
 - Update to DuckDB 1.3.2. ([#754], [#858])
 - Change the way MotherDuck is configured. It's not done anymore through the Postgres configuration file. Instead, you should now enable MotherDuck using `CALL duckdb.enable_motherduck(...)` or equivalent `CREATE SERVER` and `CREATE USER MAPPING` commands. ([#668])
 - Change the way secrets are added to DuckDB. You'll need to recreate your secrets using the new method `duckdb.create_simple_secret` or `duckdb.create_azure_secret` functions. Internally secrets are now stored `SERVER` and `USER MAPPING` for the `duckdb` foreign data wrapper. ([#697])
-- Disallow DuckDB execution inside functions by default. This feature can cause crashes in rare cases and is intended to be re-enabled in a future release. For now you can use `duckdb.unsafe_allow_execution_inside_function` to allow functions anyway. ([#764], [#884])
+- Disallow DuckDB execution inside functions by default. This feature can cause crashes in rare cases and is intended to be re-enabled in a future release. For now you can use `duckdb.unsafe_allow_execution_inside_functions` to allow functions anyway. ([#764], [#884])
 - Don't convert Postgres NUMERICs with a precision that's unsupported in DuckDB to double by default. Instead it will throw an error. If you want the lossy conversion to DOUBLE to happen, you can enable `duckdb.convert_unsupported_numeric_to_double`. ([#795])
 - Remove custom HTTP caching logic. ([#644])
 - When creating a table in a `ddb$` schema that table now uses the `duckdb` table access method by default. ([#650])

@@ -36,7 +36,7 @@ INSERT INTO t VALUES (2);
 INSERT INTO t_ddb VALUES (2);
 ROLLBACK;
 
--- Unless users explicitely opt-in
+-- Unless users explicitly opt-in
 BEGIN;
 SET LOCAL duckdb.unsafe_allow_mixed_transactions = true;
 INSERT INTO t_ddb VALUES (4);
@@ -276,7 +276,7 @@ CREATE TEMP TABLE t_ddb(a int) USING duckdb;
 
 
 -- It should also not be allowed to drop duckdb and postgres tables in the same
--- transaction if it's implicitely done using a DROP SCHEMA ... CASCADE.
+-- transaction if it's implicitly done using a DROP SCHEMA ... CASCADE.
 CREATE SCHEMA mixed;
 CREATE TEMP TABLE t_ddb2(a int) USING duckdb;
 -- Insert a row into pg_depend to make t_ddb depend on the mixed schema. We do

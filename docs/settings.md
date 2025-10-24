@@ -57,7 +57,7 @@ Determines whether community extensions can be installed.
 - **Default**: `false`
 - **Access**: Superuser-only
 
-### `duckdb.unsafe_allow_execution_inside_function`
+### `duckdb.unsafe_allow_execution_inside_functions`
 
 Allows DuckDB execution inside PostgreSQL functions. This feature can cause crashes in rare cases and is disabled by default. Use with caution.
 
