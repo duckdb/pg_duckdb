@@ -135,7 +135,7 @@ This section outlines behaviors and limitations in `pg_duckdb`, things to know t
 
 ### Querying
 
-- **Standard SQL is the default**. For analytical queries on your PostgreSQL tables, use standard SQL. `pg_duckdb` accelerates them automatically as long as you configure `duckdb.force_excecution=true`. No special functions are needed.
+- **Standard SQL is the default**. For analytical queries on your PostgreSQL tables, use standard SQL. `pg_duckdb` accelerates them automatically as long as you configure `duckdb.force_execution=true`. No special functions are needed.
 
 - **Use `r['column']` for external files**. When using `read_parquet()`, `read_csv()`, etc., you must access columns with the `r['column_name']` syntax, where `r` is the alias for the function call.
 
@@ -143,7 +143,7 @@ This section outlines behaviors and limitations in `pg_duckdb`, things to know t
 
 - **CTE and subquery behavior**. When using `read_parquet()` inside a CTE or subquery, column references can behave differently. You may need to explicitly alias your columns (`SELECT r['col'] AS col`) or continue using the `r['col']` syntax outside the CTE.
 
-- **Data type limitations**. [There are bunch of limitations in how data types behave because of differences between PostgreSQL and DuckDB](docs/types.md#known-limitations)
+- **Data type limitations**. [There are bunch of limitations in how data types behave because of differences between PostgreSQL and DuckDB](types.md#known-limitations)
 
 ### Transactions
 
