@@ -20,8 +20,16 @@ extern "C" {
 #include "tcop/pquery.h"
 #include "utils/syscache.h"
 #include "utils/guc.h"
+#include "parser/parse_relation.h"
+#include "utils/acl.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
+
+#if PG_VERSION_NUM >= 180000
+#include "executor/executor.h"
+#endif
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -135,6 +143,35 @@ DuckdbRangeTableEntry(CustomScan *custom_scan) {
 
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
+
+	/* If we're accessing from view, check
+	 * that Postgres user is allowed to access it */
+
+	ListCell *l;
+	foreach (l, parse->rtable) {
+		RangeTblEntry *rte = lfirst_node(RangeTblEntry, l);
+
+#if PG_VERSION_NUM < 160000
+		if (rte->relkind == RELKIND_VIEW) {
+			bool result;
+
+			result = ExecCheckRTEPerms(rte);
+			if (!result)
+				aclcheck_error(ACLCHECK_NO_PRIV, OBJECT_VIEW, get_rel_name(rte->relid));
+		}
+#else
+		if (rte->perminfoindex != 0 && rte->relkind == RELKIND_VIEW) {
+			RTEPermissionInfo *perminfo;
+			bool result;
+
+			perminfo = getRTEPermissionInfo(parse->rteperminfos, rte);
+			result = ExecCheckOneRelPerms(perminfo);
+			if (!result)
+				aclcheck_error(ACLCHECK_NO_PRIV, OBJECT_VIEW, get_rel_name(perminfo->relid));
+		}
+#endif
+	}
+
 	/* We need to check can we DuckDB create plan */
 
 	Plan *duckdb_plan = InvokeCPPFunc(CreatePlan, parse, throw_error);
