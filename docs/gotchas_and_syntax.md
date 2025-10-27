@@ -135,7 +135,7 @@ This section outlines behaviors and limitations in `pg_duckdb`, things to know t
 
 ### Querying
 
-- **Standard SQL is the default**. For analytical queries on your PostgreSQL tables, use standard SQL. `pg_duckdb` accelerates them automatically as long as you configure `duckdb.force_excecution=true`. No special functions are needed.
+- **Standard SQL is the default**. For analytical queries on your PostgreSQL tables, use standard SQL. `pg_duckdb` accelerates them automatically as long as you configure `duckdb.force_execution=true`. No special functions are needed.
 
 - **Use `r['column']` for external files**. When using `read_parquet()`, `read_csv()`, etc., you must access columns with the `r['column_name']` syntax, where `r` is the alias for the function call.
 

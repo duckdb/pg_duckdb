@@ -22,7 +22,7 @@ TRUNCATE s;
 -- error.
 INSERT INTO s VALUES(ARRAY[['a', 'b'],['c','d']]);
 SELECT * FROM s;
--- But if you change the defintion of the table, we will be able to handle it.
+-- But if you change the definition of the table, we will be able to handle it.
 ALTER TABLE s ALTER COLUMN a SET DATA TYPE text[][];
 SELECT * FROM s;
 

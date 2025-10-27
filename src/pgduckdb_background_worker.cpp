@@ -984,7 +984,7 @@ DropRelation(const char *fully_qualified_table, char relation_kind, bool drop_wi
 		return false;
 	}
 	/*
-	 * We explicitely don't call SPI_commit_that_works_in_background_worker
+	 * We explicitly don't call SPI_commit_that_works_in_background_worker
 	 * here, because that makes transactional considerations easier. And when
 	 * deleting tables, it doesn't matter how long we keep locks on them,
 	 * because they are already deleted upstream so there can be no queries on
