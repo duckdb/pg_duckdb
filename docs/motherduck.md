@@ -91,6 +91,10 @@ SELECT COUNT(*) FROM ddb$my_shared_db.aggregated_order_data; -- reads from my_sh
 SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.hn.hacker_news
 ```
 
+## Switching MotherDuck Tokens
+To switch your MotherDuck Token, first call:
+`DROP SERVER MOTHERDUCK CASCADE;` and then reinitialize with a new token: `CALL duckdb.enable_motherduck('new_token');`
+
 ## Debugging
 
 If some tables or schemas are not appearing as expected, check your Postgres log file. The background worker that automatically syncs tables may have encountered an error, which will be reported in the logs, often with information on how to resolve the issue.
