@@ -12,6 +12,8 @@ CALL duckdb.enable_motherduck('<optional token>', '<optional MD database name>')
 
 This function creates a `motherduck` `SERVER` using the `pg_duckdb` Foreign Data Wrapper, which hosts the options for this integration. It also provides a `USER MAPPING` for the current user, which stores the provided MotherDuck token (if any).
 
+> Important: once MotherDuck is enabled, calling `enable_motherduck` again with a different database parameter will **not** change the default database. Instead, it will return a notice saying "MotherDuck is already enabled" and ignore the new database parameter. To change the default database, see [Changing the Default Database](#changing-the-default-database) below. Alternatively, you can access any MotherDuck database without changing the default using the `ddb$<database>` schema syntax described in [Schema Mapping](#schema-mapping).
+
 You can refer to the [Advanced MotherDuck Configuration](#advanced-motherduck-configuration) section below for more on the `SERVER` and `USER MAPPING` configuration.
 
 ### Non-Superuser Configuration
@@ -73,9 +75,27 @@ Note: The `duckdb.enable_motherduck` function simplifies this process:
 CALL duckdb.enable_motherduck('<token>', '<default database>');
 ```
 
+### Changing the Default Database
+
+If you need to change the default MotherDuck database after initially enabling it, you must first drop the `motherduck` server and then reconnect:
+
+```sql
+-- Drop the existing connection (this will CASCADE drop all synced tables/schemas)
+DROP SERVER motherduck CASCADE;
+
+-- Reconnect with a different default database
+CALL duckdb.enable_motherduck('<token>', '<new_default_database>');
+```
+
+Important: using `DROP SERVER motherduck CASCADE` will remove all schemas and tables that were synced from MotherDuck. They will be automatically recreated by the background worker after reconnecting.
+
+Alternative: if you only need to query tables from a different database occasionally, you don't need to change the default database at all. You can use the `ddb$<database>` schema prefix to access any MotherDuck database simultaneously. See the [Schema Mapping](#schema-mapping) section below for details and examples.
+
 ## Schema Mapping
 
-DuckDB and Postgres have different schema and database conventions. The mapping from a DuckDB `database.schema` to a Postgres schema is done as follows:
+DuckDB and Postgres have different schema and database conventions. While you specify a _default_ MotherDuck database when connecting, you can access tables from **any** MotherDuck database in your account using the schema mapping described below.
+
+The mapping from a DuckDB `database.schema` to a Postgres schema is done as follows:
 
 1. The `main` DuckDB schema in your default database is merged with the Postgres `public` schema.
 2. All other schemas in your default MotherDuck database is merged with the Postgres schema of the same name.
@@ -85,13 +105,37 @@ DuckDB and Postgres have different schema and database conventions. The mapping 
 An example of each of these cases is shown below:
 
 ```sql
+-- Assuming my_db is your default database:
+
+-- Case 1: Default database main schema -> public
 INSERT INTO my_table VALUES (1, 'abc'); -- inserts into my_db.main.my_table
+
+-- Case 2: Default database other schemas -> same schema name
 INSERT INTO your_schema.tab1 VALUES (1, 'abc'); -- inserts into my_db.your_schema.tab1
+
+-- Case 3: Other database main schema -> ddb$<db_name>
 SELECT COUNT(*) FROM ddb$my_shared_db.aggregated_order_data; -- reads from my_shared_db.main.aggregated_order_data
+
+-- Case 4: Other database other schemas -> ddb$<db_name>$<schema_name>
 SELECT COUNT(*) FROM ddb$sample_data$hn.hacker_news; -- reads from sample_data.hn.hacker_news
 ```
 
+**Example: Accessing multiple databases in a single query:**
+
+```sql
+-- Join data from your default database (my_db) with sample_data
+SELECT
+    orders.order_id,
+    orders.customer_name,
+    hn.title as related_article
+FROM my_table orders  -- my_db.main.my_table (default database)
+JOIN ddb$sample_data$hn.hacker_news hn  -- sample_data.hn.hacker_news (different database)
+    ON orders.topic = hn.type
+WHERE orders.created_at > '2024-01-01';
+```
+
 ## Switching MotherDuck Tokens
+
 To switch your MotherDuck Token, first call:
 `DROP SERVER MOTHERDUCK CASCADE;` and then reinitialize with a new token: `CALL duckdb.enable_motherduck('new_token');`
 
