@@ -31,7 +31,7 @@ def test_copy_to_local(cur: Cursor, tmp_path: Path):
     # error message.
     with pytest.raises(
         psycopg.errors.InternalError,
-        match='Binder Error: Unrecognized option CSV writer "unknown_option"',
+        match='Not implemented Error: Unrecognized option "unknown_option" for csv',
     ):
         cur.sql(
             f"COPY test_table TO '{csv_path}' WITH (FORMAT CSV, UNKNOWN_OPTION true)"

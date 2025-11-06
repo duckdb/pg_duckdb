@@ -134,6 +134,11 @@ JOIN ddb$sample_data$hn.hacker_news hn  -- sample_data.hn.hacker_news (different
 WHERE orders.created_at > '2024-01-01';
 ```
 
+## Switching MotherDuck Tokens
+
+To switch your MotherDuck Token, first call:
+`DROP SERVER MOTHERDUCK CASCADE;` and then reinitialize with a new token: `CALL duckdb.enable_motherduck('new_token');`
+
 ## Debugging
 
 If some tables or schemas are not appearing as expected, check your Postgres log file. The background worker that automatically syncs tables may have encountered an error, which will be reported in the logs, often with information on how to resolve the issue.
