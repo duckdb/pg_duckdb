@@ -52,13 +52,13 @@ CoerceSubscriptToText(struct ParseState *pstate, A_Indices *subscript, const cha
 }
 
 /*
- * In Postgres all index operations in a row ar all slices or all plain
+ * In Postgres all index operations in a row are all slices or all plain
  * index operations. If you mix them, all are converted to slices.
  * There's no difference in representation possible between
- * "col[1:2][1]" and "col[1:2][1:]". If you want this seperation you
- * need to use parenthesis to seperate: "(col[1:2])[1]"
+ * "col[1:2][1]" and "col[1:2][1:]". If you want this separation you
+ * need to use parenthesis to separate: "(col[1:2])[1]"
  * This might seem like fairly strange behaviour, but Postgres uses
- * this to be able to slice in multi-dimensional arrays and thtis
+ * this to be able to slice in multi-dimensional arrays and this
  * behaviour is documented here:
  * https://www.postgresql.org/docs/current/arrays.html#ARRAYS-ACCESSING
  *

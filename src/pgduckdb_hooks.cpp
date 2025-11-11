@@ -451,7 +451,7 @@ DuckdbEmitLogHook(ErrorData *edata) {
 		if (ContainsDuckdbRowReturningFunction(debug_query_string)) {
 			edata->hint = pstrdup("If you use DuckDB functions like read_parquet, you need to use the r['colname'] "
 			                      "syntax to use columns. If "
-			                      "you're already doing that, maybe you forgot to to give the function the r alias.");
+			                      "you're already doing that, maybe you forgot to give the function the r alias.");
 		}
 	} else if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_SYNTAX_ERROR &&
 	           pgduckdb::IsExtensionRegistered() &&

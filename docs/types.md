@@ -121,7 +121,7 @@ SELECT * FROM mycte WHERE company = 'DuckDB Labs';
 -- ERROR:  42703: column "company" does not exist
 -- LINE 5: SELECT * FROM mycte WHERE company = 'DuckDB Labs';
 --                                   ^
--- HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to to give the function the r alias.
+-- HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to give the function the r alias.
 ```
 
 This is easy to work around by using the `r['colname']` syntax like so:

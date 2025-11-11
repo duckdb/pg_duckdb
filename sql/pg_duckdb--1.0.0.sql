@@ -1,6 +1,6 @@
 LOAD 'pg_duckdb';
 
--- We create a duckdb schema to store most of our things. We explicitely
+-- We create a duckdb schema to store most of our things. We explicitly
 -- don't use CREATE IF EXISTS or the schema key in the control file, so we know
 -- for sure that the extension will own the schema and thus non superusers
 -- cannot put random things in it, so we can assume it's safe. A few functions

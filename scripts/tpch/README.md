@@ -7,7 +7,7 @@ easiest way to do this is using docker:
 # Simply run this to enable motherduck:
 docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgduck -e MOTHERDUCK_TOKEN \
     pgduckdb/pgduckdb:18-main
-# For real benchmarks it's recommended to configure Postgres its its settings,
+# For real benchmarks it's recommended to configure Postgres its settings,
 # as well as docker its --shm-size to be a good match for your machine. For the
 # best results this obviously requires tuning.
 # A decent starting point for an AWS c6a.8xlarge (32 vCPU, 64GB RAM) instance
@@ -35,7 +35,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 After that you can use `./run.py` (see `run.py --help` for details) to run a
 TCPH-like benchmark. Check `./run.py --help` for details on the arguments. A
 simple example that compares the DuckDB engine and the Postgres engine on an
-extremely tiny dataset dataset (for real performance comparisons real use scale
+extremely tiny dataset (for real performance comparisons real use scale
 factors of 1 or higher):
 
 ```bash
