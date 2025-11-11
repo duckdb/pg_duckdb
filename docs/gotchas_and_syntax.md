@@ -143,7 +143,7 @@ This section outlines behaviors and limitations in `pg_duckdb`, things to know t
 
 - **CTE and subquery behavior**. When using `read_parquet()` inside a CTE or subquery, column references can behave differently. You may need to explicitly alias your columns (`SELECT r['col'] AS col`) or continue using the `r['col']` syntax outside the CTE.
 
-- **Data type limitations**. [There are bunch of limitations in how data types behave because of differences between PostgreSQL and DuckDB](docs/types.md#known-limitations)
+- **Data type limitations**. [There are bunch of limitations in how data types behave because of differences between PostgreSQL and DuckDB](types.md#known-limitations)
 
 ### Transactions
 
