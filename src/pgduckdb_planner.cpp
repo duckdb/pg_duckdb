@@ -20,8 +20,16 @@ extern "C" {
 #include "tcop/pquery.h"
 #include "utils/syscache.h"
 #include "utils/guc.h"
+#include "parser/parse_relation.h"
+#include "utils/acl.h"
+#include "utils/lsyscache.h"
+#include "utils/rel.h"
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
+
+#if PG_VERSION_NUM >= 180000
+#include "executor/executor.h"
+#endif
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -133,8 +141,56 @@ DuckdbRangeTableEntry(CustomScan *custom_scan) {
 	return rte;
 }
 
+static void
+check_view_perms_recursive(Query *query) {
+	ListCell *lc;
+
+	if (query == NULL) {
+		return;
+	}
+
+	foreach (lc, query->rtable) {
+		RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
+
+#if PG_VERSION_NUM < 160000
+		if (rte->relkind == RELKIND_VIEW) {
+			bool result = ExecCheckRTEPerms(rte);
+			if (!result) {
+				aclcheck_error(ACLCHECK_NO_PRIV, OBJECT_VIEW, get_rel_name(rte->relid));
+			}
+		}
+#else
+		if (rte->perminfoindex != 0 && rte->relkind == RELKIND_VIEW) {
+			RTEPermissionInfo *perminfo = getRTEPermissionInfo(query->rteperminfos, rte);
+			bool result = ExecCheckOneRelPerms(perminfo);
+			if (!result) {
+				aclcheck_error(ACLCHECK_NO_PRIV, OBJECT_VIEW, get_rel_name(perminfo->relid));
+			}
+		}
+#endif
+
+		if (rte->rtekind == RTE_SUBQUERY && rte->subquery) {
+			check_view_perms_recursive(rte->subquery);
+		}
+	}
+
+	if (query->cteList) {
+		ListCell *lc_cte;
+		foreach (lc_cte, query->cteList) {
+			CommonTableExpr *cte = (CommonTableExpr *)lfirst(lc_cte);
+			if (IsA(cte->ctequery, Query)) {
+				check_view_perms_recursive((Query *)cte->ctequery);
+			}
+		}
+	}
+}
+
 PlannedStmt *
 DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
+
+	/* Properly check perms if there's a view or WITH statement */
+	check_view_perms_recursive(parse);
+
 	/* We need to check can we DuckDB create plan */
 
 	Plan *duckdb_plan = InvokeCPPFunc(CreatePlan, parse, throw_error);
