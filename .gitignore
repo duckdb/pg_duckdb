@@ -14,3 +14,17 @@ compile_commands.json
 *.pyc
 
 env/
+
+# Debian build artifacts
+*.deb
+*.dsc
+*.changes
+*.build
+*.buildinfo
+*.tar.gz
+*.tar.xz
+*.tar.bz2
+debian/files
+debian/postgresql-*-pg-duckdb/
+debian/.debhelper/
+debian/debhelper-build-stamp

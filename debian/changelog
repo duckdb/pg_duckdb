@@ -1,0 +1,7 @@
+pg-duckdb (1.1.0-1) unstable; urgency=medium
+
+  * Initial Debian package release
+  * Supports PostgreSQL 14, 15, 16, 17, and 18
+
+ -- DuckDB Foundation <info@duckdb.org>  Mon, 01 Jan 2025 12:00:00 +0000
+
