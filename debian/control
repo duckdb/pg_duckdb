@@ -3,8 +3,11 @@ Section: database
 Priority: optional
 Maintainer: DuckDB Foundation <info@duckdb.org>
 Build-Depends: debhelper-compat (= 13),
-               postgresql-all-dev (>= 14),
-               postgresql-server-dev-all,
+               postgresql-server-dev-14,
+               postgresql-server-dev-15,
+               postgresql-server-dev-16,
+               postgresql-server-dev-17,
+               postgresql-server-dev-18,
                build-essential,
                libreadline-dev,
                zlib1g-dev,

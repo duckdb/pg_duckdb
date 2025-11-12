@@ -29,14 +29,24 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Install build dependencies
+      - name: Add PostgreSQL APT repository
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends ca-certificates gnupg2 wget lsb-release
+          wget --quiet -O - https://www.postgresql.org/media/keys/ACCC4CF8.asc | sudo gpg --dearmor -o /usr/share/keyrings/postgresql.gpg
+          echo "deb [signed-by=/usr/share/keyrings/postgresql.gpg] http://apt.postgresql.org/pub/repos/apt/ $(lsb_release -cs)-pgdg main" | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update -qq
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get install -y --no-install-recommends \
             devscripts \
             debhelper \
-            postgresql-all-dev \
-            postgresql-server-dev-all \
+            postgresql-server-dev-14 \
+            postgresql-server-dev-15 \
+            postgresql-server-dev-16 \
+            postgresql-server-dev-17 \
+            postgresql-server-dev-18 \
             build-essential \
             libreadline-dev \
             zlib1g-dev \
