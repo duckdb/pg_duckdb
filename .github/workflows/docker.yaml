@@ -21,7 +21,7 @@ jobs:
     name: Build Docker image for Postgres ${{ matrix.postgres }} on ${{ matrix.runner }}
     strategy:
       matrix:
-        postgres: ["14", "15", "16", "17"]
+        postgres: ["14", "15", "16", "17", "18"]
         runner: ["ubuntu-24.04", "ubuntu-24.04-arm"]
 
     runs-on: ${{ matrix.runner }}
@@ -101,7 +101,7 @@ jobs:
     name: Merge Docker image for Postgres ${{ matrix.postgres }}
     strategy:
       matrix:
-        postgres: ["14", "15", "16", "17"]
+        postgres: ["14", "15", "16", "17", "18"]
 
     runs-on: ubuntu-24.04
     needs: docker_build

@@ -40,7 +40,7 @@ SELECT * FROM (
 ) q;
 
 -- NOTE: A single "r" is equivalent to a *. The prefix and postfix columns are
--- not explicitely selected, but still show up in the result. This is
+-- not explicitly selected, but still show up in the result. This is
 -- considered a bug, but it's one that we cannot easily solve because the "r"
 -- reference does not exist in the DuckDB query at all, so there's no way to
 -- reference only the columns coming from that part of the subquery. Very few

@@ -42,7 +42,7 @@ TRUNCATE s;
 INSERT INTO s VALUES(ARRAY[['a', 'b'],['c','d']]);
 SELECT * FROM s;
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Invalid Input Error: Dimensionality of the schema and the data does not match, data contains more dimensions than the amount of dimensions specified by the schema
--- But if you change the defintion of the table, we will be able to handle it.
+-- But if you change the definition of the table, we will be able to handle it.
 ALTER TABLE s ALTER COLUMN a SET DATA TYPE text[][];
 SELECT * FROM s;
        a       

@@ -8,7 +8,7 @@ Able to read many [data types](https://www.postgresql.org/docs/current/datatype.
 - `text`/`varchar`/`bpchar`
 - `bit` related types, including both fixed and varied sized bit array
 - `bytea`/`blob`
-- `timestamp`/`timstampz`/`date`/`interval`/`timestamp_ns`/`timestamp_ms`/`timestamp_s`
+- `timestamp`/`timestamptz`/`date`/`interval`/`timestamp_ns`/`timestamp_ms`/`timestamp_s`
 - `boolean`
 - `uuid`
 - `json`/`jsonb`
@@ -29,7 +29,7 @@ The type support in `pg_duckdb` is not yet complete (and might never be). The
 following are known issues that you might run into. Feel free to contribute PRs
 to fix these limitations:
 
-1. `enum` types are not supported (PR is progress)
+1. `enum` types are not supported (PR is in progress)
 2. The DuckDB `decimal` type doesn't support the wide range of values that the Postgres `numeric` type does. To avoid errors when converting between the two, `numeric` is converted to `double precision` internally if `DuckDB` does not support the required precision. Obviously this might cause precision loss of the values.
 3. The DuckDB `timestamp_ns` type gets truncated to microseconds when it is converted to the Postgres `timestamp` type, which loses precision in the output. Operations on a `timestamp_ns` value, such as sorting/grouping/comparing, will use the full precision.
 4. `jsonb` columns are converted to `json` columns when reading from DuckDB. This is because DuckDB does not have a `jsonb` type.
@@ -121,7 +121,7 @@ SELECT * FROM mycte WHERE company = 'DuckDB Labs';
 -- ERROR:  42703: column "company" does not exist
 -- LINE 5: SELECT * FROM mycte WHERE company = 'DuckDB Labs';
 --                                   ^
--- HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to to give the function the r alias.
+-- HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to give the function the r alias.
 ```
 
 This is easy to work around by using the `r['colname']` syntax like so:

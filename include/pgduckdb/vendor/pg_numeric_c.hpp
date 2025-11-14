@@ -19,7 +19,7 @@
  *-------------------------------------------------------------------------
  */
 
-// Removed all un-neccessary includes
+// Removed all un-necessary includes
 #include "postgres.h"
 #include "utils/numeric.h"
 #include "lib/hyperloglog.h"
