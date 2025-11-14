@@ -402,8 +402,8 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 		integer_part = value;
 		fractional_part = 0;
 	} else {
-		integer_part = value / OP::GetPowerOfTen(scale);
-		fractional_part = value % OP::GetPowerOfTen(scale);
+		integer_part = value / T(OP::GetPowerOfTen(scale));
+		fractional_part = value % T(OP::GetPowerOfTen(scale));
 	}
 
 	constexpr idx_t MAX_DIGITS = sizeof(T) * 4;
@@ -429,7 +429,7 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 	// this means we need to "correct" the number 12 by multiplying by 100 in this case
 	// this correction factor is the "number of digits to the next full number"
 	int32_t correction = fractional_ndigits * DEC_DIGITS - scale;
-	fractional_part *= OP::GetPowerOfTen(correction);
+	fractional_part *= T(OP::GetPowerOfTen(correction));
 	for (idx_t i = 0; i < fractional_ndigits; i++) {
 		fractional_digits[i] = uint16_t(fractional_part % NBASE);
 		fractional_part /= NBASE;
