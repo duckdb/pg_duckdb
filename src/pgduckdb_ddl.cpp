@@ -46,7 +46,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb_guc.hpp"
-#include "pgduckdb/pgduckdb_external_tables.hpp"
+#include "pgduckdb/pgduckdb_foreign_tables.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
@@ -61,57 +61,57 @@ namespace pgduckdb {
 DDLType top_level_duckdb_ddl_type = DDLType::NONE;
 bool refreshing_materialized_view = false;
 
-struct ExternalCreateTableOptions {
-	ExternalCreateTableOptions()
-	    : is_external(false), reader(nullptr), location(nullptr), options(nullptr), format(nullptr) {
+struct ForeignCreateTableOptions {
+	ForeignCreateTableOptions()
+	    : is_foreign(false), reader(nullptr), location(nullptr), options(nullptr), format(nullptr) {
 	}
 
-	bool is_external;
+	bool is_foreign;
 	char *reader;
 	char *location;
 	Jsonb *options;
 	char *format;
 };
 
-ExternalCreateTableOptions pending_external_create_table_options;
+ForeignCreateTableOptions pending_foreign_create_table_options;
 
 static void
-ResetPendingExternalCreateTableOptions() {
-	if (pending_external_create_table_options.reader) {
-		pfree(pending_external_create_table_options.reader);
+ResetPendingForeignCreateTableOptions() {
+	if (pending_foreign_create_table_options.reader) {
+		pfree(pending_foreign_create_table_options.reader);
 	}
-	if (pending_external_create_table_options.location) {
-		pfree(pending_external_create_table_options.location);
+	if (pending_foreign_create_table_options.location) {
+		pfree(pending_foreign_create_table_options.location);
 	}
-	if (pending_external_create_table_options.options) {
-		pfree(pending_external_create_table_options.options);
+	if (pending_foreign_create_table_options.options) {
+		pfree(pending_foreign_create_table_options.options);
 	}
-	if (pending_external_create_table_options.format) {
-		pfree(pending_external_create_table_options.format);
+	if (pending_foreign_create_table_options.format) {
+		pfree(pending_foreign_create_table_options.format);
 	}
-	pending_external_create_table_options.is_external = false;
-	pending_external_create_table_options.reader = nullptr;
-	pending_external_create_table_options.location = nullptr;
-	pending_external_create_table_options.options = nullptr;
-	pending_external_create_table_options.format = nullptr;
+	pending_foreign_create_table_options.is_foreign = false;
+	pending_foreign_create_table_options.reader = nullptr;
+	pending_foreign_create_table_options.location = nullptr;
+	pending_foreign_create_table_options.options = nullptr;
+	pending_foreign_create_table_options.format = nullptr;
 }
 
 static List *
-InferExternalTableColumns(const pgduckdb::ExternalCreateTableOptions &opts) {
-	std::string function_call = pgduckdb::BuildExternalTableFunctionCall(opts.reader, opts.location, opts.options);
+InferForeignTableColumns(const pgduckdb::ForeignCreateTableOptions &opts) {
+	std::string function_call = pgduckdb::BuildForeignTableFunctionCall(opts.reader, opts.location, opts.options);
 	std::string query = "SELECT * FROM " + function_call + " LIMIT 0";
 	auto connection = pgduckdb::DuckDBManager::GetConnection();
-	elog(DEBUG1, "duckdb external column inference query: %s", query.c_str());
+	elog(DEBUG1, "duckdb foreign column inference query: %s", query.c_str());
 	auto prepared = connection->Prepare(query);
 	if (prepared->HasError()) {
 		ereport(ERROR,
-		        (errcode(ERRCODE_SYNTAX_ERROR), errmsg("unable to prepare DuckDB query for external table inference"),
+		        (errcode(ERRCODE_SYNTAX_ERROR), errmsg("unable to prepare DuckDB query for foreign table inference"),
 		         errdetail("%s", prepared->GetError().c_str())));
 	}
 	const auto &types = prepared->GetTypes();
 	const auto &names = prepared->GetNames();
 	if (types.empty()) {
-		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("could not infer columns from external source")));
+		ereport(ERROR, (errcode(ERRCODE_SYNTAX_ERROR), errmsg("could not infer columns from foreign source")));
 	}
 
 	List *columns = NIL;
@@ -146,9 +146,9 @@ InferExternalTableColumns(const pgduckdb::ExternalCreateTableOptions &opts) {
 }
 
 static bool
-ParseExternalTableOptions(List **options_ptr, pgduckdb::ExternalCreateTableOptions &out, bool remove_recognized) {
+ParseForeignTableOptions(List **options_ptr, pgduckdb::ForeignCreateTableOptions &out, bool remove_recognized) {
 	if (options_ptr == nullptr || *options_ptr == NULL) {
-		out.is_external = false;
+		out.is_foreign = false;
 		return false;
 	}
 
@@ -168,7 +168,7 @@ ParseExternalTableOptions(List **options_ptr, pgduckdb::ExternalCreateTableOptio
 				ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("location cannot be empty")));
 			}
 			out.location = pstrdup(value);
-			out.is_external = true;
+			out.is_foreign = true;
 			remove = true;
 		} else if (pg_strcasecmp(def->defname, "options") == 0) {
 			if (out.options != nullptr) {
@@ -201,10 +201,10 @@ ParseExternalTableOptions(List **options_ptr, pgduckdb::ExternalCreateTableOptio
 
 	*options_ptr = options;
 
-	if (!out.is_external) {
+	if (!out.is_foreign) {
 		if (out.options != nullptr || out.format != nullptr) {
 			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			                errmsg("duckdb external options require a location option")));
+			                errmsg("duckdb foreign options require a location option")));
 		}
 		return false;
 	}
@@ -218,7 +218,7 @@ ParseExternalTableOptions(List **options_ptr, pgduckdb::ExternalCreateTableOptio
 			out.reader = pstrdup("read_json");
 		} else {
 			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			                errmsg("Unsupported duckdb_external_format '%s'", out.format),
+			                errmsg("Unsupported duckdb_foreign_format '%s'", out.format),
 			                errhint("Supported formats are parquet, csv, and json.")));
 		}
 	}
@@ -605,7 +605,7 @@ DuckdbHandleDDLPost(PlannedStmt *pstmt) {
 static bool
 DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 	Node *parsetree = pstmt->utilityStmt;
-	pgduckdb::ResetPendingExternalCreateTableOptions();
+	pgduckdb::ResetPendingForeignCreateTableOptions();
 
 	/*
 	 * Time to check for disallowed mixed writes here. The handling for some of
@@ -632,10 +632,11 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 
-		pgduckdb::ExternalCreateTableOptions external_options;
-		if (ParseExternalTableOptions(&stmt->options, external_options, true)) {
+		pgduckdb::ForeignCreateTableOptions external_options;
+		if (ParseForeignTableOptions(&stmt->options, external_options, true)) {
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-			                errmsg("External data must be defined via CREATE FOREIGN TABLE USING ddb_s3_server")));
+			                errmsg("Foreign data must be defined via CREATE FOREIGN TABLE USING %s",
+			                       pgduckdb::ForeignTableServerName())));
 		}
 
 		if (is_duckdb_table) {
@@ -650,10 +651,11 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 		return false;
 	} else if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
-		pgduckdb::ExternalCreateTableOptions external_options;
-		if (ParseExternalTableOptions(&stmt->into->options, external_options, true)) {
+		pgduckdb::ForeignCreateTableOptions external_options;
+		if (ParseForeignTableOptions(&stmt->into->options, external_options, true)) {
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-			                errmsg("External data must be defined via CREATE FOREIGN TABLE USING ddb_s3_server")));
+			                errmsg("Foreign data must be defined via CREATE FOREIGN TABLE USING %s",
+			                       pgduckdb::ForeignTableServerName())));
 		}
 
 		/* Default to duckdb AM for ddb$ schemas and disallow other AMs */
@@ -786,7 +788,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 		}
 	} else if (IsA(parsetree, CreateForeignTableStmt)) {
 		auto stmt = castNode(CreateForeignTableStmt, parsetree);
-		if (stmt->servername == nullptr || pg_strcasecmp(stmt->servername, pgduckdb::ExternalTableServerName()) != 0) {
+		if (stmt->servername == nullptr || pg_strcasecmp(stmt->servername, pgduckdb::ForeignTableServerName()) != 0) {
 			return false;
 		}
 
@@ -801,8 +803,8 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 			                errmsg("server \"%s\" must use the duckdb foreign data wrapper", stmt->servername)));
 		}
 
-		pgduckdb::ExternalCreateTableOptions external_options;
-		if (!ParseExternalTableOptions(&stmt->options, external_options, true)) {
+		pgduckdb::ForeignCreateTableOptions external_options;
+		if (!ParseForeignTableOptions(&stmt->options, external_options, true)) {
 			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 			                errmsg("location option is required for DuckDB foreign tables")));
 		}
@@ -816,7 +818,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 		}
 
 		if (stmt->base.tableElts == NIL) {
-			stmt->base.tableElts = InferExternalTableColumns(external_options);
+			stmt->base.tableElts = InferForeignTableColumns(external_options);
 		}
 
 		List *normalized_options = stmt->options;
@@ -1444,7 +1446,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		 * We're not installed, so don't mess with the query. Normally this
 		 * shouldn't happen, but better safe than sorry.
 		 */
-		pgduckdb::ResetPendingExternalCreateTableOptions();
+		pgduckdb::ResetPendingForeignCreateTableOptions();
 		PG_RETURN_NULL();
 	}
 
@@ -1492,7 +1494,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		/* No DuckDB tables were created so we don't need to do anything */
 		AtEOXact_GUC(false, save_nestlevel);
 		SPI_finish();
-		pgduckdb::ResetPendingExternalCreateTableOptions();
+		pgduckdb::ResetPendingForeignCreateTableOptions();
 		PG_RETURN_NULL();
 	}
 
@@ -1583,7 +1585,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 		 * We don't want to forward DDL to DuckDB because we're syncing the
 		 * tables that are already there.
 		 */
-		pgduckdb::ResetPendingExternalCreateTableOptions();
+		pgduckdb::ResetPendingForeignCreateTableOptions();
 		PG_RETURN_NULL();
 	}
 
@@ -1816,7 +1818,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * the DROP is only meant to replace the existing Postgres shell table with
 	 * a new version.
 	 *
-	 * External tables are dropped from DuckDB regardless of MotherDuck state.
+	 * Foreign tables are dropped from DuckDB regardless of MotherDuck state.
 	 */
 	for (uint64_t proc = 0; proc < SPI_processed; ++proc) {
 		HeapTuple tuple = SPI_tuptable->vals[proc];
@@ -1824,9 +1826,9 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		bool isnull;
 		Oid relid = DatumGetObjectId(SPI_getbinval(tuple, SPI_tuptable->tupdesc, 1, &isnull));
 		Assert(!isnull);
-		bool local_is_external = pgduckdb::pgduckdb_is_external_relation(relid);
+		bool local_is_foreign = pgduckdb::pgduckdb_is_foreign_relation(relid);
 		bool should_drop_in_duckdb =
-		    !pgduckdb::doing_motherduck_sync && (pgduckdb::IsMotherDuckEnabled() || local_is_external);
+		    !pgduckdb::doing_motherduck_sync && (pgduckdb::IsMotherDuckEnabled() || local_is_foreign);
 
 		if (should_drop_in_duckdb) {
 			if (!connection) {
@@ -1838,16 +1840,16 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 3);
 			char *object_type = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 4);
 			char *drop_query =
-			    psprintf("DROP %s IF EXISTS %s.%s", local_is_external ? "view" : object_type,
-			             pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", local_is_external),
+			    psprintf("DROP %s IF EXISTS %s.%s", local_is_foreign ? "view" : object_type,
+			             pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", local_is_foreign),
 			             quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 
 			deleted_duckdb_relations++;
 		}
 
-		if (local_is_external) {
-			pgduckdb::ForgetLoadedExternalTable(relid);
+		if (local_is_foreign) {
+			pgduckdb::ForgetLoadedForeignTable(relid);
 		}
 	}
 
@@ -1889,7 +1891,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		pgduckdb::DuckDBQueryOrThrow(*connection,
 		                             std::string("DROP TABLE pg_temp.main.") + quote_identifier(table_name));
 		pgduckdb::UnregisterDuckdbTempTable(relid);
-		pgduckdb::ForgetLoadedExternalTable(relid);
+		pgduckdb::ForgetLoadedForeignTable(relid);
 		deleted_duckdb_relations++;
 	}
 
