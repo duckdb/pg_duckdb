@@ -837,8 +837,8 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 			StringInfoData json_text;
 			initStringInfo(&json_text);
 			JsonbToCString(&json_text, &external_options.options->root, VARSIZE(external_options.options));
-			normalized_options = lappend(
-			    normalized_options, makeDefElem(pstrdup("options"), (Node *)makeString(json_text.data), -1));
+			normalized_options =
+			    lappend(normalized_options, makeDefElem(pstrdup("options"), (Node *)makeString(json_text.data), -1));
 			pfree(external_options.options);
 			external_options.options = nullptr;
 		}
@@ -1839,10 +1839,9 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 			char *postgres_schema_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
 			char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 3);
 			char *object_type = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 4);
-			char *drop_query =
-			    psprintf("DROP %s IF EXISTS %s.%s", local_is_foreign ? "view" : object_type,
-			             pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", local_is_foreign),
-			             quote_identifier(table_name));
+			char *drop_query = psprintf("DROP %s IF EXISTS %s.%s", local_is_foreign ? "view" : object_type,
+			                            pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", local_is_foreign),
+			                            quote_identifier(table_name));
 			pgduckdb::DuckDBQueryOrThrow(*connection, drop_query);
 
 			deleted_duckdb_relations++;

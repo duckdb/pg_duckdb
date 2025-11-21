@@ -553,8 +553,7 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_tabl
  * database are quoted if necessary.
  */
 const char *
-pgduckdb_db_and_schema_string(const char *postgres_schema_name, const char *duckdb_table_am_name,
-                              bool is_foreign) {
+pgduckdb_db_and_schema_string(const char *postgres_schema_name, const char *duckdb_table_am_name, bool is_foreign) {
 	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, duckdb_table_am_name, is_foreign);
 	const char *db_name = (const char *)linitial(db_and_schema);
 	const char *schema_name = (const char *)lsecond(db_and_schema);
