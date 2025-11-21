@@ -182,10 +182,11 @@ PopulateMetadataFromOptions(List *options_list, ForeignTableMetadata &out) {
 			const char *json_value = (*value == '\0') ? "{}" : value;
 			Datum json_datum = DirectFunctionCall1(jsonb_in, CStringGetDatum(json_value));
 			out.options = DatumGetJsonbP(json_datum);
-		} else if (pg_strncasecmp(def->defname, "duckdb_external_", strlen("duckdb_external_")) == 0) {
-			ereport(ERROR,
-			        (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			         errmsg("option \"%s\" is no longer supported; use location/reader/format/options", def->defname)));
+		} else {
+			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+			                errmsg("unknown or unsupported option \"%s\" for duckdb foreign table; supported options "
+			                       "are: location, reader, format, options",
+			                       def->defname)));
 		}
 	}
 
@@ -302,12 +303,12 @@ EnsureForeignTableLoaded(Oid relid) {
 }
 
 void
-ForgetLoadedForeignTable(Oid relid) {
+UnloadedForeignTable(Oid relid) {
 	loaded_foreign_tables.erase(relid);
 }
 
 void
-ResetLoadedForeignTableCache() {
+ResetForeignTableCache() {
 	loaded_foreign_tables.clear();
 }
 

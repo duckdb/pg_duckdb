@@ -631,14 +631,6 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 
 		char *access_method = stmt->accessMethod ? stmt->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
-
-		pgduckdb::ForeignCreateTableOptions external_options;
-		if (ParseForeignTableOptions(&stmt->options, external_options, true)) {
-			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-			                errmsg("Foreign data must be defined via CREATE FOREIGN TABLE USING %s",
-			                       pgduckdb::ForeignTableServerName())));
-		}
-
 		if (is_duckdb_table) {
 			if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
 				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
@@ -651,12 +643,6 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 		return false;
 	} else if (IsA(parsetree, CreateTableAsStmt)) {
 		auto stmt = castNode(CreateTableAsStmt, parsetree);
-		pgduckdb::ForeignCreateTableOptions external_options;
-		if (ParseForeignTableOptions(&stmt->into->options, external_options, true)) {
-			ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
-			                errmsg("Foreign data must be defined via CREATE FOREIGN TABLE USING %s",
-			                       pgduckdb::ForeignTableServerName())));
-		}
 
 		/* Default to duckdb AM for ddb$ schemas and disallow other AMs */
 		Oid schema_oid = RangeVarGetCreationNamespace(stmt->into->rel);
@@ -1459,6 +1445,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 
 	EventTriggerData *trigger_data = (EventTriggerData *)fcinfo->context;
 	Node *parsetree = trigger_data->parsetree;
+
 	SPI_connect();
 
 	/*
@@ -1607,6 +1594,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	 * the DuckDB connection and possibly transactions.
 	 */
 	std::string create_table_string(pgduckdb_get_tabledef(relid));
+
 	/* We're going to run multiple queries in DuckDB, so we need to start a
 	 * transaction to ensure ACID guarantees hold. */
 	auto connection = pgduckdb::DuckDBManager::GetConnection(true);
@@ -1620,6 +1608,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	pgduckdb::DuckDBQueryOrThrow(*connection, create_table_string);
 	if (ctas_query) {
 		const char *ctas_query_string = pgduckdb_get_querydef(ctas_query);
+
 		std::string insert_string =
 		    std::string("INSERT INTO ") + pgduckdb_relation_name(relid) + " " + ctas_query_string;
 		pgduckdb::DuckDBQueryOrThrow(*connection, insert_string);
@@ -1848,7 +1837,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		}
 
 		if (local_is_foreign) {
-			pgduckdb::ForgetLoadedForeignTable(relid);
+			pgduckdb::UnloadedForeignTable(relid);
 		}
 	}
 
@@ -1890,7 +1879,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		pgduckdb::DuckDBQueryOrThrow(*connection,
 		                             std::string("DROP TABLE pg_temp.main.") + quote_identifier(table_name));
 		pgduckdb::UnregisterDuckdbTempTable(relid);
-		pgduckdb::ForgetLoadedForeignTable(relid);
+		pgduckdb::UnloadedForeignTable(relid);
 		deleted_duckdb_relations++;
 	}
 

@@ -131,7 +131,7 @@ ContainsDuckdbItems(Node *node, void *context) {
 }
 
 /*
- * Tree walker to ensure all foreign tables in the query are loaded into DuckDB.
+ * Tree walker to ensure all duckdb foreign tables in the query are loaded into DuckDB.
  * This traverses the query tree and loads any foreign tables found in range tables.
  */
 static Node *

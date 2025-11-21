@@ -32,7 +32,7 @@ extern "C" {
 
 extern "C" {
 
-typedef enum { ANY, MD, S3, GCS, SENTINEL } FdwType;
+typedef enum { ANY, MD, S3, GCS, FOREIGN_TABLE, SENTINEL } FdwType;
 
 struct PGDuckDBFdwOption {
 	const char *optname;
@@ -61,6 +61,7 @@ static const struct PGDuckDBFdwOption valid_md_options[] = {
  */
 static const struct PGDuckDBFdwOption valid_foreign_table_options[] = {{"location", ForeignTableRelationId},
                                                                        {"format", ForeignTableRelationId},
+                                                                       {"reader", ForeignTableRelationId},
                                                                        {"options", ForeignTableRelationId},
 
                                                                        /* Sentinel */
@@ -260,7 +261,7 @@ ValidateForeignTableOptions(List *options_list, Oid context) {
 	// Make sure all options are valid
 	foreach_node(DefElem, def, options_list) {
 		if (!IsValidForeignTableOption(def->defname, context)) {
-			elog(ERROR, "Unknown option: '%s' for foreign table", def->defname);
+			elog(ERROR, "Unknown option: '%s' for duckdb foreign table", def->defname);
 		}
 
 		// Validate that 'options' is valid JSON if provided
@@ -283,7 +284,7 @@ ValidateForeignTableOptions(List *options_list, Oid context) {
 	}
 
 	if (!has_location) {
-		elog(ERROR, "Missing required option 'location' for foreign table");
+		elog(ERROR, "Missing required option 'location' for duckdb foreign table");
 	}
 }
 
@@ -350,7 +351,10 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 		pgduckdb::CurrentServerType = nullptr;
 		if (AreStringEqual(server_type, "motherduck")) {
 			ValidateMotherduckServerFdw(options_list, catalog);
-		} else {
+		} else if (AreStringEqual(server_type, "foreign_table")) {
+			// do nothing
+		}
+		else {
 			ValidateDuckDBSecret(server_type, options_list);
 		}
 
