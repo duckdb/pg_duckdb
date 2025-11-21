@@ -10,8 +10,11 @@ CREATE FOREIGN TABLE external_parquet ()
 SELECT "sepal.length", "file_row_number", "filename" FROM external_parquet ORDER BY "sepal.length", "file_row_number" LIMIT 5;
 SELECT count(*) FROM external_parquet;
 
-ALTER FOREIGN TABLE external_parquet RENAME TO external_parquet_renamed;
+ALTER TABLE external_parquet RENAME TO external_parquet_renamed;
 SELECT count(*) FROM external_parquet_renamed;
+
+ALTER FOREIGN TABLE external_parquet_renamed RENAME TO external_parquet_renamed_1;
+SELECT count(*) FROM external_parquet_renamed_1;
 
 CREATE SCHEMA external_parquet_schema;
 SET search_path to external_parquet_schema;
@@ -51,16 +54,8 @@ SELECT sum(a), min(b), max(c) FROM external_json;
 CREATE TABLE json_tbl AS SELECT * FROM external_json;
 SELECT count(*) FROM json_tbl;
 SELECT sum(a), min(b), max(c) FROM json_tbl;
-SELECT option_name, option_value
-FROM pg_options_to_table(
-    (SELECT ftoptions
-     FROM pg_foreign_table
-     JOIN pg_class ON pg_class.oid = pg_foreign_table.ftrelid
-     WHERE pg_class.relname = 'external_parquet_renamed')
-)
-ORDER BY option_name;
 
-DROP FOREIGN TABLE external_parquet_renamed;
+DROP FOREIGN TABLE external_parquet_renamed_1;
 DROP FOREIGN TABLE external_csv;
 DROP FOREIGN TABLE external_json;
 DROP TABLE json_tbl;

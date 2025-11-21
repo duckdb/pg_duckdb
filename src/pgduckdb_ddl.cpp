@@ -873,7 +873,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 			if (pgduckdb::IsDuckdbSchemaName(stmt->newname)) {
 				elog(ERROR, "Changing a schema to a ddb$ schema is currently not supported");
 			}
-		} else if (stmt->renameType == OBJECT_TABLE ||
+		} else if (stmt->renameType == OBJECT_TABLE || stmt->renameType == OBJECT_FOREIGN_TABLE ||
 		           (stmt->renameType == OBJECT_COLUMN && stmt->relationType == OBJECT_TABLE)) {
 			Oid relation_oid = RangeVarGetRelid(stmt->relation, AccessExclusiveLock, true);
 			if (relation_oid == InvalidOid) {
@@ -888,7 +888,7 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 				return DuckdbHandleRenameViewPre(stmt);
 			}
 
-			if (pgduckdb::IsDuckdbTable(rel)) {
+			if (pgduckdb::IsDuckdbTable(rel) || pgduckdb::pgduckdb_is_foreign_relation(relation_oid)) {
 				if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
 					ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 					                errmsg("Only one DuckDB %s can be renamed in a single statement",
@@ -1716,7 +1716,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * want to start allowing this than it is to start disallowing it.
 	 */
 	int ret = SPI_exec(R"(
-		SELECT count(*)::bigint, (count(*) FILTER (WHERE object_type IN ('table', 'view')))::bigint
+		SELECT count(*)::bigint, (count(*) FILTER (WHERE object_type IN ('table', 'foreign table', 'view')))::bigint
 		FROM pg_catalog.pg_event_trigger_dropped_objects()
 		WHERE object_type NOT IN ('type', 'sequence', 'table constraint', 'index', 'default value', 'trigger', 'toast table', 'rule')
 	)",
@@ -1779,7 +1779,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		USING (
 			SELECT objid, schema_name, object_name, object_type
 			FROM pg_catalog.pg_event_trigger_dropped_objects()
-			WHERE object_type in ('table', 'view')
+			WHERE object_type in ('table', 'foreign table', 'view')
 		) objs
 		WHERE relid = objid
 		RETURNING objs.objid, objs.schema_name, objs.object_name, objs.object_type
@@ -1987,7 +1987,15 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		WHERE cmds.object_type in ('table', 'table column')
 		AND pg_class.relam != (SELECT oid FROM pg_am WHERE amname = 'duckdb')
 		AND pg_class.relpersistence = 't'
-		)",
+		UNION ALL
+		SELECT objid as relid, false AS needs_to_check_temporary_set
+		FROM pg_catalog.pg_event_trigger_ddl_commands() cmds
+		JOIN pg_catalog.pg_foreign_table ft
+		ON cmds.objid = ft.ftrelid
+		JOIN pg_catalog.pg_foreign_server fs
+		ON ft.ftserver = fs.oid
+		WHERE cmds.object_type in ('foreign table', 'foreign table column')
+		AND fs.srvname = ')" DUCKDB_FOREIGN_SERVER_NAME "'",
 	                   0);
 
 	/* Revert back to original privileges */
@@ -2047,9 +2055,18 @@ DECLARE_PG_FUNCTION(duckdb_alter_table_trigger) {
 		alter_table_stmt_string = pgduckdb_get_alter_tabledef(relid, alter_table_stmt);
 	} else if (IsA(trigdata->parsetree, RenameStmt)) {
 		RenameStmt *rename_stmt = (RenameStmt *)trigdata->parsetree;
-		alter_table_stmt_string = pgduckdb_get_rename_relationdef(relid, rename_stmt);
+		if ((rename_stmt->renameType == OBJECT_TABLE || rename_stmt->renameType == OBJECT_FOREIGN_TABLE) &&
+		    pgduckdb::pgduckdb_is_foreign_relation(relid) && !pgduckdb::IsForeignTableLoaded(relid)) {
+			alter_table_stmt_string = nullptr;
+		} else {
+			alter_table_stmt_string = pgduckdb_get_rename_relationdef(relid, rename_stmt);
+		}
 	} else {
 		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(trigdata->parsetree));
+	}
+
+	if (!alter_table_stmt_string) {
+		PG_RETURN_NULL();
 	}
 
 	elog(DEBUG1, "Executing: %s", alter_table_stmt_string);
