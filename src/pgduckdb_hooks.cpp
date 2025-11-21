@@ -67,7 +67,10 @@ ContainsCatalogTable(List *rtes) {
 
 static bool
 IsDuckdbTable(Oid relid) {
-	return pgduckdb::DuckdbTableAmGetName(relid) != nullptr;
+	if (pgduckdb::DuckdbTableAmGetName(relid) != nullptr) {
+		return true;
+	}
+	return pgduckdb::pgduckdb_is_external_relation(relid);
 }
 
 static bool
@@ -83,10 +86,9 @@ ContainsDuckdbTables(List *rte_list) {
 static void
 LoadDuckdbExternalTables(List *rte_list) {
 	foreach_node(RangeTblEntry, rte, rte_list) {
-		if (!IsDuckdbTable(rte->relid)) {
-			continue;
+		if (pgduckdb::pgduckdb_is_external_relation(rte->relid)) {
+			pgduckdb::EnsureExternalTableLoaded(rte->relid);
 		}
-		pgduckdb::EnsureExternalTableLoaded(rte->relid);
 	}
 }
 

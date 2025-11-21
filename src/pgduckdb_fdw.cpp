@@ -56,6 +56,18 @@ static const struct PGDuckDBFdwOption valid_md_options[] = {
     /* Sentinel */
     {NULL, SENTINEL, InvalidOid}};
 
+/*
+ * Valid options for external (S3, etc.) foreign tables
+ */
+static const struct PGDuckDBFdwOption valid_external_table_options[] = {
+    {"location", ForeignTableRelationId},
+    {"reader", ForeignTableRelationId},
+    {"format", ForeignTableRelationId},
+    {"options", ForeignTableRelationId},
+
+    /* Sentinel */
+    {NULL, SENTINEL, InvalidOid}};
+
 PG_FUNCTION_INFO_V1(pgduckdb_fdw_handler);
 Datum
 pgduckdb_fdw_handler(PG_FUNCTION_ARGS __attribute__((unused))) {
@@ -65,6 +77,16 @@ pgduckdb_fdw_handler(PG_FUNCTION_ARGS __attribute__((unused))) {
 bool
 IsValidMdOption(const char *optname, Oid context) {
 	for (const struct PGDuckDBFdwOption *opt = valid_md_options; opt->optname != NULL; ++opt) {
+		if (opt->context == context && strcmp(optname, opt->optname) == 0) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool
+IsValidExternalTableOption(const char *optname, Oid context) {
+	for (const struct PGDuckDBFdwOption *opt = valid_external_table_options; opt->optname != NULL; ++opt) {
 		if (opt->context == context && strcmp(optname, opt->optname) == 0) {
 			return true;
 		}
@@ -235,6 +257,38 @@ ValidateMdOptions(List *options_list, Oid context) {
 	ValidateHasRequiredMdOptions(options_list, context);
 }
 
+void
+ValidateExternalTableOptions(List *options_list, Oid context) {
+	// Make sure all options are valid
+	foreach_node(DefElem, def, options_list) {
+		if (!IsValidExternalTableOption(def->defname, context)) {
+			elog(ERROR, "Unknown option: '%s' for external table", def->defname);
+		}
+
+		// Validate that 'options' is valid JSON if provided
+		if (strcmp(def->defname, "options") == 0 && def->arg) {
+			const char *json_str = defGetString(def);
+			if (json_str && *json_str) {
+				// Try to parse as JSONB to validate
+				DirectFunctionCall1(jsonb_in, CStringGetDatum(json_str));
+			}
+		}
+	}
+
+	// location is required for external tables
+	bool has_location = false;
+	foreach_node(DefElem, def, options_list) {
+		if (strcmp(def->defname, "location") == 0) {
+			has_location = true;
+			break;
+		}
+	}
+
+	if (!has_location) {
+		elog(ERROR, "Missing required option 'location' for external table");
+	}
+}
+
 Datum
 ValidateMotherduckServerFdw(List *options_list, Oid context) {
 	// For now only accept one MotherDuck FDW globally
@@ -281,8 +335,8 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 	using namespace pgduckdb::pg;
 	Oid catalog = PG_GETARG_OID(1);
 
-	if (catalog == ForeignTableRelationId || catalog == ForeignTableRelidIndexId) {
-		elog(ERROR, "pgduckdb FDW only support 'SERVER' and 'USER MAPPING' objects.");
+	if (catalog == ForeignTableRelidIndexId) {
+		elog(ERROR, "pgduckdb FDW only support 'SERVER' and 'USER MAPPING' and 'FOREIGN TABLE' objects.");
 	}
 
 	List *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
@@ -315,6 +369,10 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 		// PG only accepts at most one USER MAPPING for a given (user, server)
 		// So no need to check for duplicates.
 
+		PG_RETURN_VOID();
+	} else if (catalog == ForeignTableRelationId) {
+		// Validate external table options (location, reader, format, options)
+		ValidateExternalTableOptions(options_list, catalog);
 		PG_RETURN_VOID();
 	}
 
