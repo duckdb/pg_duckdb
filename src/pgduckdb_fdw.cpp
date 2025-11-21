@@ -353,8 +353,7 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 			ValidateMotherduckServerFdw(options_list, catalog);
 		} else if (AreStringEqual(server_type, "foreign_table")) {
 			// do nothing
-		}
-		else {
+		} else {
 			ValidateDuckDBSecret(server_type, options_list);
 		}
 
