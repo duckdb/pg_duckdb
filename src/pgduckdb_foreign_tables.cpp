@@ -1,4 +1,4 @@
-#include "pgduckdb/pgduckdb_external_tables.hpp"
+#include "pgduckdb/pgduckdb_foreign_tables.hpp"
 
 #include <cctype>
 #include <initializer_list>
@@ -31,14 +31,12 @@ extern "C" {
 
 namespace {
 
-const char *const EXTERNAL_SERVER_NAME = "ddb_s3_server";
-
-struct ExternalTableMetadata {
-	ExternalTableMetadata() : reader(), location(), format(), options(nullptr) {
+struct ForeignTableMetadata {
+	ForeignTableMetadata() : reader(), location(), format(), options(nullptr) {
 	}
 
-	ExternalTableMetadata(const ExternalTableMetadata &) = delete;
-	ExternalTableMetadata &operator=(const ExternalTableMetadata &) = delete;
+	ForeignTableMetadata(const ForeignTableMetadata &) = delete;
+	ForeignTableMetadata &operator=(const ForeignTableMetadata &) = delete;
 
 	std::string reader;
 	std::string location;
@@ -46,7 +44,7 @@ struct ExternalTableMetadata {
 	Jsonb *options;
 };
 
-static std::unordered_set<Oid> loaded_external_tables;
+static std::unordered_set<Oid> loaded_foreign_tables;
 
 bool
 OptionNameMatches(const char *name, std::initializer_list<const char *> candidates) {
@@ -78,7 +76,7 @@ AppendDuckdbOptions(std::ostringstream &oss, Jsonb *options) {
 
 	if (!JB_ROOT_IS_OBJECT(options)) {
 		ereport(ERROR,
-		        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("duckdb external options must be a JSON object")));
+		        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("duckdb foreign options must be a JSON object")));
 	}
 
 	JsonbIterator *it = JsonbIteratorInit(&options->root);
@@ -107,7 +105,7 @@ AppendDuckdbOptions(std::ostringstream &oss, Jsonb *options) {
 
 		if (!expecting_value || r != WJB_VALUE) {
 			ereport(ERROR,
-			        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("invalid duckdb external options structure")));
+			        (errcode(ERRCODE_INVALID_PARAMETER_VALUE), errmsg("invalid duckdb foreign options structure")));
 		}
 
 		expecting_value = false;
@@ -153,14 +151,14 @@ AppendDuckdbOptions(std::ostringstream &oss, Jsonb *options) {
 		}
 		default:
 			ereport(ERROR, (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
-			                errmsg("unsupported value type in duckdb external options for key \"%s\"", key_str.c_str()),
+			                errmsg("unsupported value type in duckdb foreign options for key \"%s\"", key_str.c_str()),
 			                errhint("Only string, numeric, boolean, null, array and object values are supported.")));
 		}
 	}
 }
 
 void
-PopulateMetadataFromOptions(List *options_list, ExternalTableMetadata &out) {
+PopulateMetadataFromOptions(List *options_list, ForeignTableMetadata &out) {
 	foreach_node(DefElem, def, options_list) {
 		const char *value = nullptr;
 		if (def->arg) {
@@ -206,7 +204,7 @@ PopulateMetadataFromOptions(List *options_list, ExternalTableMetadata &out) {
 }
 
 bool
-LoadExternalTableMetadata(Oid relid, ExternalTableMetadata &out) {
+LoadForeignTableMetadata(Oid relid, ForeignTableMetadata &out) {
 	ForeignTable *ft = GetForeignTable(relid);
 	if (ft == nullptr) {
 		return false;
@@ -226,12 +224,12 @@ LoadExternalTableMetadata(Oid relid, ExternalTableMetadata &out) {
 namespace pgduckdb {
 
 const char *
-ExternalTableServerName() {
-	return EXTERNAL_SERVER_NAME;
+ForeignTableServerName() {
+	return DUCKDB_FOREIGN_SERVER_NAME;
 }
 
 std::string
-BuildExternalTableFunctionCall(const char *reader, const char *location, void *raw_options) {
+BuildForeignTableFunctionCall(const char *reader, const char *location, void *raw_options) {
 	Jsonb *options = (Jsonb *)raw_options;
 	char *quoted_location = quote_literal_cstr(location);
 	std::ostringstream oss;
@@ -243,21 +241,21 @@ BuildExternalTableFunctionCall(const char *reader, const char *location, void *r
 }
 
 bool
-EnsureExternalTableLoaded(Oid relid) {
+EnsureForeignTableLoaded(Oid relid) {
 	if (!OidIsValid(relid)) {
 		return false;
 	}
 
-	if (loaded_external_tables.find(relid) != loaded_external_tables.end()) {
+	if (loaded_foreign_tables.find(relid) != loaded_foreign_tables.end()) {
 		return true;
 	}
 
-	if (!pgduckdb_is_external_relation(relid)) {
+	if (!pgduckdb_is_foreign_relation(relid)) {
 		return false;
 	}
 
-	ExternalTableMetadata metadata;
-	if (!LoadExternalTableMetadata(relid, metadata)) {
+	ForeignTableMetadata metadata;
+	if (!LoadForeignTableMetadata(relid, metadata)) {
 		return false;
 	}
 
@@ -283,7 +281,7 @@ EnsureExternalTableLoaded(Oid relid) {
 	char *qualified_view_name = psprintf("%s.%s", duckdb_schema_name, quote_identifier(relname));
 	std::string schema_query = std::string("CREATE SCHEMA IF NOT EXISTS ") + duckdb_schema_name + ";";
 	std::string function_call =
-	    BuildExternalTableFunctionCall(metadata.reader.c_str(), metadata.location.c_str(), metadata.options);
+	    BuildForeignTableFunctionCall(metadata.reader.c_str(), metadata.location.c_str(), metadata.options);
 	std::string view_query =
 	    std::string("CREATE OR REPLACE VIEW ") + qualified_view_name + " AS SELECT * FROM " + function_call;
 
@@ -294,27 +292,27 @@ EnsureExternalTableLoaded(Oid relid) {
 	pfree((void *)duckdb_schema_name);
 
 	auto connection = DuckDBManager::GetConnection();
-	elog(INFO, "Creating DuckDB schema: %s", schema_query.c_str());
+	elog(DEBUG2, "Creating DuckDB schema: %s", schema_query.c_str());
 	DuckDBQueryOrThrow(*connection, schema_query);
-	elog(INFO, "Creating DuckDB view: %s", view_query.c_str());
+	elog(DEBUG2, "Creating DuckDB view: %s", view_query.c_str());
 	DuckDBQueryOrThrow(*connection, view_query);
 
-	loaded_external_tables.insert(relid);
+	loaded_foreign_tables.insert(relid);
 	return true;
 }
 
 void
-ForgetLoadedExternalTable(Oid relid) {
-	loaded_external_tables.erase(relid);
+ForgetLoadedForeignTable(Oid relid) {
+	loaded_foreign_tables.erase(relid);
 }
 
 void
-ResetLoadedExternalTableCache() {
-	loaded_external_tables.clear();
+ResetLoadedForeignTableCache() {
+	loaded_foreign_tables.clear();
 }
 
 bool
-pgduckdb_is_external_relation(Oid relation_oid) {
+pgduckdb_is_foreign_relation(Oid relation_oid) {
 	if (!OidIsValid(relation_oid)) {
 		return false;
 	}
@@ -324,20 +322,20 @@ pgduckdb_is_external_relation(Oid relation_oid) {
 		return false;
 	}
 
-	bool is_external = false;
+	bool is_foreign = false;
 	if (rel->rd_rel->relkind == RELKIND_FOREIGN_TABLE) {
 		ForeignTable *ft = GetForeignTable(relation_oid);
 		if (ft != nullptr) {
 			ForeignServer *server = GetForeignServer(ft->serverid);
 			if (server != nullptr && server->servername != nullptr &&
-			    strcmp(server->servername, EXTERNAL_SERVER_NAME) == 0) {
-				is_external = true;
+			    strcmp(server->servername, DUCKDB_FOREIGN_SERVER_NAME) == 0) {
+				is_foreign = true;
 			}
 		}
 	}
 
 	RelationClose(rel);
-	return is_external;
+	return is_foreign;
 }
 
 } // namespace pgduckdb

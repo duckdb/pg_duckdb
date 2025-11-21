@@ -40,7 +40,7 @@ extern "C" {
 }
 
 #include "pgduckdb/pgduckdb.h"
-#include "pgduckdb/pgduckdb_external_tables.hpp"
+#include "pgduckdb/pgduckdb_foreign_tables.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
@@ -474,7 +474,7 @@ pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level) {
  * are not escaped yet.
  */
 List *
-pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_table_am_name, bool is_ddb_external) {
+pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_table_am_name, bool is_foreign) {
 	if (duckdb_table_am_name == nullptr) {
 		return list_make2((void *)"pgduckdb", (void *)postgres_schema_name);
 	}
@@ -494,7 +494,7 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_tabl
 	}
 
 	/* These are MotherDuck tables, so we need credentials to access them */
-	if (!is_ddb_external && !pgduckdb::IsMotherDuckEnabled()) {
+	if (!is_foreign && !pgduckdb::IsMotherDuckEnabled()) {
 		ereport(ERROR,
 		        (errcode(ERRCODE_INVALID_AUTHORIZATION_SPECIFICATION),
 		         errmsg("MotherDuck tables cannot be accessed without MotherDuck credentials"),
@@ -554,8 +554,8 @@ pgduckdb_db_and_schema(const char *postgres_schema_name, const char *duckdb_tabl
  */
 const char *
 pgduckdb_db_and_schema_string(const char *postgres_schema_name, const char *duckdb_table_am_name,
-                              bool is_ddb_external) {
-	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, duckdb_table_am_name, is_ddb_external);
+                              bool is_foreign) {
+	List *db_and_schema = pgduckdb_db_and_schema(postgres_schema_name, duckdb_table_am_name, is_foreign);
 	const char *db_name = (const char *)linitial(db_and_schema);
 	const char *schema_name = (const char *)lsecond(db_and_schema);
 	return psprintf("%s.%s", quote_identifier(db_name), quote_identifier(schema_name));
@@ -576,9 +576,9 @@ pgduckdb_relation_name(Oid relation_oid) {
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
 	// For DuckDB foreign tables, we explicitly use the DuckDB table access method (AM) name here.
 	// This ensures the planner routes queries intended for these tables through DuckDB for execution.
-	bool is_external = pgduckdb::pgduckdb_is_external_relation(relation_oid);
-	const char *duckdb_table_am_name = is_external ? "duckdb" : pgduckdb::DuckdbTableAmGetName(relation_oid);
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, duckdb_table_am_name, is_external);
+	bool is_foreign = pgduckdb::pgduckdb_is_foreign_relation(relation_oid);
+	const char *duckdb_table_am_name = is_foreign ? "duckdb" : pgduckdb::DuckdbTableAmGetName(relation_oid);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, duckdb_table_am_name, is_foreign);
 
 	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
 
@@ -898,11 +898,11 @@ pgduckdb_get_rename_relationdef(Oid relation_oid, RenameStmt *rename_stmt) {
 	Assert(pgduckdb::IsDuckdbTable(relation) || pgduckdb::IsMotherDuckView(relation));
 
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
-	const bool is_external_relation = pgduckdb::pgduckdb_is_external_relation(relation_oid);
-	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", is_external_relation);
+	const bool is_foreign = pgduckdb::pgduckdb_is_foreign_relation(relation_oid);
+	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, "duckdb", is_foreign);
 	const char *old_table_name = psprintf("%s.%s", db_and_schema, quote_identifier(rename_stmt->relation->relname));
 	const char *relation_type = "TABLE";
-	if (relation->rd_rel->relkind == RELKIND_VIEW || is_external_relation) {
+	if (relation->rd_rel->relkind == RELKIND_VIEW || is_foreign) {
 		relation_type = "VIEW";
 	}
 
