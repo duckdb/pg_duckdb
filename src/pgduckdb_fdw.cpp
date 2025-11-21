@@ -59,14 +59,12 @@ static const struct PGDuckDBFdwOption valid_md_options[] = {
 /*
  * Valid options for DuckDB foreign tables (S3, etc.)
  */
-static const struct PGDuckDBFdwOption valid_foreign_table_options[] = {
-    {"location", ForeignTableRelationId},
-    {"reader", ForeignTableRelationId},
-    {"format", ForeignTableRelationId},
-    {"options", ForeignTableRelationId},
+static const struct PGDuckDBFdwOption valid_foreign_table_options[] = {{"location", ForeignTableRelationId},
+                                                                       {"format", ForeignTableRelationId},
+                                                                       {"options", ForeignTableRelationId},
 
-    /* Sentinel */
-    {NULL, SENTINEL, InvalidOid}};
+                                                                       /* Sentinel */
+                                                                       {NULL, SENTINEL, InvalidOid}};
 
 PG_FUNCTION_INFO_V1(pgduckdb_fdw_handler);
 Datum
