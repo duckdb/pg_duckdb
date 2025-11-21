@@ -312,6 +312,11 @@ ResetLoadedForeignTableCache() {
 }
 
 bool
+IsForeignTableLoaded(Oid relid) {
+	return loaded_foreign_tables.find(relid) != loaded_foreign_tables.end();
+}
+
+bool
 pgduckdb_is_foreign_relation(Oid relation_oid) {
 	if (!OidIsValid(relation_oid)) {
 		return false;

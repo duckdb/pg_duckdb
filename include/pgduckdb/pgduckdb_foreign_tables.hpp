@@ -21,6 +21,8 @@ void ForgetLoadedForeignTable(Oid relid);
 
 void ResetLoadedForeignTableCache();
 
+bool IsForeignTableLoaded(Oid relid);
+
 bool pgduckdb_is_foreign_relation(Oid relation_oid);
 
 const char *ForeignTableServerName();

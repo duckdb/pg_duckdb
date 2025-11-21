@@ -109,3 +109,8 @@ TYPE 's3'
 FOREIGN DATA WRAPPER duckdb;
 
 GRANT USAGE ON FOREIGN SERVER ddb_foreign_server TO public;
+
+DROP EVENT TRIGGER IF EXISTS duckdb_alter_table_trigger;
+CREATE EVENT TRIGGER duckdb_alter_foreign_table_trigger ON ddl_command_end
+    WHEN tag IN ('ALTER TABLE', 'ALTER FOREIGN TABLE')
+    EXECUTE FUNCTION duckdb._alter_table_trigger();
