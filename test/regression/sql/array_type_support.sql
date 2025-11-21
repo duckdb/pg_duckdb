@@ -398,6 +398,10 @@ SELECT
     CAST([] AS MAP(VARCHAR, INTEGER)[]) as empty_map_array
 $$);
 
+CREATE TABLE text_array AS SELECT * FROM read_parquet('../../data/text_array.parquet');
+SELECT * FROM text_array;
+ANALYZE text_array;
+
 -- Cleanup
 DROP TABLE int_array_0d;
 DROP TABLE int_array_1d;
