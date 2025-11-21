@@ -220,7 +220,7 @@ DuckDBManager::Reset() {
 	delete manager_instance.database;
 	manager_instance.database = nullptr;
 	UnclaimBgwSessionHint();
-	ResetLoadedForeignTableCache();
+	ResetForeignTableCache();
 }
 
 int64

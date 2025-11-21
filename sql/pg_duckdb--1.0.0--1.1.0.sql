@@ -105,7 +105,7 @@ SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_simple_secret';
 
 CREATE SERVER ddb_foreign_server
-TYPE 's3'
+TYPE 'foreign_table'
 FOREIGN DATA WRAPPER duckdb;
 
 GRANT USAGE ON FOREIGN SERVER ddb_foreign_server TO public;

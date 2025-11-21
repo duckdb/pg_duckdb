@@ -6,9 +6,7 @@
 
 namespace pgduckdb {
 
-/*
- * The name of the foreign server that we use for DuckDB foreign tables.
- */
+// The name of the foreign server that we use for DuckDB foreign tables.
 #define DUCKDB_FOREIGN_SERVER_NAME "ddb_foreign_server"
 
 void ValidateForeignIdentifier(const char *identifier, const char *context);
@@ -17,9 +15,9 @@ std::string BuildForeignTableFunctionCall(const char *reader, const char *locati
 
 bool EnsureForeignTableLoaded(Oid relid);
 
-void ForgetLoadedForeignTable(Oid relid);
+void UnloadedForeignTable(Oid relid);
 
-void ResetLoadedForeignTableCache();
+void ResetForeignTableCache();
 
 bool IsForeignTableLoaded(Oid relid);
 
