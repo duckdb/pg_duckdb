@@ -574,9 +574,10 @@ pgduckdb_relation_name(Oid relation_oid) {
 	Form_pg_class relation = (Form_pg_class)GETSTRUCT(tp);
 	const char *relname = NameStr(relation->relname);
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->relnamespace);
-	const char *duckdb_table_am_name = pgduckdb::DuckdbTableAmGetName(relation_oid);
-
-	bool is_external = duckdb_table_am_name && pgduckdb::pgduckdb_is_external_relation(relation_oid);
+	// For DuckDB foreign tables, we explicitly use the DuckDB table access method (AM) name here.
+	// This ensures the planner routes queries intended for these tables through DuckDB for execution.
+	bool is_external = pgduckdb::pgduckdb_is_external_relation(relation_oid);
+	const char *duckdb_table_am_name = is_external ? "duckdb" : pgduckdb::DuckdbTableAmGetName(relation_oid);
 	const char *db_and_schema = pgduckdb_db_and_schema_string(postgres_schema_name, duckdb_table_am_name, is_external);
 
 	char *result = psprintf("%s.%s", db_and_schema, quote_identifier(relname));
