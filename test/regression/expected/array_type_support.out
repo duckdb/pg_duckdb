@@ -692,6 +692,14 @@ $$);
  {"{key1=10, key2=20}","{a=100}"} | {"{x=1, y=2, z=3}"} | {}
 (1 row)
 
+CREATE TABLE text_array AS SELECT * FROM read_parquet('../../data/text_array.parquet');
+SELECT * FROM text_array;
+                                   tags                                    
+---------------------------------------------------------------------------
+ {"box office",hollywood,"2025 Predictions",Movies,Culture,"Best of 2025"}
+(1 row)
+
+ANALYZE text_array;
 -- Cleanup
 DROP TABLE int_array_0d;
 DROP TABLE int_array_1d;
