@@ -890,12 +890,13 @@ cookConstraint(ParseState *pstate, Node *raw_constraint, char *relname) {
 char *
 pgduckdb_get_rename_relationdef(Oid relation_oid, RenameStmt *rename_stmt) {
 	if (rename_stmt->renameType != OBJECT_TABLE && rename_stmt->renameType != OBJECT_VIEW &&
-	    rename_stmt->renameType != OBJECT_COLUMN) {
+	    rename_stmt->renameType != OBJECT_COLUMN && rename_stmt->renameType != OBJECT_FOREIGN_TABLE) {
 		elog(ERROR, "Only renaming tables and columns is supported in DuckDB");
 	}
 
 	Relation relation = relation_open(relation_oid, AccessShareLock);
-	Assert(pgduckdb::IsDuckdbTable(relation) || pgduckdb::IsMotherDuckView(relation));
+	Assert(pgduckdb::IsDuckdbTable(relation) || pgduckdb::pgduckdb_is_foreign_relation(relation_oid) ||
+	       pgduckdb::IsMotherDuckView(relation));
 
 	const char *postgres_schema_name = get_namespace_name_or_temp(relation->rd_rel->relnamespace);
 	const bool is_foreign = pgduckdb::pgduckdb_is_foreign_relation(relation_oid);
