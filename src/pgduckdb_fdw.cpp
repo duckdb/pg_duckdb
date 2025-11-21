@@ -57,9 +57,9 @@ static const struct PGDuckDBFdwOption valid_md_options[] = {
     {NULL, SENTINEL, InvalidOid}};
 
 /*
- * Valid options for external (S3, etc.) foreign tables
+ * Valid options for DuckDB foreign tables (S3, etc.)
  */
-static const struct PGDuckDBFdwOption valid_external_table_options[] = {
+static const struct PGDuckDBFdwOption valid_foreign_table_options[] = {
     {"location", ForeignTableRelationId},
     {"reader", ForeignTableRelationId},
     {"format", ForeignTableRelationId},
@@ -85,8 +85,8 @@ IsValidMdOption(const char *optname, Oid context) {
 }
 
 bool
-IsValidExternalTableOption(const char *optname, Oid context) {
-	for (const struct PGDuckDBFdwOption *opt = valid_external_table_options; opt->optname != NULL; ++opt) {
+IsValidForeignTableOption(const char *optname, Oid context) {
+	for (const struct PGDuckDBFdwOption *opt = valid_foreign_table_options; opt->optname != NULL; ++opt) {
 		if (opt->context == context && strcmp(optname, opt->optname) == 0) {
 			return true;
 		}
@@ -258,11 +258,11 @@ ValidateMdOptions(List *options_list, Oid context) {
 }
 
 void
-ValidateExternalTableOptions(List *options_list, Oid context) {
+ValidateForeignTableOptions(List *options_list, Oid context) {
 	// Make sure all options are valid
 	foreach_node(DefElem, def, options_list) {
-		if (!IsValidExternalTableOption(def->defname, context)) {
-			elog(ERROR, "Unknown option: '%s' for external table", def->defname);
+		if (!IsValidForeignTableOption(def->defname, context)) {
+			elog(ERROR, "Unknown option: '%s' for foreign table", def->defname);
 		}
 
 		// Validate that 'options' is valid JSON if provided
@@ -275,7 +275,7 @@ ValidateExternalTableOptions(List *options_list, Oid context) {
 		}
 	}
 
-	// location is required for external tables
+	// location is required for foreign tables
 	bool has_location = false;
 	foreach_node(DefElem, def, options_list) {
 		if (strcmp(def->defname, "location") == 0) {
@@ -285,7 +285,7 @@ ValidateExternalTableOptions(List *options_list, Oid context) {
 	}
 
 	if (!has_location) {
-		elog(ERROR, "Missing required option 'location' for external table");
+		elog(ERROR, "Missing required option 'location' for foreign table");
 	}
 }
 
@@ -371,8 +371,8 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 
 		PG_RETURN_VOID();
 	} else if (catalog == ForeignTableRelationId) {
-		// Validate external table options (location, reader, format, options)
-		ValidateExternalTableOptions(options_list, catalog);
+		// Validate foreign table options (location, reader, format, options)
+		ValidateForeignTableOptions(options_list, catalog);
 		PG_RETURN_VOID();
 	}
 
