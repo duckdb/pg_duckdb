@@ -1,6 +1,8 @@
 -- This script is used to enable MotherDuck support if
 -- the token is provided in the environment variables.
 
+-- Once we stop supporting PG14 we can use \getenv again
+-- For grepability: PG_VERSION_NUM < 150000
 \set lc_token `echo $motherduck_token`
 \set uc_token `echo $MOTHERDUCK_TOKEN`
 
