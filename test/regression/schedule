@@ -29,6 +29,7 @@ test: issue_789
 test: issue_796
 test: issue_802
 test: issue_813
+test: issue_975
 test: json_functions_duckdb
 test: materialized_view
 test: non_superuser

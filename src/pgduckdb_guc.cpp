@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "access/xact.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
 #include "miscadmin.h" // DataDir
@@ -272,8 +273,12 @@ DuckAssignTimezone_Cpp(const char *tz) {
 		return;
 	}
 
-	// update duckdb tz
-	auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+	// Update timezone in DuckDB too.
+	// This uses GetConnectionUnsafe because GetConnection requires a
+	// transaction context to be active in Postgres to be able to call
+	// RefreshConnectionState, and GUCs can be changed outside of transaction
+	// blocks (for instance by being reverted due to SET LOCAL or by SIGHUP)
+	auto connection = pgduckdb::DuckDBManager::GetConnectionUnsafe();
 	pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
 	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
 }
