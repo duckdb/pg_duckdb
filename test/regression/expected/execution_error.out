@@ -16,8 +16,11 @@ Did you mean "main.pragma_user_agent"?
 
 LINE 1: SELECT raw_query FROM duckdb.raw_query('aaaaa'::text) raw_query(raw_query)
                               ^
-LOCATION:  CreatePlan, pgduckdb_planner.cpp:58
+LOCATION:  CreatePlan, pgduckdb_planner.cpp:66
 ERROR:  XX000: (PGDuckDB/pgduckdb_raw_query_cpp) Parser Error: syntax error at or near "aaaaa"
+
+LINE 1: aaaaa
+        ^
 
 LINE 1: aaaaa
         ^

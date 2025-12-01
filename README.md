@@ -244,7 +244,7 @@ We welcome contributions! Please see:
 
 ## Requirements
 
-- **PostgreSQL**: 14, 15, 16, 17
+- **PostgreSQL**: 14, 15, 16, 17, 18
 - **Operating Systems**: Ubuntu 22.04-24.04, macOS
 
 ## License

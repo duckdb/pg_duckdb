@@ -4,7 +4,6 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
@@ -25,6 +24,7 @@
 #include "pgduckdb/scan/postgres_scan.hpp"
 
 #include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/utility/signal_guard.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 
 extern "C" {
@@ -92,12 +92,16 @@ void
 DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
+	// Block signals before initializing DuckDB to ensure signal is handled by the Postgres main thread only
+	pgduckdb::ThreadSignalBlockGuard guard;
+
 	// Make sure directories provided in config exists
 	std::filesystem::create_directories(duckdb_temporary_directory);
 	std::filesystem::create_directories(duckdb_extension_directory);
 
 	duckdb::DBConfig config;
 	config.SetOptionByName("custom_user_agent", "pg_duckdb");
+	config.SetOptionByName("default_null_order", "postgres");
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
 	SET_DUCKDB_OPTION(enable_external_access);
@@ -176,8 +180,11 @@ DuckDBManager::Initialize() {
 	// Register the unsupported type optimizer to run after all other optimizations
 	dbconfig.optimizer_extensions.push_back(UnsupportedTypeOptimizer::GetOptimizerExtension());
 
+	auto &extension_manager = database->instance->GetExtensionManager();
+	auto extension_active_load = extension_manager.BeginLoad("pgduckdb");
+	D_ASSERT(extension_active_load);
 	duckdb::ExtensionInstallInfo extension_install_info;
-	database->instance->SetExtensionLoaded("pgduckdb", extension_install_info);
+	extension_active_load->FinishLoad(extension_install_info);
 
 	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 
@@ -271,6 +278,15 @@ DisabledFileSystems() {
 		return "LocalFileSystem";
 	}
 
+	/* Ensure LocalFileSystem is added only when it's absent from duckdb_disabled_filesystems. */
+	std::vector<std::string> fs_list = duckdb::StringUtil::Split(duckdb_disabled_filesystems, ',');
+	for (auto &fs : fs_list) {
+		std::string trimmed_fs = fs;
+		duckdb::StringUtil::Trim(trimmed_fs);
+		if (duckdb::StringUtil::CIEquals(trimmed_fs, "LocalFileSystem")) {
+			return duckdb_disabled_filesystems;
+		}
+	}
 	return "LocalFileSystem," + std::string(duckdb_disabled_filesystems);
 }
 

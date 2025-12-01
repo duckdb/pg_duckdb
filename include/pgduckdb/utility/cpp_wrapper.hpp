@@ -53,7 +53,7 @@ __CPPFunctionGuard__(const char *func_name, const char *file_name, int line, Fun
 	// }
 
 	// In this case the `PG_CATCH` block that will handle the error thrown below
-	// would try to reset the stack to the begining of `my_func` and crash
+	// would try to reset the stack to the beginning of `my_func` and crash
 	//
 	// So instead this should also be wrapped in a `InvokeCPPFunc` like:
 	//

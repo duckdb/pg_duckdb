@@ -89,7 +89,7 @@ SELECT * FROM (
 (1 row)
 
 -- NOTE: A single "r" is equivalent to a *. The prefix and postfix columns are
--- not explicitely selected, but still show up in the result. This is
+-- not explicitly selected, but still show up in the result. This is
 -- considered a bug, but it's one that we cannot easily solve because the "r"
 -- reference does not exist in the DuckDB query at all, so there's no way to
 -- reference only the columns coming from that part of the subquery. Very few
@@ -320,7 +320,7 @@ SELECT count("sepal.length") FROM read_parquet('../../data/iris.parquet');
 ERROR:  column "sepal.length" does not exist
 LINE 1: SELECT count("sepal.length") FROM read_parquet('../../data/i...
                      ^
-HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to to give the function the r alias.
+HINT:  If you use DuckDB functions like read_parquet, you need to use the r['colname'] syntax to use columns. If you're already doing that, maybe you forgot to give the function the r alias.
 -- But again only show it when we use functions that return duckdb.rows
 SELECT count("sepal.length") FROM generate_series(1, 100) a(x);
 ERROR:  column "sepal.length" does not exist
@@ -357,6 +357,9 @@ SELECT r['sepal.length'], r['filename']
 
 SELECT * FROM read_csv('../../non-existing-file.csv');
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: IO Error: No files found that match the pattern "../../non-existing-file.csv"
+
+LINE 1: SELECT read_csv.* FROM system.main.read_csv('../../non-existing-file.csv'::text...
+                               ^
 -- We override Postgres its default column name for subscript expressions. In
 -- the following example the column would normally be named "r", which is
 -- pretty non-descriptive especially when selecting multiple columns from the

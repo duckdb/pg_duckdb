@@ -23,7 +23,7 @@ EXPLAIN (COSTS OFF) EXECUTE f(2);
  │          Table: t         │
  │        Filters: a=2       │
  │                           │
- │         ~510 Rows         │
+ │         ~510 rows         │
  └───────────────────────────┘
  
  

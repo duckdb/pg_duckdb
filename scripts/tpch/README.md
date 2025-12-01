@@ -6,15 +6,15 @@ easiest way to do this is using docker:
 ```bash
 # Simply run this to enable motherduck:
 docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgduck -e MOTHERDUCK_TOKEN \
-    pgduckdb/pgduckdb:17-main
-# For real benchmarks it's recommended to configure Postgres its its settings,
+    pgduckdb/pgduckdb:18-main
+# For real benchmarks it's recommended to configure Postgres its settings,
 # as well as docker its --shm-size to be a good match for your machine. For the
 # best results this obviously requires tuning.
 # A decent starting point for an AWS c6a.8xlarge (32 vCPU, 64GB RAM) instance
 # is something like this:
 docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgduck -e MOTHERDUCK_TOKEN \
     --shm-size=64g \
-    pgduckdb/pgduckdb:17-main \
+    pgduckdb/pgduckdb:18-main \
     -c shared_buffers=32GB \
     -c max_parallel_workers=32 \
     -c max_parallel_workers_per_gather=8 \
@@ -23,12 +23,19 @@ docker run --rm -e POSTGRES_HOST_AUTH_METHOD=trust --network=host -d --name pgdu
 ```
 
 Then clone this repository and install the dependencies:
+```bash
+git clone https://github.com/duckdb/pg_duckdb
+cd pg_duckdb/scripts/tpch
+# Install uv if not already installed (recommended)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# Or use pip to install dependencies manually:
+# pip install pandas matplotlib psycopg[binary]
 ```
 
 After that you can use `./run.py` (see `run.py --help` for details) to run a
 TCPH-like benchmark. Check `./run.py --help` for details on the arguments. A
 simple example that compares the DuckDB engine and the Postgres engine on an
-extremely tiny dataset dataset (for real performance comparisons real use scale
+extremely tiny dataset (for real performance comparisons real use scale
 factors of 1 or higher):
 
 ```bash
@@ -79,3 +86,4 @@ runtime**:
 
 ```bash
 ./run.py --scale-factor 0.01 --duckdb-engine --pg-engine --motherduck
+```

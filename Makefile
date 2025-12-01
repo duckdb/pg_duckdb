@@ -13,7 +13,7 @@ OBJS += $(subst .c,.o, $(C_SRCS))
 # set to `make` to disable ninja
 DUCKDB_GEN ?= ninja
 # used to know what version of extensions to download
-DUCKDB_VERSION = v1.3.2
+DUCKDB_VERSION = v1.4.2
 # duckdb build tweaks
 DUCKDB_CMAKE_VARS = -DCXX_EXTRA=-fvisibility=default -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0
 # set to 1 to disable asserts in DuckDB. This is particularly useful in combinition with MotherDuck.
@@ -42,7 +42,7 @@ DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/libduckdb_bundle.a
-	PG_DUCKDB_LINK_FLAGS = $(FULL_DUCKDB_LIB)
+	PG_DUCKDB_LINK_FLAGS = $(FULL_DUCKDB_LIB) -lcurl
 else
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb$(DLSUFFIX)
 	PG_DUCKDB_LINK_FLAGS = -lduckdb
@@ -125,6 +125,9 @@ duckdb: $(FULL_DUCKDB_LIB)
 	git submodule update --init --recursive
 
 $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_extensions.cmake
+ifeq ($(DUCKDB_BUILD), ReleaseStatic)
+	mkdir -p third_party/duckdb/build/release/vcpkg_installed
+endif
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \

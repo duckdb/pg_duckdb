@@ -1117,8 +1117,8 @@ DuckdbShouldCallDDLHooks(PlannedStmt *pstmt) {
 	 */
 	if (IsA(parsetree, TransactionStmt)) {
 		/*
-		 * We could explicitely only check for BEGIN, but any others won't be
-		 * the first query in a session anyway (so initialzing caching doesn't
+		 * We could explicitly only check for BEGIN, but any others won't be
+		 * the first query in a session anyway (so initializing caching doesn't
 		 * matter).
 		 *
 		 * Secondly, we also don't want to do anything for transaction
@@ -1455,7 +1455,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 	 * 1. Each table owns two types:
 	 *	 a. the composite type matching its columns
 	 *	 b. the array of that composite type
-	 * 2. There can also be many implicitely connected things to a table, like sequences/constraints/etc
+	 * 2. There can also be many implicitly connected things to a table, like sequences/constraints/etc
 	 *
 	 * So here we try to count all the objects that are not connected to a
 	 * table. Sadly at this stage the objects are already deleted, so there's

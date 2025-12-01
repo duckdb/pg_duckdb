@@ -30,6 +30,9 @@ SET duckdb.force_execution = true;
 -- read_csv from the local filesystem should be disallowed
 SELECT count(r['sepal.length']) FROM read_csv('../../data/iris.csv') r;
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Permission Error: File system LocalFileSystem has been disabled by configuration
+
+LINE 1: SELECT count(r."sepal.length") AS count FROM system.main.read_csv('../../data/iris.csv'::text) r
+                                                     ^
 CALL duckdb.recycle_ddb();
 -- It's allowed for users with pg_read_server_files and pg_write_server_files.
 SET ROLE user4;
@@ -112,7 +115,31 @@ SELECT * FROM duckdb.install_extension('iceberg');
 
 TRUNCATE duckdb.extensions;
 SET duckdb.force_execution = true;
+-- Test Issue #931
 RESET ROLE;
+CALL duckdb.recycle_ddb();
+ALTER SYSTEM SET duckdb.disabled_filesystems = 'LocalFileSystem';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+CREATE USER admin_user IN ROLE duckdb_group;
+SET ROLE admin_user;
+CREATE TEMP TABLE duckdb_tbl (id int) USING DUCKDB;
+DROP TABLE duckdb_tbl;
+-- Cleanup
+RESET ROLE;
+CALL duckdb.recycle_ddb();
+ALTER SYSTEM SET duckdb.disabled_filesystems = '';
+SELECT pg_reload_conf();
+ pg_reload_conf 
+----------------
+ t
+(1 row)
+
+DROP USER admin_user;
 DROP TABLE t;
 DROP OWNED BY user1;
 DROP USER user1, user2, user3;

@@ -27,6 +27,25 @@ All of the DuckDB [json functions and aggregates](https://duckdb.org/docs/data/j
 | [`union_extract`](#union_extract) | Extracts a value from a union type by tag name. |
 | [`union_tag`](#union_tag) | Gets the tag name of the active member in a union type. |
 
+## MAP Functions
+
+All of the DuckDB [map functions](https://duckdb.org/docs/sql/data_types/map.html#map-functions).
+
+| Name | Description |
+| :--- | :---------- |
+| [`cardinality`](#cardinality) | Return the size of the map |
+| [`element_at`](#element_at) | Return the value for a given key as a list |
+| [`map_concat`](#map_concat) | Merge multiple maps |
+| [`map_contains`](#map_contains) | Check if a map contains a given key |
+| [`map_contains_entry`](#map_contains_entry) | Check if a map contains a given key-value pair |
+| [`map_contains_value`](#map_contains_value) | Check if a map contains a given value |
+| [`map_entries`](#map_entries) | Return a list of struct(k, v) for each key-value pair |
+| [`map_extract`](#map_extract) | Extract a value from a map using a key |
+| [`map_extract_value`](#map_extract_value) | Return the value for a given key or NULL |
+| [`map_from_entries`](#map_from_entries) | Create a map from an array of struct(k, v) |
+| [`map_keys`](#map_keys) | Get all keys from a map as a list |
+| [`map_values`](#map_values) | Get all values from a map as a list |
+
 ## Aggregates
 
 |Name|Description|
@@ -671,6 +690,277 @@ WHERE epoch(created_at) > 1640995200; -- After 2022-01-01
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | timestamp_expr | timestamp | The timestamp to convert to epoch seconds |
+
+#### <a name="map_extract"></a>`map_extract(map_col duckdb.map, key duckdb.unresolved_type) -> duckdb.unresolved_type`
+
+Extracts a value from a map using the specified key. If the key doesn't exist, returns an empty array.
+
+```sql
+-- Extract value from a map
+SELECT map_extract(r['map_col'], 'a') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {1}
+
+-- Extract non-existent key
+SELECT map_extract(r['map_col'], 'c') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {}
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract from |
+| key | duckdb.unresolved_type | The key to look up in the map |
+
+#### <a name="map_keys"></a>`map_keys(map_col duckdb.map) -> duckdb.unresolved_type`
+
+Returns all keys from a map as an array.
+
+```sql
+-- Get all keys from a map
+SELECT map_keys(r['map_col']) as keys 
+FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
+-- Returns: {a,b,c}
+
+-- Empty map
+SELECT map_keys(r['map_col']) as keys 
+FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
+-- Returns: {}
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract keys from |
+
+#### <a name="map_values"></a>`map_values(map_col duckdb.map) -> duckdb.unresolved_type`
+
+Returns all values from a map as an array.
+
+```sql
+-- Get all values from a map
+SELECT map_values(r['map_col']) as values 
+FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
+-- Returns: {1,2,3}
+
+-- Empty map
+SELECT map_values(r['map_col']) as values 
+FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
+-- Returns: {}
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract values from |
+
+#### <a name="cardinality"></a>`cardinality(map_col duckdb.map) -> numeric`
+
+Returns the size of the map (number of key-value pairs).
+
+```sql
+-- Get the number of entries in a map
+SELECT cardinality(r['map_col']) as size 
+FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
+-- Returns: 3
+
+-- Empty map
+SELECT cardinality(r['map_col']) as size 
+FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
+-- Returns: 0
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to get the size of |
+
+#### <a name="element_at"></a>`element_at(map_col duckdb.map, key duckdb.unresolved_type) -> duckdb.unresolved_type`
+
+Returns the value for a given key as an array.
+
+```sql
+-- Get value for a specific key
+SELECT element_at(r['map_col'], 'a') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {1}
+
+-- Non-existent key
+SELECT element_at(r['map_col'], 'c') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {}
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract from |
+| key | duckdb.unresolved_type | The key to look up in the map |
+
+#### <a name="map_concat"></a>`map_concat(map_col duckdb.map, map_col2 duckdb.map) -> duckdb.map`
+
+Merges multiple maps. On key collision, the value is taken from the last map.
+
+```sql
+-- Merge two maps
+SELECT map_concat(r1['map1'], r2['map2']) as merged 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map1 $$) r1, 
+     duckdb.query($$ SELECT MAP(['b', 'c'], [3, 4]) as map2 $$) r2;
+-- Returns: {a=1, b=3, c=4}
+
+-- Note: 'b' value from map2 (3) overwrites map1's value (2)
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The first map |
+| map_col2 | duckdb.map | The second map to merge |
+
+#### <a name="map_contains"></a>`map_contains(map_col duckdb.map, key duckdb.unresolved_type) -> boolean`
+
+Checks if a map contains a given key.
+
+```sql
+-- Check if key exists
+SELECT map_contains(r['map_col'], 'a') as has_key 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: t (true)
+
+-- Check for non-existent key
+SELECT map_contains(r['map_col'], 'c') as has_key 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: f (false)
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to check |
+| key | duckdb.unresolved_type | The key to search for |
+
+#### <a name="map_contains_entry"></a>`map_contains_entry(map_col duckdb.map, key duckdb.unresolved_type, value duckdb.unresolved_type) -> boolean`
+
+Checks if a map contains a given key-value pair.
+
+```sql
+-- Check if key-value pair exists
+SELECT map_contains_entry(r['map_col'], 'a', 1) as has_entry 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: t (true)
+
+-- Check with wrong value for existing key
+SELECT map_contains_entry(r['map_col'], 'a', 2) as has_entry 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: f (false)
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to check |
+| key | duckdb.unresolved_type | The key to search for |
+| value | duckdb.unresolved_type | The value to match with the key |
+
+#### <a name="map_contains_value"></a>`map_contains_value(map_col duckdb.map, value duckdb.unresolved_type) -> boolean`
+
+Checks if a map contains a given value.
+
+```sql
+-- Check if value exists
+SELECT map_contains_value(r['map_col'], 1) as has_value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: t (true)
+
+-- Check for non-existent value
+SELECT map_contains_value(r['map_col'], 3) as has_value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: f (false)
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to check |
+| value | duckdb.unresolved_type | The value to search for |
+
+#### <a name="map_entries"></a>`map_entries(map_col duckdb.map) -> duckdb.struct[]`
+
+Returns an array of struct(key, value) for each key-value pair in the map.
+
+```sql
+-- Get all key-value pairs as structs
+SELECT map_entries(r['map_col']) as entries 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: {"(a,1)","(b,2)"}
+
+-- Access individual struct fields
+SELECT unnest(map_entries(r['map_col'])) as entry 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract entries from |
+
+#### <a name="map_extract_value"></a>`map_extract_value(map_col duckdb.map, key duckdb.unresolved_type) -> duckdb.unresolved_type`
+
+Returns the value for a given key or NULL if the key is not contained in the map. 
+
+```sql
+-- Extract single value (not as array)
+SELECT map_extract_value(r['map_col'], 'a') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: 1
+
+-- Non-existent key returns NULL
+SELECT map_extract_value(r['map_col'], 'c') as value 
+FROM duckdb.query($$ SELECT MAP(['a', 'b'], [1, 2]) as map_col $$) r;
+-- Returns: NULL
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| map_col | duckdb.map | The map to extract from |
+| key | duckdb.unresolved_type | The key to look up in the map |
+
+#### <a name="map_from_entries"></a>`map_from_entries(entries duckdb.struct[]) -> duckdb.map`
+
+Creates a map from an array of struct(k, v).
+
+```sql
+-- Create map from array of structs
+SELECT map_from_entries(r['entries']) as new_map 
+FROM duckdb.query($$ 
+    SELECT [{'k': 'a', 'v': 1}, {'k': 'b', 'v': 2}] as entries 
+$$) r;
+-- Returns: {a=1, b=2}
+
+-- This is the inverse operation of map_entries
+SELECT map_from_entries(map_entries(r['map_col'])) as reconstructed 
+FROM duckdb.query($$ SELECT MAP(['x', 'y'], [10, 20]) as map_col $$) r;
+-- Returns: {x=10, y=20}
+```
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| entries | duckdb.struct[] | Array of structs with 'k' (key) and 'v' (value) fields |
 
 #### <a name="epoch_ms"></a>`epoch_ms(timestamp_expr)` -> `BIGINT`
 
