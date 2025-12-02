@@ -249,11 +249,6 @@ ConvertInt8Datum(const duckdb::Value &value) {
 }
 
 static Datum
-ConvertVarCharDatum(const duckdb::Value &value) {
-	return ConvertToStringDatum(value);
-}
-
-static Datum
 ConvertBinaryDatum(const duckdb::Value &value) {
 	auto str = value.GetValueUnsafe<duckdb::string_t>();
 	auto blob_len = str.GetSize();
@@ -800,16 +795,16 @@ struct PostgresTypeTraits<NUMERICOID> {
 	}
 };
 
-// VARCHAR type
+// TEXT type
 template <>
-struct PostgresTypeTraits<VARCHAROID> {
+struct PostgresTypeTraits<TEXTOID> {
 	static constexpr int16_t typlen = -1; // variable-length
 	static constexpr bool typbyval = false;
 	static constexpr char typalign = 'i';
 
 	static inline Datum
 	ToDatum(const duckdb::Value &val) {
-		return ConvertVarCharDatum(val);
+		return ConvertToStringDatum(val);
 	}
 };
 
@@ -869,7 +864,7 @@ using BitArray = PODArray<PostgresOIDMapping<VARBITOID>>;
 using TimeArray = PODArray<PostgresOIDMapping<TIMEOID>>;
 using TimeTzArray = PODArray<PostgresOIDMapping<TIMETZOID>>;
 using UUIDArray = PODArray<PostgresOIDMapping<UUIDOID>>;
-using VarCharArray = PODArray<PostgresOIDMapping<VARCHAROID>>;
+using TextArray = PODArray<PostgresOIDMapping<TEXTOID>>;
 using NumericArray = PODArray<PostgresOIDMapping<NUMERICOID>>;
 using ByteArray = PODArray<PostgresOIDMapping<BYTEAOID>>;
 
@@ -1127,7 +1122,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	case TEXTOID:
 	case JSONOID:
 	case VARCHAROID: {
-		slot->tts_values[col] = ConvertVarCharDatum(value);
+		slot->tts_values[col] = ConvertToStringDatum(value);
 		break;
 	}
 	case DATEOID: {
@@ -1197,7 +1192,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	case TEXTARRAYOID:
 	case JSONARRAYOID:
 	case VARCHARARRAYOID: {
-		ConvertDuckToPostgresArray<VarCharArray>(slot, value, col);
+		ConvertDuckToPostgresArray<TextArray>(slot, value, col);
 		break;
 	}
 	case DATEARRAYOID: {
