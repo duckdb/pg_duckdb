@@ -692,14 +692,39 @@ $$);
  {"{key1=10, key2=20}","{a=100}"} | {"{x=1, y=2, z=3}"} | {}
 (1 row)
 
-CREATE TABLE text_array AS SELECT * FROM read_parquet('../../data/text_array.parquet');
-SELECT * FROM text_array;
+CREATE TABLE text_array_ctas AS SELECT * FROM duckdb.query($$
+    SELECT ['box office', 'hollywood', '2025 Predictions', 'Movies', 'Culture', 'Best of 2025'] as tags
+$$);
+CREATE TABLE json_array_ctas AS SELECT * FROM duckdb.query($$
+    SELECT [{'key': 'value'}, {'foo': 'bar'}]::JSON[] as data
+$$);
+SELECT * FROM text_array_ctas;
                                    tags                                    
 ---------------------------------------------------------------------------
  {"box office",hollywood,"2025 Predictions",Movies,Culture,"Best of 2025"}
 (1 row)
 
-ANALYZE text_array;
+SELECT * FROM json_array_ctas;
+                                 data                                  
+-----------------------------------------------------------------------
+ {"{\"key\":\"value\",\"foo\":null}","{\"key\":null,\"foo\":\"bar\"}"}
+(1 row)
+
+-- Check column types
+SELECT attname, atttypid::regtype
+FROM pg_attribute
+WHERE attrelid IN ('text_array_ctas'::regclass, 'json_array_ctas'::regclass)
+  AND attnum > 0
+ORDER BY attrelid::regclass::text, attname;
+ attname | atttypid 
+---------+----------
+ data    | json[]
+ tags    | text[]
+(2 rows)
+
+-- This was crashing before treating DuckDB varchar array as text array
+ANALYZE text_array_ctas;
+ANALYZE json_array_ctas;
 -- Cleanup
 DROP TABLE int_array_0d;
 DROP TABLE int_array_1d;
@@ -721,6 +746,8 @@ DROP TABLE numeric_array_1d;
 DROP TABLE uuid_array_1d;
 DROP TABLE json_array_1d;
 DROP TABLE jsonb_array_1d;
+DROP TABLE text_array_ctas;
+DROP TABLE json_array_ctas;
 DROP TABLE regclass_array_1d;
 DROP TABLE char_array_2d;
 DROP TABLE smallint_array_2d;
