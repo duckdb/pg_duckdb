@@ -256,7 +256,12 @@ IsAllowedStatement(Query *query, bool throw_error) {
 } // namespace pgduckdb
 
 static PlannedStmt *
+#if PG_VERSION_NUM >= 190000
+DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
+                      ExplainState *es) {
+#else
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+#endif
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (pgduckdb::NeedsDuckdbExecution(parse)) {
 			pgduckdb::TriggerActivity();
@@ -286,15 +291,26 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 
 	pgduckdb::MarkStatementNotTopLevel();
 
+#if PG_VERSION_NUM >= 190000
+	return prev_planner_hook(parse, query_string, cursor_options, bound_params, es);
+#else
 	return prev_planner_hook(parse, query_string, cursor_options, bound_params);
+#endif
 }
 
 static PlannedStmt *
+#if PG_VERSION_NUM >= 190000
+DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
+                  ExplainState *es) {
+	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params, es);
+}
+#else
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params);
 }
+#endif
 
-bool
+static bool
 IsDuckdbPlan(PlannedStmt *stmt) {
 	Plan *plan = stmt->planTree;
 	if (!plan) {
@@ -402,7 +418,7 @@ DuckdbExecutorFinishHook(QueryDesc *queryDesc) {
 	InvokeCPPFunc(DuckdbExecutorFinishHook_Cpp, queryDesc);
 }
 
-void
+static void
 DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, ExplainState *es, const char *queryString,
                           ParamListInfo params, QueryEnvironment *queryEnv) {
 	/*
