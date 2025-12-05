@@ -1,3 +1,9 @@
+-- standard_conforming_strings = off (i.e. non-standard string literals) was
+-- removed in PG19, so this whole test only applies to older versions.
+SELECT current_setting('server_version_num')::int >= 190000 AS pg19 \gset
+\if :pg19
+\q
+\endif
 CREATE TABLE foo(t text);
 set standard_conforming_strings = off;
 INSERT INTO foo VALUES('foo\'bar');

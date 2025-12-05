@@ -24,6 +24,7 @@ extern "C" {
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/snapmgr.h"
+#include "utils/lsyscache.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -108,7 +109,11 @@ uint32 schema_hash_value;
  * IsExtensionRegistered for details).
  */
 static void
+#if PG_VERSION_NUM >= 190000
+InvalidateCaches(Datum /*arg*/, SysCacheIdentifier /*cache_id*/, uint32 hash_value) {
+#else
 InvalidateCaches(Datum /*arg*/, int /*cache_id*/, uint32 hash_value) {
+#endif
 	if (hash_value != schema_hash_value) {
 		return;
 	}

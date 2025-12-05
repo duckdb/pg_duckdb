@@ -3,10 +3,3 @@
 SELECT current_setting('server_version_num')::int >= 190000 AS pg19 \gset
 \if :pg19
 \q
-\endif
-CREATE TABLE foo(t text);
-set standard_conforming_strings = off;
-INSERT INTO foo VALUES('foo\'bar');
-select * from foo where t = 'foo\'bar';
-
-DROP TABLE foo;

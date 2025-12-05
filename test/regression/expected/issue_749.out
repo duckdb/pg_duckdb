@@ -1,4 +1,4 @@
-create temp table users (data jsonb);
+create table users (data jsonb);
 insert into users values ('{"a": 123}');
 create or replace function get_users() returns setof users as
 $$ SELECT * FROM users; $$
@@ -17,3 +17,5 @@ LINE 1: SELECT data, ordinality FROM get_users() WITH ORDINALITY get_users(data,
  {"a": 123} |          1
 (1 row)
 
+DROP FUNCTION get_users();
+DROP table users;

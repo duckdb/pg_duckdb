@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_map.hpp"
 
 #include "pgduckdb/pgduckdb_ddl.hpp"
+#include "pgduckdb/pgduckdb_table_am.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -107,7 +108,11 @@ duckdb_scan_getnextslot(TableScanDesc /*sscan*/, ScanDirection /*direction*/, Tu
  */
 
 static IndexFetchTableData *
+#if PG_VERSION_NUM >= 190000
+duckdb_index_fetch_begin(Relation /*rel*/, uint32 /*flags*/) {
+#else
 duckdb_index_fetch_begin(Relation /*rel*/) {
+#endif
 	NOT_IMPLEMENTED();
 }
 
@@ -164,14 +169,24 @@ duckdb_index_delete_tuples(Relation /*rel*/, TM_IndexDeleteOp * /*delstate*/) {
  */
 
 static void
+#if PG_VERSION_NUM >= 190000
+duckdb_tuple_insert(Relation /*relation*/, TupleTableSlot * /*slot*/, CommandId /*cid*/, uint32 /*options*/,
+                    BulkInsertState /*bistate*/) {
+#else
 duckdb_tuple_insert(Relation /*relation*/, TupleTableSlot * /*slot*/, CommandId /*cid*/, int /*options*/,
                     BulkInsertState /*bistate*/) {
+#endif
 	NOT_IMPLEMENTED();
 }
 
 static void
+#if PG_VERSION_NUM >= 190000
+duckdb_tuple_insert_speculative(Relation /*relation*/, TupleTableSlot * /*slot*/, CommandId /*cid*/, uint32 /*options*/,
+                                BulkInsertState /*bistate*/, uint32 /*specToken*/) {
+#else
 duckdb_tuple_insert_speculative(Relation /*relation*/, TupleTableSlot * /*slot*/, CommandId /*cid*/, int /*options*/,
                                 BulkInsertState /*bistate*/, uint32 /*specToken*/) {
+#endif
 	NOT_IMPLEMENTED();
 }
 
@@ -182,10 +197,25 @@ duckdb_tuple_complete_speculative(Relation /*relation*/, TupleTableSlot * /*slot
 }
 
 static void
+#if PG_VERSION_NUM >= 190000
+duckdb_multi_insert(Relation /*relation*/, TupleTableSlot ** /*slots*/, int /*ntuples*/, CommandId /*cid*/,
+                    uint32 /*options*/, BulkInsertState /*bistate*/) {
+#else
 duckdb_multi_insert(Relation /*relation*/, TupleTableSlot ** /*slots*/, int /*ntuples*/, CommandId /*cid*/,
                     int /*options*/, BulkInsertState /*bistate*/) {
+#endif
 	NOT_IMPLEMENTED();
 }
+
+#if PG_VERSION_NUM >= 190000
+
+static TM_Result
+duckdb_tuple_delete(Relation /*relation*/, ItemPointer /*tid*/, CommandId /*cid*/, uint32 /*options*/,
+                    Snapshot /*snapshot*/, Snapshot /*crosscheck*/, bool /*wait*/, TM_FailureData * /*tmfd*/) {
+	NOT_IMPLEMENTED();
+}
+
+#else
 
 static TM_Result
 duckdb_tuple_delete(Relation /*relation*/, ItemPointer /*tid*/, CommandId /*cid*/, Snapshot /*snapshot*/,
@@ -193,7 +223,18 @@ duckdb_tuple_delete(Relation /*relation*/, ItemPointer /*tid*/, CommandId /*cid*
 	NOT_IMPLEMENTED();
 }
 
-#if PG_VERSION_NUM >= 160000
+#endif
+
+#if PG_VERSION_NUM >= 190000
+
+static TM_Result
+duckdb_tuple_update(Relation /*relation*/, ItemPointer /*otid*/, TupleTableSlot * /*slot*/, CommandId /*cid*/,
+                    uint32 /*options*/, Snapshot /*snapshot*/, Snapshot /*crosscheck*/, bool /*wait*/,
+                    TM_FailureData * /*tmfd*/, LockTupleMode * /*lockmode*/, TU_UpdateIndexes * /*update_indexes*/) {
+	NOT_IMPLEMENTED();
+}
+
+#elif PG_VERSION_NUM >= 160000
 
 static TM_Result
 duckdb_tuple_update(Relation /*relation*/, ItemPointer /*otid*/, TupleTableSlot * /*slot*/, CommandId /*cid*/,
@@ -221,7 +262,11 @@ duckdb_tuple_lock(Relation /*relation*/, ItemPointer /*tid*/, Snapshot /*snapsho
 }
 
 static void
+#if PG_VERSION_NUM >= 190000
+duckdb_finish_bulk_insert(Relation /*relation*/, uint32 /*options*/) {
+#else
 duckdb_finish_bulk_insert(Relation /*relation*/, int /*options*/) {
+#endif
 	if (pgduckdb::top_level_duckdb_ddl_type == pgduckdb::DDLType::ALTER_TABLE) {
 		return;
 	}
@@ -286,17 +331,34 @@ duckdb_copy_data(Relation /*rel*/, const RelFileNode * /*newrnode*/) {
 
 #endif
 
+#if PG_VERSION_NUM >= 190000
+static void
+duckdb_copy_for_cluster(Relation /*OldTable*/, Relation /*NewTable*/, Relation /*OldIndex*/, bool /*use_sort*/,
+                        TransactionId /*OldestXmin*/, Snapshot /*snapshot*/, TransactionId * /*xid_cutoff*/,
+                        MultiXactId * /*multi_cutoff*/, double * /*num_tuples*/, double * /*tups_vacuumed*/,
+                        double * /*tups_recently_dead*/) {
+	NOT_IMPLEMENTED();
+}
+#else
 static void
 duckdb_copy_for_cluster(Relation /*OldTable*/, Relation /*NewTable*/, Relation /*OldIndex*/, bool /*use_sort*/,
                         TransactionId /*OldestXmin*/, TransactionId * /*xid_cutoff*/, MultiXactId * /*multi_cutoff*/,
                         double * /*num_tuples*/, double * /*tups_vacuumed*/, double * /*tups_recently_dead*/) {
 	NOT_IMPLEMENTED();
 }
+#endif
 
+#if PG_VERSION_NUM >= 190000
+static void
+duckdb_vacuum(Relation /*onerel*/, const VacuumParams * /*params*/, BufferAccessStrategy /*bstrategy*/) {
+	NOT_IMPLEMENTED();
+}
+#else
 static void
 duckdb_vacuum(Relation /*onerel*/, VacuumParams * /*params*/, BufferAccessStrategy /*bstrategy*/) {
 	NOT_IMPLEMENTED();
 }
+#endif
 
 #if PG_VERSION_NUM >= 170000
 
@@ -315,11 +377,19 @@ duckdb_scan_analyze_next_block(TableScanDesc /*scan*/, BlockNumber /*blockno*/, 
 }
 #endif
 
+#if PG_VERSION_NUM >= 190000
+static bool
+duckdb_scan_analyze_next_tuple(TableScanDesc /*scan*/, double * /*liverows*/, double * /*deadrows*/,
+                               TupleTableSlot * /*slot*/) {
+	NOT_IMPLEMENTED();
+}
+#else
 static bool
 duckdb_scan_analyze_next_tuple(TableScanDesc /*scan*/, TransactionId /*OldestXmin*/, double * /*liverows*/,
                                double * /*deadrows*/, TupleTableSlot * /*slot*/) {
 	NOT_IMPLEMENTED();
 }
+#endif
 
 static double
 duckdb_index_build_range_scan(Relation /*tableRelation*/, Relation /*indexRelation*/, IndexInfo * /*indexInfo*/,
@@ -497,6 +567,9 @@ duckdb_am_handler(FunctionCallInfo /*funcinfo*/) {
 
 static duckdb::unordered_map<const TableAmRoutine * /*am*/, duckdb::string /*name*/> duckdb_table_ams = {
     {&duckdb_methods, "duckdb"}};
+
+extern "C" __attribute__((visibility("default"))) bool RegisterDuckdbTableAm(const char *name,
+                                                                             const TableAmRoutine *am);
 
 extern "C" __attribute__((visibility("default"))) bool
 RegisterDuckdbTableAm(const char *name, const TableAmRoutine *am) {
