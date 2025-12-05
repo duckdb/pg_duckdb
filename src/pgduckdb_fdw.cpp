@@ -59,10 +59,15 @@ static const struct PGDuckDBFdwOption valid_md_options[] = {
 PG_FUNCTION_INFO_V1(pgduckdb_fdw_handler);
 Datum
 pgduckdb_fdw_handler(PG_FUNCTION_ARGS __attribute__((unused))) {
-	PG_RETURN_POINTER(nullptr);
+	/*
+	 * PG19's PointerGetDatum() uses a "true ? (X) : NULL" trick to reject
+	 * non-pointer arguments, but that ternary can't reconcile a bare nullptr
+	 * (std::nullptr_t) with NULL (long int) in C++, so pass a typed null pointer.
+	 */
+	PG_RETURN_POINTER((void *)nullptr);
 }
 
-bool
+static bool
 IsValidMdOption(const char *optname, Oid context) {
 	for (const struct PGDuckDBFdwOption *opt = valid_md_options; opt->optname != NULL; ++opt) {
 		if (opt->context == context && strcmp(optname, opt->optname) == 0) {
@@ -72,7 +77,7 @@ IsValidMdOption(const char *optname, Oid context) {
 	return false;
 }
 
-void
+static void
 ValidateHasRequiredMdOptions(List *options_list, Oid context) {
 	for (const struct PGDuckDBFdwOption *opt = valid_md_options; opt->optname != NULL; ++opt) {
 		if (!opt->required || opt->context != context) {
@@ -214,7 +219,7 @@ GetMotherDuckPostgresRoleOid(Oid server_oid) {
 	return role == nullptr ? server->owner : get_role_oid(role, true);
 }
 
-void
+static void
 ValidateHasNoMotherduckForeignServer() {
 	auto oid = FindMotherDuckForeignServerOid();
 	if (oid != InvalidOid) {
@@ -222,7 +227,7 @@ ValidateHasNoMotherduckForeignServer() {
 	}
 }
 
-void
+static void
 ValidateMdOptions(List *options_list, Oid context) {
 	// Make sure all options are valid
 	foreach_node(DefElem, def, options_list) {
@@ -235,7 +240,7 @@ ValidateMdOptions(List *options_list, Oid context) {
 	ValidateHasRequiredMdOptions(options_list, context);
 }
 
-Datum
+static Datum
 ValidateMotherduckServerFdw(List *options_list, Oid context) {
 	// For now only accept one MotherDuck FDW globally
 	// can be relaxed eventually with https://github.com/duckdb/pg_duckdb/pull/545

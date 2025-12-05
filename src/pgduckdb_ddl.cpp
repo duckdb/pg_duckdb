@@ -1175,7 +1175,7 @@ DuckdbTruncateTable(Oid relation_oid) {
  * ONCOMMIT_DROP, but this will also handle any new ON COMMIT clauses that
  * might be added to Postgres in future releases.
  */
-void
+static void
 CheckOnCommitSupport(OnCommitAction on_commit) {
 	switch (on_commit) {
 	case ONCOMMIT_NOOP:

@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "access/htup_details.h"
 #include "access/xact.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
@@ -224,7 +225,11 @@ DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 #if PG_VERSION_NUM >= 160000
 	result->permInfos = NULL;
 #endif
+#if PG_VERSION_NUM >= 190000
+	result->resultRelationRelids = NULL;
+#else
 	result->resultRelations = NULL;
+#endif
 	result->appendRelations = NULL;
 	result->subplans = NIL;
 	result->rewindPlanIDs = NULL;
