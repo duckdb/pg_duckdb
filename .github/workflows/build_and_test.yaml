@@ -54,8 +54,13 @@ jobs:
           type: ReleaseStatic
         - version: REL_18_STABLE
           type: Debug
+        - version: master
+          type: Release
 
     runs-on: ubuntu-24.04
+
+    env:
+      PG_MAX_VER: "19"
 
     steps:
       - name: Test details

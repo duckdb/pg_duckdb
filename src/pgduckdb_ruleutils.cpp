@@ -98,7 +98,7 @@ pgduckdb_is_fake_type(Oid type_oid) {
 	return false;
 }
 
-bool
+static bool
 pgduckdb_is_duckdb_subscript_type(Oid type_oid) {
 	if (pgduckdb_is_unresolved_type(type_oid)) {
 		return true;
