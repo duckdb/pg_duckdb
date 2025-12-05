@@ -145,7 +145,8 @@ char *duckdb_azure_transport_option_type = strdup("");
 void
 InitGUC() {
 	/* pg_duckdb specific GUCs */
-	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
+	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution,
+	                     PGC_USERSET, GUC_REPORT);
 
 	DefineCustomVariable("duckdb.unsafe_allow_execution_inside_functions", "Allow DuckDB execution inside functions",
 	                     &duckdb_unsafe_allow_execution_inside_functions, PGC_SUSET);

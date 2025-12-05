@@ -6,7 +6,7 @@
 
 ### `duckdb.force_execution`
 
-Forces queries to use DuckDB execution. This is only necessary when accessing only Postgres tables in a query. As soon as you use a DuckDB-only feature, DuckDB execution will be used automatically. DuckDB-only features include reading from DuckDB/MotherDuck tables, using DuckDB functions (like `read_parquet`), or `COPY` to remote storage (e.g., `s3://`).
+Forces queries to use DuckDB execution. This is only necessary when accessing only Postgres tables in a query. As soon as you use a DuckDB-only feature, DuckDB execution will be used automatically. DuckDB-only features include reading from DuckDB/MotherDuck tables, using DuckDB functions (like `read_parquet`), or `COPY` to remote storage (e.g., `s3://`). If you use PgBouncer you can add this setting to `track_extra_parameters` to make sure that PgBouncer correctly syncs this value across server connections based on what the client has set it to.
 
 - **Default**: `false`
 - **Access**: General
