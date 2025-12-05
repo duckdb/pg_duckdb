@@ -123,7 +123,7 @@ EstimateRelSize(Relation rel) {
 	return cardinality;
 }
 
-Oid
+static Oid
 PGGetRelidFromSchemaAndTable(const char *schema_name, const char *entry_name) {
 	List *name_list = NIL;
 	name_list = lappend(name_list, makeString(pstrdup(schema_name)));

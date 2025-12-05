@@ -14,6 +14,7 @@
 #include "duckdb/common/unordered_map.hpp"
 
 #include "pgduckdb/pgduckdb_ddl.hpp"
+#include "pgduckdb/pgduckdb_table_am.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -293,10 +294,17 @@ duckdb_copy_for_cluster(Relation /*OldTable*/, Relation /*NewTable*/, Relation /
 	NOT_IMPLEMENTED();
 }
 
+#if PG_VERSION_NUM >= 190000
+static void
+duckdb_vacuum(Relation /*onerel*/, const VacuumParams /*params*/, BufferAccessStrategy /*bstrategy*/) {
+	NOT_IMPLEMENTED();
+}
+#else
 static void
 duckdb_vacuum(Relation /*onerel*/, VacuumParams * /*params*/, BufferAccessStrategy /*bstrategy*/) {
 	NOT_IMPLEMENTED();
 }
+#endif
 
 #if PG_VERSION_NUM >= 170000
 
@@ -497,6 +505,9 @@ duckdb_am_handler(FunctionCallInfo /*funcinfo*/) {
 
 static duckdb::unordered_map<const TableAmRoutine * /*am*/, duckdb::string /*name*/> duckdb_table_ams = {
     {&duckdb_methods, "duckdb"}};
+
+extern "C" __attribute__((visibility("default"))) bool RegisterDuckdbTableAm(const char *name,
+                                                                             const TableAmRoutine *am);
 
 extern "C" __attribute__((visibility("default"))) bool
 RegisterDuckdbTableAm(const char *name, const TableAmRoutine *am) {

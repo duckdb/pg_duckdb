@@ -41,7 +41,7 @@ extern "C" {
 
 namespace pgduckdb {
 
-const char *
+static const char *
 GetSessionHint() {
 	if (!IsEmptyString(duckdb_motherduck_session_hint)) {
 		return duckdb_motherduck_session_hint;
@@ -231,7 +231,7 @@ DuckDBManager::Reset() {
 	UnclaimBgwSessionHint();
 }
 
-int64
+static int64
 GetSeqLastValue(const char *seq_name) {
 	Oid duckdb_namespace = get_namespace_oid("duckdb", false);
 	Oid table_seq_oid = get_relname_relid(seq_name, duckdb_namespace);

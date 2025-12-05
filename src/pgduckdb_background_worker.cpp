@@ -53,6 +53,7 @@ extern "C" {
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/snapmgr.h"
@@ -119,14 +120,14 @@ static BackgroundWorkerShmemStruct *BgwShmemStruct;
 MUST be called under a lock
 Get the BGW state for the current database (MyDatabaseId)
 */
-BgwStatePerDB *
+static BgwStatePerDB *
 FindState() {
 	bool found = false;
 	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_FIND, &found);
 	return found ? state : nullptr;
 }
 
-BgwStatePerDB *
+static BgwStatePerDB *
 GetState() {
 	Assert(is_background_worker);
 	auto state = FindState();
@@ -158,7 +159,7 @@ BackgroundWorkerCheck(duckdb::Connection &connection, int64_t &last_activity_cou
 
 bool CanTakeBgwLockForDatabase(Oid database_oid);
 
-bool
+static bool
 RunOneCheck(int64_t &last_activity_count) {
 	// No need to run if MD is not enabled.
 	if (!IsMotherDuckEnabled()) {
@@ -183,7 +184,7 @@ RunOneCheck(int64_t &last_activity_count) {
 	return false;
 }
 
-void
+static void
 SetBackgroundWorkerState(Oid database_oid) {
 	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &database_oid, HASH_ENTER, NULL);
 	state->latch = MyLatch;
@@ -191,7 +192,7 @@ SetBackgroundWorkerState(Oid database_oid) {
 	state->bgw_session_hint_is_reused = false;
 }
 
-void
+static void
 BgwMainLoop() {
 	elog(LOG, "pg_duckdb background worker: starting");
 
@@ -244,6 +245,8 @@ BgwMainLoop() {
 } // namespace pgduckdb
 
 extern "C" {
+
+PGDLLEXPORT void pgduckdb_background_worker_main(Datum main_arg);
 
 PGDLLEXPORT void
 pgduckdb_background_worker_main(Datum main_arg) {
@@ -369,7 +372,7 @@ ShmemStartup(void) {
 
 constexpr const char *PGDUCKDB_SYNC_WORKER_NAME = "pg_duckdb sync worker";
 
-bool
+static bool
 HasBgwRunningForMyDatabase() {
 	const auto num_backends = pgstat_fetch_stat_numbackends();
 	for (int backend_idx = 1; backend_idx <= num_backends; ++backend_idx) {
@@ -545,7 +548,7 @@ PossiblyReuseBgwSessionHint(void) {
 bool doing_motherduck_sync;
 char *current_motherduck_catalog_version;
 
-std::string
+static std::string
 PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is_default_db) {
 	if (is_default_db) {
 		/*
@@ -564,7 +567,7 @@ PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is
 	return oss.str();
 }
 
-std::string
+static std::string
 DropPgRelationString(const char *postgres_schema_name, const char *relation_name, char relation_kind,
                      bool with_cascade) {
 	std::ostringstream oss;
@@ -584,7 +587,7 @@ DropPgRelationString(const char *postgres_schema_name, const char *relation_name
 	return oss.str();
 }
 
-std::string
+static std::string
 CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 	std::ostringstream oss;
 
@@ -640,7 +643,7 @@ CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 	return oss.str();
 }
 
-std::string
+static std::string
 CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 	std::ostringstream oss;
 
@@ -702,7 +705,7 @@ CreatePgSchemaString(std::string postgres_schema_name) {
  * See the following thread for details:
  * https://www.postgresql.org/message-id/flat/CAFcNs%2Bp%2BfD5HEXEiZMZC1COnXkJCMnUK0%3Dr4agmZP%3D9Hi%2BYcJA%40mail.gmail.com
  */
-void
+static void
 SPI_commit_that_works_in_bgworker() {
 	if (is_background_worker) {
 		SPI_finish();
