@@ -1,6 +1,6 @@
 -- parquet
 CREATE FOREIGN TABLE external_parquet ()
-  SERVER ddb_foreign_server
+  SERVER duckdb
   OPTIONS (
     location '../../data/iris.parquet',
     format   'parquet',
@@ -19,7 +19,7 @@ SELECT count(*) FROM external_parquet_renamed_1;
 CREATE SCHEMA external_parquet_schema;
 SET search_path to external_parquet_schema;
 CREATE FOREIGN TABLE external_parquet ()
-  SERVER ddb_foreign_server
+  SERVER duckdb
   OPTIONS (
     location '../../data/iris.parquet'
   );
@@ -29,7 +29,7 @@ RESET search_path;
 
 -- CSV
 CREATE FOREIGN TABLE external_csv ()
-  SERVER ddb_foreign_server
+  SERVER duckdb
   OPTIONS (
     location '../../data/iris.csv',
     format   'csv',
@@ -41,7 +41,7 @@ SELECT min("sepal.length"), max("sepal.length") FROM external_csv;
 
 -- JSON
 CREATE FOREIGN TABLE external_json ()
-  SERVER ddb_foreign_server
+  SERVER duckdb
   OPTIONS (
     location '../../data/table.json',
     format   'json'
