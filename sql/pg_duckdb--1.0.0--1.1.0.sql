@@ -104,11 +104,11 @@ RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_simple_secret';
 
-CREATE SERVER ddb_foreign_server
+CREATE SERVER duckdb
 TYPE 'foreign_table'
 FOREIGN DATA WRAPPER duckdb;
 
-GRANT USAGE ON FOREIGN SERVER ddb_foreign_server TO public;
+GRANT USAGE ON FOREIGN SERVER duckdb TO public;
 
 DROP EVENT TRIGGER IF EXISTS duckdb_alter_table_trigger;
 CREATE EVENT TRIGGER duckdb_alter_foreign_table_trigger ON ddl_command_end

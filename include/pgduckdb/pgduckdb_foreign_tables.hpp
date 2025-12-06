@@ -7,7 +7,7 @@
 namespace pgduckdb {
 
 // The name of the foreign server that we use for DuckDB foreign tables.
-#define DUCKDB_FOREIGN_SERVER_NAME "ddb_foreign_server"
+#define DUCKDB_FOREIGN_SERVER_NAME "duckdb"
 
 void ValidateForeignIdentifier(const char *identifier, const char *context);
 
