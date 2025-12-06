@@ -33,6 +33,7 @@ extern "C" {
 #include "pgduckdb/utility/copy.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
+#include "pgduckdb/pgduckdb_foreign_tables.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
@@ -66,7 +67,10 @@ ContainsCatalogTable(List *rtes) {
 
 static bool
 IsDuckdbTable(Oid relid) {
-	return pgduckdb::DuckdbTableAmGetName(relid) != nullptr;
+	if (pgduckdb::DuckdbTableAmGetName(relid) != nullptr) {
+		return true;
+	}
+	return pgduckdb::pgduckdb_is_foreign_relation(relid);
 }
 
 static bool
@@ -77,6 +81,15 @@ ContainsDuckdbTables(List *rte_list) {
 		}
 	}
 	return false;
+}
+
+static void
+LoadDuckdbForeignTables(List *rte_list) {
+	foreach_node(RangeTblEntry, rte, rte_list) {
+		if (pgduckdb::pgduckdb_is_foreign_relation(rte->relid)) {
+			pgduckdb::EnsureForeignTableLoaded(rte->relid);
+		}
+	}
 }
 
 static bool
@@ -114,6 +127,33 @@ ContainsDuckdbItems(Node *node, void *context) {
 	return expression_tree_walker(node, ContainsDuckdbItems, context);
 #else
 	return expression_tree_walker(node, (bool (*)())((void *)ContainsDuckdbItems), context);
+#endif
+}
+
+/*
+ * Tree walker to ensure all duckdb foreign tables in the query are loaded into DuckDB.
+ * This traverses the query tree and loads any foreign tables found in range tables.
+ */
+static Node *
+LoadForeignTablesWalker(Node *node, void *context) {
+	if (node == NULL)
+		return node;
+
+	if (IsA(node, Query)) {
+		Query *query = castNode(Query, node);
+		LoadDuckdbForeignTables(query->rtable);
+#if PG_VERSION_NUM >= 160000
+		query_tree_mutator(query, LoadForeignTablesWalker, context, 0);
+#else
+		query_tree_mutator(query, (Node * (*)())((void *)LoadForeignTablesWalker), context, 0);
+#endif
+		return node;
+	}
+
+#if PG_VERSION_NUM >= 160000
+	return expression_tree_mutator(node, LoadForeignTablesWalker, context);
+#else
+	return expression_tree_mutator(node, (Node * (*)())((void *)LoadForeignTablesWalker), context);
 #endif
 }
 
@@ -259,6 +299,7 @@ static PlannedStmt *
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (pgduckdb::NeedsDuckdbExecution(parse)) {
+			::LoadForeignTablesWalker((Node *)parse, NULL);
 			pgduckdb::TriggerActivity();
 			pgduckdb::IsAllowedStatement(parse, true);
 
