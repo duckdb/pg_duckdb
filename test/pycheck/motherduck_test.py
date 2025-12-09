@@ -171,7 +171,7 @@ def test_md_multiple_databases(pg_two_dbs):
 
 @pytest.mark.timeout(120)
 @pytest.mark.skipif(not can_run_md_multi_user_tests(), reason="needs multiple users")
-def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
+def test_md_read_scaling_two_databases(pg_two_dbs, md_test_user):
     cur1, cur2 = pg_two_dbs
     ## FIXME - If the DB is not unique, the test fails
     db_name = "test_md_db" + str(uuid.uuid4()).replace("-", "")
@@ -192,7 +192,7 @@ def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
         with MDClient.create(user2_spec) as cli2:
             # First check in the second connection that we can see the table
             for _ in wait_until("Failed to get t1 records", timeout=70):
-                with suppress(duckdb.duckdb.CatalogException):
+                with suppress(duckdb.CatalogException):
                     cli2.run_query(f"REFRESH DATABASE {db_name};")
                     if cli2.run_query("SELECT * FROM t1") == [(41, "hello world")]:
                         break
@@ -216,6 +216,84 @@ def test_md_read_scaling_two_connections(pg_two_dbs, md_test_user):
                 match=r"Cannot execute statement of type \"INSERT\" on database \".*\" which is attached in read-only mode!",
             ):
                 cur2.sql("INSERT INTO t1 VALUES (42, 'nope')")
+
+
+@pytest.mark.timeout(120)
+@pytest.mark.skipif(not can_run_md_multi_user_tests(), reason="needs multiple users")
+def test_md_read_scaling_same_database(
+    pg: Postgres, md_cur, default_db_name, md_test_user
+):
+    """Test read/write setup with different tokens for different PG users.
+
+    The server owner (current user) gets a write token, and a separate
+    PostgreSQL user gets a read-scaling token. This tests the setup described
+    in the docs where both read and write access is needed from the same
+    pg_duckdb instance.
+    """
+    write_cur = md_cur
+    read_token = create_read_scaling_token(md_test_user, token_name="test_rs_multi")[
+        "token"
+    ]
+
+    # Create a read-only PostgreSQL user
+    pg.create_user("reader_user", args=psycopg.sql.SQL("IN ROLE duckdb_group"))
+
+    # Give the read-only user a read-scaling token
+    pg.sql(f"""
+        CREATE USER MAPPING FOR reader_user
+            SERVER motherduck
+            OPTIONS (token '{read_token}')
+    """)
+
+    write_cur.sql("CREATE TABLE t1(a int, b varchar)")
+    write_cur.sql("INSERT INTO t1 VALUES (1, 'hello')")
+
+    # Verify write user can read
+    assert write_cur.sql("SELECT * FROM t1") == (1, "hello")
+
+    # Verify write user can write more data
+    write_cur.sql("INSERT INTO t1 VALUES (2, 'world')")
+    assert write_cur.sql("SELECT count(*) FROM t1") == 2
+
+    # Now connect as the read-only user
+    with pg.cur(user="reader_user") as read_cur:
+        # Wait for the table to be visible (read-scaling replicas are eventually consistent)
+        for _ in wait_until("Table t1 was not synced to reader", timeout=70):
+            try:
+                read_cur.sql(
+                    f"SELECT duckdb.raw_query($$ REFRESH DATABASE {default_db_name}; $$)"
+                )
+                if read_cur.sql("SELECT count(*) FROM t1") == 2:
+                    break
+            except psycopg.errors.InternalError_ as e:
+                # We're in a partial state because the table does not exist on
+                # the writer but not on the reader. Currently the duckdb binder
+                # then tries to see if a file exists, and that fails with
+                # LocalFileSystem has been disabled.
+                #
+                # Note: This error is very confusing and the error message is
+                # greatly improved in DuckDB 1.5. See:
+                # https://github.com/duckdb/duckdb/pull/20077
+                if (
+                    "Prepared query returned an error: Permission Error: File system LocalFileSystem has been disabled by configuration"
+                    in str(e)
+                ):
+                    continue
+                raise
+
+        # Verify read user can read
+        result = read_cur.sql("SELECT * FROM t1 ORDER BY a")
+        assert result == [(1, "hello"), (2, "world")]
+
+        # Verify read user cannot write
+        with pytest.raises(
+            psycopg.errors.InternalError_,
+            match=r'Cannot execute statement of type "INSERT" on database ".*" which is attached in read-only mode!',
+        ):
+            read_cur.sql("INSERT INTO t1 VALUES (3, 'nope')")
+
+    # Clean up
+    pg.sql("DROP SERVER motherduck CASCADE")
 
 
 def test_md_ctas(md_cur: Cursor, ddb):
@@ -252,7 +330,7 @@ def test_md_alter_table(md_cur: Cursor):
 
     md_cur.sql("ALTER TABLE t ADD COLUMN b int DEFAULT 100")
     for _ in wait_until("Failed to add column"):
-        with suppress(duckdb.duckdb.CatalogException):
+        with suppress(duckdb.CatalogException):
             if md_cur.sql("SELECT * FROM t") == (1, 100):
                 break
 
