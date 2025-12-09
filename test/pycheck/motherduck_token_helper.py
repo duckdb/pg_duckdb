@@ -61,7 +61,7 @@ def create_test_user():
     user = make_request(
         uri="/tuc/createTestUser",
         headers={"Content-Type": "application/json"},
-        data_json={"token": token},
+        data_json={"token": token, "region": "aws-us-east-1"},
     )
     print(f"Created user with email='{user['testEmail']}' and id='{user['id']}'")
     return user

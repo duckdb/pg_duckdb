@@ -139,6 +139,52 @@ WHERE orders.created_at > '2024-01-01';
 To switch your MotherDuck Token, first call:
 `DROP SERVER MOTHERDUCK CASCADE;` and then reinitialize with a new token: `CALL duckdb.enable_motherduck('new_token');`
 
+## Simple Read-scaling Setup
+
+pg_duckdb supports [read-scaling tokens for MotherDuck](https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/read-scaling), you can simply use a read-scaling token as the token when enabling MotherDuck:
+
+```sql
+CALL duckdb.enable_motherduck('<your_read_scaling_token>', '<database_name>');
+```
+
+You can create a read-scaling token in the [MotherDuck UI](https://motherduck.com/docs/key-tasks/authenticating-and-connecting-to-motherduck/) by selecting "Read Scaling Token" as the token type.
+
+## Read-scaling setup with Read Write Setup
+
+For applications that need both read and write access from the same PostgreSQL instance, you can configure different PostgreSQL users with different MotherDuck tokens. In this case the server owner should get a write token, so it can sync the latest versions of tables from MotherDuck. Any Postgres users that should use read-scaling should get a read-scaling token.
+
+### Step 1: Create the MotherDuck server with a write token
+
+```sql
+-- Create the server (no token here)
+CALL duckdb.enable_motherduck('<your_write_token>', '<your_database_name>');
+```
+
+### Step 2: Create a read-only user with a read-scaling token
+
+```sql
+-- Create a PostgreSQL user for read-only access
+CREATE USER reader_user IN ROLE duckdb_group;
+
+-- Give them a read-scaling token
+CREATE USER MAPPING FOR reader_user
+    SERVER motherduck
+    OPTIONS (token '<your_read_scaling_token>');
+```
+
+### Usage
+
+```sql
+-- As the server owner: full read-write access
+INSERT INTO my_table VALUES (1, 'data');
+SELECT * FROM my_table;
+
+-- As reader_user: read-only access that scales across read-scaling ducklings
+SELECT * FROM my_table;  -- works
+INSERT INTO my_table VALUES (2, 'more');  -- fails with read-only error
+```
+
+
 ## Debugging
 
 If some tables or schemas are not appearing as expected, check your Postgres log file. The background worker that automatically syncs tables may have encountered an error, which will be reported in the logs, often with information on how to resolve the issue.
