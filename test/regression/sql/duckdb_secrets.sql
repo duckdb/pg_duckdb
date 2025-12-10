@@ -154,6 +154,24 @@ SELECT duckdb.create_simple_secret('GCS', 'my third key', 'my secret'); -- No se
 -- Invalid
 SELECT duckdb.create_simple_secret('BadType', '-', '-');
 
+-- Test backwards compatibility with 1.0.0 SQL signature (9 parameters instead of 11)
+CREATE FUNCTION create_simple_secret_v1_0_0(
+    type          TEXT,
+    key_id        TEXT,
+    secret        TEXT,
+    session_token TEXT DEFAULT '',
+    region        TEXT DEFAULT '',
+    url_style     TEXT DEFAULT '',
+    provider      TEXT DEFAULT '',
+    endpoint      TEXT DEFAULT '',
+    scope         TEXT DEFAULT ''
+)
+RETURNS TEXT
+LANGUAGE C AS 'pg_duckdb', 'pgduckdb_create_simple_secret';
+
+SELECT create_simple_secret_v1_0_0('S3', 'compat-key', 'compat-secret', '', 'us-west-2');
+DROP FUNCTION create_simple_secret_v1_0_0;
+
 -- 2. Azure
 
 SELECT duckdb.create_azure_secret('hello world', scope := 'az://myaccount.blob.core.windows.net/');
@@ -164,7 +182,8 @@ SELECT fs.srvname, fs.srvtype, fs.srvoptions, um.umoptions
 FROM pg_foreign_server fs
 INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
 LEFT JOIN pg_user_mapping um ON um.umserver = fs.oid
-WHERE fdw.fdwname = 'duckdb' AND fs.srvtype != 'motherduck';
+WHERE fdw.fdwname = 'duckdb' AND fs.srvtype != 'motherduck'
+ORDER BY fs.srvname;
 
 SELECT * FROM duckdb.query($$
     SELECT
@@ -196,6 +215,7 @@ DROP SERVER
     simple_s3_secret_1,
     simple_s3_secret_2,
     simple_s3_secret_3,
+    simple_s3_secret_4,
     simple_r2_secret,
     simple_r2_secret_1,
     simple_gcs_secret,

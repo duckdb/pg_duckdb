@@ -55,6 +55,9 @@ ReadOptions(FunctionCallInfo fcinfo, int start, const std::vector<std::string> &
 	std::ostringstream oss;
 	int opt_idx = start;
 	for (const auto &name : names) {
+		if (opt_idx >= PG_NARGS()) {
+			break;
+		}
 		auto value = GetArgString(fcinfo, opt_idx++);
 		if (value.empty()) {
 			continue;

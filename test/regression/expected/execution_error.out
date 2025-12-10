@@ -24,4 +24,4 @@ LINE 1: aaaaa
 
 LINE 1: aaaaa
         ^
-LOCATION:  pgduckdb_raw_query_cpp, pgduckdb_options.cpp:77
+LOCATION:  pgduckdb_raw_query_cpp, pgduckdb_options.cpp:80
