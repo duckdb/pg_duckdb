@@ -1,19 +1,21 @@
 /*-------------------------------------------------------------------------
  *
- * ruleutils.c
+ * pg_ruleutils_19.c
  *	  Functions to convert stored expressions/querytrees back to
  *	  source text
  *
  * Portions Copyright (c) 1996-2025, PostgreSQL Global Development Group
  * Portions Copyright (c) 1994, Regents of the University of California
  *
- *
- * IDENTIFICATION
- *	  src/backend/utils/adt/ruleutils.c
- *
  *-------------------------------------------------------------------------
  */
 #include "postgres.h"
+
+#if PG_VERSION_NUM >= 190000 && PG_VERSION_NUM < 200000
+
+#pragma GCC diagnostic ignored "-Wshadow" // ignore any compiler warnings
+#pragma GCC diagnostic ignored "-Wsign-compare" // ignore any compiler warnings
+#pragma GCC diagnostic ignored "-Wunused-parameter" // ignore any compiler warnings
 
 #include <ctype.h>
 #include <unistd.h>
@@ -65,12 +67,16 @@
 #include "utils/lsyscache.h"
 #include "utils/partcache.h"
 #include "utils/rel.h"
-#include "utils/ruleutils.h"
+#include "pgduckdb/vendor/pg_ruleutils.h"
 #include "utils/snapmgr.h"
 #include "utils/syscache.h"
 #include "utils/typcache.h"
 #include "utils/varlena.h"
 #include "utils/xml.h"
+
+#include "pgduckdb/pgduckdb_ruleutils.h"
+
+#include "pgduckdb/utility/rename_ruleutils.h"
 
 /* ----------
  * Pretty formatting constants
@@ -92,7 +98,7 @@
 /* Standard conversion of a "bool pretty" option to detailed flags */
 #define GET_PRETTY_FLAGS(pretty) \
 	((pretty) ? (PRETTYFLAG_PAREN | PRETTYFLAG_INDENT | PRETTYFLAG_SCHEMA) \
-	 : PRETTYFLAG_INDENT)
+	 : 0)
 
 /* Default line length for pretty-print wrapping: 0 means wrap always */
 #define WRAP_COLUMN_DEFAULT		0
@@ -525,8 +531,6 @@ static void get_opclass_name(Oid opclass, Oid actual_datatype,
 static Node *processIndirection(Node *node, deparse_context *context);
 static void printSubscripts(SubscriptingRef *sbsref, deparse_context *context);
 static char *get_relation_name(Oid relid);
-static char *generate_relation_name(Oid relid, List *namespaces);
-static char *generate_qualified_relation_name(Oid relid);
 static char *generate_function_name(Oid funcid, int nargs,
 									List *argnames, Oid *argtypes,
 									bool has_variadic, bool *use_variadic_p,
@@ -5776,6 +5780,9 @@ get_with_clause(Query *query, deparse_context *context)
 	if (query->cteList == NIL)
 		return;
 
+	bool previous_outermost_query = outermost_query;
+	outermost_query = false;
+
 	if (PRETTY_INDENT(context))
 	{
 		context->indentLevel += PRETTYINDENT_STD;
@@ -5899,6 +5906,8 @@ get_with_clause(Query *query, deparse_context *context)
 	}
 	else
 		appendStringInfoChar(buf, ' ');
+
+	outermost_query = previous_outermost_query;
 }
 
 /* ----------
@@ -6255,11 +6264,22 @@ get_target_list(List *targetList, deparse_context *context)
 
 	sep = " ";
 	colno = 0;
+
+	StarReconstructionContext star_reconstruction_context = {0};
+	star_reconstruction_context.target_list = targetList;
+
+	bool outermost_targetlist = outermost_query;
+	outermost_query = false;
+
 	foreach(l, targetList)
 	{
 		TargetEntry *tle = (TargetEntry *) lfirst(l);
 		char	   *colname;
 		char	   *attname;
+
+		if (pgduckdb_reconstruct_star_step(&star_reconstruction_context, l)) {
+			continue;
+		}
 
 		if (tle->resjunk)
 			continue;			/* ignore junk entries */
@@ -6285,8 +6305,10 @@ get_target_list(List *targetList, deparse_context *context)
 		 * directly so that we can tell it to do the right thing, and so that
 		 * we can get the attribute name which is the default AS label.
 		 */
+		Var *var = NULL;
 		if (tle->expr && (IsA(tle->expr, Var)))
 		{
+			var = (Var *) tle->expr;
 			attname = get_variable((Var *) tle->expr, 0, true, context);
 		}
 		else
@@ -6313,8 +6335,33 @@ get_target_list(List *targetList, deparse_context *context)
 		else
 			colname = tle->resname;
 
+		/*
+		 * This makes sure we don't add Postgres its bad default alias to the
+		 * duckdb.row type.
+		 */
+		bool duckdb_skip_as = pgduckdb_var_is_duckdb_row(var);
+
+		/*
+		 * For r['abc'] expressions we don't want the column name to be r, but
+		 * instead we want it to be "abc". We can only to do this for the
+		 * target list of the outside most query though to make sure references
+		 * to the column name are still valid.
+		 */
+		if (!duckdb_skip_as && outermost_targetlist) {
+			Var *subscript_var = pgduckdb_duckdb_subscript_var(tle->expr);
+			if (subscript_var) {
+				/*
+				 * This cannot be moved to pgduckdb_ruleutils, because of
+				 * the reliance on the non-public deparse_namespace type.
+				 */
+				deparse_namespace* dpns = (deparse_namespace *) list_nth(context->namespaces,
+															subscript_var->varlevelsup);
+				duckdb_skip_as = !pgduckdb_subscript_has_custom_alias(dpns->plan, dpns->rtable, subscript_var, colname);
+			}
+		}
+
 		/* Show AS unless the column's name is correct as-is */
-		if (colname)			/* resname could be NULL */
+		if (colname && !duckdb_skip_as)			/* resname could be NULL */
 		{
 			if (attname == NULL || strcmp(attname, colname) != 0)
 				appendStringInfo(&targetbuf, " AS %s", quote_identifier(colname));
@@ -7013,6 +7060,16 @@ get_insert_query_def(Query *query, deparse_context *context)
 
 		if (tle->resjunk)
 			continue;			/* ignore junk entries */
+
+		/*
+		 * If it's an INSERT ... SELECT or multi-row VALUES, the entry
+		 * with the default value is ignored unless it is specified
+		 */
+		if (values_rte || select_rte)
+		{
+			if (!pgduckdb_is_not_default_expr((Node *) tle, NULL))
+				continue;
+		}
 
 		appendStringInfoString(buf, sep);
 		sep = ", ";
@@ -7806,6 +7863,11 @@ get_variable(Var *var, int levelsup, bool istoplevel, deparse_context *context)
 		if (attnum > colinfo->num_cols)
 			elog(ERROR, "invalid attnum %d for relation \"%s\"",
 				 attnum, rte->eref->aliasname);
+
+		if (pgduckdb_var_is_duckdb_row(var)) {
+			return pgduckdb_write_row_refname(context->buf, refname, istoplevel);
+		}
+
 		attname = colinfo->colnames[attnum - 1];
 
 		/*
@@ -9377,8 +9439,9 @@ get_rule_expr(Node *node, deparse_context *context,
 				}
 				else
 				{
+					SubscriptingRef *new_sbsref = pgduckdb_strip_first_subscript(sbsref, context->buf);
 					/* Just an ordinary container fetch, so print subscripts */
-					printSubscripts(sbsref, context);
+					printSubscripts(new_sbsref, context);
 				}
 			}
 			break;
@@ -10774,12 +10837,13 @@ get_oper_expr(OpExpr *expr, deparse_context *context)
 		Node	   *arg1 = (Node *) linitial(args);
 		Node	   *arg2 = (Node *) lsecond(args);
 
+		char* op_name = generate_operator_name(opno, exprType(arg1), exprType(arg2));
+		void* ctx = pg_duckdb_get_oper_expr_make_ctx(op_name, &arg1, &arg2);
+		pg_duckdb_get_oper_expr_prefix(buf, ctx);
 		get_rule_expr_paren(arg1, context, true, (Node *) expr);
-		appendStringInfo(buf, " %s ",
-						 generate_operator_name(opno,
-												exprType(arg1),
-												exprType(arg2)));
+		pg_duckdb_get_oper_expr_middle(buf, ctx);
 		get_rule_expr_paren(arg2, context, true, (Node *) expr);
+		pg_duckdb_get_oper_expr_suffix(buf, ctx);
 	}
 	else
 	{
@@ -11468,6 +11532,10 @@ get_coercion_expr(Node *arg, deparse_context *context,
 			appendStringInfoChar(buf, ')');
 	}
 
+	if (pgduckdb_is_fake_type(resulttype)) {
+		return;
+	}
+
 	/*
 	 * Never emit resulttype(arg) functional notation. A pg_proc entry could
 	 * take precedence, and a resulttype in pg_temp would require schema
@@ -11502,6 +11570,8 @@ get_const_expr(Const *constval, deparse_context *context, int showtype)
 	bool		typIsVarlena;
 	char	   *extval;
 	bool		needlabel = false;
+
+	showtype = pgduckdb_show_type(constval, showtype);
 
 	if (constval->constisnull)
 	{
@@ -12421,6 +12491,9 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 				break;
 			case RTE_SUBQUERY:
 				/* Subquery RTE */
+				if (pgduckdb_replace_subquery_with_view(rte->subquery, buf)) {
+					break;
+				}
 				appendStringInfoChar(buf, '(');
 				get_query_def(rte->subquery, buf, context->namespaces, NULL,
 							  true,
@@ -12543,8 +12616,18 @@ get_from_clause_item(Node *jtnode, Query *query, deparse_context *context)
 		/* Print the relation alias, if needed */
 		get_rte_alias(rte, varno, false, context);
 
+		if (pgduckdb_func_returns_duckdb_row(rtfunc1)) {
+			/*
+			 * We never want to print column aliases for functions that return
+			 * a duckdb.row. The common pattern is for people to not provide an
+			 * explicit column alias (i.e. "r" becomes "r(r)"). This obviously
+			 * is a naming collision and DuckDB resolves that in the opposite
+			 * way that we want. Never adding column aliases for duckdb.row
+			 * avoids this conflict.
+			 */
+		}
 		/* Print the column definitions or aliases, if needed */
-		if (rtfunc1 && rtfunc1->funccolnames != NIL)
+		else if (rtfunc1 && rtfunc1->funccolnames != NIL)
 		{
 			/* Reconstruct the columndef list, which is also the aliases */
 			get_from_clause_coldeflist(rtfunc1, colinfo, context);
@@ -12870,6 +12953,10 @@ get_tablesample_def(TableSampleClause *tablesample, deparse_context *context)
 		if (nargs++ > 0)
 			appendStringInfoString(buf, ", ");
 		get_rule_expr((Node *) lfirst(l), context, false);
+		const char *tsm_name = generate_function_name(tablesample->tsmhandler, 1,
+											NIL, argtypes,
+											false, NULL, EXPR_KIND_NONE);
+		pgduckdb_add_tablesample_percent(tsm_name, buf, list_length(tablesample->args));
 	}
 	appendStringInfoChar(buf, ')');
 
@@ -13172,102 +13259,6 @@ get_relation_name(Oid relid)
 	return relname;
 }
 
-/*
- * generate_relation_name
- *		Compute the name to display for a relation specified by OID
- *
- * The result includes all necessary quoting and schema-prefixing.
- *
- * If namespaces isn't NIL, it must be a list of deparse_namespace nodes.
- * We will forcibly qualify the relation name if it equals any CTE name
- * visible in the namespace list.
- */
-static char *
-generate_relation_name(Oid relid, List *namespaces)
-{
-	HeapTuple	tp;
-	Form_pg_class reltup;
-	bool		need_qual;
-	ListCell   *nslist;
-	char	   *relname;
-	char	   *nspname;
-	char	   *result;
-
-	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
-	if (!HeapTupleIsValid(tp))
-		elog(ERROR, "cache lookup failed for relation %u", relid);
-	reltup = (Form_pg_class) GETSTRUCT(tp);
-	relname = NameStr(reltup->relname);
-
-	/* Check for conflicting CTE name */
-	need_qual = false;
-	foreach(nslist, namespaces)
-	{
-		deparse_namespace *dpns = (deparse_namespace *) lfirst(nslist);
-		ListCell   *ctlist;
-
-		foreach(ctlist, dpns->ctes)
-		{
-			CommonTableExpr *cte = (CommonTableExpr *) lfirst(ctlist);
-
-			if (strcmp(cte->ctename, relname) == 0)
-			{
-				need_qual = true;
-				break;
-			}
-		}
-		if (need_qual)
-			break;
-	}
-
-	/* Otherwise, qualify the name if not visible in search path */
-	if (!need_qual)
-		need_qual = !RelationIsVisible(relid);
-
-	if (need_qual)
-		nspname = get_namespace_name_or_temp(reltup->relnamespace);
-	else
-		nspname = NULL;
-
-	result = quote_qualified_identifier(nspname, relname);
-
-	ReleaseSysCache(tp);
-
-	return result;
-}
-
-/*
- * generate_qualified_relation_name
- *		Compute the name to display for a relation specified by OID
- *
- * As above, but unconditionally schema-qualify the name.
- */
-static char *
-generate_qualified_relation_name(Oid relid)
-{
-	HeapTuple	tp;
-	Form_pg_class reltup;
-	char	   *relname;
-	char	   *nspname;
-	char	   *result;
-
-	tp = SearchSysCache1(RELOID, ObjectIdGetDatum(relid));
-	if (!HeapTupleIsValid(tp))
-		elog(ERROR, "cache lookup failed for relation %u", relid);
-	reltup = (Form_pg_class) GETSTRUCT(tp);
-	relname = NameStr(reltup->relname);
-
-	nspname = get_namespace_name_or_temp(reltup->relnamespace);
-	if (!nspname)
-		elog(ERROR, "cache lookup failed for namespace %u",
-			 reltup->relnamespace);
-
-	result = quote_qualified_identifier(nspname, relname);
-
-	ReleaseSysCache(tp);
-
-	return result;
-}
 
 /*
  * generate_function_name
@@ -13306,6 +13297,10 @@ generate_function_name(Oid funcid, int nargs, List *argnames, Oid *argtypes,
 	Oid			p_vatype;
 	Oid		   *p_true_typeids;
 	bool		force_qualify = false;
+
+	result = pgduckdb_function_name(funcid, use_variadic_p);
+	if (result)
+		return result;
 
 	proctup = SearchSysCache1(PROCOID, ObjectIdGetDatum(funcid));
 	if (!HeapTupleIsValid(proctup))
@@ -13743,3 +13738,5 @@ get_range_partbound_string(List *bound_datums)
 
 	return buf.data;
 }
+
+#endif
