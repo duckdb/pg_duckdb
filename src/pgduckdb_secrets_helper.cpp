@@ -89,7 +89,7 @@ ListDuckDBCreateSecretQueries() {
 			fs.oid as server_oid
 		FROM pg_foreign_server fs
 		INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
-		WHERE fdw.fdwname = 'duckdb' AND fs.srvtype != 'motherduck';
+		WHERE fdw.fdwname = 'duckdb' AND fs.srvtype != 'motherduck' AND fs.srvtype != 'foreign_table';
 	)";
 
 	auto ret = SPI_exec(query, 0);
