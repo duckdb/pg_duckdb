@@ -37,9 +37,47 @@ extern "C" {
 #include "nodes/value.h"      // strVal
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "utils/lsyscache.h"  // get_relname_relid
+#include "storage/ipc.h"      // on_proc_exit
 }
 
 namespace pgduckdb {
+
+/*
+ * Make sure the hook is registered once for a backend.
+ * This flag is also used to get a unique temporary directory name
+ * for in-memory duckdb instance, otherwise they clash on the same
+ * temporary file names. The fix is on pg_duckdb side until
+ * https://github.com/duckdb/duckdb/issues/15173 is resolved.
+ */
+static bool set_up_instance_directory_hook = false;
+
+/*
+ * The length is 37, because a UUID has 36 characters and we need to add a NULL
+ * byte. The approach is the same as for bgw_session_hint.
+ */
+static char duckdb_instance_directory[37];
+void RemoveTemporaryDirectory(int code = 0, Datum arg = 0);
+
+std::string
+GetInstanceTempDir() {
+	if (!set_up_instance_directory_hook) {
+		Datum random_uuid = DirectFunctionCall1(gen_random_uuid, 0);
+		Datum uuid_datum = DirectFunctionCall1(uuid_out, random_uuid);
+		char *uuid_cstr = DatumGetCString(uuid_datum);
+		strcpy(duckdb_instance_directory, uuid_cstr);
+
+		/* Set up the flag first to avoid re-generating uuid in the hook */
+		set_up_instance_directory_hook = true;
+		on_proc_exit(RemoveTemporaryDirectory, 0);
+	}
+
+	return (std::string)duckdb_temporary_directory + "/" + (std::string)duckdb_instance_directory;
+}
+
+void
+RemoveTemporaryDirectory(int /*code*/, Datum /*arg*/) {
+	std::filesystem::remove_all(GetInstanceTempDir());
+}
 
 const char *
 GetSessionHint() {
@@ -100,6 +138,12 @@ DuckDBManager::Initialize() {
 	std::filesystem::create_directories(duckdb_extension_directory);
 
 	duckdb::DBConfig config;
+
+	// Special case for temporary directory, that should be unique for every instance
+	std::string instance_temp_directory = GetInstanceTempDir();
+	config.options.temporary_directory = instance_temp_directory;
+	std::filesystem::create_directory(instance_temp_directory);
+
 	config.SetOptionByName("custom_user_agent", "pg_duckdb");
 	config.SetOptionByName("default_null_order", "postgres");
 
@@ -108,7 +152,6 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(allow_community_extensions);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
-	SET_DUCKDB_OPTION(temporary_directory);
 	SET_DUCKDB_OPTION(extension_directory);
 
 	if (duckdb_maximum_memory > 0) {
@@ -219,6 +262,7 @@ DuckDBManager::Reset() {
 	delete manager_instance.database;
 	manager_instance.database = nullptr;
 	UnclaimBgwSessionHint();
+	RemoveTemporaryDirectory();
 }
 
 int64
