@@ -65,27 +65,42 @@ SELECT * FROM t;
 SET duckdb.force_execution = true;
 -- Let's add RLS
 RESET ROLE;
+INSERT INTO t VALUES (1), (2), (3);
 ALTER TABLE t ENABLE ROW LEVEL SECURITY;
--- Should still be allowed, we're superuser
+CREATE POLICY t_policy ON t FOR SELECT USING (a <= 2);
+-- Should still see all rows, superusers bypass RLS
 SELECT * FROM t;
  a 
 ---
-(0 rows)
+ 1
+ 2
+ 3
+(3 rows)
 
--- Should fall back to PG execution, because we don't support RLS
+-- Should only see rows where a <= 2 due to RLS policy
 SET ROLE user1;
 SELECT * FROM t;
-WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error: Not implemented Error: Cannot use "t" relation in a DuckDB query, because RLS is enabled on it
  a 
 ---
-(0 rows)
+ 1
+ 2
+(2 rows)
 
--- Should fail because we require duckdb execution so no fallback
-SELECT public.approx_count_distinct(a) FROM t;
-ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Not implemented Error: Cannot use "t" relation in a DuckDB query, because RLS is enabled on it
+-- Should also enforce RLS via raw_query
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
-ERROR:  (PGDuckDB/pgduckdb_raw_query_cpp) Not implemented Error: Cannot use "t" relation in a DuckDB query, because RLS is enabled on it
+NOTICE:  result: a	
+INTEGER	
+[ Rows: 2]
+1
+2
+
+
+ raw_query 
+-----------
+ 
+(1 row)
+
 SET duckdb.force_execution = true;
 -- Extension installation
 SET duckdb.force_execution = false;

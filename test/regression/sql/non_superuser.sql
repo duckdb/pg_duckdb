@@ -48,17 +48,17 @@ SET duckdb.force_execution = true;
 
 -- Let's add RLS
 RESET ROLE;
+INSERT INTO t VALUES (1), (2), (3);
 ALTER TABLE t ENABLE ROW LEVEL SECURITY;
--- Should still be allowed, we're superuser
+CREATE POLICY t_policy ON t FOR SELECT USING (a <= 2);
+-- Should still see all rows, superusers bypass RLS
 SELECT * FROM t;
 
--- Should fall back to PG execution, because we don't support RLS
+-- Should only see rows where a <= 2 due to RLS policy
 SET ROLE user1;
 SELECT * FROM t;
 
--- Should fail because we require duckdb execution so no fallback
-SELECT public.approx_count_distinct(a) FROM t;
-
+-- Should also enforce RLS via raw_query
 SET duckdb.force_execution = false;
 SELECT * FROM duckdb.raw_query($$ SELECT * FROM pgduckdb.public.t $$);
 SET duckdb.force_execution = true;

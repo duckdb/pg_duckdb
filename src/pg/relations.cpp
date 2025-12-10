@@ -82,12 +82,6 @@ ExecStoreMinimalTupleUnsafe(MinimalTuple minmal_tuple, TupleTableSlot *slot, boo
 
 Relation
 OpenRelation(Oid relationId) {
-	if (PostgresFunctionGuard(check_enable_rls, relationId, InvalidOid, false) == RLS_ENABLED) {
-		throw duckdb::NotImplementedException(
-		    "Cannot use \"%s\" relation in a DuckDB query, because RLS is enabled on it",
-		    PostgresFunctionGuard(get_rel_name, relationId));
-	}
-
 	/*
 	 * We always open & close the relation using the
 	 * TopTransactionResourceOwner to avoid having to close the relation

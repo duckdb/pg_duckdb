@@ -56,16 +56,6 @@ AppendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *co
 
 	table_close(rel, AccessShareLock);
 
-	/*
-	 * RLS for relation. We should probably bail out at this point.
-	 */
-	if (check_enable_rls(relid, InvalidOid, false) == RLS_ENABLED) {
-		ereport(ERROR,
-		        (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-		         errmsg("(PGDuckDB/CreateRelationCopyString) RLS enabled on \"%s\", cannot use DuckDB based COPY",
-		                RelationGetRelationName(rel))));
-	}
-
 	appendStringInfoString(info, pgduckdb_relation_name(relid));
 	if (!copy_stmt->attlist) {
 		return;
