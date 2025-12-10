@@ -141,6 +141,7 @@ char *duckdb_extension_directory = MakeDirName("extensions");
 char *duckdb_max_temp_directory_size = strdup("");
 char *duckdb_default_collation = strdup("");
 char *duckdb_azure_transport_option_type = strdup("");
+char *duckdb_custom_user_agent = strdup("");
 
 void
 InitGUC() {
@@ -243,6 +244,9 @@ InitGUC() {
 	                           "Set the azure_transport_option_type for DuckDB Azure extension. Can be used to "
 	                           "workaround issue #882: https://github.com/duckdb/pg_duckdb/issues/882",
 	                           &duckdb_azure_transport_option_type, PGC_SUSET);
+
+	DefineCustomDuckDBVariable("duckdb.custom_user_agent", "Additional user agent string to append to 'pg_duckdb'",
+	                           &duckdb_custom_user_agent, PGC_SUSET);
 }
 
 #if PG_VERSION_NUM < 160000
