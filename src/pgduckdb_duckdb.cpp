@@ -100,7 +100,12 @@ DuckDBManager::Initialize() {
 	std::filesystem::create_directories(duckdb_extension_directory);
 
 	duckdb::DBConfig config;
-	config.SetOptionByName("custom_user_agent", "pg_duckdb");
+	std::string user_agent = "pg_duckdb";
+	if (!IsEmptyString(duckdb_custom_user_agent)) {
+		user_agent += " ";
+		user_agent += duckdb_custom_user_agent;
+	}
+	config.SetOptionByName("custom_user_agent", user_agent);
 	config.SetOptionByName("default_null_order", "postgres");
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);

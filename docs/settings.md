@@ -147,6 +147,13 @@ Allows mixed transactions between DuckDB and PostgreSQL. This experimental setti
 - **Default**: `false`
 - **Access**: General
 
+### `duckdb.custom_user_agent`
+
+Appends a custom string to the DuckDB user agent (this is appended after `pg_duckdb`).
+
+- **Default**: `""` (empty string)
+- **Access**: Superuser-only
+
 ## File System and Storage
 
 ### `duckdb.temporary_directory`
