@@ -625,6 +625,12 @@ CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 		oss << " AS " << duckdb::KeywordHelper::WriteQuoted(*it_names, '"');
 	}
 
+	if (first) {
+		elog(WARNING, "Skipping view %s.%s.%s because none of its columns had supported types", info.catalog.c_str(),
+		     info.schema.c_str(), info.view_name.c_str());
+		return "";
+	}
+
 	oss << " FROM duckdb.view(";
 	oss << duckdb::KeywordHelper::WriteQuoted(info.catalog) << ", ";
 	oss << duckdb::KeywordHelper::WriteQuoted(info.schema) << ", ";
