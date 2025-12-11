@@ -4,9 +4,10 @@
 
 Any tagged release are built and pushed with the tag `$POSTGRES_VERSION-$TAG`, for example:
 
-* `15-v1.0.0`
-* `16-v1.0.0`
-* `17-v1.0.0`
+* `15-v1.1.0`
+* `16-v1.1.0`
+* `17-v1.1.0`
+* `18-v1.1.0`
 
 ### Nightly builds
 
