@@ -171,7 +171,7 @@ FindUserMapping(Oid userid, Oid serverid, bool with_options) {
 	return um;
 }
 
-const char *
+static const char *
 GetQueryError(const char *query, List *server_options) {
 	// Create a new connection on the DB so we can create the secret and rollback without modifying the transaction
 	// state of the main connection.

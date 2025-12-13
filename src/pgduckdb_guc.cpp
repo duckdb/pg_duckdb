@@ -306,7 +306,13 @@ void
 InitGUCHooks() {
 	// timezone
 	{
-		if (auto *tz = (struct config_string *)find_option("TimeZone", false, false, 0); tz != nullptr) {
+		struct config_generic *tz_generic = find_option("TimeZone", false, false, 0);
+		if (tz_generic != nullptr && tz_generic->vartype == PGC_STRING) {
+#if PG_VERSION_NUM < 190000
+			struct config_string *tz = (config_string *)tz_generic;
+#else
+			struct config_string *tz = &tz_generic->_string;
+#endif
 			prev_tz_assign_hook = tz->assign_hook;
 			tz->assign_hook = DuckAssignTimezone;
 		}

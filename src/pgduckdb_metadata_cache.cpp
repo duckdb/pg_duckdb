@@ -24,6 +24,7 @@ extern "C" {
 #include "utils/rel.h"
 #include "utils/syscache.h"
 #include "utils/snapmgr.h"
+#include "utils/lsyscache.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
