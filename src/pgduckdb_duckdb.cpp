@@ -102,8 +102,13 @@ DuckDBManager::Initialize() {
 	duckdb::DBConfig config;
 	std::string user_agent = "pg_duckdb";
 	if (!IsEmptyString(duckdb_custom_user_agent)) {
-		user_agent += " ";
+		user_agent += ", ";
 		user_agent += duckdb_custom_user_agent;
+	}
+	const char *application_name = pg::GetConfigOption("application_name", true);
+	if (!IsEmptyString(application_name)) {
+		user_agent += ", ";
+		user_agent += application_name;
 	}
 	config.SetOptionByName("custom_user_agent", user_agent);
 	config.SetOptionByName("default_null_order", "postgres");
