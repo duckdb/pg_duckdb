@@ -1,3 +1,12 @@
+# 1.1.1 (2025-12-16)
+
+## Changed
+
+- Update to DuckDB v1.4.3. ([#985])
+- Include `application_name` DuckDB its `custom_user_agent` setting.
+
+[#985]: https://github.com/duckdb/pg_duckdb/pull/985
+
 # 1.1.0 (2025-12-11)
 
 ## Added
