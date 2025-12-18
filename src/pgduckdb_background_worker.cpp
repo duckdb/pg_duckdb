@@ -20,6 +20,7 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pg/relations.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/pg/string_utils.hpp"
 #include <string>
 #include <unordered_map>
 #include <sys/file.h>
@@ -624,6 +625,12 @@ CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 		oss << " AS " << duckdb::KeywordHelper::WriteQuoted(*it_names, '"');
 	}
 
+	if (first) {
+		elog(WARNING, "Skipping view %s.%s.%s because none of its columns had supported types", info.catalog.c_str(),
+		     info.schema.c_str(), info.view_name.c_str());
+		return "";
+	}
+
 	oss << " FROM duckdb.view(";
 	oss << duckdb::KeywordHelper::WriteQuoted(info.catalog) << ", ";
 	oss << duckdb::KeywordHelper::WriteQuoted(info.schema) << ", ";
@@ -1001,15 +1008,10 @@ DropRelation(const char *fully_qualified_table, char relation_kind, bool drop_wi
  */
 static bool
 GrantAccessToSchema(const char *postgres_schema_name) {
-	if (pgduckdb::MotherDuckPostgresUserOid() == BOOTSTRAP_SUPERUSERID) {
-		/*
-		 * We don't need to grant access to the bootstrap superuser. It already
-		 * has every access it might need.
-		 */
-		return true;
-	}
-
-	/* Grant access to the schema to the duckdb user on the tables */
+	/*
+	 * Grant full access to the schema to the motherduck postgres user so that
+	 * it can create and drop the tables.
+	 */
 	const char *grant_query = psprintf("GRANT ALL ON SCHEMA %s TO %s", quote_identifier(postgres_schema_name),
 	                                   quote_identifier(MotherDuckPostgresUserName()));
 	if (!SPI_run_utility_command(grant_query)) {
@@ -1018,6 +1020,25 @@ GrantAccessToSchema(const char *postgres_schema_name) {
 		         errdetail("While executing command: %s", grant_query), errhint("See previous WARNING for details")));
 		return false;
 	}
+
+	/*
+	 * Grant USAGE on the schema to duckdb.postgres_role so that members of
+	 * that role can SELECT from the synced tables. The MotherDuckPostgresUser
+	 * owns the tables, but regular users who are members of duckdb.postgres_role
+	 * need USAGE on the schema to access them.
+	 */
+	if (!IsEmptyString(duckdb_postgres_role) && !AreStringEqual(duckdb_postgres_role, MotherDuckPostgresUserName())) {
+		grant_query = psprintf("GRANT USAGE ON SCHEMA %s TO %s", quote_identifier(postgres_schema_name),
+		                       quote_identifier(duckdb_postgres_role));
+		if (!SPI_run_utility_command(grant_query)) {
+			ereport(WARNING, (errmsg("Failed to grant USAGE on MotherDuck schema %s to %s", postgres_schema_name,
+			                         duckdb_postgres_role),
+			                  errdetail("While executing command: %s", grant_query),
+			                  errhint("See previous WARNING for details")));
+			return false;
+		}
+	}
+
 	return true;
 }
 

@@ -398,6 +398,28 @@ SELECT
     CAST([] AS MAP(VARCHAR, INTEGER)[]) as empty_map_array
 $$);
 
+CREATE TABLE text_array_ctas AS SELECT * FROM duckdb.query($$
+    SELECT ['box office', 'hollywood', '2025 Predictions', 'Movies', 'Culture', 'Best of 2025'] as tags
+$$);
+
+CREATE TABLE json_array_ctas AS SELECT * FROM duckdb.query($$
+    SELECT [{'key': 'value'}, {'foo': 'bar'}]::JSON[] as data
+$$);
+
+SELECT * FROM text_array_ctas;
+SELECT * FROM json_array_ctas;
+
+-- Check column types
+SELECT attname, atttypid::regtype
+FROM pg_attribute
+WHERE attrelid IN ('text_array_ctas'::regclass, 'json_array_ctas'::regclass)
+  AND attnum > 0
+ORDER BY attrelid::regclass::text, attname;
+
+-- This was crashing before treating DuckDB varchar array as text array
+ANALYZE text_array_ctas;
+ANALYZE json_array_ctas;
+
 -- Cleanup
 DROP TABLE int_array_0d;
 DROP TABLE int_array_1d;
@@ -419,6 +441,8 @@ DROP TABLE numeric_array_1d;
 DROP TABLE uuid_array_1d;
 DROP TABLE json_array_1d;
 DROP TABLE jsonb_array_1d;
+DROP TABLE text_array_ctas;
+DROP TABLE json_array_ctas;
 DROP TABLE regclass_array_1d;
 DROP TABLE char_array_2d;
 DROP TABLE smallint_array_2d;

@@ -9,6 +9,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "access/xact.h"
 #include "utils/guc.h"
 #include "utils/guc_tables.h"
 #include "miscadmin.h" // DataDir
@@ -140,11 +141,13 @@ char *duckdb_extension_directory = MakeDirName("extensions");
 char *duckdb_max_temp_directory_size = strdup("");
 char *duckdb_default_collation = strdup("");
 char *duckdb_azure_transport_option_type = strdup("");
+char *duckdb_custom_user_agent = strdup("");
 
 void
 InitGUC() {
 	/* pg_duckdb specific GUCs */
-	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution);
+	DefineCustomVariable("duckdb.force_execution", "Force queries to use DuckDB execution", &duckdb_force_execution,
+	                     PGC_USERSET, GUC_REPORT);
 
 	DefineCustomVariable("duckdb.unsafe_allow_execution_inside_functions", "Allow DuckDB execution inside functions",
 	                     &duckdb_unsafe_allow_execution_inside_functions, PGC_SUSET);
@@ -241,6 +244,9 @@ InitGUC() {
 	                           "Set the azure_transport_option_type for DuckDB Azure extension. Can be used to "
 	                           "workaround issue #882: https://github.com/duckdb/pg_duckdb/issues/882",
 	                           &duckdb_azure_transport_option_type, PGC_SUSET);
+
+	DefineCustomDuckDBVariable("duckdb.custom_user_agent", "Additional user agent string to append to 'pg_duckdb'",
+	                           &duckdb_custom_user_agent, PGC_SUSET);
 }
 
 #if PG_VERSION_NUM < 160000
@@ -272,8 +278,12 @@ DuckAssignTimezone_Cpp(const char *tz) {
 		return;
 	}
 
-	// update duckdb tz
-	auto connection = pgduckdb::DuckDBManager::GetConnection(false);
+	// Update timezone in DuckDB too.
+	// This uses GetConnectionUnsafe because GetConnection requires a
+	// transaction context to be active in Postgres to be able to call
+	// RefreshConnectionState, and GUCs can be changed outside of transaction
+	// blocks (for instance by being reverted due to SET LOCAL or by SIGHUP)
+	auto connection = pgduckdb::DuckDBManager::GetConnectionUnsafe();
 	pgduckdb::DuckDBQueryOrThrow(*connection, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(tz));
 	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'TimeZone'=%s", tz);
 }

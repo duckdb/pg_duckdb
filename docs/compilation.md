@@ -7,6 +7,7 @@ This guide provides detailed instructions for building `pg_duckdb` from source o
 ```bash
 git clone https://github.com/duckdb/pg_duckdb
 cd pg_duckdb
+git submodule update --init --recursive
 ```
 
 And then you can follow the instructions for your operating system below
@@ -56,7 +57,7 @@ sudo apt install \
     build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev \
     libxslt-dev libssl-dev libxml2-utils xsltproc pkg-config libc++-dev \
     libc++abi-dev libglib2.0-dev libtinfo6 cmake libstdc++-12-dev \
-    liblz4-dev ninja-build
+    liblz4-dev libcurl4-openssl-dev ninja-build
 ```
 
 ### Build and Install

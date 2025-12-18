@@ -1,3 +1,64 @@
+# 1.1.1 (2025-12-16)
+
+## Changed
+
+- Update to DuckDB v1.4.3. ([#985])
+- Include `application_name` DuckDB its `custom_user_agent` setting.
+
+[#985]: https://github.com/duckdb/pg_duckdb/pull/985
+
+# 1.1.0 (2025-12-11)
+
+## Added
+
+- Add support for DuckDB MAP functions: `map_extract`, `map_keys`, `map_values`, `cardinality`, `element_at`, `map_concat`, `map_contains`, `map_contains_entry`, `map_contains_value`, `map_entries`, `map_extract_value`, and `map_from_entries`. ([#902])
+- Add `use_ssl` parameter to `duckdb.create_simple_secret()` function. ([#956])
+- Add support for arrays of DuckDB-only types (`STRUCT[]`, `UNION[]`, `MAP[]`). ([#922])
+- Support reading from PostgreSQL tables with RLS enabled. ([#986])
+- Add `duckdb.custom_user_agent` setting. ([#989])
+- Support multiple users with different MotherDuck tokens (read-write and read-only) within the same Postgres database. ([#984])
+
+## Changed
+
+- Update to DuckDB v1.4.2. ([#933], [#961], [#973])
+- Mark `duckdb.force_execution` as `GUC_REPORT` for better PgBouncer integration. When using PgBouncer in transaction pooling mode, you should configure `track_extra_parameters` to include `duckdb.force_execution` to ensure it syncs correctly across connections. ([#982])
+- Make PostgreSQL 18 the default version in Docker images. ([#959])
+
+## Fixed
+
+- Check Postgres user privileges when querying through views. Previously a user could bypass access restrictions by querying a view that the user had access to, even if the user did not have access to the underlying tables. ([#949])
+- Fix NULL ordering behavior to align with PostgreSQL: `ORDER BY col DESC` now uses `NULLS FIRST` semantics (matching Postgres), instead of `NULLS LAST` which was the previous DuckDB default. ([#935])
+- Fix crash in the timezone assign hook when run outside of a transaction context. ([#981])
+- Fix type mismatch where DuckDB `VARCHAR[]` was incorrectly mapped to PostgreSQL `VARCHAR[]` instead of `TEXT[]`. This caused assertion failures during statistics analysis. ([#979])
+- Fix syncing of MotherDuck views that only contain columns with types not supported by pg_duckdb. Such views are now skipped instead of generating invalid SQL. ([#990])
+- Fix error that blocked pg_duckdb usage when `duckdb.disabled_filesystems` was set to `LocalFileSystem` explicitly. ([#937])
+- Fix undefined symbol error when building with GCC 8 on RHEL 8 and other older systems. ([#920])
+- Fix cases where unsupported Postgres types (like too-wide decimals) used in expressions could cause DuckDB internal errors instead of a clear error message. ([#921])
+- Make MotherDuck setup script in Dockerfile work correctly with PostgreSQL 14. ([#932])
+- Fix crash that could happen when DuckDB threads would receive a signal. ([#936])
+
+[#902]: https://github.com/duckdb/pg_duckdb/pull/902
+[#956]: https://github.com/duckdb/pg_duckdb/pull/956
+[#922]: https://github.com/duckdb/pg_duckdb/pull/922
+[#986]: https://github.com/duckdb/pg_duckdb/pull/986
+[#949]: https://github.com/duckdb/pg_duckdb/pull/949
+[#933]: https://github.com/duckdb/pg_duckdb/pull/933
+[#961]: https://github.com/duckdb/pg_duckdb/pull/961
+[#973]: https://github.com/duckdb/pg_duckdb/pull/973
+[#982]: https://github.com/duckdb/pg_duckdb/pull/982
+[#935]: https://github.com/duckdb/pg_duckdb/pull/935
+[#959]: https://github.com/duckdb/pg_duckdb/pull/959
+[#936]: https://github.com/duckdb/pg_duckdb/pull/936
+[#981]: https://github.com/duckdb/pg_duckdb/pull/981
+[#979]: https://github.com/duckdb/pg_duckdb/pull/979
+[#937]: https://github.com/duckdb/pg_duckdb/pull/937
+[#920]: https://github.com/duckdb/pg_duckdb/pull/920
+[#921]: https://github.com/duckdb/pg_duckdb/pull/921
+[#932]: https://github.com/duckdb/pg_duckdb/pull/932
+[#984]: https://github.com/duckdb/pg_duckdb/pull/984
+[#989]: https://github.com/duckdb/pg_duckdb/pull/989
+[#990]: https://github.com/duckdb/pg_duckdb/pull/990
+
 # 1.0.0 (2025-09-04)
 
 ## Added
