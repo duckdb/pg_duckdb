@@ -1,0 +1,46 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+
+%:
+	dh $@ --with=postgresql
+
+override_dh_auto_configure:
+	# No configure step needed, we use PGXS
+	# Initialize git submodules if needed
+	if [ ! -f third_party/duckdb/.git ]; then \
+		git submodule update --init --recursive || true; \
+	fi
+
+override_dh_auto_build:
+	# Build for each PostgreSQL version
+	for pgver in 14 15 16 17 18; do \
+		if [ -d /usr/lib/postgresql/$$pgver ]; then \
+			echo "Building for PostgreSQL $$pgver..."; \
+			PG_CONFIG=/usr/lib/postgresql/$$pgver/bin/pg_config \
+			$(MAKE) clean || true; \
+			PG_CONFIG=/usr/lib/postgresql/$$pgver/bin/pg_config \
+			DUCKDB_BUILD=Release \
+			$(MAKE) -j$$(nproc) || exit 1; \
+		fi; \
+	done
+
+override_dh_auto_install:
+	# Install for each PostgreSQL version separately
+	# Each version installs to its own package directory
+	for pgver in 14 15 16 17 18; do \
+		if [ -d /usr/lib/postgresql/$$pgver ]; then \
+			echo "Installing for PostgreSQL $$pgver..."; \
+			mkdir -p $(CURDIR)/debian/postgresql-$$pgver-pg-duckdb; \
+			PG_CONFIG=/usr/lib/postgresql/$$pgver/bin/pg_config \
+			$(MAKE) DESTDIR=$(CURDIR)/debian/postgresql-$$pgver-pg-duckdb install || exit 1; \
+		fi; \
+	done
+
+override_dh_auto_clean:
+	$(MAKE) clean || true
+	rm -rf third_party/duckdb/build
+
+override_dh_auto_test:
+	# Skip tests during package build, they require a running PostgreSQL instance
+
