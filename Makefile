@@ -1,5 +1,7 @@
 .PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression
 
+PG_DUCKDB_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo "unknown")
+
 MODULE_big = pg_duckdb
 EXTENSION = pg_duckdb
 DATA = pg_duckdb.control $(wildcard sql/pg_duckdb--*.sql)
@@ -83,6 +85,10 @@ override PG_CFLAGS += -Wno-declaration-after-statement
 SHLIB_LINK += $(PG_DUCKDB_LINK_FLAGS)
 
 include Makefile.global
+
+# Only pass the version define to the one file that needs it, so that ccache
+# doesn't invalidate everything on every commit.
+src/pgduckdb.o: PG_CPPFLAGS += -DPG_DUCKDB_VERSION="\"$(PG_DUCKDB_VERSION)\""
 
 # We need the DuckDB header files to build our own .o files. We depend on the
 # duckdb submodule HEAD, because that target pulls in the submodule which
