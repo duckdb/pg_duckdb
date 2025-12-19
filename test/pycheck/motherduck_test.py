@@ -322,11 +322,8 @@ def test_md_alter_table(md_cur: Cursor):
     with pytest.raises(psycopg.errors.FeatureNotSupported):
         md_cur.sql("ALTER TABLE t FORCE ROW LEVEL SECURITY")
 
-    with pytest.raises(
-        psycopg.errors.FeatureNotSupported,
-        match="Changing the schema of a duckdb table is currently not supported",
-    ):
-        md_cur.sql("ALTER TABLE t SET SCHEMA public")
+    # ALTER TABLE SET SCHEMA for DuckDB tables
+    md_cur.sql("ALTER TABLE t SET SCHEMA public")
 
     md_cur.sql("ALTER TABLE t ADD COLUMN b int DEFAULT 100")
     for _ in wait_until("Failed to add column"):
