@@ -10,10 +10,22 @@
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
+extern "C" {
+extern bool ExitOnAnyError;
+}
+
 namespace pgduckdb {
 
 static CommandId next_expected_command_id = FirstCommandId;
 static bool top_level_statement = true;
+static std::string pending_error;
+
+std::string
+FindAndResetPendingError() {
+	auto prev = pending_error;
+	pending_error = "";
+	return prev;
+}
 
 namespace pg {
 
@@ -307,6 +319,7 @@ DuckdbSubXactCallback_Cpp(SubXactEvent event) {
 	if (!DuckDBManager::IsInitialized()) {
 		return;
 	}
+
 	auto connection = DuckDBManager::GetConnectionUnsafe();
 	auto &context = *connection->context;
 	if (!context.transaction.HasActiveTransaction()) {
@@ -314,7 +327,11 @@ DuckdbSubXactCallback_Cpp(SubXactEvent event) {
 	}
 
 	if (event == SUBXACT_EVENT_START_SUB) {
-		throw duckdb::NotImplementedException("SAVEPOINT is not supported in DuckDB");
+		if (ExitOnAnyError) {
+			pending_error = "SAVEPOINT is not supported in DuckDB";
+		} else {
+			throw duckdb::NotImplementedException("SAVEPOINT is not supported in DuckDB");
+		}
 	}
 }
 
