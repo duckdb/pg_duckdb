@@ -8,13 +8,14 @@
  *
  *-------------------------------------------------------------------------
  */
+
+#include "pgduckdb/vendor/pg_explain.hpp"
+
 extern "C" {
 #include "postgres.h"
 
 #include "optimizer/planner.h"
 #include "tcop/tcopprot.h"
-
-#include "pgduckdb/vendor/pg_explain.hpp"
 
 #if PG_VERSION_NUM < 170000
 

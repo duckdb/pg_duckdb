@@ -16,7 +16,7 @@ namespace pgduckdb {
 
 namespace pg {
 
-Node *
+static Node *
 CoerceSubscriptToText(struct ParseState *pstate, A_Indices *subscript, const char *type_name) {
 	if (!subscript->uidx) {
 		elog(ERROR, "Creating a slice out of %s is not supported", type_name);
@@ -69,7 +69,7 @@ CoerceSubscriptToText(struct ParseState *pstate, A_Indices *subscript, const cha
  *
  * See also comments on SubscriptingRef in nodes/subscripting.h
  */
-void
+static void
 AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_Indices *subscript, bool is_slice) {
 	Assert(is_slice || subscript->uidx);
 
@@ -95,7 +95,7 @@ AddSubscriptExpressions(SubscriptingRef *sbsref, struct ParseState *pstate, A_In
  * expressions. All this does is parse those expressions and make sure the
  * subscript returns an an duckdb.unresolved_type again.
  */
-void
+static void
 DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
                          bool is_assignment, const char *type_name) {
 	/*
@@ -135,7 +135,7 @@ DuckdbSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct Pars
  *
  * Currently this is used for duckdb.row and duckdb.struct types.
  */
-void
+static void
 DuckdbTextSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
                              bool is_assignment, const char *type_name) {
 	/*
@@ -217,7 +217,7 @@ DuckdbSubscriptFetchOld(ExprState * /*state*/, ExprEvalStep *op, ExprContext * /
  * shouldn't force usage of DuckDB execution when duckdb types are present in
  * the query. So these methods are just stubs that throw an error when called.
  */
-void
+static void
 DuckdbSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefState *sbsrefstate,
                          SubscriptExecSteps *methods, const char *type_name) {
 
@@ -228,13 +228,13 @@ DuckdbSubscriptExecSetup(const SubscriptingRef * /*sbsref*/, SubscriptingRefStat
 	methods->sbs_fetch_old = DuckdbSubscriptFetchOld;
 }
 
-void
+static void
 DuckdbRowSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
                             bool is_assignment) {
 	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.row");
 }
 
-void
+static void
 DuckdbRowSubscriptExecSetup(const SubscriptingRef *sbsref, SubscriptingRefState *sbsrefstate,
                             SubscriptExecSteps *methods) {
 	DuckdbSubscriptExecSetup(sbsref, sbsrefstate, methods, "duckdb.row");
@@ -248,13 +248,13 @@ static SubscriptRoutines duckdb_row_subscript_routines = {
     .store_leakproof = true,
 };
 
-void
+static void
 DuckdbUnresolvedTypeSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate,
                                        bool is_slice, bool is_assignment) {
 	DuckdbSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.unresolved_type");
 }
 
-void
+static void
 DuckdbUnresolvedTypeSubscriptExecSetup(const SubscriptingRef *sbsref, SubscriptingRefState *sbsrefstate,
                                        SubscriptExecSteps *methods) {
 	DuckdbSubscriptExecSetup(sbsref, sbsrefstate, methods, "duckdb.unresolved_type");
@@ -268,13 +268,13 @@ static SubscriptRoutines duckdb_unresolved_type_subscript_routines = {
     .store_leakproof = true,
 };
 
-void
+static void
 DuckdbStructSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
                                bool is_assignment) {
 	DuckdbTextSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.struct");
 }
 
-void
+static void
 DuckdbStructSubscriptExecSetup(const SubscriptingRef *sbsref, SubscriptingRefState *sbsrefstate,
                                SubscriptExecSteps *methods) {
 	DuckdbSubscriptExecSetup(sbsref, sbsrefstate, methods, "duckdb.struct");
@@ -288,13 +288,13 @@ static SubscriptRoutines duckdb_struct_subscript_routines = {
     .store_leakproof = true,
 };
 
-void
+static void
 DuckdbMapSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
                             bool is_assignment) {
 	DuckdbSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.map");
 }
 
-void
+static void
 DuckdbMapSubscriptExecSetup(const SubscriptingRef *sbsref, SubscriptingRefState *sbsrefstate,
                             SubscriptExecSteps *methods) {
 	DuckdbSubscriptExecSetup(sbsref, sbsrefstate, methods, "duckdb.map");

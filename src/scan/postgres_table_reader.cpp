@@ -5,6 +5,7 @@
 
 extern "C" {
 #include "postgres.h"
+#include "access/htup_details.h"
 #include "miscadmin.h"
 #include "access/xact.h"
 #include "commands/explain.h"
@@ -63,7 +64,11 @@ PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_
 
 	char persistence = get_rel_persistence(rte->relid);
 
+#if PG_VERSION_NUM >= 190000
+	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr, nullptr);
+#else
 	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr);
+#endif
 
 	table_scan_query_desc = CreateQueryDesc(planned_stmt, table_scan_query, GetActiveSnapshot(), InvalidSnapshot,
 	                                        None_Receiver, nullptr, nullptr, 0);

@@ -82,7 +82,7 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	return (Node *)custom_scan_state;
 }
 
-void
+static void
 Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*eflags*/) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
 
@@ -329,7 +329,7 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 	return InvokeCPPFunc(Duckdb_ExecCustomScan_Cpp, node);
 }
 
-void
+static void
 Duckdb_EndCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
@@ -359,7 +359,7 @@ void
 Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 }
 
-void
+static void
 Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 	/*
 	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_format,

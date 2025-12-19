@@ -50,8 +50,8 @@ typedef struct ParamListInfoData *ParamListInfo;
 
 struct PlannedStmt;
 
-typedef char *Pointer;
-typedef Pointer Page;
+typedef char PageData;
+typedef PageData *Page;
 
 struct Query;
 

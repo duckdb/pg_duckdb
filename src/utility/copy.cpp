@@ -85,12 +85,16 @@ AppendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *co
  * Checks if postgres permissions permit us to execute this query as the
  * current user.
  */
-void
+static void
 CheckQueryPermissions(Query *query, const char *query_string) {
 	Query *copied_query = (Query *)copyObjectImpl(query);
 
 	/* First we let postgres plan the query */
+#if PG_VERSION_NUM >= 190000
+	PlannedStmt *postgres_plan = pg_plan_query(copied_query, query_string, CURSOR_OPT_PARALLEL_OK, NULL, NULL);
+#else
 	PlannedStmt *postgres_plan = pg_plan_query(copied_query, query_string, CURSOR_OPT_PARALLEL_OK, NULL);
+#endif
 
 	if (postgres_plan == nullptr) {
 		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -225,7 +229,7 @@ StringOneOfInternal(const char *str, const char *compare_to[], int length_of_com
 	return false;
 }
 
-bool
+static bool
 MatchesURIScheme(const char *str) {
 	if (str == NULL) {
 		return false;

@@ -542,7 +542,7 @@ PostgresScanTableFunction::PostgresScanInitLocal(duckdb::ExecutionContext &, duc
 	auto global_state = reinterpret_cast<PostgresScanGlobalState *>(gstate);
 	return duckdb::make_uniq<PostgresScanLocalState>(global_state);
 }
-void
+static void
 SetOutputCardinality(duckdb::DataChunk &output, PostgresScanLocalState &local_state) {
 	idx_t output_cardinality =
 	    local_state.output_vector_size <= STANDARD_VECTOR_SIZE ? local_state.output_vector_size : STANDARD_VECTOR_SIZE;
