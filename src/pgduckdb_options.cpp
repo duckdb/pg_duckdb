@@ -232,6 +232,56 @@ DECLARE_PG_FUNCTION(pgduckdb_create_azure_secret) {
 	PG_RETURN_TEXT_P(result);
 }
 
+DECLARE_PG_FUNCTION(pgduckdb_create_gsheet_secret) {
+    auto provider_type = pgduckdb::pg::GetArgString(fcinfo, 0);
+    auto credential = pgduckdb::pg::GetArgString(fcinfo, 1);
+    auto lc_provider = duckdb::StringUtil::Lower(provider_type);
+
+    if (lc_provider != "key_file" && lc_provider != "access_token") {
+        elog(ERROR,
+             "Invalid provider '%s'. For gsheet, supported providers are 'key_file' or 'access_token'.",
+             provider_type.c_str());
+    }
+
+    std::string secret_name_prefix = "gsheet_secret";
+    SPI_connect();
+    auto server_name = pgduckdb::FindServerName(secret_name_prefix.c_str());
+    {
+        std::ostringstream create_server_query;
+        create_server_query << "CREATE SERVER " << server_name
+                            << " TYPE 'gsheet' FOREIGN DATA WRAPPER duckdb";
+
+        auto ret = SPI_exec(create_server_query.str().c_str(), 0);
+        if (ret != SPI_OK_UTILITY) {
+            elog(ERROR, "Could not create 'gsheet' SERVER: %s", SPI_result_code_string(ret));
+        }
+    }
+    {
+        std::ostringstream create_mapping_query;
+        create_mapping_query << "CREATE USER MAPPING FOR CURRENT_USER SERVER "
+                             << server_name << " OPTIONS (";
+
+        create_mapping_query << "PROVIDER " << duckdb::KeywordHelper::WriteQuoted(lc_provider) << ", ";
+
+        if (lc_provider == "key_file") {
+            create_mapping_query << "FILEPATH " << duckdb::KeywordHelper::WriteQuoted(credential);
+        } else {
+            create_mapping_query << "TOKEN " << duckdb::KeywordHelper::WriteQuoted(credential);
+        }
+
+        create_mapping_query << ");";
+
+        auto ret = SPI_exec(create_mapping_query.str().c_str(), 0);
+        if (ret != SPI_OK_UTILITY) {
+            elog(ERROR, "Could not create 'gsheet' USER MAPPING: %s", SPI_result_code_string(ret));
+        }
+    }
+
+    SPI_finish();
+    auto result = cstring_to_text(server_name.c_str());
+    PG_RETURN_TEXT_P(result);
+}
+
 /*
  * We need these dummy cache functions so that people are able to load the
  * new pg_duckdb.so file with an old SQL version (where these functions still

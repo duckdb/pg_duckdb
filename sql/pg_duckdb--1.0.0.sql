@@ -801,6 +801,52 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
+-- read_xlsx function for single path
+CREATE FUNCTION @extschema@.read_xlsx(path text, header BOOLEAN DEFAULT NULL,
+                                                sheet TEXT DEFAULT NULL,
+                                                all_varchar BOOLEAN DEFAULT FALSE,
+                                                ignore_errors BOOLEAN DEFAULT FALSE,
+                                                range TEXT DEFAULT NULL,
+                                                stop_at_empty BOOLEAN DEFAULT NULL,
+                                                empty_as_varchar BOOLEAN DEFAULT FALSE)
+RETURNS SETOF duckdb.row
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+-- read_xlsx function for array of paths
+CREATE FUNCTION @extschema@.read_xlsx(path text[], header BOOLEAN DEFAULT NULL,
+                                                sheet TEXT DEFAULT NULL,
+                                                all_varchar BOOLEAN DEFAULT FALSE,
+                                                ignore_errors BOOLEAN DEFAULT FALSE,
+                                                range TEXT DEFAULT NULL,
+                                                stop_at_empty BOOLEAN DEFAULT NULL,
+                                                empty_as_varchar BOOLEAN DEFAULT FALSE)
+RETURNS SETOF duckdb.row
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+-- read_gsheet function for single path
+CREATE FUNCTION @extschema@.read_gsheet(path text, header BOOLEAN DEFAULT NULL,
+                                                sheet TEXT DEFAULT NULL,
+                                                all_varchar BOOLEAN DEFAULT FALSE,
+                                                range TEXT DEFAULT NULL)
+RETURNS SETOF duckdb.row
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
+-- read_gsheet function for array of paths
+CREATE FUNCTION @extschema@.read_gsheet(path text[], header BOOLEAN DEFAULT NULL,
+                                                sheet TEXT DEFAULT NULL,
+                                                all_varchar BOOLEAN DEFAULT FALSE,
+                                                range TEXT DEFAULT NULL)
+RETURNS SETOF duckdb.row
+SET search_path = pg_catalog, pg_temp
+AS 'MODULE_PATHNAME', 'duckdb_only_function'
+LANGUAGE C;
+
 -- read_csv function for single path
 CREATE FUNCTION @extschema@.read_csv(path text, all_varchar BOOLEAN DEFAULT FALSE,
                                                allow_quoted_nulls BOOLEAN DEFAULT TRUE,
@@ -1866,6 +1912,14 @@ CREATE FUNCTION duckdb.create_azure_secret(connection_string TEXT, scope TEXT DE
 RETURNS TEXT
 SET search_path = pg_catalog, pg_temp
 LANGUAGE C AS 'MODULE_PATHNAME', 'pgduckdb_create_azure_secret';
+
+CREATE FUNCTION duckdb.create_gsheet_secret(
+    provider text,
+    credential text
+)
+RETURNS text
+LANGUAGE c
+AS 'MODULE_PATHNAME', 'pgduckdb_create_gsheet_secret';
 
 CREATE FUNCTION duckdb.view(dbname text, schema text, view_name text, query text)
 RETURNS SETOF duckdb.row
