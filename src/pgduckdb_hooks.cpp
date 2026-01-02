@@ -20,6 +20,7 @@ extern "C" {
 #include "tcop/pquery.h"
 #include "utils/rel.h"
 #include "utils/relcache.h"
+#include "utils/lsyscache.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
 }
@@ -152,6 +153,10 @@ ContainsPostgresTable(Node *node, void *context) {
 		List *rtable = query->rtable;
 		foreach_node(RangeTblEntry, rte, rtable) {
 			if (rte->relid == InvalidOid) {
+				continue;
+			}
+			char relkind = get_rel_relkind(rte->relid);
+			if (relkind == RELKIND_VIEW) {
 				continue;
 			}
 			if (!::IsDuckdbTable(rte->relid)) {
