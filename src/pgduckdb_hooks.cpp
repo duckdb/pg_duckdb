@@ -157,6 +157,7 @@ ContainsPostgresTable(Node *node, void *context) {
 			}
 			char relkind = get_rel_relkind(rte->relid);
 			if (relkind == RELKIND_VIEW) {
+				/* Any tables referenced in the view will also be in the rtable */
 				continue;
 			}
 			if (!::IsDuckdbTable(rte->relid)) {
