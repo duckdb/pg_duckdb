@@ -29,7 +29,9 @@ def test_community_extensions(pg: Postgres):
             psycopg.errors.InternalError,
             match="IO Error: Attempting to install an extension file that doesn't have a valid signature",
         ):
-            cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL prql FROM community; $$)")
+            cur.sql(
+                "SELECT * FROM duckdb.raw_query($$ INSTALL prql FROM community; $$)"
+            )
 
     # And that setting is only changeable by superusers
     with pg.cur() as cur:
