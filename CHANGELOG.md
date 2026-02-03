@@ -1,3 +1,9 @@
+# 1.1.2 (2026-02-03)
+
+## Changed
+
+- Update to DuckDB v1.4.4.
+
 # 1.1.1 (2025-12-16)
 
 ## Changed

@@ -15,6 +15,7 @@ test: domain
 test: duckdb_only_functions
 test: duckdb_recycle
 test: duckdb_secrets
+test: duckdb_views
 test: execution_error
 test: extensions
 test: foreign_data_wrapper
