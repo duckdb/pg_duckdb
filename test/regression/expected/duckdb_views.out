@@ -33,7 +33,6 @@ SELECT * from postgres_view;
         2
 (2 rows)
 
-
 SELECT * from duckdb.query($$ FROM pgduckdb.public.duckdb_view $$);
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Executor Error: (PGDuckDB/GetNextTuple) Function 'duckdb.query' only works with DuckDB execution
 SELECT * from duckdb.query($$ FROM pgduckdb.public.postgres_table $$);
@@ -42,3 +41,4 @@ SELECT * from duckdb.query($$ FROM pgduckdb.public.postgres_table $$);
  2
  2
 (2 rows)
+
