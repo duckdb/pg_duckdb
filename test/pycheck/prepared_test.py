@@ -114,6 +114,31 @@ def test_extended(cur: Cursor):
     )
 
 
+def test_prepared_numeric_parameter(cur: Cursor):
+    """Test NUMERIC type in prepared statement parameters (Issue #892)."""
+    from decimal import Decimal
+
+    cur.sql("CREATE TABLE t_numeric(val NUMERIC)")
+    cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("123.456"),))
+    cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("999999.99"),))
+    cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("-42.0"),))
+
+    # Test with custom plan mode
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    q = "SELECT count(*) FROM t_numeric WHERE val = %s"
+    assert cur.sql(q, (Decimal("123.456"),), prepare=True) == 1
+    assert cur.sql(q, (Decimal("999999.99"),)) == 1
+    assert cur.sql(q, (Decimal("-42.0"),)) == 1
+    assert cur.sql(q, (Decimal("0"),)) == 0
+
+    # Test with generic plan mode - this is the critical path for issue #892
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q, (Decimal("123.456"),)) == 1
+    assert cur.sql(q, (Decimal("999999.99"),)) == 1
+    assert cur.sql(q, (Decimal("-42.0"),)) == 1
+    assert cur.sql(q, (Decimal("0"),)) == 0
+
+
 def test_prepared_writes(cur: Cursor):
     cur.sql("CREATE TEMP TABLE test_table (id int)")
     cur.sql("INSERT INTO test_table VALUES (%s), (%s), (%s)", (1, 2, 3))

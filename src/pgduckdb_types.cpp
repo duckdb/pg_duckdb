@@ -1793,6 +1793,55 @@ ConvertDecimal(const NumericVar &numeric) {
 	return numeric.sign == NUMERIC_NEG ? -base_res : base_res;
 }
 
+// Issue #892: Helper function for converting NUMERIC parameters to DuckDB DECIMAL
+static duckdb::Value
+ConvertNumericParameterToDuckValue(Datum value) {
+	auto numeric = DatumGetNumeric(value);
+	auto numeric_var = FromNumeric(numeric);
+
+	// Check for special values (NaN, Infinity)
+	if (numeric_var.sign == NUMERIC_NAN) {
+		elog(ERROR, "Cannot convert NaN NUMERIC to DuckDB DECIMAL");
+	}
+#if PG_VERSION_NUM >= 140000
+	if (numeric_var.sign == NUMERIC_PINF || numeric_var.sign == NUMERIC_NINF) {
+		elog(ERROR, "Cannot convert Infinity NUMERIC to DuckDB DECIMAL");
+	}
+#endif
+
+	// Calculate precision from the numeric value
+	// Precision = number of digits before decimal + scale
+	// weight is in base-NBASE (10000) units, so multiply by DEC_DIGITS (4)
+	int integral_digits = (numeric_var.weight + 1) * DEC_DIGITS;
+	if (integral_digits < 1) {
+		integral_digits = 1; // At minimum 1 digit for the integral part
+	}
+	uint8_t scale = static_cast<uint8_t>(numeric_var.dscale);
+	uint8_t precision = static_cast<uint8_t>(integral_digits + scale);
+
+	// Clamp to DuckDB's max precision (38)
+	if (precision > 38) {
+		elog(WARNING, "NUMERIC precision %d exceeds DuckDB maximum (38), truncating", precision);
+		precision = 38;
+	}
+	if (scale > precision) {
+		elog(DEBUG1, "NUMERIC scale (%d) > precision (%d), clamping", scale, precision);
+		scale = precision;
+	}
+
+	// Choose the appropriate physical type based on precision
+	if (precision <= 4) {
+		return duckdb::Value::DECIMAL(ConvertDecimal<int16_t>(numeric_var), precision, scale);
+	} else if (precision <= 9) {
+		return duckdb::Value::DECIMAL(ConvertDecimal<int32_t>(numeric_var), precision, scale);
+	} else if (precision <= 18) {
+		return duckdb::Value::DECIMAL(ConvertDecimal<int64_t>(numeric_var), precision, scale);
+	} else {
+		return duckdb::Value::DECIMAL(ConvertDecimal<hugeint_t, DecimalConversionHugeint>(numeric_var), precision,
+		                              scale);
+	}
+}
+
 /*
  * Convert a Postgres Datum to a DuckDB Value. This is meant to be used to
  * covert query parameters in a prepared statement to its DuckDB equivalent.
@@ -1841,6 +1890,9 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
 	case UUIDOID:
 		return duckdb::Value::UUID(DatumGetUUID(value));
+	case NUMERICOID:
+		// Issue #892: Support NUMERIC in prepared statement parameters
+		return ConvertNumericParameterToDuckValue(value);
 	default:
 		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
 	}
