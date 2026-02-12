@@ -1,6 +1,8 @@
 import datetime
+from decimal import Decimal
 import uuid
 
+import psycopg.errors
 import psycopg.types.json
 import pytest
 
@@ -115,15 +117,11 @@ def test_extended(cur: Cursor):
 
 
 def test_prepared_numeric_parameter(cur: Cursor):
-    """Test NUMERIC type in prepared statement parameters (Issue #892)."""
-    from decimal import Decimal
-
     cur.sql("CREATE TABLE t_numeric(val NUMERIC)")
     cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("123.456"),))
     cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("999999.99"),))
     cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("-42.0"),))
 
-    # Test with custom plan mode
     cur.sql("SET plan_cache_mode = 'force_custom_plan'")
     q = "SELECT count(*) FROM t_numeric WHERE val = %s"
     assert cur.sql(q, (Decimal("123.456"),), prepare=True) == 1
@@ -131,19 +129,14 @@ def test_prepared_numeric_parameter(cur: Cursor):
     assert cur.sql(q, (Decimal("-42.0"),)) == 1
     assert cur.sql(q, (Decimal("0"),)) == 0
 
-    # Test with generic plan mode - this is the critical path for issue #892
     cur.sql("SET plan_cache_mode = 'force_generic_plan'")
-    assert cur.sql(q, (Decimal("123.456"),)) == 1
+    assert cur.sql(q, (Decimal("123.456"),)) == 1  # creates generic plan
     assert cur.sql(q, (Decimal("999999.99"),)) == 1
     assert cur.sql(q, (Decimal("-42.0"),)) == 1
     assert cur.sql(q, (Decimal("0"),)) == 0
 
 
 def test_prepared_array_parameters(cur: Cursor):
-    """Test array types in prepared statement parameters (Issue #892)."""
-    from decimal import Decimal
-
-    # Test INTEGER[] arrays
     cur.sql("CREATE TABLE t_int_arr(vals INT[])")
     cur.sql("INSERT INTO t_int_arr VALUES (%s)", ([1, 2, 3],))
     cur.sql("INSERT INTO t_int_arr VALUES (%s)", ([4, 5],))
@@ -155,11 +148,10 @@ def test_prepared_array_parameters(cur: Cursor):
     assert cur.sql(q_int, ([1, 2],)) == 0
 
     cur.sql("SET plan_cache_mode = 'force_generic_plan'")
-    assert cur.sql(q_int, ([1, 2, 3],)) == 1
+    assert cur.sql(q_int, ([1, 2, 3],)) == 1  # creates generic plan
     assert cur.sql(q_int, ([4, 5],)) == 1
     assert cur.sql(q_int, ([1, 2],)) == 0
 
-    # Test TEXT[] arrays
     cur.sql("CREATE TABLE t_text_arr(vals TEXT[])")
     cur.sql("INSERT INTO t_text_arr VALUES (%s)", (["hello", "world"],))
     cur.sql("INSERT INTO t_text_arr VALUES (%s)", (["foo"],))
@@ -171,7 +163,7 @@ def test_prepared_array_parameters(cur: Cursor):
     assert cur.sql(q_text, (["bar"],)) == 0
 
     cur.sql("SET plan_cache_mode = 'force_generic_plan'")
-    assert cur.sql(q_text, (["hello", "world"],)) == 1
+    assert cur.sql(q_text, (["hello", "world"],)) == 1  # creates generic plan
     assert cur.sql(q_text, (["foo"],)) == 1
 
     # Test NUMERIC[] arrays (special case with per-element precision)
@@ -185,7 +177,23 @@ def test_prepared_array_parameters(cur: Cursor):
     assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],), prepare=True) == 1
 
     cur.sql("SET plan_cache_mode = 'force_generic_plan'")
-    assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],)) == 1
+    assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],)) == 1  # creates generic plan
+
+
+@pytest.mark.parametrize("type_sql,value", [
+    ("oid", 42),
+    ("name", "myname"),
+])
+def test_prepared_unsupported_parameter_type(cur: Cursor, type_sql, value):
+    cur.sql(f"CREATE TABLE t(x {type_sql}) USING duckdb")
+    cur.sql("INSERT INTO t VALUES (%s)", (value,))
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    q = "SELECT count(*) FROM t WHERE x = %s"
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="Could not convert Postgres parameter of type",
+    ):
+        cur.sql(q, (value,), prepare=True)
 
 
 def test_prepared_writes(cur: Cursor):
