@@ -139,6 +139,55 @@ def test_prepared_numeric_parameter(cur: Cursor):
     assert cur.sql(q, (Decimal("0"),)) == 0
 
 
+def test_prepared_array_parameters(cur: Cursor):
+    """Test array types in prepared statement parameters (Issue #892)."""
+    from decimal import Decimal
+
+    # Test INTEGER[] arrays
+    cur.sql("CREATE TABLE t_int_arr(vals INT[])")
+    cur.sql("INSERT INTO t_int_arr VALUES (%s)", ([1, 2, 3],))
+    cur.sql("INSERT INTO t_int_arr VALUES (%s)", ([4, 5],))
+
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    q_int = "SELECT count(*) FROM t_int_arr WHERE vals = %s"
+    assert cur.sql(q_int, ([1, 2, 3],), prepare=True) == 1
+    assert cur.sql(q_int, ([4, 5],)) == 1
+    assert cur.sql(q_int, ([1, 2],)) == 0
+
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q_int, ([1, 2, 3],)) == 1
+    assert cur.sql(q_int, ([4, 5],)) == 1
+    assert cur.sql(q_int, ([1, 2],)) == 0
+
+    # Test TEXT[] arrays
+    cur.sql("CREATE TABLE t_text_arr(vals TEXT[])")
+    cur.sql("INSERT INTO t_text_arr VALUES (%s)", (["hello", "world"],))
+    cur.sql("INSERT INTO t_text_arr VALUES (%s)", (["foo"],))
+
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    q_text = "SELECT count(*) FROM t_text_arr WHERE vals = %s"
+    assert cur.sql(q_text, (["hello", "world"],), prepare=True) == 1
+    assert cur.sql(q_text, (["foo"],)) == 1
+    assert cur.sql(q_text, (["bar"],)) == 0
+
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q_text, (["hello", "world"],)) == 1
+    assert cur.sql(q_text, (["foo"],)) == 1
+
+    # Test NUMERIC[] arrays (special case with per-element precision)
+    cur.sql("CREATE TABLE t_numeric_arr(vals NUMERIC[])")
+    cur.sql(
+        "INSERT INTO t_numeric_arr VALUES (%s)", ([Decimal("1.1"), Decimal("2.2")],)
+    )
+
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    q_num = "SELECT count(*) FROM t_numeric_arr WHERE vals = %s"
+    assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],), prepare=True) == 1
+
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],)) == 1
+
+
 def test_prepared_writes(cur: Cursor):
     cur.sql("CREATE TEMP TABLE test_table (id int)")
     cur.sql("INSERT INTO test_table VALUES (%s), (%s), (%s)", (1, 2, 3))

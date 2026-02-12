@@ -1893,6 +1893,121 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	case NUMERICOID:
 		// Issue #892: Support NUMERIC in prepared statement parameters
 		return ConvertNumericParameterToDuckValue(value);
+	case INT2ARRAYOID:
+	case INT4ARRAYOID:
+	case INT8ARRAYOID:
+	case FLOAT4ARRAYOID:
+	case FLOAT8ARRAYOID:
+	case TEXTARRAYOID:
+	case VARCHARARRAYOID:
+	case BPCHARARRAYOID:
+	case BOOLARRAYOID:
+	case DATEARRAYOID:
+	case TIMESTAMPARRAYOID:
+	case TIMESTAMPTZARRAYOID:
+	case UUIDARRAYOID: {
+		// Issue #892: Support array types in prepared statement parameters
+		auto array = DatumGetArrayTypeP(value);
+		auto elem_type = ARR_ELEMTYPE(array);
+
+		int16 typlen;
+		bool typbyval;
+		char typalign;
+		PostgresFunctionGuard(get_typlenbyvalalign, elem_type, &typlen, &typbyval, &typalign);
+
+		int nelems;
+		Datum *elems;
+		bool *nulls;
+		PostgresFunctionGuard(deconstruct_array, array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
+
+		// Determine the DuckDB element type based on postgres element type
+		duckdb::LogicalType child_type;
+		switch (elem_type) {
+		case INT2OID:
+			child_type = duckdb::LogicalType::SMALLINT;
+			break;
+		case INT4OID:
+			child_type = duckdb::LogicalType::INTEGER;
+			break;
+		case INT8OID:
+			child_type = duckdb::LogicalType::BIGINT;
+			break;
+		case FLOAT4OID:
+			child_type = duckdb::LogicalType::FLOAT;
+			break;
+		case FLOAT8OID:
+			child_type = duckdb::LogicalType::DOUBLE;
+			break;
+		case TEXTOID:
+		case VARCHAROID:
+		case BPCHAROID:
+			child_type = duckdb::LogicalType::VARCHAR;
+			break;
+		case BOOLOID:
+			child_type = duckdb::LogicalType::BOOLEAN;
+			break;
+		case DATEOID:
+			child_type = duckdb::LogicalType::DATE;
+			break;
+		case TIMESTAMPOID:
+			child_type = duckdb::LogicalType::TIMESTAMP;
+			break;
+		case TIMESTAMPTZOID:
+			child_type = duckdb::LogicalType::TIMESTAMP_TZ;
+			break;
+		case UUIDOID:
+			child_type = duckdb::LogicalType::UUID;
+			break;
+		default:
+			elog(ERROR, "Unsupported array element type: %d", elem_type);
+		}
+
+		// Convert each element
+		duckdb::vector<duckdb::Value> values;
+		values.reserve(nelems);
+		for (int i = 0; i < nelems; i++) {
+			if (nulls[i]) {
+				values.push_back(duckdb::Value(child_type));
+			} else {
+				values.push_back(ConvertPostgresParameterToDuckValue(elems[i], elem_type));
+			}
+		}
+
+		return duckdb::Value::LIST(child_type, std::move(values));
+	}
+	case NUMERICARRAYOID: {
+		// Issue #892: Support NUMERIC[] - special case due to per-element precision
+		// NUMERIC arrays require individual element conversion since each value
+		// may have different precision/scale
+		auto array = DatumGetArrayTypeP(value);
+		auto elem_type = ARR_ELEMTYPE(array);
+
+		int16 typlen;
+		bool typbyval;
+		char typalign;
+		PostgresFunctionGuard(get_typlenbyvalalign, elem_type, &typlen, &typbyval, &typalign);
+
+		int nelems;
+		Datum *elems;
+		bool *nulls;
+		PostgresFunctionGuard(deconstruct_array, array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
+
+		// Convert each NUMERIC element individually
+		duckdb::vector<duckdb::Value> values;
+		values.reserve(nelems);
+		for (int i = 0; i < nelems; i++) {
+			if (nulls[i]) {
+				// Use a reasonable default DECIMAL type for nulls
+				values.push_back(duckdb::Value(duckdb::LogicalType::DECIMAL(38, 0)));
+			} else {
+				values.push_back(ConvertNumericParameterToDuckValue(elems[i]));
+			}
+		}
+
+		// Use DECIMAL(38,0) as the list element type since individual elements
+		// may have varying precision
+		return duckdb::Value::LIST(duckdb::LogicalType::DECIMAL(38, 0), std::move(values));
+	}
 	default:
 		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
 	}
