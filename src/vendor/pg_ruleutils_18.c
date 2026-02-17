@@ -8863,6 +8863,25 @@ get_parameter(Param *param, deparse_context *context)
 	 */
 	Assert(param->paramkind == PARAM_EXTERN);
 
+	/*
+	 * DuckDB can defer output typing for untyped parameter references in
+	 * projection lists. Emitting an explicit cast keeps prepared-statement
+	 * result schemas stable between planning and execution.
+	 */
+	if (OidIsValid(param->paramtype) && param->paramtype != UNKNOWNOID)
+	{
+		const char *param_type_name;
+
+		param_type_name = format_type_with_typemod(param->paramtype,
+												   param->paramtypmod);
+		if (param_type_name)
+		{
+			appendStringInfo(context->buf, "($%d)::%s", param->paramid,
+							 param_type_name);
+			return;
+		}
+	}
+
 	appendStringInfo(context->buf, "$%d", param->paramid);
 }
 

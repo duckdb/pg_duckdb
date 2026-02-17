@@ -44,6 +44,26 @@ def test_prepared(cur: Cursor):
     assert cur.sql(q2, (4,)) == 0
 
 
+def test_prepared_select_list_parameters(cur: Cursor):
+    cur.sql("CREATE TEMP TABLE t_select_param (id int, name text) USING duckdb")
+    cur.sql("INSERT INTO t_select_param VALUES (1, 'alice'), (2, 'bob'), (42, 'charlie')")
+
+    expected_rows = [
+        ("my_label", 1, "alice"),
+        ("my_label", 2, "bob"),
+        ("my_label", 42, "charlie"),
+    ]
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+
+        q_select = "SELECT %s AS label, id, name FROM t_select_param ORDER BY id"
+        assert cur.sql(q_select, ("my_label",), prepare=True) == expected_rows
+
+        q_select_where = "SELECT %s AS label, id, name FROM t_select_param WHERE id = %s"
+        assert cur.sql(q_select_where, ("my_label", 42), prepare=True) == [("my_label", 42, "charlie")]
+
+
 def test_extended(cur: Cursor):
     cur.sql("""
         CREATE TABLE t(

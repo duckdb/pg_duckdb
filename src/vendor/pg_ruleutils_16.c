@@ -8313,6 +8313,26 @@ get_parameter(Param *param, deparse_context *context)
 	/*
 	 * Not PARAM_EXEC, or couldn't find referent: just print $N.
 	 */
+	if (param->paramkind == PARAM_EXTERN &&
+		OidIsValid(param->paramtype) &&
+		param->paramtype != UNKNOWNOID)
+	{
+		const char *param_type_name;
+
+		/*
+		 * Keep the deparsed parameter typed so DuckDB does not drop projection
+		 * parameter columns from prepared result schemas.
+		 */
+		param_type_name = format_type_with_typemod(param->paramtype,
+												   param->paramtypmod);
+		if (param_type_name)
+		{
+			appendStringInfo(context->buf, "($%d)::%s", param->paramid,
+							 param_type_name);
+			return;
+		}
+	}
+
 	appendStringInfo(context->buf, "$%d", param->paramid);
 }
 
