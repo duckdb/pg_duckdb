@@ -1121,6 +1121,8 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	case BPCHAROID:
 	case TEXTOID:
 	case JSONOID:
+	case UNKNOWNOID:
+	case 0:  /* InvalidOid - for UNKNOWN columns where tuple descriptor has no type */
 	case VARCHAROID: {
 		slot->tts_values[col] = ConvertToStringDatum(value);
 		break;
@@ -1514,6 +1516,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbUnionArrayOid();
 	case duckdb::LogicalTypeId::MAP:
 		return pgduckdb::DuckdbMapArrayOid();
+	case duckdb::LogicalTypeId::UNKNOWN:
+		return TEXTARRAYOID;
 	default: {
 		if (throw_error) {
 			throw duckdb::NotImplementedException("Unsupported DuckDB `LIST` subtype: " + type.ToString());
@@ -1613,6 +1617,9 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbUnionOid();
 	case duckdb::LogicalTypeId::MAP:
 		return pgduckdb::DuckdbMapOid();
+	case duckdb::LogicalTypeId::UNKNOWN:
+		/* Used for parameter expressions and unresolved types; map to text so CreatePlan succeeds. */
+		return TEXTOID;
 	case duckdb::LogicalTypeId::ENUM:
 		return VARCHAROID;
 	default: {
