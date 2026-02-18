@@ -2,6 +2,7 @@ import datetime
 from decimal import Decimal
 import uuid
 
+import duckdb
 import psycopg.errors
 import psycopg.types.json
 import pytest
@@ -62,6 +63,85 @@ def test_prepared_select_list_parameters(cur: Cursor):
 
         q_select_where = "SELECT %s AS label, id, name FROM t_select_param WHERE id = %s"
         assert cur.sql(q_select_where, ("my_label", 42), prepare=True) == [("my_label", 42, "charlie")]
+
+
+def _create_typed_bind_parquet(tmp_path) -> str:
+    parquet_path = tmp_path / "typed_bind_params.parquet"
+    escaped_path = str(parquet_path).replace("'", "''")
+    duckdb.query(
+        f"""
+        COPY (
+            SELECT 20240901::INTEGER AS bc_date, 'lv'::TEXT AS data_stream
+            UNION ALL SELECT 20240902::INTEGER, 'linear'::TEXT
+            UNION ALL SELECT 20240903::INTEGER, 'vod'::TEXT
+        ) TO '{escaped_path}' (FORMAT PARQUET)
+        """
+    )
+    return str(parquet_path)
+
+
+def test_prepared_parquet_untyped_between_param(cur: Cursor, tmp_path):
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    q = "SELECT count(*) FROM read_parquet(%s) t WHERE t['bc_date'] BETWEEN %s AND %s"
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        assert cur.sql(q, (parquet_path, 20240901, 20240902), prepare=True) == 2
+
+
+def test_prepared_parquet_untyped_in_param(cur: Cursor, tmp_path):
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    q = "SELECT count(*) FROM read_parquet(%s) t WHERE t['data_stream'] IN (%s)"
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        assert cur.sql(q, (parquet_path, "lv"), prepare=True) == 1
+
+
+def test_prepared_parquet_casted_param_controls(cur: Cursor, tmp_path):
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    q_between = "SELECT count(*) FROM read_parquet(%s) t WHERE t['bc_date'] BETWEEN %s::integer AND %s::integer"
+    q_in = "SELECT count(*) FROM read_parquet(%s) t WHERE t['data_stream'] IN (%s::text)"
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        assert cur.sql(q_between, (parquet_path, 20240901, 20240902), prepare=True) == 2
+        assert cur.sql(q_in, (parquet_path, "lv"), prepare=True) == 1
+
+
+def test_prepared_parquet_native_prepare_execute_between(cur: Cursor, tmp_path):
+    """
+    B1 path: native PREPARE/EXECUTE with untyped integer params in parquet BETWEEN.
+    Ensures the extended query protocol / param_types normalization works.
+    """
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    escaped_path = parquet_path.replace("'", "''")
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        cur.sql(f"PREPARE b1_between AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['bc_date'] BETWEEN $1 AND $2")
+        assert cur.sql("EXECUTE b1_between(20240901, 20240902)") == 2
+        cur.sql("DEALLOCATE b1_between")
+
+
+def test_prepared_parquet_native_prepare_execute_in(cur: Cursor, tmp_path):
+    """
+    B3 path: native PREPARE/EXECUTE with untyped text params in parquet IN.
+    Covers unresolved parquet predicate typing for data_stream filters.
+    """
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    escaped_path = parquet_path.replace("'", "''")
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        cur.sql(f"PREPARE b3_in AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['data_stream'] IN ($1)")
+        assert cur.sql("EXECUTE b3_in('lv')") == 1
+        cur.sql("DEALLOCATE b3_in")
 
 
 def test_extended(cur: Cursor):
