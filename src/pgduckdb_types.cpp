@@ -1869,6 +1869,7 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	case BPCHAROID:
 	case TEXTOID:
 	case JSONOID:
+	case UNKNOWNOID:
 	case VARCHAROID: {
 		// FIXME: TextDatumGetCstring allocates so it needs a
 		// guard, but it's a macro not a function, so our current gaurd
@@ -2016,6 +2017,9 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::LIST(duckdb::LogicalType::DECIMAL(38, 0), std::move(values));
 	}
 	default:
+		if (postgres_type == pgduckdb::DuckdbUnresolvedTypeOid()) {
+			return duckdb::Value(TextDatumGetCString(value));
+		}
 		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
 	}
 }

@@ -8520,7 +8520,9 @@ get_parameter(Param *param, deparse_context *context)
 	 * projection lists. Emitting an explicit cast keeps prepared-statement
 	 * result schemas stable between planning and execution.
 	 */
-	if (OidIsValid(param->paramtype) && param->paramtype != UNKNOWNOID)
+	if (OidIsValid(param->paramtype) &&
+		param->paramtype != UNKNOWNOID &&
+		!pgduckdb_is_fake_type(param->paramtype))
 	{
 		const char *param_type_name;
 

@@ -8380,7 +8380,8 @@ get_parameter(Param *param, deparse_context *context)
 	 */
 	if (param->paramkind == PARAM_EXTERN &&
 		OidIsValid(param->paramtype) &&
-		param->paramtype != UNKNOWNOID)
+		param->paramtype != UNKNOWNOID &&
+		!pgduckdb_is_fake_type(param->paramtype))
 	{
 		const char *param_type_name;
 
