@@ -44,6 +44,7 @@ typedef struct DuckdbScanState {
 	bool fetch_next;
 	duckdb::unique_ptr<duckdb::QueryResult> query_results;
 	duckdb::idx_t column_count;
+	duckdb::idx_t expected_column_count;
 	duckdb::unique_ptr<duckdb::DataChunk> current_data_chunk;
 	duckdb::idx_t current_row;
 } DuckdbScanState;
@@ -143,6 +144,9 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 				     var->vartype, postgres_column_oid);
 			}
 		}
+		duckdb_scan_state->expected_column_count = prepared_result_types.size();
+	} else {
+		duckdb_scan_state->expected_column_count = 0;
 	}
 
 	duckdb_scan_state->duckdb_connection = pgduckdb::DuckDBManager::GetConnection();
@@ -248,6 +252,22 @@ ExecuteQuery(DuckdbScanState *state) {
 
 	state->query_results = pending->Execute();
 	state->column_count = state->query_results->ColumnCount();
+
+	/*
+	 * Some prepared query paths can yield a mismatched column count via
+	 * PendingQuery execution. Retry with direct Execute() and accept it
+	 * only when it matches the planned schema.
+	 */
+	if (state->expected_column_count != 0 && state->column_count != state->expected_column_count) {
+		auto retry_results = prepared.Execute(named_values, allow_stream_result);
+		if (retry_results && !retry_results->HasError()) {
+			auto retry_column_count = retry_results->ColumnCount();
+			if (retry_column_count == state->expected_column_count) {
+				state->query_results = std::move(retry_results);
+				state->column_count = retry_column_count;
+			}
+		}
+	}
 	state->is_executed = true;
 }
 
