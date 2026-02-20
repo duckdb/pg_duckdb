@@ -7,7 +7,6 @@
 
 #include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
-#include "pgduckdb/pgduckdb_ruleutils.h"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/pg/explain.hpp"
@@ -18,6 +17,8 @@ extern "C" {
 #include "tcop/pquery.h"
 #include "nodes/params.h"
 #include "utils/ruleutils.h"
+
+char *pgduckdb_get_querydef(Query *query);
 }
 
 #include "pgduckdb/pgduckdb_node.hpp"
@@ -307,7 +308,7 @@ ExecuteQuery(DuckdbScanState *state) {
 			pos++;
 		}
 
-		auto fallback_results = state->duckdb_connection->context->Query(inlined_sql);
+		auto fallback_results = state->duckdb_connection->context->Query(inlined_sql, allow_stream_result);
 		if (fallback_results->HasError()) {
 			fallback_results->ThrowError();
 		}
