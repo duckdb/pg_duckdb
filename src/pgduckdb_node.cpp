@@ -3,8 +3,11 @@
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/exception.hpp"
 
+#include <cctype>
+
 #include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
+#include "pgduckdb/pgduckdb_ruleutils.h"
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/pg/explain.hpp"
@@ -169,6 +172,7 @@ ExecuteQuery(DuckdbScanState *state) {
 	auto pg_params = state->params;
 	const auto num_params = pg_params ? pg_params->numParams : 0;
 	duckdb::case_insensitive_map_t<duckdb::BoundParameterData> named_values;
+	duckdb::case_insensitive_map_t<std::string> param_sql_literals;
 
 	for (int i = 0; i < num_params; i++) {
 		ParamExternData *pg_param;
@@ -188,8 +192,10 @@ ExecuteQuery(DuckdbScanState *state) {
 
 		if (pg_param->isnull) {
 			duckdb_param = duckdb::Value();
+			param_sql_literals[duckdb::to_string(i + 1)] = "NULL";
 		} else if (OidIsValid(pg_param->ptype)) {
 			duckdb_param = pgduckdb::ConvertPostgresParameterToDuckValue(pg_param->value, pg_param->ptype);
+			param_sql_literals[duckdb::to_string(i + 1)] = duckdb_param.ToSQLString();
 		} else {
 			std::ostringstream oss;
 			oss << "parameter '" << i << "' has an invalid type (" << pg_param->ptype << ") during query execution";
@@ -267,6 +273,46 @@ ExecuteQuery(DuckdbScanState *state) {
 				state->column_count = retry_column_count;
 			}
 		}
+	}
+
+	/*
+	 * As a last resort, inline SQL parameters and execute the concrete SQL.
+	 * This mirrors the raw-query boundary and avoids known prepared-shape drift.
+	 */
+	if (state->expected_column_count != 0 && state->column_count != state->expected_column_count) {
+		Query *copied_query = (Query *)copyObjectImpl(state->query);
+		const char *query_sql = pgduckdb_get_querydef(copied_query);
+		std::string inlined_sql;
+		inlined_sql.reserve(strlen(query_sql) + 64);
+
+		for (size_t pos = 0; query_sql[pos] != '\0';) {
+			if (query_sql[pos] == '$') {
+				size_t digit_pos = pos + 1;
+				while (isdigit(static_cast<unsigned char>(query_sql[digit_pos]))) {
+					digit_pos++;
+				}
+
+				if (digit_pos > pos + 1) {
+					std::string param_id(query_sql + pos + 1, digit_pos - (pos + 1));
+					auto value_it = param_sql_literals.find(param_id);
+					if (value_it != param_sql_literals.end()) {
+						inlined_sql.append(value_it->second);
+						pos = digit_pos;
+						continue;
+					}
+				}
+			}
+
+			inlined_sql.push_back(query_sql[pos]);
+			pos++;
+		}
+
+		auto fallback_results = state->duckdb_connection->context->Query(inlined_sql);
+		if (fallback_results->HasError()) {
+			fallback_results->ThrowError();
+		}
+		state->query_results = std::move(fallback_results);
+		state->column_count = state->query_results->ColumnCount();
 	}
 	state->is_executed = true;
 }
