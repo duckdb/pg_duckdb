@@ -8870,36 +8870,57 @@ get_rule_expr(Node *node, deparse_context *context,
 				Node	   *arg1 = (Node *) linitial(args);
 				Node	   *arg2 = (Node *) lsecond(args);
 
-				if (!PRETTY_PAREN(context))
-					appendStringInfoChar(buf, '(');
-				get_rule_expr_paren(arg1, context, true, node);
-				appendStringInfo(buf, " %s %s (",
-								 generate_operator_name(expr->opno,
-														exprType(arg1),
-														get_base_element_type(exprType(arg2))),
-								 expr->useOr ? "ANY" : "ALL");
-				get_rule_expr_paren(arg2, context, true, node);
-
 				/*
-				 * There's inherent ambiguity in "x op ANY/ALL (y)" when y is
-				 * a bare sub-SELECT.  Since we're here, the sub-SELECT must
-				 * be meant as a scalar sub-SELECT yielding an array value to
-				 * be used in ScalarArrayOpExpr; but the grammar will
-				 * preferentially interpret such a construct as an ANY/ALL
-				 * SubLink.  To prevent misparsing the output that way, insert
-				 * a dummy coercion (which will be stripped by parse analysis,
-				 * so no inefficiency is added in dump and reload).  This is
-				 * indeed most likely what the user wrote to get the construct
-				 * accepted in the first place.
+				 * When the RHS is an explicit ARRAY[] constructor and the
+				 * expression uses OR semantics (i.e., original SQL was
+				 * IN (...)), deparse as IN (...) instead of = ANY (ARRAY[...]).
+				 * DuckDB's prepared statement engine handles IN syntax
+				 * correctly but can mishandle the ANY(ARRAY[...]) form.
 				 */
-				if (IsA(arg2, SubLink) &&
-					((SubLink *) arg2)->subLinkType == EXPR_SUBLINK)
-					appendStringInfo(buf, "::%s",
-									 format_type_with_typemod(exprType(arg2),
-															  exprTypmod(arg2)));
-				appendStringInfoChar(buf, ')');
-				if (!PRETTY_PAREN(context))
+				if (expr->useOr && IsA(arg2, ArrayExpr))
+				{
+					ArrayExpr  *arrexpr = (ArrayExpr *) arg2;
+					ListCell   *lc;
+					bool		first = true;
+
+					if (!PRETTY_PAREN(context))
+						appendStringInfoChar(buf, '(');
+					get_rule_expr_paren(arg1, context, true, node);
+					appendStringInfoString(buf, " IN (");
+					foreach(lc, arrexpr->elements)
+					{
+						Node	   *elem = (Node *) lfirst(lc);
+
+						if (!first)
+							appendStringInfoString(buf, ", ");
+						get_rule_expr(elem, context, false);
+						first = false;
+					}
 					appendStringInfoChar(buf, ')');
+					if (!PRETTY_PAREN(context))
+						appendStringInfoChar(buf, ')');
+				}
+				else
+				{
+					if (!PRETTY_PAREN(context))
+						appendStringInfoChar(buf, '(');
+					get_rule_expr_paren(arg1, context, true, node);
+					appendStringInfo(buf, " %s %s (",
+									 generate_operator_name(expr->opno,
+															exprType(arg1),
+															get_base_element_type(exprType(arg2))),
+									 expr->useOr ? "ANY" : "ALL");
+					get_rule_expr_paren(arg2, context, true, node);
+
+					if (IsA(arg2, SubLink) &&
+						((SubLink *) arg2)->subLinkType == EXPR_SUBLINK)
+						appendStringInfo(buf, "::%s",
+										 format_type_with_typemod(exprType(arg2),
+																  exprTypmod(arg2)));
+					appendStringInfoChar(buf, ')');
+					if (!PRETTY_PAREN(context))
+						appendStringInfoChar(buf, ')');
+				}
 			}
 			break;
 
