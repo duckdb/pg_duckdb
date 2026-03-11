@@ -114,7 +114,6 @@ DuckDBManager::Initialize() {
 	config.SetOptionByName("default_null_order", "postgres");
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
-	SET_DUCKDB_OPTION(enable_external_access);
 	SET_DUCKDB_OPTION(allow_community_extensions);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
@@ -225,6 +224,33 @@ DuckDBManager::Initialize() {
 		InstallExtensions(context);
 	}
 	LoadExtensions(context);
+
+	/* Set allowed_directories and enable_external_access AFTER loading extensions
+	 * (extensions need filesystem access to install/load). Set allowed_directories
+	 * BEFORE disabling external access (DuckDB rejects changes to
+	 * allowed_directories when external access is disabled). */
+	if (!IsEmptyString(duckdb_allowed_directories)) {
+		/* Skip empty entries (e.g. from a leading/trailing/doubled comma or a
+		 * whitespace-only entry). DuckDB canonicalizes an empty path to the
+		 * backend's current working directory, which is the Postgres data
+		 * directory. So without this filtering a stray comma would silently
+		 * allowlist the entire data directory. */
+		duckdb::vector<std::string> dirs;
+		for (auto &dir : duckdb::StringUtil::Split(duckdb_allowed_directories, ',')) {
+			duckdb::StringUtil::Trim(dir);
+			if (!dir.empty()) {
+				dirs.push_back(duckdb::KeywordHelper::WriteQuoted(dir));
+			}
+		}
+		if (!dirs.empty()) {
+			auto list_str = "[" + duckdb::StringUtil::Join(dirs, ", ") + "]";
+			pgduckdb::DuckDBQueryOrThrow(context, "SET allowed_directories=" + list_str);
+		}
+	}
+
+	if (!duckdb_enable_external_access) {
+		pgduckdb::DuckDBQueryOrThrow(context, "SET enable_external_access=false");
+	}
 }
 
 void
