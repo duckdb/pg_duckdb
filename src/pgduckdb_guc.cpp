@@ -131,6 +131,7 @@ bool duckdb_force_motherduck_views = false;
 int duckdb_maximum_threads = -1;
 int duckdb_maximum_memory = 4096; /* 4GB in MB */
 char *duckdb_disabled_filesystems = strdup("");
+char *duckdb_allowed_directories = strdup("");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_community_extensions = false;
 bool duckdb_allow_unsigned_extensions = false;
@@ -239,6 +240,12 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                           &duckdb_disabled_filesystems, PGC_SUSET);
+
+	DefineCustomDuckDBVariable("duckdb.allowed_directories",
+	                           "Comma-separated list of directories and URL prefixes that are always "
+	                           "allowed for file access, even when enable_external_access is false "
+	                           "(e.g., '/data/,s3://mybucket/')",
+	                           &duckdb_allowed_directories, PGC_SUSET);
 
 	DefineCustomDuckDBVariable("duckdb.azure_transport_option_type",
 	                           "Set the azure_transport_option_type for DuckDB Azure extension. Can be used to "

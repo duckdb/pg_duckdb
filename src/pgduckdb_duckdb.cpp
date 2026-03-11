@@ -114,7 +114,6 @@ DuckDBManager::Initialize() {
 	config.SetOptionByName("default_null_order", "postgres");
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
-	SET_DUCKDB_OPTION(enable_external_access);
 	SET_DUCKDB_OPTION(allow_community_extensions);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
@@ -221,6 +220,27 @@ DuckDBManager::Initialize() {
 		InstallExtensions(context);
 	}
 	LoadExtensions(context);
+
+	/* Set allowed_directories and enable_external_access AFTER loading extensions
+	 * (extensions need filesystem access to install/load). Set allowed_directories
+	 * BEFORE disabling external access (DuckDB rejects changes to
+	 * allowed_directories when external access is disabled). */
+	if (!IsEmptyString(duckdb_allowed_directories)) {
+		auto dirs = duckdb::StringUtil::Split(duckdb_allowed_directories, ',');
+		auto list_str = "[" +
+		                duckdb::StringUtil::Join(dirs, dirs.size(), ", ",
+		                                         [](const std::string &dir) {
+			                                         auto trimmed = dir;
+			                                         duckdb::StringUtil::Trim(trimmed);
+			                                         return duckdb::KeywordHelper::WriteQuoted(trimmed);
+		                                         }) +
+		                "]";
+		pgduckdb::DuckDBQueryOrThrow(context, "SET allowed_directories=" + list_str);
+	}
+
+	if (!duckdb_enable_external_access) {
+		pgduckdb::DuckDBQueryOrThrow(context, "SET enable_external_access=false");
+	}
 }
 
 void
