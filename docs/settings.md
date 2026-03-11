@@ -65,11 +65,30 @@ Allows DuckDB execution inside PostgreSQL functions. This feature can cause cras
 - **Access**: Superuser-only
 
 
-### `duckdb.enable_external_access` (Experimental)
+### `duckdb.enable_external_access`
 
-Allows DuckDB to access external resources (e.g., HTTP, S3). This setting is not yet well-tested, and disabling it may break unintended `pg_duckdb` functionality.
+Allows DuckDB to access external resources (e.g., the local file system, HTTP, S3, Azure). When set to `false`, DuckDB can no longer read from or write to any file or remote location. This is a powerful way to lock down what `pg_duckdb` is allowed to touch.
+
+> [!WARNING]
+> Disabling this setting blocks **all** external access, including S3 and Azure. So things like `read_parquet('s3://...')` will stop working. To keep specific locations accessible while everything else stays blocked, add them to [`duckdb.allowed_directories`](#duckdballowed_directories).
 
 - **Default**: `true`
+- **Access**: Superuser-only
+
+### `duckdb.allowed_directories`
+
+A comma-separated list of directories and URL prefixes that are always allowed for file access, even when [`duckdb.enable_external_access`](#duckdbenable_external_access) is `false`. This lets you keep external access disabled by default while still allowing a specific allowlist of locations. Entries can be local directories as well as remote prefixes such as `s3://` or `https://` URLs.
+
+For example, to block all access except a single S3 bucket and a local data directory:
+
+```sql
+SET duckdb.allowed_directories = 's3://my-bucket/, /var/lib/data/';
+SET duckdb.enable_external_access = false;
+```
+
+Like `duckdb.enable_external_access`, this setting can only be changed before DuckDB is initialized in the current session. If DuckDB has already been used, reconnect or run `CALL duckdb.recycle_ddb()` first.
+
+- **Default**: `""` (empty)
 - **Access**: Superuser-only
 
 ### `duckdb.azure_transport_option_type`
