@@ -178,6 +178,11 @@ GetRelationName(Relation rel) {
 }
 
 Oid
+GetRelationOid(Relation rel) {
+	return RelationGetRelid(rel);
+}
+
+Oid
 GetOid(Form_pg_class rel) {
 	return rel->oid;
 }

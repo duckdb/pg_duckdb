@@ -36,6 +36,7 @@ char *GenerateQualifiedRelationName(Relation rel);
 const char *QuoteIdentifier(const char *ident);
 
 const char *GetRelationName(Relation rel);
+Oid GetRelationOid(Relation rel);
 
 Oid GetOid(Form_pg_class rel);
 

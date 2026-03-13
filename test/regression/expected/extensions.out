@@ -39,7 +39,7 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
  httpfs         | t      | t         | 
- icu            | t      | t         | 
+ icu            | t      | t         | core
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
@@ -65,7 +65,7 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
  httpfs         | t      | t         | 
- icu            | t      | t         | 
+ icu            | t      | t         | core
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
@@ -89,7 +89,7 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
  aws            | t      | t         | core
  core_functions | t      | t         | 
  httpfs         | t      | t         | 
- icu            | t      | t         | 
+ icu            | t      | t         | core
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
@@ -158,7 +158,7 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
  aws            | t      | t         | core
  core_functions | t      | t         | 
  httpfs         | t      | t         | 
- icu            | t      | t         | 
+ icu            | t      | t         | core
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
@@ -171,13 +171,13 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
  httpfs         | t      | t         | 
- icu            | t      | t         | 
+ icu            | t      | t         | core
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
 (6 rows)
 
-SELECT duckdb.install_extension('prql', 'community');
+SELECT duckdb.install_extension('quack', 'community');
  install_extension 
 -------------------
  
@@ -194,11 +194,11 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
  httpfs         | t      | t         | 
- icu            | t      | t         | 
+ icu            | t      | t         | core
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
- prql           | t      | t         | community
+ quack          | t      | t         | community
 (7 rows)
 
 -- cleanup

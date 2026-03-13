@@ -17,21 +17,21 @@ def test_autoinstall_known_extensions(pg: Postgres, cur: Cursor):
     cur.sql("TRUNCATE duckdb.extensions")
     assert (
         cur.sql(
-            "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'prql' $$)"
+            "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'quack' $$)"
         )
         == []
     )
 
-    cur.sql("SELECT duckdb.install_extension('prql', 'community')")
+    cur.sql("SELECT duckdb.install_extension('quack', 'community')")
     assert cur.sql(
-        "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'prql' $$)"
+        "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'quack' $$)"
     ) == (True, True)
 
     # Now we delete it from disk, which should be reflected in the duckdb_extensions() table function
     if extension_dir.exists():
         shutil.rmtree(extension_dir)
     assert cur.sql(
-        "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'prql' $$)"
+        "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'quack' $$)"
     ) == (False, True)
 
     # We close the duckdb database for this session.
@@ -39,7 +39,7 @@ def test_autoinstall_known_extensions(pg: Postgres, cur: Cursor):
     # The next query should then try to load the extension, which will fail because it's not there and autoinstall_known_extensions is off.
     with pytest.raises(
         psycopg.errors.InternalError,
-        match=r'prql.duckdb_extension" not found.',
+        match=r'quack.duckdb_extension" not found.',
     ):
         cur.sql("SELECT * FROM duckdb.query($$ SELECT 1 $$)")
 
@@ -47,7 +47,7 @@ def test_autoinstall_known_extensions(pg: Postgres, cur: Cursor):
     cur.sql("CALL duckdb.recycle_ddb()")
     cur.sql("SET duckdb.autoinstall_known_extensions = 'on'")
     assert cur.sql(
-        "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'prql' $$)"
+        "SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'quack' $$)"
     ) == (True, True)
 
     # MotherDuck should also not be installed automatically if

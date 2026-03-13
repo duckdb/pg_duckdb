@@ -1,3 +1,5 @@
+#include <duckdb/common/serializer/serializer.hpp>
+#include <duckdb/common/serializer/deserializer.hpp>
 #include <duckdb/common/types.hpp>
 #include <duckdb/planner/filter/optional_filter.hpp>
 #include <duckdb/planner/filter/expression_filter.hpp>
@@ -8,6 +10,7 @@
 #include <duckdb/planner/expression/bound_conjunction_expression.hpp>
 #include <duckdb/planner/expression/bound_operator_expression.hpp>
 
+#include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -286,16 +289,21 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 	case duckdb::TableFilterType::CONJUNCTION_OR:
 	case duckdb::TableFilterType::CONJUNCTION_AND: {
 		auto conjuction_filter = reinterpret_cast<duckdb::ConjunctionFilter *>(filter);
+		bool is_or = filter->filter_type == duckdb::TableFilterType::CONJUNCTION_OR;
 		duckdb::vector<std::string> conjuction_child_filters;
 		for (idx_t i = 0; i < conjuction_filter->child_filters.size(); i++) {
 			std::string child_filter;
 			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter,
 			                        is_inside_optional_filter)) {
 				conjuction_child_filters.emplace_back(child_filter);
+			} else if (is_or && is_inside_optional_filter) {
+				/* Dropping a child of an OR makes it more restrictive,
+				 * which is incorrect for optional filters. Drop the
+				 * entire OR instead. */
+				return 0;
 			}
 		}
-		duckdb::string conjuction_delimiter =
-		    filter->filter_type == duckdb::TableFilterType::CONJUNCTION_OR ? " OR " : " AND ";
+		duckdb::string conjuction_delimiter = is_or ? " OR " : " AND ";
 		if (conjuction_child_filters.size()) {
 			query_filters += "(" + FilterJoin(conjuction_child_filters, std::move(conjuction_delimiter)) + ")";
 		}
@@ -492,11 +500,16 @@ PostgresScanLocalState::~PostgresScanLocalState() {
 // PostgresSeqScanFunctionData
 //
 
-PostgresScanFunctionData::PostgresScanFunctionData(Relation _rel, uint64_t _cardinality, Snapshot _snapshot)
-    : complex_filters(), rel(_rel), cardinality(_cardinality), snapshot(_snapshot) {
+PostgresScanFunctionData::PostgresScanFunctionData(Relation _rel, uint64_t _cardinality, Snapshot _snapshot,
+                                                   bool _owns_rel)
+    : complex_filters(), rel(_rel), cardinality(_cardinality), snapshot(_snapshot), owns_rel(_owns_rel) {
 }
 
 PostgresScanFunctionData::~PostgresScanFunctionData() {
+	if (owns_rel && rel) {
+		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+		CloseRelation(rel);
+	}
 }
 
 //
@@ -520,6 +533,28 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 	cardinality = PostgresScanCardinality;
 	pushdown_expression = PostgresScanPushdownExpression;
 	to_string = ToString;
+	serialize = PostgresScanSerialize;
+	deserialize = PostgresScanDeserialize;
+}
+
+void
+PostgresScanTableFunction::PostgresScanSerialize(duckdb::Serializer &serializer,
+                                                 const duckdb::optional_ptr<duckdb::FunctionData> bind_data,
+                                                 const duckdb::TableFunction &) {
+	auto &data = bind_data->Cast<PostgresScanFunctionData>();
+	serializer.WriteProperty(100, "relid", static_cast<uint32_t>(GetRelationOid(data.rel)));
+	serializer.WriteProperty(101, "cardinality", data.cardinality);
+	serializer.WriteProperty(102, "snapshot", static_cast<uint64_t>(reinterpret_cast<uintptr_t>(data.snapshot)));
+}
+
+duckdb::unique_ptr<duckdb::FunctionData>
+PostgresScanTableFunction::PostgresScanDeserialize(duckdb::Deserializer &deserializer, duckdb::TableFunction &) {
+	auto relid = deserializer.ReadProperty<uint32_t>(100, "relid");
+	auto cardinality = deserializer.ReadProperty<uint64_t>(101, "cardinality");
+	auto snap = deserializer.ReadProperty<uint64_t>(102, "snapshot");
+	auto rel = PostgresTable::OpenRelation(static_cast<Oid>(relid));
+	return duckdb::make_uniq<PostgresScanFunctionData>(rel, cardinality,
+	                                                   reinterpret_cast<Snapshot>(static_cast<uintptr_t>(snap)), true);
 }
 
 duckdb::InsertionOrderPreservingMap<duckdb::string>

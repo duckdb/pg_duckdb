@@ -4,7 +4,10 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/extension/extension_loader.hpp"
+#include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/parser/parsed_data/create_table_function_info.hpp"
+#include "duckdb/storage/storage_extension.hpp"
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/pg/guc.hpp"
@@ -85,18 +88,15 @@ ToString(char *value) {
 }
 
 #define SET_DUCKDB_OPTION(ddb_option_name)                                                                             \
-	config.options.ddb_option_name = duckdb_##ddb_option_name;                                                         \
+	config.SetOptionByName(#ddb_option_name, duckdb::Value(duckdb_##ddb_option_name));                                 \
 	elog(DEBUG2, "[PGDuckDB] Set DuckDB option: '" #ddb_option_name "'=%s", ToString(duckdb_##ddb_option_name).c_str());
 
 void
 DuckDBManager::Initialize() {
 	elog(DEBUG2, "(PGDuckDB/DuckDBManager) Creating DuckDB instance");
 
-	// Block signals before initializing DuckDB to ensure signal is handled by the Postgres main thread only
-	pgduckdb::ThreadSignalBlockGuard guard;
-
 	// Make sure directories provided in config exists
-	std::filesystem::create_directories(duckdb_temporary_directory);
+	std::filesystem::create_directories(duckdb_temp_directory);
 	std::filesystem::create_directories(duckdb_extension_directory);
 
 	duckdb::DBConfig config;
@@ -118,7 +118,7 @@ DuckDBManager::Initialize() {
 	SET_DUCKDB_OPTION(allow_community_extensions);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
-	SET_DUCKDB_OPTION(temporary_directory);
+	SET_DUCKDB_OPTION(temp_directory);
 	SET_DUCKDB_OPTION(extension_directory);
 
 	if (duckdb_maximum_memory > 0) {
@@ -134,8 +134,8 @@ DuckDBManager::Initialize() {
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'max_temp_directory_size'=%s", duckdb_max_temp_directory_size);
 	}
 
-	if (duckdb_maximum_threads > -1) {
-		SET_DUCKDB_OPTION(maximum_threads);
+	if (duckdb_threads > -1) {
+		SET_DUCKDB_OPTION(threads);
 	}
 
 	std::string connection_string;
@@ -185,14 +185,18 @@ DuckDBManager::Initialize() {
 	database = new duckdb::DuckDB(connection_string, &config);
 
 	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
-	dbconfig.storage_extensions["pgduckdb"] = duckdb::make_uniq<PostgresStorageExtension>();
+	duckdb::StorageExtension::Register(dbconfig, "pgduckdb", duckdb::make_shared_ptr<PostgresStorageExtension>());
 
 	// Register the unsupported type optimizer to run after all other optimizations
-	dbconfig.optimizer_extensions.push_back(UnsupportedTypeOptimizer::GetOptimizerExtension());
+	duckdb::OptimizerExtension::Register(dbconfig, UnsupportedTypeOptimizer::GetOptimizerExtension());
 
 	auto &extension_manager = database->instance->GetExtensionManager();
 	auto extension_active_load = extension_manager.BeginLoad("pgduckdb");
 	D_ASSERT(extension_active_load);
+	{
+		duckdb::ExtensionLoader loader(*extension_active_load);
+		loader.RegisterFunction(PostgresScanTableFunction());
+	}
 	duckdb::ExtensionInstallInfo extension_install_info;
 	extension_active_load->FinishLoad(extension_install_info);
 

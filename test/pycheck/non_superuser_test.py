@@ -18,7 +18,7 @@ def test_community_extensions(pg: Postgres):
             match="Permission Error: File system LocalFileSystem has been disabled by configuration",
         ):
             cur.sql(
-                "SELECT * FROM duckdb.raw_query($$ INSTALL prql FROM community; $$)"
+                "SELECT * FROM duckdb.raw_query($$ INSTALL quack FROM community; $$)"
             )
 
     # Even if such community extensions somehow get installed, it's not possible
@@ -26,18 +26,23 @@ def test_community_extensions(pg: Postgres):
     # superuser.
     with pg.cur() as cur:
         cur.sql("SET duckdb.force_execution = false")
-        cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL prql FROM community; $$)")
+        cur.sql("SET duckdb.allow_community_extensions = true")
+        cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL quack FROM community; $$)")
+
+    with pg.cur() as cur:
+        cur.sql("SET duckdb.allow_community_extensions = false")
+        cur.sql("SET duckdb.force_execution = false")
         with pytest.raises(
             Exception,
             match="IO Error: Extension .* could not be loaded because its signature is either missing or invalid and unsigned extensions are disabled by configuration",
         ):
-            cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD prql; $$)")
+            cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD quack; $$)")
 
     # But it should be possible to load them after changing that setting.
     with pg.cur() as cur:
         cur.sql("SET duckdb.allow_community_extensions = true")
         cur.sql("SET duckdb.force_execution = false")
-        cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD prql; $$)")
+        cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD quack; $$)")
 
     # And that setting is only changeable by superusers
     with pg.cur() as cur:
