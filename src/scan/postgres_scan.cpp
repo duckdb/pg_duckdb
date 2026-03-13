@@ -505,10 +505,6 @@ PostgresScanFunctionData::PostgresScanFunctionData(Relation _rel, uint64_t _card
 }
 
 PostgresScanFunctionData::~PostgresScanFunctionData() {
-	if (owns_rel && rel != nullptr) {
-		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-		CloseRelation(rel);
-	}
 }
 
 //
@@ -534,31 +530,29 @@ PostgresScanPushdownExpression(duckdb::ClientContext &, const duckdb::LogicalGet
  * register the function in the system catalog so the by-name lookup resolves,
  * and provide real (de)serialize so the bind data is reconstructed.
  *
- * Only relid and cardinality cross the wire. The snapshot is intentionally
- * not serialized -- it's a per-query pointer that the deep copy stays inside
- * of, so we just rebind to GetActiveSnapshot() on deserialize. complex_filters
- * is empty at the point DeepCopy runs (FilterPushdown happens before this) so
- * we don't bother round-tripping it either.
+ * The DeepCopy stays inside the same query, so the original Relation and
+ * Snapshot pointers are still live -- round-trip them as raw pointers rather
+ * than reopening the relation. complex_filters is empty at the point DeepCopy
+ * runs (FilterPushdown happens before this) so we don't bother round-tripping
+ * it either.
  */
 static void
-PostgresScanSerialize(duckdb::Serializer &serializer,
-                      const duckdb::optional_ptr<duckdb::FunctionData> bind_data_p,
+PostgresScanSerialize(duckdb::Serializer &serializer, const duckdb::optional_ptr<duckdb::FunctionData> bind_data_p,
                       const duckdb::TableFunction &) {
 	auto &bind_data = bind_data_p->Cast<PostgresScanFunctionData>();
-	serializer.WriteProperty(100, "relid", static_cast<uint32_t>(GetRelid(bind_data.rel)));
+	serializer.WriteProperty(100, "rel", static_cast<uint64_t>(reinterpret_cast<uintptr_t>(bind_data.rel)));
 	serializer.WriteProperty(101, "cardinality", bind_data.cardinality);
+	serializer.WriteProperty(102, "snapshot", static_cast<uint64_t>(reinterpret_cast<uintptr_t>(bind_data.snapshot)));
 }
 
 static duckdb::unique_ptr<duckdb::FunctionData>
 PostgresScanDeserialize(duckdb::Deserializer &deserializer, duckdb::TableFunction &) {
-	auto relid = deserializer.ReadProperty<uint32_t>(100, "relid");
+	auto rel = deserializer.ReadProperty<uint64_t>(100, "rel");
 	auto cardinality = deserializer.ReadProperty<uint64_t>(101, "cardinality");
-
-	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	Relation rel = pgduckdb::OpenRelation(static_cast<Oid>(relid));
-	auto result = duckdb::make_uniq<PostgresScanFunctionData>(rel, cardinality, GetActiveSnapshot());
-	result->owns_rel = true;
-	return std::move(result);
+	auto snap = deserializer.ReadProperty<uint64_t>(102, "snapshot");
+	return duckdb::make_uniq<PostgresScanFunctionData>(reinterpret_cast<Relation>(static_cast<uintptr_t>(rel)),
+	                                                   cardinality,
+	                                                   reinterpret_cast<Snapshot>(static_cast<uintptr_t>(snap)));
 }
 
 PostgresScanTableFunction::PostgresScanTableFunction()

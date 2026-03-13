@@ -71,11 +71,6 @@ struct PostgresScanFunctionData : public duckdb::TableFunctionData {
 	Relation rel;
 	uint64_t cardinality;
 	Snapshot snapshot;
-	// True when this instance opened the relation itself (e.g. via Deserialize)
-	// and must close it on destruction. False for the original path where
-	// PostgresTable owns the relation.
-	// TODO: remove with the rest of the WindowSelfJoinOptimizer workaround.
-	bool owns_rel = false;
 
 private:
 	PostgresScanFunctionData(const PostgresScanFunctionData &) = delete;
