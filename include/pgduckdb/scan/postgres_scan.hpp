@@ -65,13 +65,12 @@ private:
 // PostgresScanFunctionData
 
 struct PostgresScanFunctionData : public duckdb::TableFunctionData {
-	PostgresScanFunctionData(Relation rel, uint64_t cardinality, Snapshot snapshot, bool owns_rel = false);
+	PostgresScanFunctionData(Relation rel, uint64_t cardinality, Snapshot snapshot);
 	~PostgresScanFunctionData() override;
 	duckdb::vector<duckdb::string> complex_filters;
 	Relation rel;
 	uint64_t cardinality;
 	Snapshot snapshot;
-	bool owns_rel;
 
 private:
 	PostgresScanFunctionData(const PostgresScanFunctionData &) = delete;

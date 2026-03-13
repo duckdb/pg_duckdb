@@ -500,16 +500,11 @@ PostgresScanLocalState::~PostgresScanLocalState() {
 // PostgresSeqScanFunctionData
 //
 
-PostgresScanFunctionData::PostgresScanFunctionData(Relation _rel, uint64_t _cardinality, Snapshot _snapshot,
-                                                   bool _owns_rel)
-    : complex_filters(), rel(_rel), cardinality(_cardinality), snapshot(_snapshot), owns_rel(_owns_rel) {
+PostgresScanFunctionData::PostgresScanFunctionData(Relation _rel, uint64_t _cardinality, Snapshot _snapshot)
+    : complex_filters(), rel(_rel), cardinality(_cardinality), snapshot(_snapshot) {
 }
 
 PostgresScanFunctionData::~PostgresScanFunctionData() {
-	if (owns_rel && rel) {
-		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-		CloseRelation(rel);
-	}
 }
 
 //
@@ -542,19 +537,19 @@ PostgresScanTableFunction::PostgresScanSerialize(duckdb::Serializer &serializer,
                                                  const duckdb::optional_ptr<duckdb::FunctionData> bind_data,
                                                  const duckdb::TableFunction &) {
 	auto &data = bind_data->Cast<PostgresScanFunctionData>();
-	serializer.WriteProperty(100, "relid", static_cast<uint32_t>(GetRelationOid(data.rel)));
+	serializer.WriteProperty(100, "rel", static_cast<uint64_t>(reinterpret_cast<uintptr_t>(data.rel)));
 	serializer.WriteProperty(101, "cardinality", data.cardinality);
 	serializer.WriteProperty(102, "snapshot", static_cast<uint64_t>(reinterpret_cast<uintptr_t>(data.snapshot)));
 }
 
 duckdb::unique_ptr<duckdb::FunctionData>
 PostgresScanTableFunction::PostgresScanDeserialize(duckdb::Deserializer &deserializer, duckdb::TableFunction &) {
-	auto relid = deserializer.ReadProperty<uint32_t>(100, "relid");
+	auto rel = deserializer.ReadProperty<uint64_t>(100, "rel");
 	auto cardinality = deserializer.ReadProperty<uint64_t>(101, "cardinality");
 	auto snap = deserializer.ReadProperty<uint64_t>(102, "snapshot");
-	auto rel = PostgresTable::OpenRelation(static_cast<Oid>(relid));
-	return duckdb::make_uniq<PostgresScanFunctionData>(rel, cardinality,
-	                                                   reinterpret_cast<Snapshot>(static_cast<uintptr_t>(snap)), true);
+	return duckdb::make_uniq<PostgresScanFunctionData>(reinterpret_cast<Relation>(static_cast<uintptr_t>(rel)),
+	                                                   cardinality,
+	                                                   reinterpret_cast<Snapshot>(static_cast<uintptr_t>(snap)));
 }
 
 duckdb::InsertionOrderPreservingMap<duckdb::string>
