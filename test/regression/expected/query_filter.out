@@ -602,7 +602,7 @@ Parallel Seq Scan on query_filter_varchar
 SELECT a FROM query_filter_varchar WHERE upper(a) IS NOT DISTINCT FROM 'BTT';
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_varchar WHERE NOT ((upper(a) IS DISTINCT FROM 'BTT'))
+QUERY: SELECT a FROM public.query_filter_varchar WHERE (upper(a) IS NOT DISTINCT FROM 'BTT')
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_varchar

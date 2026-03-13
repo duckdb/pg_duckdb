@@ -2,5 +2,5 @@ duckdb_extension_load(json)
 duckdb_extension_load(icu)
 duckdb_extension_load(httpfs
     GIT_URL https://github.com/duckdb/duckdb-httpfs
-    GIT_TAG 9c7d34977b10346d0b4cbbde5df807d1dab0b2bf
+    GIT_TAG c3f215ab360f04dc3d3d5305fa81849c0121f111
 )

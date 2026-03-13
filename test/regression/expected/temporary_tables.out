@@ -108,7 +108,7 @@ SELECT duckdb.raw_query($$ SELECT database_name, schema_name, sql FROM duckdb_ta
 NOTICE:  result: database_name	schema_name	sql	
 VARCHAR	VARCHAR	VARCHAR	
 [ Rows: 2]
-pg_temp	main	CREATE TABLE t(bool BOOLEAN, i2 SMALLINT, i4 INTEGER DEFAULT(1), i8 BIGINT NOT NULL, fl4 FLOAT DEFAULT((random() + CAST(1 AS DOUBLE))), fl8 DOUBLE, t1 VARCHAR, t2 VARCHAR, t3 VARCHAR, d DATE, ts TIMESTAMP, json_obj JSON, CHECK((i4 > i2)), CHECK((fl8 > CAST(0 AS DOUBLE))));
+pg_temp	main	CREATE TABLE t(bool BOOLEAN, i2 SMALLINT, i4 INTEGER DEFAULT(1), i8 BIGINT NOT NULL, fl4 FLOAT DEFAULT((random() + CAST(1 AS "DOUBLE"))), fl8 DOUBLE, t1 VARCHAR, t2 VARCHAR, t3 VARCHAR, d DATE, ts TIMESTAMP, json_obj JSON, CHECK((i4 > i2)), CHECK((fl8 > CAST(0 AS "DOUBLE"))));
 pg_temp	main	CREATE TABLE t2(a INTEGER);
 
 
