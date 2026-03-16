@@ -1,0 +1,38 @@
+-- Test duckdb.allowed_directories GUC with comma-separated values
+-- Recycle DuckDB first so GucCheckDuckDBNotInitdHook allows SET
+CALL duckdb.recycle_ddb();
+SET duckdb.allowed_directories = 's3://test-bucket/data/, /tmp/duckdb-test/';
+SET duckdb.enable_external_access = false;
+-- Should be blocked (not in allowed dirs)
+SELECT * FROM duckdb.raw_query($$ SELECT * FROM read_csv('/etc/passwd') $$);
+WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: Table Function with name raw_query does not exist!
+Did you mean "main.pragma_user_agent"?
+
+LINE 1: SELECT raw_query FROM duckdb.raw_query(' SELECT * FROM read_csv(''/etc/passwd...
+                              ^
+ERROR:  (PGDuckDB/pgduckdb_raw_query_cpp) Permission Error: Cannot access file "/etc/passwd" - file system operations are disabled by configuration
+
+LINE 1:  SELECT * FROM read_csv('/etc/passwd') 
+                       ^
+SELECT * FROM duckdb.raw_query($$ SELECT * FROM read_csv('https://example.com/test.csv') $$);
+WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: Table Function with name raw_query does not exist!
+Did you mean "main.pragma_user_agent"?
+
+LINE 1: SELECT raw_query FROM duckdb.raw_query(' SELECT * FROM read_csv(''https://example...
+                              ^
+ERROR:  (PGDuckDB/pgduckdb_raw_query_cpp) Permission Error: Cannot access file "https://example.com/test.csv" - file system operations are disabled by configuration
+
+LINE 1:  SELECT * FROM read_csv('https://example.com/test.csv') 
+                       ^
+SELECT * FROM duckdb.raw_query($$ SELECT * FROM read_csv('s3://other-bucket/secret.csv') $$);
+WARNING:  (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: Table Function with name raw_query does not exist!
+Did you mean "main.pragma_user_agent"?
+
+LINE 1: SELECT raw_query FROM duckdb.raw_query(' SELECT * FROM read_csv(''s3://other-bucket...
+                              ^
+ERROR:  (PGDuckDB/pgduckdb_raw_query_cpp) Permission Error: Cannot access file "s3://other-bucket/secret.csv" - file system operations are disabled by configuration
+
+LINE 1:  SELECT * FROM read_csv('s3://other-bucket/secret.csv') 
+                       ^
+-- Cleanup: recycle to clear restrictions for subsequent tests
+CALL duckdb.recycle_ddb();
