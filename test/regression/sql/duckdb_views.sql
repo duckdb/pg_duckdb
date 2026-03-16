@@ -6,20 +6,23 @@ SET ROLE duckdb_view_admin;
 
 CREATE VIEW duckdb_view AS SELECT r['a']::int as a FROM duckdb.query($$ SELECT 1 a $$) r;
 CREATE VIEW postgres_view AS SELECT 2 from generate_series(1,2);
+CREATE TABLE postgres_table (x int);
+INSERT INTO postgres_table VALUES (2), (2);
 
 SET ROLE duckdb_view_user1;
 
 SELECT * from duckdb_view;
 SELECT * from postgres_view;
 SELECT * from duckdb.query($$ FROM pgduckdb.public.duckdb_view $$);
-SELECT * from duckdb.query($$ FROM pgduckdb.public.postgres_view $$);
+SELECT * from duckdb.query($$ FROM pgduckdb.public.postgres_table $$);
 
 SET ROLE duckdb_view_admin;
 GRANT SELECT ON duckdb_view TO duckdb_view_user1;
 GRANT SELECT ON postgres_view TO duckdb_view_user1;
+GRANT SELECT ON postgres_table TO duckdb_view_user1;
 SET ROLE duckdb_view_user1;
 
 SELECT * from duckdb_view;
 SELECT * from postgres_view;
 SELECT * from duckdb.query($$ FROM pgduckdb.public.duckdb_view $$);
-SELECT * from duckdb.query($$ FROM pgduckdb.public.postgres_view $$);
+SELECT * from duckdb.query($$ FROM pgduckdb.public.postgres_table $$);
