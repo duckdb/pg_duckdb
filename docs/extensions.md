@@ -9,7 +9,9 @@
 | `iceberg` | Apache Iceberg support | Installable |
 | `delta` | Delta Lake support | Installable |
 | `azure` | Azure Blob Storage connectivity | Installable |
+| `excel` | Excel Xlsx file support | Installable |
 | Community | Various community extensions | Installable (requires configuration) |
+| `gsheets` | GSheets from GDrive file support | Installable (requires configuration) |
 
 Installing other extensions may work, but they have not been thoroughly tested and are used at your own risk
 
@@ -40,6 +42,11 @@ SELECT duckdb.install_extension('prql', 'community');
 
 ```sql
 SET duckdb.allow_unsigned_extensions = true;
+```
+
+**Note**: Recycling of the DuckDb might be required:
+```sql
+CALL duckdb.recycle_ddb();
 ```
 
 ## Managing Extensions
