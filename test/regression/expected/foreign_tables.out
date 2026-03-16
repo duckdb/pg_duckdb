@@ -1,0 +1,110 @@
+-- parquet
+CREATE FOREIGN TABLE external_parquet ()
+  SERVER duckdb
+  OPTIONS (
+    location '../../data/iris.parquet',
+    format   'parquet',
+    options  '{"filename": true, "file_row_number": true}'
+  );
+SELECT "sepal.length", "file_row_number", "filename" FROM external_parquet ORDER BY "sepal.length", "file_row_number" LIMIT 5;
+ sepal.length | file_row_number |        filename         
+--------------+-----------------+-------------------------
+          4.3 |              13 | ../../data/iris.parquet
+          4.4 |               8 | ../../data/iris.parquet
+          4.4 |              38 | ../../data/iris.parquet
+          4.4 |              42 | ../../data/iris.parquet
+          4.5 |              41 | ../../data/iris.parquet
+(5 rows)
+
+SELECT count(*) FROM external_parquet;
+ count 
+-------
+   150
+(1 row)
+
+ALTER TABLE external_parquet RENAME TO external_parquet_renamed;
+SELECT count(*) FROM external_parquet_renamed;
+ count 
+-------
+   150
+(1 row)
+
+ALTER FOREIGN TABLE external_parquet_renamed RENAME TO external_parquet_renamed_1;
+SELECT count(*) FROM external_parquet_renamed_1;
+ count 
+-------
+   150
+(1 row)
+
+CREATE SCHEMA external_parquet_schema;
+SET search_path to external_parquet_schema;
+CREATE FOREIGN TABLE external_parquet ()
+  SERVER duckdb
+  OPTIONS (
+    location '../../data/iris.parquet'
+  );
+SELECT count(*) FROM external_parquet;
+ count 
+-------
+   150
+(1 row)
+
+DROP FOREIGN TABLE external_parquet;
+RESET search_path;
+-- CSV
+CREATE FOREIGN TABLE external_csv ()
+  SERVER duckdb
+  OPTIONS (
+    location '../../data/iris.csv',
+    format   'csv',
+    options  '{"header": true}'
+  );
+SELECT count(*) FROM external_csv;
+ count 
+-------
+   150
+(1 row)
+
+SELECT min("sepal.length"), max("sepal.length") FROM external_csv;
+ min | max 
+-----+-----
+ 4.3 | 7.9
+(1 row)
+
+-- JSON
+CREATE FOREIGN TABLE external_json ()
+  SERVER duckdb
+  OPTIONS (
+    location '../../data/table.json',
+    format   'json'
+  );
+SELECT count(*) FROM external_json;
+ count 
+-------
+   100
+(1 row)
+
+SELECT sum(a), min(b), max(c) FROM external_json;
+ sum  |  min   |  max  
+------+--------+-------
+ 5050 | json_1 | 100.5
+(1 row)
+
+-- CTAS from foreign table
+CREATE TABLE json_tbl AS SELECT * FROM external_json;
+SELECT count(*) FROM json_tbl;
+ count 
+-------
+   100
+(1 row)
+
+SELECT sum(a), min(b), max(c) FROM json_tbl;
+ sum  |  min   |  max  
+------+--------+-------
+ 5050 | json_1 | 100.5
+(1 row)
+
+DROP FOREIGN TABLE external_parquet_renamed_1;
+DROP FOREIGN TABLE external_csv;
+DROP FOREIGN TABLE external_json;
+DROP TABLE json_tbl;

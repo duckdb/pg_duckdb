@@ -182,7 +182,7 @@ SELECT fs.srvname, fs.srvtype, fs.srvoptions, um.umoptions
 FROM pg_foreign_server fs
 INNER JOIN pg_foreign_data_wrapper fdw ON fdw.oid = fs.srvfdw
 LEFT JOIN pg_user_mapping um ON um.umserver = fs.oid
-WHERE fdw.fdwname = 'duckdb' AND fs.srvtype != 'motherduck'
+WHERE fdw.fdwname = 'duckdb' AND fs.srvtype != 'motherduck' AND fs.srvtype != 'foreign_table'
 ORDER BY fs.srvname;
 
 SELECT * FROM duckdb.query($$
