@@ -63,7 +63,7 @@ InvalidateUserDataCache() {
 	cache.motherduck_user_mapping_oid = InvalidOid;
 }
 
-void
+static void
 LoadMotherDuckCache() {
 	Assert(!cache.valid); // shouldn't be called if the cache is already valid
 
