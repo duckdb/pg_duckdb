@@ -7,7 +7,9 @@ LOAD 'pg_duckdb';
 -- we'll put into @extschema@ so that in normal usage they get put into the
 -- public schema and are thus more easily usable. This is the case for the
 -- read_csv, read_parquet and iceberg functions. It would be sad for usability
--- if people would have to prefix those with duckdb.read_csv
+-- if people would have to prefix those with duckdb.read_csv. The extension can 
+-- also be installed in a non-public schema in which case those functions will 
+-- require a schema qualified name.
 CREATE SCHEMA duckdb;
 -- Allow users to see the objects in the duckdb schema. We'll manually revoke rights
 -- for the dangerous ones.
