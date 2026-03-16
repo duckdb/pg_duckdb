@@ -163,6 +163,7 @@ brew install lz4
   export PG_CONFIG=/opt/homebrew/opt/postgresql@18/bin/pg_config
   ```
 - **Apple Silicon**: All dependencies should install natively via Homebrew
+- **`libduckdb.so` not found on install**: On macOS, if you hit `install: ... libduckdb.so: No such file or directory`, the `DLSUFFIX` value coming from the PGXS Makefile can be set to `.so` while DuckDB builds `libduckdb.dylib` (seen with PostgreSQL 14/15). Use PostgreSQL 16+ (for example `postgresql@18`) and point `PG_CONFIG` to it.
 
 # FAQ
 
