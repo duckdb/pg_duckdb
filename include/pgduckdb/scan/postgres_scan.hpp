@@ -82,6 +82,13 @@ private:
 struct PostgresScanTableFunction : public duckdb::TableFunction {
 	PostgresScanTableFunction();
 
+	static void PostgresScanSerialize(duckdb::Serializer &serializer,
+	                                  const duckdb::optional_ptr<duckdb::FunctionData> bind_data,
+	                                  const duckdb::TableFunction &function);
+
+	static duckdb::unique_ptr<duckdb::FunctionData> PostgresScanDeserialize(duckdb::Deserializer &deserializer,
+	                                                                        duckdb::TableFunction &function);
+
 	static duckdb::unique_ptr<duckdb::GlobalTableFunctionState>
 	PostgresScanInitGlobal(duckdb::ClientContext &context, duckdb::TableFunctionInitInput &input);
 

@@ -38,8 +38,8 @@ SELECT public.json_exists('{"a": {"b": 1}}'::jsonb, '$.a.c');
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: Type with name jsonb does not exist!
 Did you mean "blob"?
 
-LINE 1: SELECT system.main.json_exists(('{"a": {"b": 1}}'::jsonb), '$.a.c'::character varying) AS json_exists
-                                                           ^
+LINE 1: SELECT system.main."json_exists"(('{"a": {"b": 1}}'::jsonb), '$.a.c'::character varying) AS "json_exists"
+                                                             ^
 -- </JSON_EXISTS>
 -- <JSON_EXTRACT>
 -- Basic JSON Extraction (using a string literal)

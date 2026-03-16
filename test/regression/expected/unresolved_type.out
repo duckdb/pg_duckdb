@@ -69,9 +69,9 @@ select regexp_replace(r['a'], 'A', 'x', 'i') from duckdb.query($$ SELECT 'abc' a
 (1 row)
 
 select date_trunc('year', r['ts']) from duckdb.query($$ SELECT '2024-08-04 12:34:56'::timestamp ts $$) r;
- date_trunc 
-------------
- 01-01-2024
+        date_trunc        
+--------------------------
+ Mon Jan 01 00:00:00 2024
 (1 row)
 
 select strptime('Wed, 1 January 1992 - 08:38:40 PM', '%a, %-d %B %Y - %I:%M:%S %p');

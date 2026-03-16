@@ -33,7 +33,7 @@ Community extensions can be installed when `duckdb.allow_community_extensions` i
 SET duckdb.allow_community_extensions = true;
 
 -- Install a community extension
-SELECT duckdb.install_extension('prql', 'community');
+SELECT duckdb.install_extension('quack', 'community');
 ```
 
 **Note**: In some environments, you may also need to enable unsigned extensions:
@@ -56,7 +56,7 @@ SELECT duckdb.autoload_extension('iceberg', false);
 -- For such extensions, you can still load them manually in a session
 SELECT duckdb.load_extension('iceberg');
 -- You can also install community extensions
-SELECT duckdb.install_extension('prql', 'community');
+SELECT duckdb.install_extension('quack', 'community');
 ```
 
 ## Supported Extensions
