@@ -5,7 +5,9 @@
 extern "C" {
 extern bool IsSubTransaction(void);
 
+#ifndef FirstCommandId
 #define FirstCommandId ((CommandId)0)
+#endif
 
 /*
  * These enum definitions are vendored in so we can implement a postgres
