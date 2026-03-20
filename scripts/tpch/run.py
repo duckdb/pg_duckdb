@@ -94,7 +94,13 @@ def build_pg_env(username, password):
 
 
 def create_tables(
-    host, database_name, schema_name, username, password, no_indexes=False, pk_only=False
+    host,
+    database_name,
+    schema_name,
+    username,
+    password,
+    no_indexes=False,
+    pk_only=False,
 ):
     """Create tables using SQL files"""
     pg_env = build_pg_env(username, password)
