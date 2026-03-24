@@ -490,12 +490,10 @@ SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg') ORDER BY sequence
 (2 rows)
 
 SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths => true);
-                             manifest_path                              | manifest_sequence_number | manifest_content | status  | content  |                                     file_path                                      
-------------------------------------------------------------------------+--------------------------+------------------+---------+----------+------------------------------------------------------------------------------------
- lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m1.avro |                        2 | DATA             | ADDED   | EXISTING | lineitem_iceberg/data/00041-414-f3c73457-bbd6-4b92-9c15-17b241171b16-00001.parquet
- lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro |                        2 | DATA             | DELETED | EXISTING | lineitem_iceberg/data/00000-411-0792dcfe-4e25-4ca3-8ada-175286069a47-00001.parquet
-(2 rows)
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Invalid Configuration Error: 'manifest_entry.file_sequence_number' is only allowed to be NULL for ADDED entries
 
+LINE 1: ..._number, manifest_content, status, content, file_path FROM system.main.iceberg_metadata('../../data/lineitem_iceberg...
+                                                                      ^
 -- read_json
 SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r;
  count 

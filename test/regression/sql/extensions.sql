@@ -61,7 +61,8 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 CALL duckdb.recycle_ddb();
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
 
-SELECT duckdb.install_extension('quack', 'community');
+-- TODO: re-enable when community extensions are published for v1.5.1
+-- SELECT duckdb.install_extension('quack', 'community');
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 

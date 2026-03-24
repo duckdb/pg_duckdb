@@ -6,7 +6,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
-#include "duckdb/parser/parsed_data/create_table_function_info.hpp"
 #include "duckdb/storage/storage_extension.hpp"
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
@@ -24,8 +23,6 @@
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
-#include "pgduckdb/scan/postgres_scan.hpp"
-
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/utility/signal_guard.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
@@ -193,13 +190,10 @@ DuckDBManager::Initialize() {
 	// Register the unsupported type optimizer to run after all other optimizations
 	duckdb::OptimizerExtension::Register(dbconfig, UnsupportedTypeOptimizer::GetOptimizerExtension());
 
+	// Register pgduckdb as a loaded extension so it appears in duckdb_extensions()
 	auto &extension_manager = database->instance->GetExtensionManager();
 	auto extension_active_load = extension_manager.BeginLoad("pgduckdb");
 	D_ASSERT(extension_active_load);
-	{
-		duckdb::ExtensionLoader loader(*extension_active_load);
-		loader.RegisterFunction(PostgresScanTableFunction());
-	}
 	duckdb::ExtensionInstallInfo extension_install_info;
 	extension_active_load->FinishLoad(extension_install_info);
 
