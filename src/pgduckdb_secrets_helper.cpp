@@ -6,6 +6,8 @@
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 
+#include "pgduckdb/pgduckdb_xact.hpp"
+
 extern "C" {
 #include "postgres.h"
 
@@ -81,6 +83,7 @@ MakeDuckDBCreateSecretQuery(const char *server_name, const char *type, List *ser
 List *
 ListDuckDBCreateSecretQueries() {
 	MemoryContext entry_ctx = CurrentMemoryContext;
+	bool was_top_level_statement = pgduckdb::IsStatementTopLevel();
 	SPI_connect();
 
 	// List all SERVER created with 'duckdb' FDW
@@ -129,6 +132,7 @@ ListDuckDBCreateSecretQueries() {
 	}
 
 	SPI_finish();
+	pgduckdb::SetStatementTopLevel(was_top_level_statement);
 	return results;
 }
 
