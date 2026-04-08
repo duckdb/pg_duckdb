@@ -181,11 +181,6 @@ hydra
 
 ### Package Managers
 
-**pgxman (apt):**
-```bash
-pgxman install pg_duckdb
-```
-
 **Compile from source:**
 
 ```bash

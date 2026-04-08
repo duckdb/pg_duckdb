@@ -15,7 +15,12 @@ extern "C" {
 extern "C" {
 
 #ifdef PG_MODULE_MAGIC_EXT
-PG_MODULE_MAGIC_EXT(.name = "pg_duckdb", .version = "1.0.0");
+#ifndef PG_DUCKDB_VERSION
+// Should always be defined via build system, but keep a fallback here for
+// static analysis tools etc.
+#define PG_DUCKDB_VERSION "unknown"
+#endif
+PG_MODULE_MAGIC_EXT(.name = "pg_duckdb", .version = PG_DUCKDB_VERSION);
 #else
 PG_MODULE_MAGIC;
 #endif
