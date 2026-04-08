@@ -1823,14 +1823,15 @@ ConvertNumericParameterToDuckValue(Datum value) {
 	if (integral_digits < 1) {
 		integral_digits = 1; // At minimum 1 digit for the integral part
 	}
-	uint8_t scale = static_cast<uint8_t>(numeric_var.dscale);
-	uint8_t precision = static_cast<uint8_t>(integral_digits + scale);
 
-	// Clamp to DuckDB's max precision (38)
-	if (precision > 38) {
-		elog(WARNING, "NUMERIC precision %d exceeds DuckDB maximum (38), truncating", precision);
-		precision = 38;
+	// Clamp using int to avoid uint8_t overflow (e.g. 256 digits wraps to 0)
+	int raw_precision = integral_digits + static_cast<int>(numeric_var.dscale);
+	if (raw_precision > 38) {
+		elog(WARNING, "NUMERIC precision %d exceeds DuckDB maximum (38), truncating", raw_precision);
+		raw_precision = 38;
 	}
+	uint8_t precision = static_cast<uint8_t>(raw_precision);
+	uint8_t scale = static_cast<uint8_t>(std::min(static_cast<int>(numeric_var.dscale), raw_precision));
 	if (scale > precision) {
 		elog(DEBUG1, "NUMERIC scale (%d) > precision (%d), clamping", scale, precision);
 		scale = precision;
