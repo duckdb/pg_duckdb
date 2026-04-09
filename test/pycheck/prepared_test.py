@@ -66,9 +66,11 @@ def test_prepared_select_list_parameters(cur: Cursor):
         q_select_where = (
             "SELECT %s AS label, id, name FROM t_select_param WHERE id = %s"
         )
-        assert cur.sql(q_select_where, ("my_label", 42), prepare=True) == [
-            ("my_label", 42, "charlie")
-        ]
+        assert cur.sql(q_select_where, ("my_label", 42), prepare=True) == (
+            "my_label",
+            42,
+            "charlie",
+        )
 
 
 def _create_typed_bind_parquet(tmp_path) -> str:
@@ -229,7 +231,7 @@ def test_extended(cur: Cursor):
 
 
 def test_prepared_numeric_parameter(cur: Cursor):
-    cur.sql("CREATE TABLE t_numeric(val NUMERIC)")
+    cur.sql("CREATE TABLE t_numeric(val NUMERIC(10,3))")
     cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("123.456"),))
     cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("999999.99"),))
     cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("-42.0"),))
@@ -254,7 +256,7 @@ def test_prepared_array_parameters(cur: Cursor):
     cur.sql("INSERT INTO t_int_arr VALUES (%s)", ([4, 5],))
 
     cur.sql("SET plan_cache_mode = 'force_custom_plan'")
-    q_int = "SELECT count(*) FROM t_int_arr WHERE vals = %s"
+    q_int = "SELECT count(*) FROM t_int_arr WHERE vals = %s::int[]"
     assert cur.sql(q_int, ([1, 2, 3],), prepare=True) == 1
     assert cur.sql(q_int, ([4, 5],)) == 1
     assert cur.sql(q_int, ([1, 2],)) == 0
@@ -279,13 +281,14 @@ def test_prepared_array_parameters(cur: Cursor):
     assert cur.sql(q_text, (["foo"],)) == 1
 
     # Test NUMERIC[] arrays (special case with per-element precision)
-    cur.sql("CREATE TABLE t_numeric_arr(vals NUMERIC[])")
+    cur.sql("CREATE TABLE t_numeric_arr(vals NUMERIC(10,1)[])")
     cur.sql(
-        "INSERT INTO t_numeric_arr VALUES (%s)", ([Decimal("1.1"), Decimal("2.2")],)
+        "INSERT INTO t_numeric_arr VALUES (%s::numeric(10,1)[])",
+        ([Decimal("1.1"), Decimal("2.2")],),
     )
 
     cur.sql("SET plan_cache_mode = 'force_custom_plan'")
-    q_num = "SELECT count(*) FROM t_numeric_arr WHERE vals = %s"
+    q_num = "SELECT count(*) FROM t_numeric_arr WHERE vals = %s::numeric(10,1)[]"
     assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],), prepare=True) == 1
 
     cur.sql("SET plan_cache_mode = 'force_generic_plan'")
@@ -302,7 +305,7 @@ def test_prepared_array_parameters(cur: Cursor):
     ],
 )
 def test_prepared_unsupported_parameter_type(cur: Cursor, type_sql, value):
-    cur.sql(f"CREATE TABLE t(x {type_sql}) USING duckdb")
+    cur.sql(f"CREATE TEMP TABLE t(x {type_sql}) USING duckdb")
     cur.sql("INSERT INTO t VALUES (%s)", (value,))
     cur.sql("SET plan_cache_mode = 'force_generic_plan'")
     q = "SELECT count(*) FROM t WHERE x = %s"
@@ -360,7 +363,7 @@ def test_prepared_ctas(cur: Cursor):
     # crash.
     with pytest.raises(
         psycopg.errors.InternalError,
-        match="Could not find parameter with identifier 1",
+        match="Not all parameters were bound",
     ):
         cur.sql(
             "CREATE TEMP TABLE t2 USING duckdb AS SELECT * FROM heapt where id = %s",
