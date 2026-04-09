@@ -1122,7 +1122,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	case TEXTOID:
 	case JSONOID:
 	case UNKNOWNOID:
-	case 0:  /* InvalidOid - for UNKNOWN columns where tuple descriptor has no type */
+	case 0: /* InvalidOid - for UNKNOWN columns where tuple descriptor has no type */
 	case VARCHAROID: {
 		slot->tts_values[col] = ConvertToStringDatum(value);
 		break;

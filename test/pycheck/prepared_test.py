@@ -1,6 +1,6 @@
 import datetime
-from decimal import Decimal
 import uuid
+from decimal import Decimal
 
 import duckdb
 import psycopg.errors
@@ -47,7 +47,9 @@ def test_prepared(cur: Cursor):
 
 def test_prepared_select_list_parameters(cur: Cursor):
     cur.sql("CREATE TEMP TABLE t_select_param (id int, name text) USING duckdb")
-    cur.sql("INSERT INTO t_select_param VALUES (1, 'alice'), (2, 'bob'), (42, 'charlie')")
+    cur.sql(
+        "INSERT INTO t_select_param VALUES (1, 'alice'), (2, 'bob'), (42, 'charlie')"
+    )
 
     expected_rows = [
         ("my_label", 1, "alice"),
@@ -61,8 +63,12 @@ def test_prepared_select_list_parameters(cur: Cursor):
         q_select = "SELECT %s AS label, id, name FROM t_select_param ORDER BY id"
         assert cur.sql(q_select, ("my_label",), prepare=True) == expected_rows
 
-        q_select_where = "SELECT %s AS label, id, name FROM t_select_param WHERE id = %s"
-        assert cur.sql(q_select_where, ("my_label", 42), prepare=True) == [("my_label", 42, "charlie")]
+        q_select_where = (
+            "SELECT %s AS label, id, name FROM t_select_param WHERE id = %s"
+        )
+        assert cur.sql(q_select_where, ("my_label", 42), prepare=True) == [
+            ("my_label", 42, "charlie")
+        ]
 
 
 def _create_typed_bind_parquet(tmp_path) -> str:
@@ -103,7 +109,9 @@ def test_prepared_parquet_untyped_in_param(cur: Cursor, tmp_path):
 def test_prepared_parquet_casted_param_controls(cur: Cursor, tmp_path):
     parquet_path = _create_typed_bind_parquet(tmp_path)
     q_between = "SELECT count(*) FROM read_parquet(%s) t WHERE t['bc_date'] BETWEEN %s::integer AND %s::integer"
-    q_in = "SELECT count(*) FROM read_parquet(%s) t WHERE t['data_stream'] IN (%s::text)"
+    q_in = (
+        "SELECT count(*) FROM read_parquet(%s) t WHERE t['data_stream'] IN (%s::text)"
+    )
     cur.sql("SET duckdb.force_execution = true")
 
     for mode in ("force_custom_plan", "force_generic_plan"):
@@ -123,7 +131,9 @@ def test_prepared_parquet_native_prepare_execute_between(cur: Cursor, tmp_path):
 
     for mode in ("force_custom_plan", "force_generic_plan"):
         cur.sql(f"SET plan_cache_mode = '{mode}'")
-        cur.sql(f"PREPARE b1_between AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['bc_date'] BETWEEN $1 AND $2")
+        cur.sql(
+            f"PREPARE b1_between AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['bc_date'] BETWEEN $1 AND $2"
+        )
         assert cur.sql("EXECUTE b1_between(20240901, 20240902)") == 2
         cur.sql("DEALLOCATE b1_between")
 
@@ -139,7 +149,9 @@ def test_prepared_parquet_native_prepare_execute_in(cur: Cursor, tmp_path):
 
     for mode in ("force_custom_plan", "force_generic_plan"):
         cur.sql(f"SET plan_cache_mode = '{mode}'")
-        cur.sql(f"PREPARE b3_in AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['data_stream'] IN ($1)")
+        cur.sql(
+            f"PREPARE b3_in AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['data_stream'] IN ($1)"
+        )
         assert cur.sql("EXECUTE b3_in('lv')") == 1
         cur.sql("DEALLOCATE b3_in")
 
@@ -277,13 +289,18 @@ def test_prepared_array_parameters(cur: Cursor):
     assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],), prepare=True) == 1
 
     cur.sql("SET plan_cache_mode = 'force_generic_plan'")
-    assert cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],)) == 1  # creates generic plan
+    assert (
+        cur.sql(q_num, ([Decimal("1.1"), Decimal("2.2")],)) == 1
+    )  # creates generic plan
 
 
-@pytest.mark.parametrize("type_sql,value", [
-    ("oid", 42),
-    ("name", "myname"),
-])
+@pytest.mark.parametrize(
+    "type_sql,value",
+    [
+        ("oid", 42),
+        ("name", "myname"),
+    ],
+)
 def test_prepared_unsupported_parameter_type(cur: Cursor, type_sql, value):
     cur.sql(f"CREATE TABLE t(x {type_sql}) USING duckdb")
     cur.sql("INSERT INTO t VALUES (%s)", (value,))

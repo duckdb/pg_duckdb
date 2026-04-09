@@ -73,8 +73,7 @@ CreatePlan(Query *query, bool throw_error) {
 
 	elog(DEBUG2, "(PGDuckDB/CreatePlan) DuckDB Prepare returned %zu result column(s)", prepared_result_types.size());
 	for (size_t j = 0; j < prepared_result_types.size(); j++) {
-		elog(DEBUG2, "(PGDuckDB/CreatePlan)   col[%zu] = %s  name=%s", j,
-		     prepared_result_types[j].ToString().c_str(),
+		elog(DEBUG2, "(PGDuckDB/CreatePlan)   col[%zu] = %s  name=%s", j, prepared_result_types[j].ToString().c_str(),
 		     prepared_query->GetNames()[j].c_str());
 	}
 
