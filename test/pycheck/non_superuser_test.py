@@ -5,7 +5,7 @@ import pytest
 from .utils import Postgres
 
 
-@pytest.mark.skip(reason="quack community extension not yet published for v1.5.1")
+@pytest.mark.skip(reason="quack community extension not yet published for v1.5.2")
 def test_community_extensions(pg: Postgres):
     pg.create_user("user1", psycopg.sql.SQL("IN ROLE duckdb_group"))
     # Raw extension installation should not be possible non-superusers, because

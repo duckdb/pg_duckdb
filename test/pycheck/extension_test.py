@@ -7,7 +7,7 @@ import pytest
 from .utils import Cursor, Postgres
 
 
-@pytest.mark.skip(reason="quack community extension not yet published for v1.5.1")
+@pytest.mark.skip(reason="quack community extension not yet published for v1.5.2")
 def test_autoinstall_known_extensions(pg: Postgres, cur: Cursor):
     cur.sql("SET duckdb.autoinstall_known_extensions = 'off'")
     cur.sql("SET duckdb.allow_community_extensions = 'on'")
