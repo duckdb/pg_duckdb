@@ -27,7 +27,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
 
-#if PG_VERSION_NUM >= 160000
+#if PG_VERSION_NUM >= 180000
 #include "executor/executor.h"
 #endif
 }
@@ -162,7 +162,8 @@ check_view_perms_recursive(Query *query) {
 #else
 		if (rte->perminfoindex != 0 && rte->relkind == RELKIND_VIEW) {
 			RTEPermissionInfo *perminfo = getRTEPermissionInfo(query->rteperminfos, rte);
-			if (!ExecCheckPermissions(query->rtable, list_make1(perminfo), false)) {
+			bool result = ExecCheckOneRelPerms(perminfo);
+			if (!result) {
 				aclcheck_error(ACLCHECK_NO_PRIV, OBJECT_VIEW, get_rel_name(perminfo->relid));
 			}
 		}
