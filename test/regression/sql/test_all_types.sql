@@ -22,7 +22,6 @@ SELECT * exclude(
     timestamp_ms, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
     timestamp_ns, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
     timestamp_tz, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
-    time_ns, -- TIME_NS is not supported in Postgres
-    geometry -- geometry is not yet supported
+    time_ns -- TIME_NS is not supported in Postgres
 )
 $$)
