@@ -413,7 +413,11 @@ DuckdbTableAmOid() {
 bool
 IsDuckdbTable(Form_pg_class relation) {
 	Assert(cache.valid);
-	return relation->relam == pgduckdb::DuckdbTableAmOid();
+	Oid duckdb_am_oid = pgduckdb::DuckdbTableAmOid();
+	if (duckdb_am_oid == InvalidOid) {
+		return false;
+	}
+	return relation->relam == duckdb_am_oid;
 }
 
 bool
