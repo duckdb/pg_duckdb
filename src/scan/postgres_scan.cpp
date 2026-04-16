@@ -294,10 +294,11 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter,
 			                        is_inside_optional_filter)) {
 				conjuction_child_filters.emplace_back(child_filter);
-			} else if (is_or && is_inside_optional_filter) {
-				/* Dropping a child of an OR makes it more restrictive,
-				 * which is incorrect for optional filters. Drop the
-				 * entire OR instead. */
+			} else if (is_or) {
+				/* Dropping a child of an OR makes it more restrictive.
+				 * Drop the entire OR instead. */
+				pd_log(DEBUG1, "(DuckDB/ExtractQueryFilters) Dropping OR filter: %s",
+				       filter->ToString(column_name).c_str());
 				return 0;
 			}
 		}
