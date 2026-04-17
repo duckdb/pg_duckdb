@@ -8,6 +8,7 @@
 | `json` | JSON functions and operators | Pre-installed |
 | `iceberg` | Apache Iceberg support | Installable |
 | `delta` | Delta Lake support | Installable |
+| `vortex` | Vortex file format support | Installable |
 | `azure` | Azure Blob Storage connectivity | Installable |
 | Community | Various community extensions | Installable (requires configuration) |
 
@@ -77,6 +78,9 @@ Apache Iceberg support adds functions to read Iceberg tables and metadata. For a
 #### `delta`
 Delta Lake support adds the ability to read Delta Lake files via [delta_scan](functions.md#delta_scan).
 
+#### `vortex`
+Vortex file format support adds the ability to read Vortex files via [read_vortex](functions.md#read_vortex).
+
 ### Extension Usage Examples
 
 ```sql
@@ -87,6 +91,10 @@ SELECT * FROM iceberg_scan('s3://bucket/iceberg-table/');
 -- Install and use Delta
 SELECT duckdb.install_extension('delta');
 SELECT * FROM delta_scan('s3://bucket/delta-table/');
+
+-- Install and use Vortex
+SELECT duckdb.install_extension('vortex');
+SELECT * FROM read_vortex('s3://bucket/file.vortex');
 ```
 
 ## Security Considerations
