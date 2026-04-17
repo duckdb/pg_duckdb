@@ -14,6 +14,7 @@ extern "C" {
 #include "utils/guc_tables.h"
 #include "miscadmin.h" // DataDir
 #include "lib/stringinfo.h"
+#include "pgtime.h" // pg_get_timezone_name, pg_tz
 #include "postmaster/bgworker_internals.h"
 }
 
@@ -268,6 +269,55 @@ find_option(const char *name, bool, bool, int) {
 }
 #endif
 
+// Convert a PostgreSQL timezone to a DuckDB-compatible name.
+// Numeric offset timezones (e.g. from SET TIME ZONE '+07') are converted to
+// "Etc/GMT-N" format. IANA names pass through unchanged.
+// Fractional-hour offsets (e.g. '+05:30') fall back to UTC since DuckDB's
+// Etc/GMT zone only supports integer hours.
+const char *
+DuckdbTimezoneName(pg_tz *tz) {
+	if (!tz) {
+		return "UTC";
+	}
+
+	const char *tz_name = pg_get_timezone_name(tz);
+	if (!tz_name) {
+		return "UTC";
+	}
+
+	if (tz_name[0] == '<' || tz_name[0] == '+' || tz_name[0] == '-' || (tz_name[0] >= '0' && tz_name[0] <= '9')) {
+
+		long int gmtoff;
+		if (pg_get_timezone_offset(tz, &gmtoff)) {
+
+			if (gmtoff % 3600 != 0) {
+				elog(WARNING,
+				     "Fractional-hour offset (%ld sec) is not supported for DuckDB session sync, falling "
+				     "back to UTC",
+				     gmtoff);
+				return "UTC";
+			}
+
+			int offset_hours = -((int)gmtoff / 3600);
+
+			if (offset_hours >= -14 && offset_hours <= 12) {
+				if (offset_hours == 0)
+					return "UTC";
+
+				char *result = (char *)palloc(16);
+				snprintf(result, 16, "Etc/GMT%+d", offset_hours);
+				return result;
+			} else {
+				elog(WARNING, "Timezone offset (%d hours) out of Etc/GMT bounds, falling back to UTC", -offset_hours);
+				return "UTC";
+			}
+		}
+	}
+
+	// return other values as-is
+	return tz_name;
+}
+
 static void
 DuckAssignTimezone_Cpp(const char *tz) {
 	if (!IsExtensionRegistered()) {
@@ -293,8 +343,8 @@ DuckAssignTimezone(const char *newval, void *extra) {
 	prev_tz_assign_hook(newval, extra);
 
 	// assign_timezone have not update guc_variables, so we can't use GetConfigOption
-	auto *tz = pg_get_timezone_name(*((pg_tz **)extra));
-	InvokeCPPFunc(DuckAssignTimezone_Cpp, tz);
+	auto duckdb_tz = DuckdbTimezoneName(*((pg_tz **)extra));
+	InvokeCPPFunc(DuckAssignTimezone_Cpp, duckdb_tz);
 }
 
 /*

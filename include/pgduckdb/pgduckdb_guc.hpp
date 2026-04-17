@@ -1,8 +1,11 @@
 #pragma once
 
+struct pg_tz;
+
 namespace pgduckdb {
 void InitGUC();
 void InitGUCHooks();
+const char *DuckdbTimezoneName(pg_tz *tz);
 
 extern bool duckdb_force_execution;
 extern bool duckdb_unsafe_allow_execution_inside_functions;

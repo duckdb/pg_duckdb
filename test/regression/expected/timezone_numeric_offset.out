@@ -1,0 +1,75 @@
+----------------------------------------
+-- Timezone numeric offset tests
+----------------------------------------
+-- Positive numeric offset: SET TIME ZONE '+07'
+SET TIME ZONE '+07';
+SHOW TIME ZONE;
+ TimeZone 
+----------
+ <+07>-07
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT * FROM duckdb_settings() WHERE name = 'TimeZone' $$) r;
+   name   |   value   |      description      | input_type | scope | aliases 
+----------+-----------+-----------------------+------------+-------+---------
+ TimeZone | Etc/GMT-7 | The current time zone | VARCHAR    | LOCAL | {}
+(1 row)
+
+-- Negative numeric offset: SET TIME ZONE '-05'
+SET TIME ZONE '-05';
+SHOW TIME ZONE;
+ TimeZone 
+----------
+ <-05>+05
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT * FROM duckdb_settings() WHERE name = 'TimeZone' $$) r;
+   name   |   value   |      description      | input_type | scope | aliases 
+----------+-----------+-----------------------+------------+-------+---------
+ TimeZone | Etc/GMT+5 | The current time zone | VARCHAR    | LOCAL | {}
+(1 row)
+
+-- Zero offset: SET TIME ZONE '+00'
+SET TIME ZONE '+00';
+SHOW TIME ZONE;
+ TimeZone 
+----------
+ <+00>-00
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT * FROM duckdb_settings() WHERE name = 'TimeZone' $$) r;
+   name   | value |      description      | input_type | scope | aliases 
+----------+-------+-----------------------+------------+-------+---------
+ TimeZone | UTC   | The current time zone | VARCHAR    | LOCAL | {}
+(1 row)
+
+--  Positive offset without plus symbol
+SET TIME ZONE '04';
+SHOW TIME ZONE;
+ TimeZone 
+----------
+ <+04>-04
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT * FROM duckdb_settings() WHERE name = 'TimeZone' $$) r;
+   name   |   value   |      description      | input_type | scope | aliases 
+----------+-----------+-----------------------+------------+-------+---------
+ TimeZone | Etc/GMT-4 | The current time zone | VARCHAR    | LOCAL | {}
+(1 row)
+
+-- IANA timezone
+SET TIME ZONE 'Asia/Novosibirsk';
+SHOW TIME ZONE;
+     TimeZone     
+------------------
+ Asia/Novosibirsk
+(1 row)
+
+SELECT * FROM duckdb.query($$ SELECT * FROM duckdb_settings() WHERE name = 'TimeZone' $$) r;
+   name   |      value       |      description      | input_type | scope | aliases 
+----------+------------------+-----------------------+------------+-------+---------
+ TimeZone | Asia/Novosibirsk | The current time zone | VARCHAR    | LOCAL | {}
+(1 row)
+
+-- Reset
+SET TIME ZONE DEFAULT;
