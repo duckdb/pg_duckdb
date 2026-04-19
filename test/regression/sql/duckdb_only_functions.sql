@@ -7,7 +7,7 @@ SET duckdb.force_execution = false;
 select r['usmallint'] from read_parquet(:'pwd' || '/data/unsigned_types.parquet') r;
 select r['usmallint'] from read_parquet(ARRAY[:'pwd' || '/data/unsigned_types.parquet']) r;
 
-select r['usmallint'] from read_vortex(ARRAY[:'pwd' || '/data/unsigned_types.vortex']) r;
+select r['usmallint'] from read_vortex(:'pwd' || '/data/unsigned_types.vortex') r;
 
 select r['column00'] from read_csv(:'pwd' || '/data/web_page.csv') r LIMIT 2;
 select r['column00'] from read_csv(ARRAY[:'pwd' || '/data/web_page.csv']) r LIMIT 2;
