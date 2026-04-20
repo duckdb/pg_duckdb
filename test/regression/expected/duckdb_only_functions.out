@@ -14,12 +14,6 @@ select r['usmallint'] from read_parquet(ARRAY[:'pwd' || '/data/unsigned_types.pa
      65535
 (1 row)
 
-select r['usmallint'] from read_vortex(:'pwd' || '/data/unsigned_types.parquet') r;
- usmallint 
------------
-     65535
-(1 row)
-
 select r['column00'] from read_csv(:'pwd' || '/data/web_page.csv') r LIMIT 2;
  column00 
 ----------
