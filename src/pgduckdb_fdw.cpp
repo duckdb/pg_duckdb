@@ -299,6 +299,7 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 		if (AreStringEqual(server_type, "motherduck")) {
 			ValidateMotherduckServerFdw(options_list, catalog);
 		} else {
+			ValidateEndpointSuffix(options_list);
 			ValidateDuckDBSecret(server_type, options_list);
 		}
 

@@ -142,6 +142,7 @@ char *duckdb_max_temp_directory_size = strdup("");
 char *duckdb_default_collation = strdup("");
 char *duckdb_azure_transport_option_type = strdup("");
 char *duckdb_custom_user_agent = strdup("");
+char *duckdb_allowed_endpoint_suffixes = strdup("");
 
 void
 InitGUC() {
@@ -247,6 +248,14 @@ InitGUC() {
 
 	DefineCustomDuckDBVariable("duckdb.custom_user_agent", "Additional user agent string to append to 'pg_duckdb'",
 	                           &duckdb_custom_user_agent, PGC_SUSET);
+
+	DefineCustomVariable(
+	    "duckdb.allowed_endpoint_suffixes",
+	    "Comma-separated list of hostname suffixes allowed as S3/GCS/Azure endpoints. "
+	    "When non-empty, CREATE SERVER and duckdb.create_simple_secret() reject any endpoint "
+	    "that does not end with one of the listed suffixes (e.g. 'storage.yandexcloud.net'). "
+	    "An empty string (default) disables the restriction.",
+	    &duckdb_allowed_endpoint_suffixes, PGC_SUSET);
 }
 
 #if PG_VERSION_NUM < 160000

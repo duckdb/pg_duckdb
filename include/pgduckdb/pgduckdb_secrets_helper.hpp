@@ -15,6 +15,8 @@ We validate by creating the query to create the SECRET in DuckDB and then execut
 This function throws a PG error if the secret is invalid.
 */
 void ValidateDuckDBSecret(const char *type, List *server_options, List *mapping_options = nullptr);
+void ValidateEndpointSuffix(List *options);
+void ValidateEndpointSuffix(const char *endpoint);
 
 /* Utility functions */
 UserMapping *FindUserMapping(Oid userid, Oid serverid, bool with_options = false);

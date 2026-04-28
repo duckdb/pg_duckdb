@@ -1,5 +1,6 @@
 #include "duckdb.hpp"
 
+#include "pgduckdb/pgduckdb_secrets_helper.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -165,9 +166,16 @@ DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 		std::ostringstream create_server_query;
 		create_server_query << "CREATE SERVER " << server_name << " TYPE '" << type << "' FOREIGN DATA WRAPPER duckdb";
 
-		auto options = pgduckdb::pg::ReadOptions(
-		    fcinfo, 4, {"region", "url_style", "provider", "endpoint", "scope", "validation", "use_ssl"});
-		if (!options.empty()) {
+	/* Validate endpoint against duckdb.allowed_endpoint_suffixes before
+	 * creating the SERVER so errors are reported before any catalog changes. */
+	if (PG_NARGS() > 7 && !PG_ARGISNULL(7)) {
+		auto endpoint_arg = pgduckdb::pg::GetArgString(fcinfo, 7);
+		ValidateEndpointSuffix(endpoint_arg.empty() ? nullptr : endpoint_arg.c_str());
+	}
+
+	auto options = pgduckdb::pg::ReadOptions(
+	    fcinfo, 4, {"region", "url_style", "provider", "endpoint", "scope", "validation", "use_ssl"});
+	if (!options.empty()) {
 			create_server_query << " OPTIONS (" << options << ")";
 		}
 

@@ -28,4 +28,5 @@ extern char *duckdb_max_temp_directory_size;
 extern char *duckdb_default_collation;
 extern char *duckdb_azure_transport_option_type;
 extern char *duckdb_custom_user_agent;
+extern char *duckdb_allowed_endpoint_suffixes;
 } // namespace pgduckdb

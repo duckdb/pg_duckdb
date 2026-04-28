@@ -1,4 +1,5 @@
 #include "pgduckdb/pgduckdb_secrets_helper.hpp"
+#include "pgduckdb/pgduckdb_guc.hpp"
 
 #include "duckdb.hpp"
 #include "duckdb/main/secret/secret_manager.hpp"
@@ -222,6 +223,61 @@ GetQueryError(const char *query, List *server_options) {
 
 	con->Query("ROLLBACK;");
 	return pstrdup(oss.str().c_str());
+}
+
+/*
+ * ValidateEndpointSuffix - check that 'endpoint' matches one of the allowed
+ * suffixes in duckdb.allowed_endpoint_suffixes (comma-separated list).
+ *
+ * Does nothing when the GUC is empty (default) or when no endpoint option is
+ * present.  Called from both the FDW validator and create_simple_secret().
+ */
+static void
+ValidateEndpointSuffixValue(const char *endpoint) {
+	if (pgduckdb::duckdb_allowed_endpoint_suffixes == nullptr ||
+	    pgduckdb::duckdb_allowed_endpoint_suffixes[0] == '\0')
+		return;
+
+	if (endpoint == nullptr || endpoint[0] == '\0')
+		return;
+
+	/* Split GUC value on commas and check each suffix. */
+	char *suffixes_copy = pstrdup(pgduckdb::duckdb_allowed_endpoint_suffixes);
+	char *token;
+	char *saveptr = nullptr;
+	size_t ep_len = strlen(endpoint);
+
+	for (token = strtok_r(suffixes_copy, ",", &saveptr); token != nullptr;
+	     token = strtok_r(nullptr, ",", &saveptr)) {
+		/* Trim leading whitespace. */
+		while (*token == ' ')
+			token++;
+
+		size_t sfx_len = strlen(token);
+		if (sfx_len == 0)
+			continue;
+
+		if (ep_len >= sfx_len &&
+		    strcmp(endpoint + ep_len - sfx_len, token) == 0)
+			return; /* matched */
+	}
+
+	ereport(ERROR,
+	        (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+	         errmsg("endpoint \"%s\" is not allowed", endpoint),
+	         errdetail("duckdb.allowed_endpoint_suffixes = '%s'",
+	                   pgduckdb::duckdb_allowed_endpoint_suffixes),
+	         errhint("Use an endpoint whose hostname ends with one of the allowed suffixes.")));
+}
+
+void
+ValidateEndpointSuffix(List *options) {
+	ValidateEndpointSuffixValue(FindOption(options, "endpoint"));
+}
+
+void
+ValidateEndpointSuffix(const char *endpoint) {
+	ValidateEndpointSuffixValue(endpoint);
 }
 
 void
