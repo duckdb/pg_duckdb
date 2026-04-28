@@ -1120,7 +1120,10 @@ CREATE AGGREGATE @extschema@.json_group_structure(duckdb.json)
     initcond = 0
 );
 
-GRANT ALL ON FUNCTION duckdb.raw_query(TEXT) TO PUBLIC;
+-- raw_query executes arbitrary DuckDB SQL and must not be public.
+-- The REVOKE at the top of this file is inadvertently overridden here;
+-- keep it revoked so only roles explicitly granted access can use it.
+REVOKE ALL ON FUNCTION duckdb.raw_query(TEXT) FROM PUBLIC;
 GRANT ALL ON PROCEDURE duckdb.recycle_ddb() TO PUBLIC;
 
 -- Ensure UTF8 encoding
