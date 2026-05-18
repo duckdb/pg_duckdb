@@ -6,6 +6,7 @@
 extern "C" {
 #include "postgres.h"
 #include "miscadmin.h"
+#include "access/htup_details.h"
 #include "access/xact.h"
 #include "commands/explain.h"
 #if PG_VERSION_NUM >= 180000
@@ -27,6 +28,40 @@ extern "C" {
 #include "pgduckdb/vendor/pg_list.hpp"
 
 #include <cmath>
+#include <sstream>
+
+namespace {
+
+/*
+ * Bytes in a minimal tuple message from TupleQueueReaderNext (see tqueue.c).
+ * Do not add MINIMAL_TUPLE_DATA_OFFSET; queued tuples are not palloc-sized tuples.
+ */
+inline Size
+ParallelQueueMinimalTupleSize(MinimalTuple mtup) {
+	return mtup->t_len;
+}
+
+inline Size
+MaxAllowedParallelQueueTupleSize() {
+	return MaxHeapTupleSize;
+}
+
+void
+ValidateParallelQueueTupleSize(Size tuple_size) {
+	if (tuple_size < sizeof(uint32)) {
+		std::ostringstream oss;
+		oss << "parallel worker minimal tuple length " << tuple_size << " is too small";
+		throw duckdb::Exception(duckdb::ExceptionType::INTERNAL, oss.str().c_str());
+	}
+	if (tuple_size > MaxAllowedParallelQueueTupleSize()) {
+		std::ostringstream oss;
+		oss << "parallel worker minimal tuple length " << tuple_size << " exceeds maximum "
+		    << MaxAllowedParallelQueueTupleSize();
+		throw duckdb::Exception(duckdb::ExceptionType::INTERNAL, oss.str().c_str());
+	}
+}
+
+} // namespace
 
 namespace pgduckdb {
 
@@ -288,6 +323,7 @@ PostgresTableReader::GetNextTupleUnsafe() {
 	if (nreaders > 0) {
 		MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
 		if (HeapTupleIsValid(worker_minmal_tuple)) {
+			/* Queue pointer is valid for ParallelQueueMinimalTupleSize() bytes only. */
 			ExecStoreMinimalTuple(worker_minmal_tuple, slot, false);
 			return slot;
 		}
@@ -313,8 +349,11 @@ bool
 PostgresTableReader::GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
 	MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
 	if (HeapTupleIsValid(worker_minmal_tuple)) {
-		// deep copy worker_minmal_tuple to destination buffer
-		Size tuple_size = worker_minmal_tuple->t_len + MINIMAL_TUPLE_DATA_OFFSET;
+		Size tuple_size = ParallelQueueMinimalTupleSize(worker_minmal_tuple);
+		ValidateParallelQueueTupleSize(tuple_size);
+#ifdef USE_ASSERT_CHECKING
+		Assert(tuple_size <= MaxAllowedParallelQueueTupleSize());
+#endif
 		minimal_tuple_buffer.resize(tuple_size);
 		memcpy(minimal_tuple_buffer.data(), worker_minmal_tuple, tuple_size);
 		return true;
