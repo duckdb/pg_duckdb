@@ -28,6 +28,8 @@ double EstimateRelSize(Relation rel);
 
 Oid GetRelidFromSchemaAndTable(const char *, const char *);
 
+Oid GetRelid(Relation rel);
+
 bool IsValidOid(Oid);
 
 bool IsValidBlockNumber(BlockNumber);

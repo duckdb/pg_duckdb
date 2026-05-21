@@ -23,6 +23,7 @@
 #include "pgduckdb/pgduckdb_userdata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_xact.hpp"
+#include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/utility/signal_guard.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
@@ -194,6 +195,14 @@ DuckDBManager::Initialize() {
 	auto &extension_manager = database->instance->GetExtensionManager();
 	auto extension_active_load = extension_manager.BeginLoad("pgduckdb");
 	D_ASSERT(extension_active_load);
+	// TODO: remove once DuckDB's WindowSelfJoinOptimizer catches std::exception.
+	// Registering pgduckdb_postgres_scan in the system catalog lets DuckDB's
+	// FunctionSerializer resolve it by name when LogicalOperatorDeepCopy
+	// round-trips a LogicalGet through Serialize/Deserialize. PostgresTable
+	// still hands out the same TableFunction via GetScanFunction; the catalog
+	// entry only exists to satisfy the name lookup.
+	duckdb::ExtensionLoader extension_loader(*extension_active_load);
+	extension_loader.RegisterFunction(PostgresScanTableFunction());
 	duckdb::ExtensionInstallInfo extension_install_info;
 	extension_active_load->FinishLoad(extension_install_info);
 
@@ -208,6 +217,22 @@ DuckDBManager::Initialize() {
 	                                          duckdb::KeywordHelper::WriteQuoted(duckdb_default_collation));
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
+
+	/*
+	 * Force the SecretManager to perform its lazy initialization while
+	 * LocalFileSystem is still permitted. DuckDB 1.5.3 routes the persistent
+	 * (LocalFileSecretStorage) bootstrap through LocalDatabaseFileSystem,
+	 * which now honors disabled_filesystems. If the first query that touches
+	 * secrets happens after RefreshConnectionState has disabled LocalFileSystem
+	 * for a non-superuser, the secret-storage bootstrap raises a
+	 * PermissionException ("File system LocalFileSystem has been disabled by
+	 * configuration") and every subsequent DropSecrets/LoadSecrets attempt
+	 * then fails with "Secret Storage with name 'memory' already registered"
+	 * because the temporary storage was loaded before the persistent one
+	 * threw. Eagerly initializing here keeps the bootstrap on the superuser
+	 * Initialize() path where LocalFileSystem is still allowed.
+	 */
+	pgduckdb::DuckDBQueryOrThrow(context, "SELECT count(*) FROM duckdb_secrets();");
 
 	if (pgduckdb::IsMotherDuckEnabled()) {
 		auto timeout = FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
