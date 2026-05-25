@@ -15,7 +15,6 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pg/memory.hpp"
 #include "pgduckdb/pg/relations.hpp"
-#include "pgduckdb/pg/snapshots.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
@@ -516,45 +515,6 @@ PostgresScanPushdownExpression(duckdb::ClientContext &, const duckdb::LogicalGet
 	return ExpressionToString(expr, "dummy") != std::nullopt;
 }
 
-/*
- * Round-trip the PostgresScanFunctionData through Serialize/Deserialize.
- *
- * TODO: drop the serialize/deserialize callbacks and the matching catalog
- * registration in DuckDBManager::Initialize once a DuckDB release ships with
- * WindowSelfJoinOptimizer's catch broadened back to std::exception. In
- * v1.5.3, that catch was narrowed to `catch (NotImplementedException &)` in
- * dec05a1616, which can never catch the catalog-lookup failure that DeepCopy
- * raises while round-tripping a LogicalGet of an unregistered TableFunction.
- * Until that lands, the only way to keep window-aggregate queries over
- * postgres-heap scans working is to make the deep copy actually succeed:
- * register the function in the system catalog so the by-name lookup resolves,
- * and provide real (de)serialize so the bind data is reconstructed.
- *
- * The DeepCopy stays inside the same query, so the original Relation and
- * Snapshot pointers are still live -- round-trip them as raw pointers rather
- * than reopening the relation. complex_filters is empty at the point DeepCopy
- * runs (FilterPushdown happens before this) so we don't bother round-tripping
- * it either.
- */
-static void
-PostgresScanSerialize(duckdb::Serializer &serializer, const duckdb::optional_ptr<duckdb::FunctionData> bind_data_p,
-                      const duckdb::TableFunction &) {
-	auto &bind_data = bind_data_p->Cast<PostgresScanFunctionData>();
-	serializer.WriteProperty(100, "rel", static_cast<uint64_t>(reinterpret_cast<uintptr_t>(bind_data.rel)));
-	serializer.WriteProperty(101, "cardinality", bind_data.cardinality);
-	serializer.WriteProperty(102, "snapshot", static_cast<uint64_t>(reinterpret_cast<uintptr_t>(bind_data.snapshot)));
-}
-
-static duckdb::unique_ptr<duckdb::FunctionData>
-PostgresScanDeserialize(duckdb::Deserializer &deserializer, duckdb::TableFunction &) {
-	auto rel = deserializer.ReadProperty<uint64_t>(100, "rel");
-	auto cardinality = deserializer.ReadProperty<uint64_t>(101, "cardinality");
-	auto snap = deserializer.ReadProperty<uint64_t>(102, "snapshot");
-	return duckdb::make_uniq<PostgresScanFunctionData>(reinterpret_cast<Relation>(static_cast<uintptr_t>(rel)),
-	                                                   cardinality,
-	                                                   reinterpret_cast<Snapshot>(static_cast<uintptr_t>(snap)));
-}
-
 PostgresScanTableFunction::PostgresScanTableFunction()
     : TableFunction("pgduckdb_postgres_scan", {}, PostgresScanFunction, nullptr, PostgresScanInitGlobal,
                     PostgresScanInitLocal) {
@@ -567,9 +527,6 @@ PostgresScanTableFunction::PostgresScanTableFunction()
 	cardinality = PostgresScanCardinality;
 	pushdown_expression = PostgresScanPushdownExpression;
 	to_string = ToString;
-	// TODO: remove once DuckDB's WindowSelfJoinOptimizer catches std::exception.
-	serialize = PostgresScanSerialize;
-	deserialize = PostgresScanDeserialize;
 }
 
 duckdb::InsertionOrderPreservingMap<duckdb::string>

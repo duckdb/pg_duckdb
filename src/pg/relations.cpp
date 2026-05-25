@@ -137,11 +137,6 @@ GetRelidFromSchemaAndTable(const char *schema_name, const char *entry_name) {
 	return PostgresFunctionGuard(PGGetRelidFromSchemaAndTable, schema_name, entry_name);
 }
 
-Oid
-GetRelid(Relation rel) {
-	return RelationGetRelid(rel);
-}
-
 bool
 IsValidOid(Oid oid) {
 	return oid != InvalidOid;
