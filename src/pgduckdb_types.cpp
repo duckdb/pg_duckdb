@@ -2123,34 +2123,6 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	fn(result, value, offset);
 }
 
-void
-InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_local_state, TupleTableSlot *slot) {
-
-	auto scan_global_state = scan_local_state.global_state;
-
-	if (scan_global_state->count_tuples_only) {
-		/* COUNT(*) returned tuple will have only one value returned as first tuple element. */
-		scan_global_state->total_row_count += slot->tts_values[0];
-		scan_local_state.output_vector_size += slot->tts_values[0];
-		return;
-	}
-	/* Write tuple columns in output vector. */
-	for (int duckdb_output_index = 0; duckdb_output_index < slot->tts_tupleDescriptor->natts; duckdb_output_index++) {
-		auto &result = output.data[duckdb_output_index];
-		if (slot->tts_isnull[duckdb_output_index]) {
-			auto &array_mask = duckdb::FlatVector::Validity(result);
-			array_mask.SetInvalid(scan_local_state.output_vector_size);
-		} else {
-			auto attr = TupleDescAttr(slot->tts_tupleDescriptor, duckdb_output_index);
-			auto convert_fn = GetPostgresToDuckValueFn(attr->atttypid, result);
-			convert_fn(result, slot->tts_values[duckdb_output_index], scan_local_state.output_vector_size);
-		}
-	}
-
-	scan_local_state.output_vector_size++;
-	scan_global_state->total_row_count++;
-}
-
 /*
  * Returns true if the given type can be converted from a Postgres datum to a DuckDB value
  * without requiring any Postgres-specific functions or memory allocations (such as palloc).
@@ -2168,15 +2140,22 @@ IsThreadSafeTypeForPostgresToDuckDB(Oid attr_type, duckdb::LogicalTypeId duckdb_
 }
 
 /*
- * Insert batch of tuples into chunk. This function is thread-safe and is meant for multi-threaded scans.
+ * Insert batch of tuples into chunk.
  *
- * Global lock & PG memory context are handled for unsafe types, e.g., JSONB/LIST/VARBIT.
+ * The slots only need to hold a (minimal) tuple; this function deforms them. Global lock & PG memory
+ * context are handled for unsafe types, e.g., JSONB/LIST/VARBIT.
  */
 void
 InsertTuplesIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_local_state, TupleTableSlot **slots,
                       int num_slots) {
 	if (num_slots == 0) {
 		return;
+	}
+
+	// Deform every slot up front so the column-major loop below can read tts_values/tts_isnull. slot_getallattrs
+	// is idempotent and allocation-free for minimal slots, so it is safe to call without the global lock.
+	for (int row = 0; row < num_slots; row++) {
+		slot_getallattrs(slots[row]);
 	}
 
 	auto scan_global_state = scan_local_state.global_state;

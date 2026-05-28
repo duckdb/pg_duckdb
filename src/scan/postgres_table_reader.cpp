@@ -293,11 +293,24 @@ PostgresTableReader::GetNextTupleUnsafe() {
 		}
 	}
 
+	return ExecNextTupleUnsafe();
+}
+
+TupleTableSlot *
+PostgresTableReader::ExecNextTupleUnsafe() {
 	PostgresScopedStackReset scoped_stack_reset;
 	table_scan_query_desc->estate->es_query_dsa = parallel_executor_info ? parallel_executor_info->area : NULL;
 	TupleTableSlot *thread_scan_slot = ExecProcNode(table_scan_planstate);
 	table_scan_query_desc->estate->es_query_dsa = NULL;
 	return TupIsNull(thread_scan_slot) ? ExecClearTuple(slot) : thread_scan_slot;
+}
+
+static inline void
+CopyMinimalTuple(MinimalTuple src_minimal_tuple, std::vector<uint8_t> &dst_buffer) {
+	// Deep-copy the minimal tuple's bytes into the destination buffer.
+	Size tuple_size = src_minimal_tuple->t_len + MINIMAL_TUPLE_DATA_OFFSET;
+	dst_buffer.resize(tuple_size);
+	memcpy(dst_buffer.data(), src_minimal_tuple, tuple_size);
 }
 
 /*
@@ -313,15 +326,45 @@ bool
 PostgresTableReader::GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
 	MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
 	if (HeapTupleIsValid(worker_minmal_tuple)) {
-		// deep copy worker_minmal_tuple to destination buffer
-		Size tuple_size = worker_minmal_tuple->t_len + MINIMAL_TUPLE_DATA_OFFSET;
-		minimal_tuple_buffer.resize(tuple_size);
-		memcpy(minimal_tuple_buffer.data(), worker_minmal_tuple, tuple_size);
+		CopyMinimalTuple(worker_minmal_tuple, minimal_tuple_buffer);
 		return true;
 	}
 
 	minimal_tuple_buffer.resize(0);
 	return false;
+}
+
+int
+PostgresTableReader::GetNextInProcessTuples(TupleTableSlot **slots, int max) {
+	return PostgresMemberGuard(PostgresTableReader::GetNextInProcessTuplesUnsafe, slots, max);
+}
+
+int
+PostgresTableReader::GetNextInProcessTuplesUnsafe(TupleTableSlot **slots, int max) {
+	// One guard (set up by GetNextInProcessTuples) covers the whole batch instead of one per tuple.
+	int count = 0;
+	for (; count < max; count++) {
+		TupleTableSlot *thread_scan_slot = ExecNextTupleUnsafe();
+		if (TupIsNull(thread_scan_slot)) {
+			break;
+		}
+		// Each slot is a minimal-tuple slot; ExecCopySlot makes it take ownership of the copy (freed on its
+		// next store), so there is no per-tuple allocation for the caller to free. The copy is required
+		// because the scan node reuses `thread_scan_slot` on the next ExecProcNode call.
+		ExecCopySlot(slots[count], thread_scan_slot);
+	}
+	return count;
+}
+
+bool
+PostgresTableReader::GetNextCount(uint64_t *count_out) {
+	TupleTableSlot *next_slot = GetNextTuple();
+	if (TupIsNull(next_slot)) {
+		return false;
+	}
+	slot_getallattrs(next_slot);
+	*count_out = next_slot->tts_values[0];
+	return true;
 }
 
 MinimalTuple
