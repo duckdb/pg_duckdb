@@ -42,11 +42,21 @@ endif
 
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
+# DuckDB's CMake produces .dylib on macOS, but PGXS' $(DLSUFFIX) is .so even on
+# macOS. Pick the right suffix for the DuckDB shared lib based on the host OS.
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+	DUCKDB_LIB_SUFFIX = .dylib
+else
+	DUCKDB_LIB_SUFFIX = $(DLSUFFIX)
+endif
+
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/libduckdb_bundle.a
-	PG_DUCKDB_LINK_FLAGS = $(FULL_DUCKDB_LIB) -lcurl
+	# httpfs (bundled into the static archive) needs OpenSSL symbols.
+	PG_DUCKDB_LINK_FLAGS = $(FULL_DUCKDB_LIB) -lcurl -lssl -lcrypto
 else
-	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb$(DLSUFFIX)
+	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb$(DUCKDB_LIB_SUFFIX)
 	PG_DUCKDB_LINK_FLAGS = -lduckdb
 endif
 
@@ -72,19 +82,67 @@ endif
 
 COMPILER_FLAGS=-Wno-sign-compare -Wshadow -Wswitch -Wunused-parameter -Wunreachable-code -Wno-unknown-pragmas -Wall -Wextra ${ERROR_ON_WARNING}
 
+# On macOS, allow overriding the deployment target and/or the SDK sysroot.
+# Both are appended LATE so they override any earlier value inherited from
+# pg_config (which may point at an SDK that no longer exists, or an older
+# deployment target than pg_duckdb's C++17 features need).
+#
+# MACOSX_VERSION_MIN: e.g. 11.0 (needed for std::filesystem)
+# MACOSX_SYSROOT: e.g. $(xcrun --show-sdk-path), or
+#                       /Library/Developer/CommandLineTools/SDKs/MacOSX.sdk
+MACOSX_VERSION_MIN ?=
+ifneq ($(MACOSX_VERSION_MIN),)
+	MACOSX_VERSION_MIN_FLAG = -mmacosx-version-min=$(MACOSX_VERSION_MIN)
+else
+	MACOSX_VERSION_MIN_FLAG =
+endif
+
+MACOSX_SYSROOT ?=
+ifneq ($(MACOSX_SYSROOT),)
+	MACOSX_SYSROOT_FLAG = -isysroot $(MACOSX_SYSROOT)
+else
+	MACOSX_SYSROOT_FLAG =
+endif
+
+MACOSX_EXTRA_FLAGS = $(MACOSX_VERSION_MIN_FLAG) $(MACOSX_SYSROOT_FLAG)
+
 override PG_CPPFLAGS += -Iinclude -isystem third_party/duckdb/src/include -isystem third_party/duckdb/third_party/re2 -isystem $(INCLUDEDIR_SERVER) ${COMPILER_FLAGS}
-override PG_CXXFLAGS += -std=c++17 ${DUCKDB_BUILD_CXX_FLAGS} ${COMPILER_FLAGS} -Wno-register -Weffc++
+override PG_CXXFLAGS += -std=c++17 ${DUCKDB_BUILD_CXX_FLAGS} ${COMPILER_FLAGS} -Wno-register -Weffc++ $(MACOSX_EXTRA_FLAGS)
 # Ignore declaration-after-statement warnings in our code. Postgres enforces
 # this because their ancient style guide requires it, but we don't care. It
 # would only apply to C files anyway, and we don't have many of those. The only
 # ones that we do have are vendored in from Postgres (ruleutils), and allowing
 # declarations to be anywhere is even a good thing for those as we can keep our
 # changes to the vendored code in one place.
-override PG_CFLAGS += -Wno-declaration-after-statement
+override PG_CFLAGS += -Wno-declaration-after-statement $(MACOSX_EXTRA_FLAGS)
 
 SHLIB_LINK += $(PG_DUCKDB_LINK_FLAGS)
 
 include Makefile.global
+
+# Append the sysroot override LATE in CPPFLAGS and LDFLAGS — pg_config may
+# carry a stale `-isysroot <path>` (e.g. an SDK that no longer exists). Clang
+# uses the LAST -isysroot on the command line, so we append after the PGXS
+# include to outrank pg_config's value at both compile and link time.
+ifneq ($(MACOSX_SYSROOT),)
+override CPPFLAGS += -isysroot $(MACOSX_SYSROOT)
+override LDFLAGS += -isysroot $(MACOSX_SYSROOT)
+endif
+
+# On macOS, allow filtering out unwanted -arch flags inherited from pg_config.
+# Needed when Postgres ships as a universal binary (e.g. Postgres.app) but
+# DuckDB is built single-arch for the host. Set e.g. MACOSX_STRIP_ARCHES="arm64"
+# on an Intel Mac or "x86_64" on Apple Silicon.
+# Single arch name (e.g. "arm64"). Use $(subst) so the two-token "-arch <name>"
+# is removed as a literal substring; $(filter-out) would strip "-arch" from the
+# arch we want to keep too.
+MACOSX_STRIP_ARCH ?=
+ifneq ($(MACOSX_STRIP_ARCH),)
+override CFLAGS := $(subst -arch $(MACOSX_STRIP_ARCH),,$(CFLAGS))
+override CXXFLAGS := $(subst -arch $(MACOSX_STRIP_ARCH),,$(CXXFLAGS))
+override LDFLAGS := $(subst -arch $(MACOSX_STRIP_ARCH),,$(LDFLAGS))
+override CFLAGS_SL := $(subst -arch $(MACOSX_STRIP_ARCH),,$(CFLAGS_SL))
+endif
 
 # Only pass the version define to the one file that needs it, so that ccache
 # doesn't invalidate everything on every commit.
