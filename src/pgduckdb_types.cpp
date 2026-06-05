@@ -446,7 +446,7 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 }
 
 static Datum
-ConvertNumericDatum(const duckdb::Value &value) {
+ConvertNumericDatum(const duckdb::Value &value, int32 typmod) {
 	auto value_type_id = value.type().id();
 
 	// Special handle duckdb BIGNUM type.
@@ -458,14 +458,31 @@ ConvertNumericDatum(const duckdb::Value &value) {
 		return pg_numeric;
 	}
 
-	// Special handle duckdb DOUBLE TYPE.
+	// DuckDB FLOAT/DOUBLE -> Postgres numeric. This happens when the Postgres
+	// parser typed the result column as numeric but DuckDB computed it as a
+	// floating point value (e.g. ROUND(AVG(int) / c, n)). We must produce a real
+	// numeric Datum (matching Postgres' own float->numeric cast) rather than the
+	// raw float bytes, otherwise the value is reinterpreted as a numeric varlena
+	// in the extended query protocol (where the output uses the parser's numeric
+	// type), corrupting the result.
 	if (value_type_id == duckdb::LogicalTypeId::DOUBLE) {
-		return ConvertDoubleDatum(value);
+		return pgduckdb::pg::DoubleToNumeric(value.GetValue<double>(), typmod);
+	}
+	if (value_type_id == duckdb::LogicalTypeId::FLOAT) {
+		return pgduckdb::pg::FloatToNumeric(value.GetValue<float>(), typmod);
+	}
+
+	// The fast NumericVar path below only handles the decimal-family physical
+	// representations. Any other DuckDB type that ends up in a numeric column
+	// (e.g. an integer or a value from a DuckDB-only function whose Postgres
+	// signature declares numeric) is converted via its text representation,
+	// which is robust and never crashes.
+	if (value_type_id != duckdb::LogicalTypeId::DECIMAL && value_type_id != duckdb::LogicalTypeId::HUGEINT &&
+	    value_type_id != duckdb::LogicalTypeId::UBIGINT && value_type_id != duckdb::LogicalTypeId::UHUGEINT) {
+		return pgduckdb::pg::StringToNumeric(value.ToString().c_str());
 	}
 
 	NumericVar numeric_var;
-	D_ASSERT(value_type_id == duckdb::LogicalTypeId::DECIMAL || value_type_id == duckdb::LogicalTypeId::HUGEINT ||
-	         value_type_id == duckdb::LogicalTypeId::UBIGINT || value_type_id == duckdb::LogicalTypeId::UHUGEINT);
 	const bool is_decimal = value_type_id == duckdb::LogicalTypeId::DECIMAL;
 	uint8_t scale = is_decimal ? duckdb::DecimalType::GetScale(value.type()) : 0;
 
@@ -791,7 +808,8 @@ struct PostgresTypeTraits<NUMERICOID> {
 
 	static inline Datum
 	ToDatum(const duckdb::Value &val) {
-		return ConvertNumericDatum(val);
+		/* Array elements carry no per-element typmod. */
+		return ConvertNumericDatum(val, -1);
 	}
 };
 
@@ -1157,7 +1175,7 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		break;
 	}
 	case NUMERICOID: {
-		slot->tts_values[col] = ConvertNumericDatum(value);
+		slot->tts_values[col] = ConvertNumericDatum(value, TupleDescAttr(slot->tts_tupleDescriptor, col)->atttypmod);
 		break;
 	}
 	case UUIDOID: {
