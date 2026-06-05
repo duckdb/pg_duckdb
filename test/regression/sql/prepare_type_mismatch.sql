@@ -31,6 +31,19 @@ PREPARE pbug2(int) AS SELECT ROUND(AVG(vol) / 1024.0, 2) AS v FROM metrics WHERE
 EXECUTE pbug2(0);
 EXECUTE pbug2(0);
 
+-- Bare aggregate: Postgres types AVG(bigint) as numeric, DuckDB as double. This
+-- exercises the double -> numeric coercion directly (no surrounding ROUND).
+PREPARE pavg AS SELECT AVG(vol) AS v FROM metrics;
+SELECT result_types FROM pg_prepared_statements WHERE name = 'pavg';
+EXECUTE pavg;
+
+-- Postgres numeric where DuckDB also produces a numeric (DECIMAL): the oids
+-- already match so we keep the DuckDB type; the value must still pass through
+-- the cached-plan path unchanged.
+PREPARE pdec AS SELECT MIN(vol) + 0.5 AS v FROM metrics;
+SELECT result_types FROM pg_prepared_statements WHERE name = 'pdec';
+EXECUTE pdec;
+
 -- Control: when Postgres and DuckDB agree on the type (double), the value is
 -- already correct and stays unchanged.
 PREPARE pok AS SELECT (AVG(vol) / 1024.0)::float8 AS v FROM metrics;

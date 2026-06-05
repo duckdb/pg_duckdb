@@ -468,6 +468,10 @@ ConvertNumericDatum(const duckdb::Value &value, int32 typmod) {
 	if (value_type_id == duckdb::LogicalTypeId::DOUBLE) {
 		return pgduckdb::pg::DoubleToNumeric(value.GetValue<double>(), typmod);
 	}
+	// FLOAT is handled for completeness/symmetry; it is not reachable through
+	// query push-down today (a query whose Postgres parser type is numeric never
+	// makes DuckDB emit a bare FLOAT -- a ::numeric cast becomes a DECIMAL), and
+	// the generic fallback below would convert it correctly anyway.
 	if (value_type_id == duckdb::LogicalTypeId::FLOAT) {
 		return pgduckdb::pg::FloatToNumeric(value.GetValue<float>(), typmod);
 	}

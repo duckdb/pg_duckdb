@@ -185,7 +185,9 @@ def test_prepared_type_mismatch(cur: Cursor):
     # Decimal for numeric and a float for double, so comparing against a Decimal
     # asserts both the value AND that we report the Postgres type.
     cur.sql("CREATE TABLE metrics(id int, vol bigint)")
-    cur.sql("INSERT INTO metrics SELECT g, (g * 1000)::bigint FROM generate_series(1, 100) g")
+    cur.sql(
+        "INSERT INTO metrics SELECT g, (g * 1000)::bigint FROM generate_series(1, 100) g"
+    )
 
     q = "SELECT ROUND(AVG(vol) / 1024.0, 2) FROM metrics"
     expected = Decimal("49.32")
@@ -207,6 +209,15 @@ def test_prepared_type_mismatch(cur: Cursor):
     q2 = "SELECT ROUND(AVG(vol) / 1024.0, 2) FROM metrics WHERE id > %s"
     assert cur.sql(q2, (0,), prepare=True) == expected
     assert cur.sql(q2, (0,)) == expected
+
+    # Bare AVG(bigint): Postgres numeric, DuckDB double -> double->numeric path.
+    assert cur.sql("SELECT AVG(vol) FROM metrics", prepare=True) == Decimal("50500")
+    assert isinstance(cur.sql("SELECT AVG(vol) FROM metrics"), Decimal)
+
+    # Postgres numeric where DuckDB also yields numeric (DECIMAL): unchanged.
+    assert cur.sql("SELECT MIN(vol) + 0.5 FROM metrics", prepare=True) == Decimal(
+        "1000.5"
+    )
 
 
 def test_prepared_change_type(cur: Cursor, tmp_path):

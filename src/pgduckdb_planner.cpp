@@ -92,8 +92,8 @@ CreatePlan(Query *query, bool throw_error) {
 	 * DuckDB can resolve. We also need the parser target list to line up 1:1
 	 * with DuckDB's columns (it does not when e.g. a duckdb.row expands to "*").
 	 */
-	List *result_tlist = (query->commandType != CMD_SELECT && query->returningList != NIL) ? query->returningList
-	                                                                                        : query->targetList;
+	List *result_tlist =
+	    (query->commandType != CMD_SELECT && query->returningList != NIL) ? query->returningList : query->targetList;
 	List *parser_tes = NIL;
 	foreach_node(TargetEntry, tle, result_tlist) {
 		if (!tle->resjunk) {
