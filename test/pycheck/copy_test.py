@@ -223,7 +223,7 @@ def test_copy_from_local(cur: Cursor, tmp_path: Path):
     # If that's not possible (e.g. due to parquet), then we throw a clear error
     with pytest.raises(
         psycopg.errors.InternalError,
-        match="DuckDB does not support modififying Postgres tables",
+        match="DuckDB does not support modifying Postgres tables",
     ):
         cur.sql(
             f"COPY (INSERT INTO pg_table VALUES (1) RETURNING (id)) TO '{parquet_path}'"
