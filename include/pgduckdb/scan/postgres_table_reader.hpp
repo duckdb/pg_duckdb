@@ -12,10 +12,17 @@ class PostgresTableReader {
 public:
 	PostgresTableReader();
 	~PostgresTableReader();
-	TupleTableSlot *GetNextTuple();
 	void Init(const char *table_scan_query, bool count_tuples_only);
 	void Cleanup();
 	bool GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer);
+	// In-process variant (no parallel workers): runs the scan node and copies up to `max` tuples into
+	// `slots`, each of which takes ownership of its copy (freed on its next store). Returns the number of
+	// slots filled; a result < `max` means EOF was reached. Caller must hold GlobalProcessLock.
+	int GetNextInProcessTuples(TupleTableSlot **slots, int max);
+	// count_tuples_only variant: the aggregate node returns one tuple per call
+	// whose first attribute is the partial count. Returns false on EOF, otherwise
+	// sets *count_out to that partial count.
+	bool GetNextCount(uint64_t *count_out);
 	TupleTableSlot *InitTupleSlot();
 	int
 	NumWorkersLaunched() const {
@@ -30,7 +37,10 @@ private:
 	void InitRunWithParallelScan(PlannedStmt *, bool);
 	void CleanupUnsafe();
 
+	TupleTableSlot *GetNextTuple();
+	int GetNextInProcessTuplesUnsafe(TupleTableSlot **slots, int max);
 	TupleTableSlot *GetNextTupleUnsafe();
+	TupleTableSlot *ExecNextTupleUnsafe();
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
 	bool CanTableScanRunInParallel(Plan *plan);
