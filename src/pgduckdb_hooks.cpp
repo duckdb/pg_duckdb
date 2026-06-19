@@ -230,7 +230,7 @@ IsAllowedStatement(Query *query, bool throw_error) {
 		if (query->rtable != NULL) {
 			RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
 			if (!::IsDuckdbTable(resultRte->relid)) {
-				elog(elevel, "DuckDB does not support modififying Postgres tables");
+				elog(elevel, "DuckDB does not support modifying Postgres tables");
 				return false;
 			}
 		}

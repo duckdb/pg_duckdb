@@ -8,6 +8,7 @@
 #include <duckdb/planner/expression/bound_conjunction_expression.hpp>
 #include <duckdb/planner/expression/bound_operator_expression.hpp>
 
+#include "pgduckdb/catalog/pgduckdb_table.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/scan/postgres_table_reader.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -286,16 +287,22 @@ PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const 
 	case duckdb::TableFilterType::CONJUNCTION_OR:
 	case duckdb::TableFilterType::CONJUNCTION_AND: {
 		auto conjuction_filter = reinterpret_cast<duckdb::ConjunctionFilter *>(filter);
+		bool is_or = filter->filter_type == duckdb::TableFilterType::CONJUNCTION_OR;
 		duckdb::vector<std::string> conjuction_child_filters;
 		for (idx_t i = 0; i < conjuction_filter->child_filters.size(); i++) {
 			std::string child_filter;
 			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter,
 			                        is_inside_optional_filter)) {
 				conjuction_child_filters.emplace_back(child_filter);
+			} else if (is_or) {
+				/* Dropping a child of an OR makes it more restrictive.
+				 * Drop the entire OR instead. */
+				pd_log(DEBUG1, "(DuckDB/ExtractQueryFilters) Dropping OR filter: %s",
+				       filter->ToString(column_name).c_str());
+				return 0;
 			}
 		}
-		duckdb::string conjuction_delimiter =
-		    filter->filter_type == duckdb::TableFilterType::CONJUNCTION_OR ? " OR " : " AND ";
+		duckdb::string conjuction_delimiter = is_or ? " OR " : " AND ";
 		if (conjuction_child_filters.size()) {
 			query_filters += "(" + FilterJoin(conjuction_child_filters, std::move(conjuction_delimiter)) + ")";
 		}
