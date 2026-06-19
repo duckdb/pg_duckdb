@@ -515,3 +515,26 @@ SELECT r['a'], r['b'], r['c'] FROM read_json('../../data/table.json') r WHERE r[
  50 | json_50 | 50.5
 (1 row)
 
+-- read_vortex
+SELECT duckdb.install_extension('vortex');
+ install_extension 
+-------------------
+ 
+(1 row)
+
+SELECT count(r['sepal.length']) FROM read_vortex('../../data/iris.vortex') r;
+ count 
+-------
+   150
+(1 row)
+
+SELECT r['sepal.length'] FROM read_vortex('../../data/iris.vortex') r ORDER BY r['sepal.length']  LIMIT 5;
+ sepal.length 
+--------------
+          4.3
+          4.4
+          4.4
+          4.4
+          4.5
+(5 rows)
+

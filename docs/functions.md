@@ -15,6 +15,7 @@ By default, functions are installed into the `public` schema. You can choose an 
 | [`iceberg_metadata`](#iceberg_metadata) | Read Iceberg metadata |
 | [`iceberg_snapshots`](#iceberg_snapshots) | Read Iceberg snapshot information |
 | [`delta_scan`](#delta_scan) | Read a Delta dataset |
+| [`read_vortex`](#read_vortex) | Read a Vortex file |
 
 ## JSON Functions
 
@@ -338,6 +339,34 @@ Further information:
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | path | text | The path, either to a remote httpfs location or a local location (if enabled) of the delta dataset to read. |
+
+#### <a name="read_vortex"></a>`read_vortex(path TEXT)` -> `SETOF duckdb.row`
+
+Reads a Vortex file or glob of files.
+
+To use `read_vortex`, you must enable the `vortex` extension:
+
+```sql
+SELECT duckdb.install_extension('vortex');
+```
+
+It works similarly to the `read_parquet` function, for example:
+
+```sql
+SELECT * FROM read_vortex('file.vortex');
+SELECT r['id'], r['name'] FROM read_vortex('file.vortex') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM read_vortex('file.vortex');
+```
+
+Further information:
+
+* [DuckDB Vortex extension documentation](https://duckdb.org/docs/current/core_extensions/vortex)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text | The path, either to a remote httpfs location or a local location (if enabled) of the Vortex file to read. |
 
 #### <a name="install_extension"></a>`duckdb.install_extension(extension_name TEXT, repository TEXT DEFAULT 'core')` -> `bool`
 
