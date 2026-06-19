@@ -134,6 +134,7 @@ $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_e
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	mkdir -p third_party/duckdb/build/release/vcpkg_installed
 endif
+	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \
 	DISABLE_SANITIZER=1 \
