@@ -288,7 +288,6 @@ SELECT r['a'], r['b'], r['c'] FROM read_json('../../data/table.json') r WHERE r[
 
 -- read_vortex
 
-
 SELECT duckdb.install_extension('vortex');
 
 SELECT count(r['sepal.length']) FROM read_vortex('../../data/iris.vortex') r;
