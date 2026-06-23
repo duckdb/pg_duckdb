@@ -35,6 +35,7 @@ extern "C" {
 #include "lib/stringinfo.h"
 #include "miscadmin.h"        // superuser
 #include "nodes/value.h"      // strVal
+#include "pgtime.h"           // pg_get_timezone_name, session_timezone
 #include "utils/fmgrprotos.h" // pg_sequence_last_value
 #include "utils/lsyscache.h"  // get_relname_relid
 }
@@ -180,7 +181,7 @@ DuckDBManager::Initialize() {
 		}
 	}
 
-	std::string pg_time_zone(pg::GetConfigOption("TimeZone"));
+	const char *pg_time_zone = DuckdbTimezoneName(session_timezone);
 
 	database = new duckdb::DuckDB(connection_string, &config);
 
