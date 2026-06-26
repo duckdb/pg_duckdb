@@ -294,6 +294,9 @@ SELECT count(r['sepal.length']) FROM read_vortex('../../data/iris.vortex') r;
 
 SELECT r['sepal.length'] FROM read_vortex('../../data/iris.vortex') r ORDER BY r['sepal.length']  LIMIT 5;
 
+-- array of paths
+SELECT count(*) FROM read_vortex(ARRAY['../../data/iris.vortex', '../../data/iris.vortex']) r;
+
 -- read_text
 
 SELECT r['size'] FROM read_text('../../data/table.json') r;
