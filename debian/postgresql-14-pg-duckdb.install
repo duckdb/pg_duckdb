@@ -1,0 +1,5 @@
+pg_duckdb.so usr/lib/postgresql/14/lib/
+libduckdb.so* usr/lib/postgresql/14/lib/
+pg_duckdb.control usr/share/postgresql/14/extension/
+sql/pg_duckdb--*.sql usr/share/postgresql/14/extension/
+

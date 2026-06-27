@@ -1,0 +1,78 @@
+Source: pg-duckdb
+Section: database
+Priority: optional
+Maintainer: DuckDB Foundation <info@duckdb.org>
+Build-Depends: debhelper-compat (= 13),
+               postgresql-all-dev (>= 14),
+               postgresql-server-dev-all,
+               build-essential,
+               libreadline-dev,
+               zlib1g-dev,
+               flex,
+               bison,
+               libxml2-dev,
+               libxslt-dev,
+               libssl-dev,
+               libxml2-utils,
+               xsltproc,
+               pkg-config,
+               libc++-dev,
+               libc++abi-dev,
+               libglib2.0-dev,
+               libtinfo6,
+               cmake,
+               libstdc++-12-dev,
+               ninja-build,
+               libcurl4-openssl-dev,
+               git,
+               ca-certificates
+Standards-Version: 4.6.2
+Homepage: https://github.com/duckdb/pg_duckdb
+Vcs-Git: https://github.com/duckdb/pg_duckdb.git
+Vcs-Browser: https://github.com/duckdb/pg_duckdb
+
+Package: postgresql-14-pg-duckdb
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, postgresql-14
+Description: DuckDB embedded in PostgreSQL (PostgreSQL 14)
+ pg_duckdb integrates DuckDB's columnar-vectorized analytics engine into
+ PostgreSQL, enabling high-performance analytics and data-intensive applications.
+ .
+ This package provides the pg_duckdb extension for PostgreSQL 14.
+
+Package: postgresql-15-pg-duckdb
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, postgresql-15
+Description: DuckDB embedded in PostgreSQL (PostgreSQL 15)
+ pg_duckdb integrates DuckDB's columnar-vectorized analytics engine into
+ PostgreSQL, enabling high-performance analytics and data-intensive applications.
+ .
+ This package provides the pg_duckdb extension for PostgreSQL 15.
+
+Package: postgresql-16-pg-duckdb
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, postgresql-16
+Description: DuckDB embedded in PostgreSQL (PostgreSQL 16)
+ pg_duckdb integrates DuckDB's columnar-vectorized analytics engine into
+ PostgreSQL, enabling high-performance analytics and data-intensive applications.
+ .
+ This package provides the pg_duckdb extension for PostgreSQL 16.
+
+Package: postgresql-17-pg-duckdb
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, postgresql-17
+Description: DuckDB embedded in PostgreSQL (PostgreSQL 17)
+ pg_duckdb integrates DuckDB's columnar-vectorized analytics engine into
+ PostgreSQL, enabling high-performance analytics and data-intensive applications.
+ .
+ This package provides the pg_duckdb extension for PostgreSQL 17.
+
+Package: postgresql-18-pg-duckdb
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, postgresql-18
+Description: DuckDB embedded in PostgreSQL (PostgreSQL 18)
+ pg_duckdb integrates DuckDB's columnar-vectorized analytics engine into
+ PostgreSQL, enabling high-performance analytics and data-intensive applications.
+ .
+ This package provides the pg_duckdb extension for PostgreSQL 18.
+
