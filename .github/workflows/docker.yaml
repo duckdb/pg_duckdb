@@ -74,6 +74,7 @@ jobs:
           echo "branch_tag=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "target_repo=$TARGET_REPO" >> "$GITHUB_OUTPUT"
           echo "latest_image=pgduckdb/ci-builds:${{ matrix.postgres }}-${PLATFORM}-${BRANCH}-latest" >> "$GITHUB_OUTPUT"
+          echo "latest_cnpg_image=pgduckdb/ci-builds:${{ matrix.postgres }}-${PLATFORM}-${BRANCH}-latest" >> "$GITHUB_OUTPUT"
 
       - name: Attempt to pull previous image
         run: |
@@ -88,7 +89,7 @@ jobs:
       - name: docker bake
         uses: docker/bake-action@v5
         with:
-          targets: pg_duckdb_${{ matrix.postgres }}
+          targets: pg_duckdb_${{ matrix.postgres }}_all
           push: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
           set: |
             *.platform=linux/${{ steps.params.outputs.platform }}
@@ -97,6 +98,8 @@ jobs:
             *.cache-to=type=gha,mode=max,scope=${{ github.workflow }}
             postgres.tags=pgduckdb/ci-builds:${{ matrix.postgres }}-${{ steps.params.outputs.platform }}-${{ github.sha }}
             postgres.tags=${{ steps.params.outputs.latest_image }}
+            cnpg.tags=pgduckdb/ci-builds-cnpg:${{ matrix.postgres }}-${{ steps.params.outputs.platform }}-${{ github.sha }}
+            cnpg.tags=${{ steps.params.outputs.latest_cnpg_image }}
 
   docker_merge:
     name: Merge Docker image for Postgres ${{ matrix.postgres }}
@@ -131,3 +134,21 @@ jobs:
             pgduckdb/ci-builds:${{ matrix.postgres }}-arm64-${{ github.sha }}
 
           docker buildx imagetools inspect pgduckdb/ci-builds:${{ matrix.postgres }}-${{ github.sha }}
+
+      - name: Merge extension images
+        if: matrix.postgres >= 18
+        run: |
+          docker pull --platform linux/amd64 pgduckdb/ci-builds-cnpg:${{ matrix.postgres }}-amd64-${{ github.sha }}
+          docker pull --platform linux/arm64 pgduckdb/ci-builds-cnpg:${{ matrix.postgres }}-arm64-${{ github.sha }}
+
+          BRANCH="${{ needs.docker_build.outputs.branch_tag }}"
+          TARGET_REPO="${{ needs.docker_build.outputs.target_repo }}"
+
+          echo "Will push merged image to '${TARGET_REPO}'."
+          docker buildx imagetools create \
+            --tag     ${TARGET_REPO}-cnpg:${{ matrix.postgres }}-${BRANCH}         \
+            --tag pgduckdb/ci-builds-cnpg:${{ matrix.postgres }}-${{ github.sha }} \
+            pgduckdb/ci-builds:${{ matrix.postgres }}-amd64-${{ github.sha }} \
+            pgduckdb/ci-builds:${{ matrix.postgres }}-arm64-${{ github.sha }}
+
+          docker buildx imagetools inspect pgduckdb/ci-builds-cnpg:${{ matrix.postgres }}-${{ github.sha }}
