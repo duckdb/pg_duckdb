@@ -123,7 +123,16 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 	if (!is_explain_query) {
 		auto &prepared_result_types = prepared_query->GetTypes();
 
-		size_t target_list_length = static_cast<size_t>(list_length(duckdb_scan_state->custom_scan->custom_scan_tlist));
+		/*
+		 * The plan's Var types are the parser-assigned Postgres types (see
+		 * CreatePlan), so we compare against the DuckDB-derived Oids that we
+		 * stashed in custom_private at planning time to detect a DuckDB
+		 * result-type change between planning and execution (e.g. a CSV/Parquet
+		 * file whose inferred types changed).
+		 */
+		List *plan_duckdb_column_oids = (List *)lsecond(duckdb_scan_state->custom_scan->custom_private);
+
+		size_t target_list_length = static_cast<size_t>(list_length(plan_duckdb_column_oids));
 
 		if (prepared_result_types.size() != target_list_length) {
 			elog(ERROR,
@@ -133,14 +142,11 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 		}
 
 		for (size_t i = 0; i < prepared_result_types.size(); i++) {
-			Oid postgres_column_oid = pgduckdb::GetPostgresDuckDBType(prepared_result_types[i], true);
-
-			TargetEntry *target_entry =
-			    list_nth_node(TargetEntry, duckdb_scan_state->custom_scan->custom_scan_tlist, i);
-			Var *var = castNode(Var, target_entry->expr);
-			if (var->vartype != postgres_column_oid) {
+			Oid exec_column_oid = pgduckdb::GetPostgresDuckDBType(prepared_result_types[i], true);
+			Oid plan_column_oid = list_nth_oid(plan_duckdb_column_oids, i);
+			if (plan_column_oid != exec_column_oid) {
 				elog(ERROR, "Types returned by duckdb query changed between planning and execution, expected %d got %d",
-				     var->vartype, postgres_column_oid);
+				     plan_column_oid, exec_column_oid);
 			}
 		}
 	}

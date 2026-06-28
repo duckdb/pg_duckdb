@@ -14,6 +14,7 @@ extern "C" {
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
+#include "nodes/nodeFuncs.h"
 #include "nodes/params.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
@@ -72,24 +73,79 @@ CreatePlan(Query *query, bool throw_error) {
 
 	auto &prepared_result_types = prepared_query->GetTypes();
 
+	/*
+	 * Postgres freezes the result column types of a query from the parser's
+	 * point of view (PlanCacheComputeResultDesc -> ExecCleanTypeFromTL over the
+	 * non-junk target list), and uses those types for the RowDescription in the
+	 * extended query protocol / cached plans. DuckDB may type the same
+	 * expression differently (e.g. ROUND(AVG(int) / c, n) is numeric in Postgres
+	 * but double in DuckDB). If our plan declared the DuckDB type, the simple
+	 * protocol would work but the extended protocol would emit the value under
+	 * the parser's type, reinterpreting the bytes and corrupting the result.
+	 *
+	 * So to behave like Postgres in both protocols we declare the
+	 * parser-assigned type for numeric columns -- the case where DuckDB and
+	 * Postgres systematically disagree (DuckDB computes a double/decimal while
+	 * Postgres' parser says numeric) -- and coerce DuckDB's value to numeric at
+	 * execution time. Every other column keeps the DuckDB-derived type, which is
+	 * what makes the simple protocol work today; the parser type for those is
+	 * either identical or a placeholder (duckdb.row / unresolved_type) that only
+	 * DuckDB can resolve. We also need the parser target list to line up 1:1
+	 * with DuckDB's columns (it does not when e.g. a duckdb.row expands to "*").
+	 */
+	List *result_tlist =
+	    (query->commandType != CMD_SELECT && query->returningList != NIL) ? query->returningList : query->targetList;
+	List *parser_tes = NIL;
+	foreach_node(TargetEntry, tle, result_tlist) {
+		if (!tle->resjunk) {
+			parser_tes = lappend(parser_tes, tle);
+		}
+	}
+	bool use_parser_types = static_cast<size_t>(list_length(parser_tes)) == prepared_result_types.size();
+
+	/*
+	 * The DuckDB-derived Postgres Oids, stashed in custom_private so the
+	 * executor can detect a DuckDB result-type change between planning and
+	 * execution (the plan's Var types are now the parser types, so we can no
+	 * longer use them for that check).
+	 */
+	List *duckdb_column_oids = NIL;
+
 	for (size_t i = 0; i < prepared_result_types.size(); i++) {
-		Oid postgresColumnOid = pgduckdb::GetPostgresDuckDBType(prepared_result_types[i], throw_error);
+		Oid duckdb_column_oid = pgduckdb::GetPostgresDuckDBType(prepared_result_types[i], throw_error);
 
-		if (!OidIsValid(postgresColumnOid)) {
+		if (!OidIsValid(duckdb_column_oid)) {
 			return nullptr;
 		}
 
-		HeapTuple tp;
-		Form_pg_type typtup;
+		duckdb_column_oids = lappend_oid(duckdb_column_oids, duckdb_column_oid);
 
-		tp = SearchSysCache1(TYPEOID, ObjectIdGetDatum(postgresColumnOid));
-		if (!HeapTupleIsValid(tp)) {
-			elog(elevel, "(PGDuckDB/CreatePlan) Cache lookup failed for type %u", postgresColumnOid);
-			return nullptr;
+		/* Default to the DuckDB-derived type. */
+		Oid column_oid = duckdb_column_oid;
+		int32 column_typmod = pgduckdb::GetPostgresDuckDBTypemod(prepared_result_types[i]);
+		Oid column_collation = get_typcollation(duckdb_column_oid);
+
+		/*
+		 * Override with the parser type only when Postgres' parser says the
+		 * column is numeric but DuckDB produced a non-numeric type (i.e. a
+		 * double/float). That is the case that corrupts results in the extended
+		 * protocol, because the cached result descriptor (numeric) disagrees
+		 * with the value we emit. When DuckDB already produces a numeric the oid
+		 * matches, so we keep the DuckDB type: its typmod is harmless for the
+		 * numeric wire format, and is the bounded DECIMAL that e.g. CREATE TABLE
+		 * AS needs (Postgres' bare numeric is unbounded, which DuckDB can't
+		 * store). We deliberately require an exact NUMERICOID match (not the base
+		 * type) so domains over numeric keep the DuckDB type, since the value
+		 * converter dispatches on the declared oid and does not handle domains.
+		 */
+		if (use_parser_types && duckdb_column_oid != NUMERICOID) {
+			TargetEntry *tle = list_nth_node(TargetEntry, parser_tes, i);
+			if (exprType((Node *)tle->expr) == NUMERICOID) {
+				column_oid = NUMERICOID;
+				column_typmod = exprTypmod((Node *)tle->expr);
+				column_collation = exprCollation((Node *)tle->expr);
+			}
 		}
-
-		typtup = (Form_pg_type)GETSTRUCT(tp);
-		typtup->typtypmod = pgduckdb::GetPostgresDuckDBTypemod(prepared_result_types[i]);
 
 		/*
 		 * We hardcode varno 1 here, because our final plan will only have a
@@ -97,7 +153,7 @@ CreatePlan(Query *query, bool throw_error) {
 		 * filled it in later. If at some point we need multiple RTEs again, we
 		 * might want to start doing that again.
 		 */
-		Var *var = makeVar(1, i + 1, postgresColumnOid, typtup->typtypmod, typtup->typcollation, 0);
+		Var *var = makeVar(1, i + 1, column_oid, column_typmod, column_collation, 0);
 
 		TargetEntry *target_entry =
 		    makeTargetEntry((Expr *)var, i + 1, (char *)pstrdup(prepared_query->GetNames()[i].c_str()), false);
@@ -112,11 +168,9 @@ CreatePlan(Query *query, bool throw_error) {
 		/* But we also need an actual target list, because Postgres expects it
 		 * for things like materialization */
 		duckdb_node->scan.plan.targetlist = lappend(duckdb_node->scan.plan.targetlist, target_entry);
-
-		ReleaseSysCache(tp);
 	}
 
-	duckdb_node->custom_private = list_make1(query);
+	duckdb_node->custom_private = list_make2(query, duckdb_column_oids);
 	duckdb_node->methods = &duckdb_scan_scan_methods;
 
 	return (Plan *)duckdb_node;
