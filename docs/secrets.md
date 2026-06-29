@@ -45,6 +45,20 @@ SELECT duckdb.create_azure_secret(
 );
 ```
 
+For GSheets secrets you may use:
+```sql
+SELECT duckdb.create_gsheet_secret(
+    'key_file', '/path/to/credential.json'
+);
+```
+Or
+```sql
+SELECT duckdb.create_gsheet_secret(
+    'access_token', 'my-secret-token'
+);
+```
+
+
 ## Secrets with `credential_chain` provider:
 
 For more advanced use-cases, one can define secrets with a `SERVER` (and `USER MAPPING`) on `duckdb` Foreign Data Wrapper:
