@@ -282,6 +282,17 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 		MemoryContextReset(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
 		ExecClearTuple(slot);
 
+		const auto slot_column_count = static_cast<duckdb::idx_t>(slot->tts_tupleDescriptor->natts);
+		const auto custom_scan_column_count =
+		    static_cast<duckdb::idx_t>(list_length(duckdb_scan_state->custom_scan->custom_scan_tlist));
+		if (duckdb_scan_state->column_count != slot_column_count) {
+			elog(ERROR,
+			     "(PGDuckDB/ExecuteQuery) Number of columns returned by DuckDB query changed between planning and "
+			     "execution, expected slot=%zu custom_scan_tlist=%zu got %zu",
+			     static_cast<size_t>(slot_column_count), static_cast<size_t>(custom_scan_column_count),
+			     static_cast<size_t>(duckdb_scan_state->column_count));
+		}
+
 		/* MemoryContext used for allocation */
 		old_context = MemoryContextSwitchTo(duckdb_scan_state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
 

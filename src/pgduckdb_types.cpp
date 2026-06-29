@@ -1121,6 +1121,8 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 	case BPCHAROID:
 	case TEXTOID:
 	case JSONOID:
+	case UNKNOWNOID:
+	case 0: /* InvalidOid - for UNKNOWN columns where tuple descriptor has no type */
 	case VARCHAROID: {
 		slot->tts_values[col] = ConvertToStringDatum(value);
 		break;
@@ -1516,6 +1518,8 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbUnionArrayOid();
 	case duckdb::LogicalTypeId::MAP:
 		return pgduckdb::DuckdbMapArrayOid();
+	case duckdb::LogicalTypeId::UNKNOWN:
+		return TEXTARRAYOID;
 	default: {
 		if (throw_error) {
 			throw duckdb::NotImplementedException("Unsupported DuckDB `LIST` subtype: " + type.ToString());
@@ -1617,6 +1621,9 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbUnionOid();
 	case duckdb::LogicalTypeId::MAP:
 		return pgduckdb::DuckdbMapOid();
+	case duckdb::LogicalTypeId::UNKNOWN:
+		/* Used for parameter expressions and unresolved types; map to text so CreatePlan succeeds. */
+		return TEXTOID;
 	case duckdb::LogicalTypeId::ENUM:
 		return VARCHAROID;
 	default: {
@@ -1798,6 +1805,56 @@ ConvertDecimal(const NumericVar &numeric) {
 	return numeric.sign == NUMERIC_NEG ? -base_res : base_res;
 }
 
+// Issue #892: Helper function for converting NUMERIC parameters to DuckDB DECIMAL
+static duckdb::Value
+ConvertNumericParameterToDuckValue(Datum value) {
+	auto numeric = DatumGetNumeric(value);
+	auto numeric_var = FromNumeric(numeric);
+
+	// Check for special values (NaN, Infinity)
+	if (numeric_var.sign == NUMERIC_NAN) {
+		elog(ERROR, "Cannot convert NaN NUMERIC to DuckDB DECIMAL");
+	}
+#if PG_VERSION_NUM >= 140000
+	if (numeric_var.sign == NUMERIC_PINF || numeric_var.sign == NUMERIC_NINF) {
+		elog(ERROR, "Cannot convert Infinity NUMERIC to DuckDB DECIMAL");
+	}
+#endif
+
+	// Calculate precision from the numeric value
+	// Precision = number of digits before decimal + scale
+	// weight is in base-NBASE (10000) units, so multiply by DEC_DIGITS (4)
+	int integral_digits = (numeric_var.weight + 1) * DEC_DIGITS;
+	if (integral_digits < 1) {
+		integral_digits = 1; // At minimum 1 digit for the integral part
+	}
+
+	// Clamp using int to avoid uint8_t overflow (e.g. 256 digits wraps to 0)
+	int raw_precision = integral_digits + static_cast<int>(numeric_var.dscale);
+	if (raw_precision > 38) {
+		elog(WARNING, "NUMERIC precision %d exceeds DuckDB maximum (38), truncating", raw_precision);
+		raw_precision = 38;
+	}
+	uint8_t precision = static_cast<uint8_t>(raw_precision);
+	uint8_t scale = static_cast<uint8_t>(std::min(static_cast<int>(numeric_var.dscale), raw_precision));
+	if (scale > precision) {
+		elog(DEBUG1, "NUMERIC scale (%d) > precision (%d), clamping", scale, precision);
+		scale = precision;
+	}
+
+	// Choose the appropriate physical type based on precision
+	if (precision <= 4) {
+		return duckdb::Value::DECIMAL(ConvertDecimal<int16_t>(numeric_var), precision, scale);
+	} else if (precision <= 9) {
+		return duckdb::Value::DECIMAL(ConvertDecimal<int32_t>(numeric_var), precision, scale);
+	} else if (precision <= 18) {
+		return duckdb::Value::DECIMAL(ConvertDecimal<int64_t>(numeric_var), precision, scale);
+	} else {
+		return duckdb::Value::DECIMAL(ConvertDecimal<hugeint_t, DecimalConversionHugeint>(numeric_var), precision,
+		                              scale);
+	}
+}
+
 /*
  * Convert a Postgres Datum to a DuckDB Value. This is meant to be used to
  * covert query parameters in a prepared statement to its DuckDB equivalent.
@@ -1818,6 +1875,7 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 	case BPCHAROID:
 	case TEXTOID:
 	case JSONOID:
+	case UNKNOWNOID:
 	case VARCHAROID: {
 		// FIXME: TextDatumGetCstring allocates so it needs a
 		// guard, but it's a macro not a function, so our current gaurd
@@ -1846,7 +1904,128 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
 	case UUIDOID:
 		return duckdb::Value::UUID(DatumGetUUID(value));
+	case NUMERICOID:
+		// Issue #892: Support NUMERIC in prepared statement parameters
+		return ConvertNumericParameterToDuckValue(value);
+	case INT2ARRAYOID:
+	case INT4ARRAYOID:
+	case INT8ARRAYOID:
+	case FLOAT4ARRAYOID:
+	case FLOAT8ARRAYOID:
+	case TEXTARRAYOID:
+	case VARCHARARRAYOID:
+	case BPCHARARRAYOID:
+	case BOOLARRAYOID:
+	case DATEARRAYOID:
+	case TIMESTAMPARRAYOID:
+	case TIMESTAMPTZARRAYOID:
+	case UUIDARRAYOID: {
+		// Issue #892: Support array types in prepared statement parameters
+		auto array = DatumGetArrayTypeP(value);
+		auto elem_type = ARR_ELEMTYPE(array);
+
+		int16 typlen;
+		bool typbyval;
+		char typalign;
+		PostgresFunctionGuard(get_typlenbyvalalign, elem_type, &typlen, &typbyval, &typalign);
+
+		int nelems;
+		Datum *elems;
+		bool *nulls;
+		PostgresFunctionGuard(deconstruct_array, array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
+
+		// Determine the DuckDB element type based on postgres element type
+		duckdb::LogicalType child_type;
+		switch (elem_type) {
+		case INT2OID:
+			child_type = duckdb::LogicalType::SMALLINT;
+			break;
+		case INT4OID:
+			child_type = duckdb::LogicalType::INTEGER;
+			break;
+		case INT8OID:
+			child_type = duckdb::LogicalType::BIGINT;
+			break;
+		case FLOAT4OID:
+			child_type = duckdb::LogicalType::FLOAT;
+			break;
+		case FLOAT8OID:
+			child_type = duckdb::LogicalType::DOUBLE;
+			break;
+		case TEXTOID:
+		case VARCHAROID:
+		case BPCHAROID:
+			child_type = duckdb::LogicalType::VARCHAR;
+			break;
+		case BOOLOID:
+			child_type = duckdb::LogicalType::BOOLEAN;
+			break;
+		case DATEOID:
+			child_type = duckdb::LogicalType::DATE;
+			break;
+		case TIMESTAMPOID:
+			child_type = duckdb::LogicalType::TIMESTAMP;
+			break;
+		case TIMESTAMPTZOID:
+			child_type = duckdb::LogicalType::TIMESTAMP_TZ;
+			break;
+		case UUIDOID:
+			child_type = duckdb::LogicalType::UUID;
+			break;
+		default:
+			elog(ERROR, "Unsupported array element type: %d", elem_type);
+		}
+
+		// Convert each element
+		duckdb::vector<duckdb::Value> values;
+		values.reserve(nelems);
+		for (int i = 0; i < nelems; i++) {
+			if (nulls[i]) {
+				values.push_back(duckdb::Value(child_type));
+			} else {
+				values.push_back(ConvertPostgresParameterToDuckValue(elems[i], elem_type));
+			}
+		}
+
+		return duckdb::Value::LIST(child_type, std::move(values));
+	}
+	case NUMERICARRAYOID: {
+		// Issue #892: Support NUMERIC[] - special case due to per-element precision
+		// NUMERIC arrays require individual element conversion since each value
+		// may have different precision/scale
+		auto array = DatumGetArrayTypeP(value);
+		auto elem_type = ARR_ELEMTYPE(array);
+
+		int16 typlen;
+		bool typbyval;
+		char typalign;
+		PostgresFunctionGuard(get_typlenbyvalalign, elem_type, &typlen, &typbyval, &typalign);
+
+		int nelems;
+		Datum *elems;
+		bool *nulls;
+		PostgresFunctionGuard(deconstruct_array, array, elem_type, typlen, typbyval, typalign, &elems, &nulls, &nelems);
+
+		// Convert each NUMERIC element individually
+		duckdb::vector<duckdb::Value> values;
+		values.reserve(nelems);
+		for (int i = 0; i < nelems; i++) {
+			if (nulls[i]) {
+				// Use a reasonable default DECIMAL type for nulls
+				values.push_back(duckdb::Value(duckdb::LogicalType::DECIMAL(38, 0)));
+			} else {
+				values.push_back(ConvertNumericParameterToDuckValue(elems[i]));
+			}
+		}
+
+		// Use DECIMAL(38,0) as the list element type since individual elements
+		// may have varying precision
+		return duckdb::Value::LIST(duckdb::LogicalType::DECIMAL(38, 0), std::move(values));
+	}
 	default:
+		if (postgres_type == pgduckdb::DuckdbUnresolvedTypeOid()) {
+			return duckdb::Value(TextDatumGetCString(value));
+		}
 		elog(ERROR, "Could not convert Postgres parameter of type: %d to DuckDB type", postgres_type);
 	}
 }

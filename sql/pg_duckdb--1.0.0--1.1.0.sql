@@ -1,4 +1,8 @@
 -- Add MAP functions support
+-- Allow native PREPARE/EXECUTE integer literals to bind against unresolved parquet predicates.
+-- The unresolved type lives in the duckdb schema.
+CREATE CAST (integer AS duckdb.unresolved_type) WITH INOUT AS ASSIGNMENT;
+
 -- Extract value from map using key
 CREATE FUNCTION @extschema@.map_extract(map_col duckdb.map, key "any")
 RETURNS duckdb.unresolved_type AS 'MODULE_PATHNAME', 'duckdb_only_function' LANGUAGE C;
