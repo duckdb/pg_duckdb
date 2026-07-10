@@ -249,6 +249,49 @@ IsExtensionRegistered() {
 		return get_extension_oid("pg_duckdb", true) != InvalidOid;
 	}
 
+	/*
+	 * If we're in the middle of running our own CREATE/ALTER EXTENSION script,
+	 * the extension is only partially constructed: the pg_extension row already
+	 * exists (so get_extension_oid succeeds) but objects created later in the
+	 * script, such as the "duckdb" access method, don't exist yet. Populating
+	 * the cache here would store e.g. table_am_oid = InvalidOid, and since our
+	 * invalidation callback only fires on pg_namespace changes to the "duckdb"
+	 * schema, creating the AM afterwards wouldn't invalidate it. We'd be left
+	 * with a valid cache claiming table_am_oid = 0, which aliases every relation
+	 * with relam = 0 (e.g. sequences) into looking like a DuckDB table. So bail
+	 * out without caching; the first call after the script finishes will build
+	 * the cache correctly.
+	 *
+	 * If we already established that this command is building pg_duckdb, use the
+	 * memoized OID to avoid another get_extension_oid() scan for every statement
+	 * in the script.
+	 */
+	static Oid creating_pgduckdb_extension_oid = InvalidOid;
+	if (creating_extension && CurrentExtensionObject == creating_pgduckdb_extension_oid) {
+		return false;
+	}
+
+	Oid extension_oid = get_extension_oid("pg_duckdb", true);
+
+	/*
+	 * We compare OIDs rather than calling get_extension_name(), so that during
+	 * an unrelated CREATE EXTENSION this doesn't do an extra catalog lookup on
+	 * top of the get_extension_oid() we already need.
+	 */
+	if (creating_extension && CurrentExtensionObject == extension_oid) {
+
+		/*
+		 * While we're running our own CREATE/ALTER EXTENSION script this holds the OID
+		 * of the pg_duckdb extension being (re)built. It lets us cheaply recognize the
+		 * many hook invocations that happen during a single command without repeating
+		 * the get_extension_oid() lookup, which is a sequential scan over pg_extension
+		 * on PG17 and older. It's only ever consulted while creating_extension is true,
+		 * so it doesn't need to be reset when the command finishes.
+		 */
+		creating_pgduckdb_extension_oid = CurrentExtensionObject;
+		return false;
+	}
+
 	cache.initializing = true;
 
 	if (!callback_is_configured) {
@@ -268,7 +311,7 @@ IsExtensionRegistered() {
 		CacheRegisterSyscacheCallback(NAMESPACENAME, InvalidateCaches, (Datum)0);
 	}
 
-	cache.extension_oid = get_extension_oid("pg_duckdb", true);
+	cache.extension_oid = extension_oid;
 	cache.installed = cache.extension_oid != InvalidOid;
 	cache.version++;
 

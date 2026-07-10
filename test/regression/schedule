@@ -17,6 +17,7 @@ test: duckdb_recycle
 test: duckdb_secrets
 test: execution_error
 test: extensions
+test: create_extension_in_xact
 test: foreign_data_wrapper
 test: function
 test: gucs
