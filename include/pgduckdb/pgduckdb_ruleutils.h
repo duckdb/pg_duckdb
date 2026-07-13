@@ -21,6 +21,7 @@ bool pgduckdb_is_duckdb_row(Oid type_oid);
 bool pgduckdb_is_unresolved_type(Oid type_oid);
 bool pgduckdb_is_fake_type(Oid type_oid);
 bool pgduckdb_var_is_duckdb_row(Var *var);
+void pgduckdb_get_param(StringInfo buf, Param *param);
 bool pgduckdb_func_returns_duckdb_row(RangeTblFunction *rtfunc);
 Var *pgduckdb_duckdb_subscript_var(Expr *expr);
 bool pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell);
