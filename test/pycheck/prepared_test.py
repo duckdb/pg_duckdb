@@ -1,6 +1,9 @@
 import datetime
 import uuid
+from decimal import Decimal
 
+import duckdb
+import psycopg.errors
 import psycopg.types.json
 import pytest
 
@@ -40,6 +43,139 @@ def test_prepared(cur: Cursor):
     assert cur.sql(q2, (1,)) == 1
     assert cur.sql(q2, (3,)) == 1
     assert cur.sql(q2, (4,)) == 0
+
+
+def test_prepared_select_list_parameters(cur: Cursor):
+    cur.sql("CREATE TEMP TABLE t_select_param (id int, name text) USING duckdb")
+    cur.sql(
+        "INSERT INTO t_select_param VALUES (1, 'alice'), (2, 'bob'), (42, 'charlie')"
+    )
+
+    expected_rows = [
+        ("my_label", 1, "alice"),
+        ("my_label", 2, "bob"),
+        ("my_label", 42, "charlie"),
+    ]
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+
+        q_select = "SELECT %s AS label, id, name FROM t_select_param ORDER BY id"
+        assert cur.sql(q_select, ("my_label",), prepare=True) == expected_rows
+
+        q_select_where = (
+            "SELECT %s AS label, id, name FROM t_select_param WHERE id = %s"
+        )
+        assert cur.sql(q_select_where, ("my_label", 42), prepare=True) == (
+            "my_label",
+            42,
+            "charlie",
+        )
+
+
+def _create_typed_bind_parquet(tmp_path) -> str:
+    parquet_path = tmp_path / "typed_bind_params.parquet"
+    escaped_path = str(parquet_path).replace("'", "''")
+    duckdb.query(
+        f"""
+        COPY (
+            SELECT 20240901::INTEGER AS bc_date, 'lv'::TEXT AS data_stream
+            UNION ALL SELECT 20240902::INTEGER, 'linear'::TEXT
+            UNION ALL SELECT 20240903::INTEGER, 'vod'::TEXT
+        ) TO '{escaped_path}' (FORMAT PARQUET)
+        """
+    )
+    return str(parquet_path)
+
+
+@pytest.mark.xfail(
+    reason="Parameterized parquet file path via extended query protocol: DuckDB "
+    "cannot resolve parquet schema at prepare time when the path is a "
+    "parameter, so planned result types are incorrect. Use native "
+    "PREPARE/EXECUTE with a hardcoded path instead (see "
+    "test_prepared_parquet_native_prepare_execute_between)."
+)
+def test_prepared_parquet_untyped_between_param(cur: Cursor, tmp_path):
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    q = "SELECT count(*) FROM read_parquet(%s) t WHERE t['bc_date'] BETWEEN %s AND %s"
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        assert cur.sql(q, (parquet_path, 20240901, 20240902), prepare=True) == 2
+
+
+@pytest.mark.xfail(
+    reason="Parameterized parquet file path via extended query protocol: DuckDB "
+    "cannot resolve parquet schema at prepare time when the path is a "
+    "parameter, so planned result types are incorrect. Use native "
+    "PREPARE/EXECUTE with a hardcoded path instead (see "
+    "test_prepared_parquet_native_prepare_execute_in)."
+)
+def test_prepared_parquet_untyped_in_param(cur: Cursor, tmp_path):
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    q = "SELECT count(*) FROM read_parquet(%s) t WHERE t['data_stream'] IN (%s)"
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        assert cur.sql(q, (parquet_path, "lv"), prepare=True) == 1
+
+
+@pytest.mark.xfail(
+    reason="Parameterized parquet file path via extended query protocol: DuckDB "
+    "cannot resolve parquet schema at prepare time when the path is a "
+    "parameter, so planned result types are incorrect. Use native "
+    "PREPARE/EXECUTE with a hardcoded path instead."
+)
+def test_prepared_parquet_casted_param_controls(cur: Cursor, tmp_path):
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    q_between = "SELECT count(*) FROM read_parquet(%s) t WHERE t['bc_date'] BETWEEN %s::integer AND %s::integer"
+    q_in = (
+        "SELECT count(*) FROM read_parquet(%s) t WHERE t['data_stream'] IN (%s::text)"
+    )
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        assert cur.sql(q_between, (parquet_path, 20240901, 20240902), prepare=True) == 2
+        assert cur.sql(q_in, (parquet_path, "lv"), prepare=True) == 1
+
+
+def test_prepared_parquet_native_prepare_execute_between(cur: Cursor, tmp_path):
+    """
+    B1 path: native PREPARE/EXECUTE with untyped integer params in parquet BETWEEN.
+    Ensures the extended query protocol / param_types normalization works.
+    """
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    escaped_path = parquet_path.replace("'", "''")
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        cur.sql(
+            f"PREPARE b1_between AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['bc_date'] BETWEEN $1 AND $2"
+        )
+        assert cur.sql("EXECUTE b1_between(20240901, 20240902)") == 2
+        cur.sql("DEALLOCATE b1_between")
+
+
+def test_prepared_parquet_native_prepare_execute_in(cur: Cursor, tmp_path):
+    """
+    B3 path: native PREPARE/EXECUTE with untyped text params in parquet IN.
+    Covers unresolved parquet predicate typing for data_stream filters.
+    """
+    parquet_path = _create_typed_bind_parquet(tmp_path)
+    escaped_path = parquet_path.replace("'", "''")
+    cur.sql("SET duckdb.force_execution = true")
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        cur.sql(
+            f"PREPARE b3_in AS SELECT count(*) FROM read_parquet('{escaped_path}') t WHERE t['data_stream'] IN ($1)"
+        )
+        assert cur.sql("EXECUTE b3_in('lv')") == 1
+        cur.sql("DEALLOCATE b3_in")
 
 
 def test_extended(cur: Cursor):
@@ -114,6 +250,72 @@ def test_extended(cur: Cursor):
     )
 
 
+def test_prepared_numeric_parameter(cur: Cursor):
+    cur.sql("CREATE TABLE t_numeric(val NUMERIC(10,3))")
+    cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("123.456"),))
+    cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("999999.99"),))
+    cur.sql("INSERT INTO t_numeric VALUES (%s)", (Decimal("-42.0"),))
+
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    q = "SELECT count(*) FROM t_numeric WHERE val = %s"
+    assert cur.sql(q, (Decimal("123.456"),), prepare=True) == 1
+    assert cur.sql(q, (Decimal("999999.99"),)) == 1
+    assert cur.sql(q, (Decimal("-42.0"),)) == 1
+    assert cur.sql(q, (Decimal("0"),)) == 0
+
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q, (Decimal("123.456"),)) == 1  # creates generic plan
+    assert cur.sql(q, (Decimal("999999.99"),)) == 1
+    assert cur.sql(q, (Decimal("-42.0"),)) == 1
+    assert cur.sql(q, (Decimal("0"),)) == 0
+
+
+def test_prepared_array_parameters(cur: Cursor):
+    cur.sql("CREATE TABLE t_int_arr(vals INT[])")
+    cur.sql("INSERT INTO t_int_arr VALUES (%s)", ([1, 2, 3],))
+    cur.sql("INSERT INTO t_int_arr VALUES (%s)", ([4, 5],))
+
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    q_int = "SELECT count(*) FROM t_int_arr WHERE vals = %s::int[]"
+    assert cur.sql(q_int, ([1, 2, 3],), prepare=True) == 1
+    assert cur.sql(q_int, ([4, 5],)) == 1
+    assert cur.sql(q_int, ([1, 2],)) == 0
+
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q_int, ([1, 2, 3],)) == 1  # creates generic plan
+    assert cur.sql(q_int, ([4, 5],)) == 1
+    assert cur.sql(q_int, ([1, 2],)) == 0
+
+    cur.sql("CREATE TABLE t_text_arr(vals TEXT[])")
+    cur.sql("INSERT INTO t_text_arr VALUES (%s)", (["hello", "world"],))
+    cur.sql("INSERT INTO t_text_arr VALUES (%s)", (["foo"],))
+
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    q_text = "SELECT count(*) FROM t_text_arr WHERE vals = %s"
+    assert cur.sql(q_text, (["hello", "world"],), prepare=True) == 1
+    assert cur.sql(q_text, (["foo"],)) == 1
+    assert cur.sql(q_text, (["bar"],)) == 0
+
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q_text, (["hello", "world"],)) == 1  # creates generic plan
+    assert cur.sql(q_text, (["foo"],)) == 1
+
+
+@pytest.mark.parametrize(
+    "type_sql,value",
+    [
+        ("oid", 42),
+        ("name", "myname"),
+    ],
+)
+def test_prepared_unsupported_parameter_type(cur: Cursor, type_sql, value):
+    with pytest.raises(
+        psycopg.errors.InternalError,
+        match="Unsupported PostgreSQL type",
+    ):
+        cur.sql(f"CREATE TEMP TABLE t(x {type_sql}) USING duckdb")
+
+
 def test_prepared_writes(cur: Cursor):
     cur.sql("CREATE TEMP TABLE test_table (id int)")
     cur.sql("INSERT INTO test_table VALUES (%s), (%s), (%s)", (1, 2, 3))
@@ -161,7 +363,7 @@ def test_prepared_ctas(cur: Cursor):
     # crash.
     with pytest.raises(
         psycopg.errors.InternalError,
-        match="Could not find parameter with identifier 1",
+        match="Not all parameters were bound",
     ):
         cur.sql(
             "CREATE TEMP TABLE t2 USING duckdb AS SELECT * FROM heapt where id = %s",
