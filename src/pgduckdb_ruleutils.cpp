@@ -366,6 +366,11 @@ pgduckdb_show_type(Const *constval, int original_showtype) {
 	if (pgduckdb_is_fake_type(constval->consttype)) {
 		return -1;
 	}
+	/* DuckDB maps "::numeric" to DECIMAL(18,3); suppress for unqualified
+	 * NUMERIC so DuckDB infers the type from context instead. */
+	if (constval->consttype == NUMERICOID && constval->consttypmod == -1) {
+		return -1;
+	}
 	return original_showtype;
 }
 
