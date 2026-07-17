@@ -1,4 +1,4 @@
-.PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression
+.PHONY: duckdb install-duckdb clean-duckdb clean-all lintcheck check-regression-duckdb clean-regression valgrind-check
 
 PG_DUCKDB_VERSION ?= $(shell git describe --always --dirty 2>/dev/null || echo "unknown")
 
@@ -124,6 +124,13 @@ check: installcheck pycheck schedulecheck
 
 schedulecheck:
 	./scripts/schedule-check.sh
+
+valgrind-check:
+	@if [ -z "$(PG_SRC)" ]; then \
+		echo "Usage: make valgrind-check PG_SRC=/path/to/postgres"; \
+		exit 1; \
+	fi
+	./scripts/valgrind_pgduckdb.sh PG_SRC=$(PG_SRC)
 
 duckdb: $(FULL_DUCKDB_LIB)
 
