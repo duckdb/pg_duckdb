@@ -1,0 +1,73 @@
+Debian Packaging for pg_duckdb
+==============================
+
+This directory contains the Debian packaging files for the pg_duckdb PostgreSQL extension.
+
+Building the Package
+--------------------
+
+To build the Debian package locally:
+
+1. Install build dependencies:
+   ```bash
+   sudo apt-get install devscripts debhelper postgresql-all-dev build-essential \
+     libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev libssl-dev \
+     libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev \
+     libtinfo6 cmake libstdc++-12-dev ninja-build libcurl4-openssl-dev git
+   ```
+
+2. Build the package:
+   ```bash
+   debuild -us -uc -b
+   ```
+
+   This will create `.deb` files in the parent directory for each PostgreSQL version
+   that is installed on your system.
+
+3. To build a source package:
+   ```bash
+   debuild -us -uc -S
+   ```
+
+Package Structure
+-----------------
+
+The package builds separate `.deb` packages for each PostgreSQL version:
+- postgresql-14-pg-duckdb
+- postgresql-15-pg-duckdb
+- postgresql-16-pg-duckdb
+- postgresql-17-pg-duckdb
+- postgresql-18-pg-duckdb
+
+Each package includes:
+- The pg_duckdb extension shared library (pg_duckdb.so)
+- The DuckDB shared library (libduckdb.so) for non-static builds
+- Extension control file (pg_duckdb.control)
+- SQL migration scripts (pg_duckdb--*.sql)
+
+CI/CD
+-----
+
+The GitHub Actions workflow (`.github/workflows/debian-package.yaml`) automatically:
+- Builds the Debian package on pushes to main and pull requests
+- Publishes packages as GitHub artifacts
+- Creates GitHub releases with packages when tags are pushed
+
+For production deployment, you may want to:
+1. Sign packages with GPG
+2. Upload to a Debian repository (using dput, reprepro, or aptly)
+3. Configure repository signing keys
+
+Version Management
+------------------
+
+The package version is determined from `debian/changelog`. To update the version:
+
+```bash
+dch -i  # Interactive changelog editor
+# or
+dch -v 1.2.0-1 "Release version 1.2.0"
+```
+
+The version format is: `<upstream_version>-<debian_revision>`
+
