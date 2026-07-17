@@ -8,6 +8,8 @@ bool IsDomainType(Oid type_oid);
 bool IsArrayDomainType(Oid type_oid);
 Oid GetBaseTypeAndTypmod(Oid attribute_type_oid, int32_t *type_modifier);
 Datum StringToNumeric(const char *str);
+Datum DoubleToNumeric(double value, int32_t typmod);
+Datum FloatToNumeric(float value, int32_t typmod);
 Datum StringToVarbit(const char *str);
 const char *VarbitToString(Datum pg_varbit);
 } // namespace pgduckdb::pg

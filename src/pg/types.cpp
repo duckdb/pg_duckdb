@@ -72,6 +72,41 @@ StringToNumeric(const char *str) {
 	return PostgresFunctionGuard(StringToNumeric_C, str);
 }
 
+/*
+ * Convert a floating point value to a Postgres numeric Datum, mirroring
+ * Postgres' own float8::numeric / float4::numeric casts. This is used when the
+ * Postgres parser types a result column as numeric but DuckDB computed it as a
+ * floating point value. A non-negative typmod is applied to match an explicit
+ * numeric(p,s) declaration.
+ */
+static Datum
+DoubleToNumeric_C(double value, int32 typmod) {
+	Datum num = DirectFunctionCall1(float8_numeric, Float8GetDatum(value));
+	if (typmod != -1) {
+		num = DirectFunctionCall2(numeric, num, Int32GetDatum(typmod));
+	}
+	return num;
+}
+
+Datum
+DoubleToNumeric(double value, int32 typmod) {
+	return PostgresFunctionGuard(DoubleToNumeric_C, value, typmod);
+}
+
+static Datum
+FloatToNumeric_C(float value, int32 typmod) {
+	Datum num = DirectFunctionCall1(float4_numeric, Float4GetDatum(value));
+	if (typmod != -1) {
+		num = DirectFunctionCall2(numeric, num, Int32GetDatum(typmod));
+	}
+	return num;
+}
+
+Datum
+FloatToNumeric(float value, int32 typmod) {
+	return PostgresFunctionGuard(FloatToNumeric_C, value, typmod);
+}
+
 static Datum
 StringToVarbit_C(const char *str) {
 	return DirectFunctionCall3(varbit_in, CStringGetDatum(str), /*typelen=*/ObjectIdGetDatum(VARBITOID),

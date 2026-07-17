@@ -350,7 +350,7 @@ SELECT * FROM numeric_as_double;
 -----------------------
            0.234234234
                       
- 4.582345020342342e+20
+ 458234502034234000000
 (3 rows)
 
 RESET duckdb.convert_unsupported_numeric_to_double;
