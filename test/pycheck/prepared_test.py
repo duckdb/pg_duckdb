@@ -42,6 +42,64 @@ def test_prepared(cur: Cursor):
     assert cur.sql(q2, (4,)) == 0
 
 
+def test_prepared_param_in_expression(cur: Cursor):
+    # Regression test for issue #480: a parameter used inside an expression
+    # (rather than a direct comparison) cannot have its type inferred by DuckDB.
+    # We deparse it with an explicit cast so DuckDB knows the type instead of
+    # reporting it as UNKNOWN.
+    cur.sql("CREATE TEMP TABLE test_table (id int) USING duckdb")
+    cur.sql("INSERT INTO test_table VALUES (1), (2), (3)")
+
+    q = "SELECT count(*) FROM test_table WHERE id = %s + 1"
+
+    cur.sql("SET plan_cache_mode = 'force_custom_plan'")
+    assert cur.sql(q, (1,), prepare=True) == 1  # matches id = 2
+    assert cur.sql(q, (2,)) == 1  # matches id = 3
+    assert cur.sql(q, (3,)) == 0  # id = 4 does not exist
+
+    cur.sql("SET plan_cache_mode = 'force_generic_plan'")
+    assert cur.sql(q, (1,)) == 1  # creates generic plan
+    assert cur.sql(q, (2,)) == 1
+    assert cur.sql(q, (3,)) == 0
+
+
+def test_prepared_param_cast_types(cur: Cursor):
+    # Regression test for issue #480: every external parameter now deparses as
+    # CAST($n AS <pgtype>), so the emitted type name must be one DuckDB can parse.
+    # This covers more types than int, including the multi-word "timestamp with
+    # time zone".
+    cur.sql(
+        "CREATE TEMP TABLE test_table (t text, ts timestamptz, u uuid) USING duckdb"
+    )
+    u = uuid.UUID("12345678-1234-5678-1234-567812345678")
+    cur.sql(
+        "INSERT INTO test_table VALUES (%s, %s, %s)",
+        ("foo", datetime.datetime(2020, 1, 1, tzinfo=datetime.timezone.utc), u),
+    )
+
+    for mode in ("force_custom_plan", "force_generic_plan"):
+        cur.sql(f"SET plan_cache_mode = '{mode}'")
+        # text: parameter concatenated
+        assert (
+            cur.sql(
+                "SELECT count(*) FROM test_table WHERE t = %s || 'o'",
+                ("fo",),
+                prepare=True,
+            )
+            == 1
+        )
+        # timestamptz: parameter used in interval arithmetic
+        assert (
+            cur.sql(
+                "SELECT count(*) FROM test_table WHERE ts = %s + interval '1 day'",
+                (datetime.datetime(2019, 12, 31, tzinfo=datetime.timezone.utc),),
+            )
+            == 1
+        )
+        # uuid: cast is emitted even for a plain equality
+        assert cur.sql("SELECT count(*) FROM test_table WHERE u = %s", (u,)) == 1
+
+
 def test_extended(cur: Cursor):
     cur.sql("""
         CREATE TABLE t(
@@ -161,7 +219,7 @@ def test_prepared_ctas(cur: Cursor):
     # crash.
     with pytest.raises(
         psycopg.errors.InternalError,
-        match="Could not find parameter with identifier 1",
+        match="Not all parameters were bound",
     ):
         cur.sql(
             "CREATE TEMP TABLE t2 USING duckdb AS SELECT * FROM heapt where id = %s",

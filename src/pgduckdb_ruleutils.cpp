@@ -98,6 +98,25 @@ pgduckdb_is_fake_type(Oid type_oid) {
 	return false;
 }
 
+/*
+ * Deparse an external parameter as CAST($n AS <type>) instead of a bare $n.
+ * DuckDB can't always infer a parameter's type (e.g. inside "$1 + 1"), leaving
+ * it UNKNOWN and unconvertible to a Postgres type (issue #480); the cast hands
+ * it the type Postgres already resolved. Fake types are skipped (see above).
+ */
+void
+pgduckdb_get_param(StringInfo buf, Param *param) {
+	Oid paramtype = param->paramtype;
+
+	if (param->paramkind == PARAM_EXTERN && OidIsValid(paramtype) && paramtype != UNKNOWNOID &&
+	    !pgduckdb_is_fake_type(paramtype)) {
+		appendStringInfo(buf, "CAST($%d AS %s)", param->paramid,
+		                 format_type_with_typemod(paramtype, param->paramtypmod));
+	} else {
+		appendStringInfo(buf, "$%d", param->paramid);
+	}
+}
+
 static bool
 pgduckdb_is_duckdb_subscript_type(Oid type_oid) {
 	if (pgduckdb_is_unresolved_type(type_oid)) {
