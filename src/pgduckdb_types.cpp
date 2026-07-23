@@ -9,7 +9,6 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
-#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pg/memory.hpp"
 #include "pgduckdb/pg/types.hpp"

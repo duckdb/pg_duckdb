@@ -4,7 +4,6 @@
 #include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_hooks.hpp"
-#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pg/string_utils.hpp"
 
 extern "C" {
@@ -29,7 +28,6 @@ extern "C" {
 #include "utils/builtins.h"
 #include "utils/syscache.h"
 #include "utils/lsyscache.h"
-#include "commands/event_trigger.h"
 #include "commands/tablecmds.h"
 #include "executor/spi.h"
 #include "miscadmin.h"
@@ -40,7 +38,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_ruleutils.h"
 }
 
-#include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
