@@ -13,6 +13,7 @@ extern "C" {
 #include "catalog/pg_class.h"
 #include "catalog/heap.h"
 #include "catalog/pg_collation.h"
+#include "catalog/pg_type_d.h"
 #include "commands/dbcommands.h"
 #include "commands/tablecmds.h"
 #include "nodes/nodeFuncs.h"
@@ -237,7 +238,13 @@ pgduckdb_check_for_star_start(StarReconstructionContext *ctx, ListCell *tle_cell
 
 		/* Look for the next Var in the run */
 		varattno++;
-	} while ((tle_cell = lnext(ctx->target_list, tle_cell)));
+	} while ((tle_cell =
+#if PG_VERSION_NUM < 130000
+	              lnext(tle_cell)
+#else
+	              lnext(ctx->target_list, tle_cell)
+#endif
+	              ));
 }
 
 /*
@@ -380,9 +387,20 @@ pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var
 	 * parse tree, prefer to use the syntactic referent.  Otherwise, fall back
 	 * on the semantic referent.  (See comments in get_variable().)
 	 */
-	if (subscript_var->varnosyn > 0 && plan == NULL) {
+	if (
+#if PG_VERSION_NUM >= 130000
+	    subscript_var->varnosyn > 0
+#else
+	    subscript_var->varno > 0
+#endif
+	    && plan == NULL) {
+	#if PG_VERSION_NUM >= 130000
 		varno = subscript_var->varnosyn;
 		varattno = subscript_var->varattnosyn;
+	#else
+		varno = subscript_var->varno;
+		varattno = subscript_var->varattno;
+	#endif
 	} else {
 		varno = subscript_var->varno;
 		varattno = subscript_var->varattno;
@@ -700,9 +718,11 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		appendStringInfo(&buffer, "%s ", quote_identifier(column_name));
 		appendStringInfoString(&buffer, column_type_name);
 
+		#if PG_VERSION_NUM >= 140000
 		if (column->attcompression) {
 			elog(ERROR, "Column compression is not supported in DuckDB");
 		}
+		#endif
 
 		if (column->attidentity) {
 			elog(ERROR, "Identity columns are not supported in DuckDB");
@@ -942,8 +962,13 @@ pgduckdb_get_alter_tabledef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 
 	List *relation_context = pgduckdb_deparse_context_for(relation_name, relation_oid);
 	ParseState *pstate = make_parsestate(NULL);
+	#if PG_VERSION_NUM < 130000
+	RangeTblEntry *nsitem = addRangeTableEntryForRelation(pstate, relation, AccessShareLock, NULL, false, true);
+	addRTEtoQuery(pstate, nsitem, true, true, true);
+	#else
 	ParseNamespaceItem *nsitem = addRangeTableEntryForRelation(pstate, relation, AccessShareLock, NULL, false, true);
 	addNSItemToQuery(pstate, nsitem, true, true, true);
+	#endif
 
 	foreach_node(AlterTableCmd, cmd, alter_stmt->cmds) {
 		/*

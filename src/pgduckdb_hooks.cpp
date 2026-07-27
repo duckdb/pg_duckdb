@@ -265,6 +265,8 @@ static PlannedStmt *
 #if PG_VERSION_NUM >= 190000
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
                       ExplainState *es) {
+#elif PG_VERSION_NUM < 130000
+DuckdbPlannerHook_Cpp(Query *parse, int cursor_options, ParamListInfo bound_params) {
 #else
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 #endif
@@ -299,6 +301,8 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 
 #if PG_VERSION_NUM >= 190000
 	return prev_planner_hook(parse, query_string, cursor_options, bound_params, es);
+#elif PG_VERSION_NUM < 130000
+	return prev_planner_hook(parse, cursor_options, bound_params);
 #else
 	return prev_planner_hook(parse, query_string, cursor_options, bound_params);
 #endif
@@ -309,6 +313,10 @@ static PlannedStmt *
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
                   ExplainState *es) {
 	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params, es);
+}
+#elif PG_VERSION_NUM < 130000
+DuckdbPlannerHook(Query *parse, int cursor_options, ParamListInfo bound_params) {
+	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, cursor_options, bound_params);
 }
 #else
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {

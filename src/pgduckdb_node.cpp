@@ -88,7 +88,10 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 
 	StringInfo explain_prefix = makeStringInfo();
 
-	bool is_explain_query = ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN;
+	bool is_explain_query = false;
+#if PG_VERSION_NUM >= 130000
+	is_explain_query = ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN;
+#endif
 
 	if (is_explain_query) {
 		appendStringInfoString(explain_prefix, "EXPLAIN ");
@@ -258,7 +261,13 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 		TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
 		MemoryContext old_context;
 
-		if (ActivePortal && ActivePortal->commandTag == CMDTAG_EXPLAIN) {
+		if (ActivePortal
+#if PG_VERSION_NUM >= 130000
+		    && ActivePortal->commandTag == CMDTAG_EXPLAIN
+#else
+		    && false
+#endif
+		) {
 			ExecClearTuple(slot);
 			return slot;
 		}

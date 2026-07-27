@@ -158,10 +158,12 @@ duckdb_tuple_satisfies_snapshot(Relation /*rel*/, TupleTableSlot * /*slot*/, Sna
 	NOT_IMPLEMENTED();
 }
 
+#if PG_VERSION_NUM >= 130000
 static TransactionId
 duckdb_index_delete_tuples(Relation /*rel*/, TM_IndexDeleteOp * /*delstate*/) {
 	NOT_IMPLEMENTED();
 }
+#endif
 
 /* ----------------------------------------------------------------------------
  *  Functions for manipulations of physical tuples for duckdb AM.
@@ -501,9 +503,11 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
                                               .scan_rescan = duckdb_scan_rescan,
                                               .scan_getnextslot = duckdb_scan_getnextslot,
 
-                                              /* optional callbacks */
-                                              .scan_set_tidrange = NULL,
-                                              .scan_getnextslot_tidrange = NULL,
+												      /* optional callbacks */
+#if PG_VERSION_NUM >= 130000
+												      .scan_set_tidrange = NULL,
+												      .scan_getnextslot_tidrange = NULL,
+#endif
 
                                               /* these are common helper functions */
                                               .parallelscan_estimate = table_block_parallelscan_estimate,
@@ -519,7 +523,9 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
                                               .tuple_tid_valid = duckdb_tuple_tid_valid,
                                               .tuple_get_latest_tid = duckdb_get_latest_tid,
                                               .tuple_satisfies_snapshot = duckdb_tuple_satisfies_snapshot,
-                                              .index_delete_tuples = duckdb_index_delete_tuples,
+#if PG_VERSION_NUM >= 130000
+												      .index_delete_tuples = duckdb_index_delete_tuples,
+#endif
 
                                               .tuple_insert = duckdb_tuple_insert,
                                               .tuple_insert_speculative = duckdb_tuple_insert_speculative,
@@ -548,8 +554,12 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
                                               .relation_size = duckdb_relation_size,
                                               .relation_needs_toast_table = duckdb_relation_needs_toast_table,
                                               /* can be null because relation_needs_toast_table returns false */
+#if PG_VERSION_NUM >= 140000
                                               .relation_toast_am = NULL,
+#endif
+#if PG_VERSION_NUM >= 130000
                                               .relation_fetch_toast_slice = NULL,
+#endif
 
                                               .relation_estimate_size = duckdb_estimate_rel_size,
 #if PG_VERSION_NUM < 180000

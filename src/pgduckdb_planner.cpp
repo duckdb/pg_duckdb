@@ -28,9 +28,7 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
 
-#if PG_VERSION_NUM >= 180000
 #include "executor/executor.h"
-#endif
 }
 
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -153,7 +151,14 @@ check_view_perms_recursive(Query *query) {
 	foreach (lc, query->rtable) {
 		RangeTblEntry *rte = lfirst_node(RangeTblEntry, lc);
 
-#if PG_VERSION_NUM < 160000
+#if PG_VERSION_NUM < 140000
+		if (rte->relkind == RELKIND_VIEW) {
+			bool result = ExecCheckRTPerms(list_make1(rte), false);
+			if (!result) {
+				aclcheck_error(ACLCHECK_NO_PRIV, OBJECT_VIEW, get_rel_name(rte->relid));
+			}
+		}
+#elif PG_VERSION_NUM < 160000
 		if (rte->relkind == RELKIND_VIEW) {
 			bool result = ExecCheckRTEPerms(rte);
 			if (!result) {
@@ -230,7 +235,9 @@ DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 #else
 	result->resultRelations = NULL;
 #endif
+#if PG_VERSION_NUM >= 140000
 	result->appendRelations = NULL;
+#endif
 	result->subplans = NIL;
 	result->rewindPlanIDs = NULL;
 	result->rowMarks = NIL;

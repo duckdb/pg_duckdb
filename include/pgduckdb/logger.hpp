@@ -5,10 +5,21 @@
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 extern "C" {
+#include "pg_config.h"
+}
+
+extern "C" {
+#if PG_VERSION_NUM < 130000
+bool errstart(int elevel, const char *filename, int lineno, const char *funcname, const char *domain);
+void errfinish(int dummy, ...);
+#else
 bool errstart(int elevel, const char *domain);
 void errfinish(const char *filename, int lineno, const char *funcname);
+#endif
 int errmsg_internal(const char *fmt, ...);
+#if PG_VERSION_NUM >= 130000
 bool message_level_is_interesting(int elevel);
+#endif
 }
 
 namespace pgduckdb {
@@ -45,14 +56,38 @@ namespace pgduckdb {
 	do {                                                                                                               \
 		pd_prevent_errno_in_scope();                                                                                   \
 		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level");                       \
-		if (message_level_is_interesting(elevel)) {                                                                    \
+		if (pgduckdb_message_level_is_interesting(elevel)) {                                                          \
 			std::lock_guard<std::recursive_mutex> __pd_log_lock(pgduckdb::GlobalProcessLock::GetLock());               \
-			if (errstart(elevel, domain))                                                                              \
-				__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__);                                                  \
+			if (pgduckdb_errstart(elevel, __FILE__, __LINE__, __func__, domain))                                      \
+				__VA_ARGS__, pgduckdb_errfinish(__FILE__, __LINE__, __func__);                                         \
 		}                                                                                                              \
 	} while (0)
 
 #define TEXTDOMAIN NULL
+
+inline bool pgduckdb_message_level_is_interesting(int elevel) {
+#if PG_VERSION_NUM < 130000
+	return true;
+#else
+	return message_level_is_interesting(elevel);
+#endif
+}
+
+inline bool pgduckdb_errstart(int elevel, const char *filename, int lineno, const char *funcname, const char *domain) {
+#if PG_VERSION_NUM < 130000
+	return errstart(elevel, filename, lineno, funcname, domain);
+#else
+	return errstart(elevel, domain);
+#endif
+}
+
+inline void pgduckdb_errfinish(const char *filename, int lineno, const char *funcname) {
+#if PG_VERSION_NUM < 130000
+	errfinish(0);
+#else
+	errfinish(filename, lineno, funcname);
+#endif
+}
 
 #define pd_ereport(elevel, ...) pd_ereport_domain(elevel, TEXTDOMAIN, __VA_ARGS__)
 

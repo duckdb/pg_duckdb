@@ -38,19 +38,29 @@ standard_ExplainOneQuery(Query *query, int cursorOptions, IntoClause *into, Expl
 	INSTR_TIME_SET_CURRENT(planstart);
 
 	/* plan the query */
+#if PG_VERSION_NUM < 130000
+	plan = pg_plan_query(query, cursorOptions, params);
+#else
 	plan = pg_plan_query(query, queryString, cursorOptions, params);
+#endif
 
 	INSTR_TIME_SET_CURRENT(planduration);
 	INSTR_TIME_SUBTRACT(planduration, planstart);
 
+#if PG_VERSION_NUM >= 130000
 	/* calc differences of buffer counters. */
 	if (es->buffers) {
 		memset(&bufusage, 0, sizeof(BufferUsage));
 		BufferUsageAccumDiff(&bufusage, &pgBufferUsage, &bufusage_start);
 	}
+#endif
 
 	/* run it (if needed) and produce output */
+#if PG_VERSION_NUM < 130000
+	ExplainOnePlan(plan, into, es, queryString, params, queryEnv, &planduration);
+#else
 	ExplainOnePlan(plan, into, es, queryString, params, queryEnv, &planduration, (es->buffers ? &bufusage : NULL));
+#endif
 }
 #endif
 }

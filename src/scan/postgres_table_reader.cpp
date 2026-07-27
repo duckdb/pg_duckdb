@@ -22,7 +22,9 @@ extern "C" {
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/snapmgr.h"
+#if PG_VERSION_NUM >= 130000
 #include "utils/wait_event.h"
+#endif
 #include "storage/latch.h"
 #if PG_VERSION_NUM >= 190000
 #include "storage/waiteventset.h"
@@ -70,6 +72,8 @@ PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_
 
 #if PG_VERSION_NUM >= 190000
 	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr, nullptr);
+#elif PG_VERSION_NUM < 130000
+	PlannedStmt *planned_stmt = standard_planner(query, 0, nullptr);
 #else
 	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr);
 #endif
@@ -344,7 +348,17 @@ PostgresTableReader::GetNextWorkerTuple() {
 	for (; next_parallel_reader < nreaders;) {
 		reader = (TupleQueueReader *)parallel_worker_readers[next_parallel_reader];
 
+#if PG_VERSION_NUM < 130000
+		HeapTuple heap_tuple = TupleQueueReaderNext(reader, true, &readerdone);
+		if (heap_tuple) {
+			minimal_tuple = minimal_tuple_from_heap_tuple(heap_tuple);
+			heap_freetuple(heap_tuple);
+		} else {
+			minimal_tuple = NULL;
+		}
+#else
 		minimal_tuple = TupleQueueReaderNext(reader, true, &readerdone);
+#endif
 
 		if (readerdone) {
 			--nreaders;
@@ -375,7 +389,11 @@ PostgresTableReader::GetNextWorkerTuple() {
 			 * It should be safe to make this call because function calling GetNextTuple() and transitively
 			 * GetNextWorkerTuple() should held GlobalProcesLock.
 			 */
+#if PG_VERSION_NUM < 130000
+			WaitLatch(MyLatch, WL_LATCH_SET | WL_EXIT_ON_PM_DEATH, 0, 0);
+#else
 			WaitLatch(MyLatch, WL_LATCH_SET | WL_EXIT_ON_PM_DEATH, 0, PG_WAIT_EXTENSION);
+#endif
 			/* No need to use PostgresFunctionGuard here, because ResetLatch is a trivial function */
 			ResetLatch(MyLatch);
 			nvisited = 0;
