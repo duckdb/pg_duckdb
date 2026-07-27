@@ -56,24 +56,27 @@ namespace pgduckdb {
 	do {                                                                                                               \
 		pd_prevent_errno_in_scope();                                                                                   \
 		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level");                       \
-		if (pgduckdb_message_level_is_interesting(elevel)) {                                                          \
+		if (pgduckdb_message_level_is_interesting(elevel)) {                                                           \
 			std::lock_guard<std::recursive_mutex> __pd_log_lock(pgduckdb::GlobalProcessLock::GetLock());               \
-			if (pgduckdb_errstart(elevel, __FILE__, __LINE__, __func__, domain))                                      \
+			if (pgduckdb_errstart(elevel, __FILE__, __LINE__, __func__, domain))                                       \
 				__VA_ARGS__, pgduckdb_errfinish(__FILE__, __LINE__, __func__);                                         \
 		}                                                                                                              \
 	} while (0)
 
 #define TEXTDOMAIN NULL
 
-inline bool pgduckdb_message_level_is_interesting(int elevel) {
+inline bool
+pgduckdb_message_level_is_interesting(int elevel) {
 #if PG_VERSION_NUM < 130000
+	(void)elevel;
 	return true;
 #else
 	return message_level_is_interesting(elevel);
 #endif
 }
 
-inline bool pgduckdb_errstart(int elevel, const char *filename, int lineno, const char *funcname, const char *domain) {
+inline bool
+pgduckdb_errstart(int elevel, const char *filename, int lineno, const char *funcname, const char *domain) {
 #if PG_VERSION_NUM < 130000
 	return errstart(elevel, filename, lineno, funcname, domain);
 #else
@@ -81,8 +84,12 @@ inline bool pgduckdb_errstart(int elevel, const char *filename, int lineno, cons
 #endif
 }
 
-inline void pgduckdb_errfinish(const char *filename, int lineno, const char *funcname) {
+inline void
+pgduckdb_errfinish(const char *filename, int lineno, const char *funcname) {
 #if PG_VERSION_NUM < 130000
+	(void)filename;
+	(void)lineno;
+	(void)funcname;
 	errfinish(0);
 #else
 	errfinish(filename, lineno, funcname);

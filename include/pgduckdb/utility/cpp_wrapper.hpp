@@ -74,17 +74,17 @@ __CPPFunctionGuard__(const char *func_name, const char *file_name, int line, Fun
 	}
 
 	// Simplified version of `elog(ERROR, ...)`, with arguments inlined
-	#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 	if (errstart(ERROR, file_name, line, func_name, TEXTDOMAIN)) {
-	#else
+#else
 	if (errstart_cold(ERROR, TEXTDOMAIN)) {
-	#endif
+#endif
 		errmsg_internal("(PGDuckDB/%s) %s", func_name, error_message);
-	#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 		errfinish(0);
-	#else
+#else
 		errfinish(file_name, line, func_name);
-	#endif
+#endif
 	}
 	pg_unreachable();
 }

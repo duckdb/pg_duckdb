@@ -503,10 +503,10 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
                                               .scan_rescan = duckdb_scan_rescan,
                                               .scan_getnextslot = duckdb_scan_getnextslot,
 
-												      /* optional callbacks */
+/* optional callbacks */
 #if PG_VERSION_NUM >= 130000
-												      .scan_set_tidrange = NULL,
-												      .scan_getnextslot_tidrange = NULL,
+                                              .scan_set_tidrange = NULL,
+                                              .scan_getnextslot_tidrange = NULL,
 #endif
 
                                               /* these are common helper functions */
@@ -524,7 +524,7 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
                                               .tuple_get_latest_tid = duckdb_get_latest_tid,
                                               .tuple_satisfies_snapshot = duckdb_tuple_satisfies_snapshot,
 #if PG_VERSION_NUM >= 130000
-												      .index_delete_tuples = duckdb_index_delete_tuples,
+                                              .index_delete_tuples = duckdb_index_delete_tuples,
 #endif
 
                                               .tuple_insert = duckdb_tuple_insert,
@@ -553,7 +553,7 @@ static const TableAmRoutine duckdb_methods = {.type = T_TableAmRoutine,
 
                                               .relation_size = duckdb_relation_size,
                                               .relation_needs_toast_table = duckdb_relation_needs_toast_table,
-                                              /* can be null because relation_needs_toast_table returns false */
+/* can be null because relation_needs_toast_table returns false */
 #if PG_VERSION_NUM >= 140000
                                               .relation_toast_am = NULL,
 #endif

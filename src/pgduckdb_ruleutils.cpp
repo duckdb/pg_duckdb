@@ -394,13 +394,13 @@ pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var
 	    subscript_var->varno > 0
 #endif
 	    && plan == NULL) {
-	#if PG_VERSION_NUM >= 130000
+#if PG_VERSION_NUM >= 130000
 		varno = subscript_var->varnosyn;
 		varattno = subscript_var->varattnosyn;
-	#else
+#else
 		varno = subscript_var->varno;
 		varattno = subscript_var->varattno;
-	#endif
+#endif
 	} else {
 		varno = subscript_var->varno;
 		varattno = subscript_var->varattno;
@@ -718,11 +718,11 @@ pgduckdb_get_tabledef(Oid relation_oid) {
 		appendStringInfo(&buffer, "%s ", quote_identifier(column_name));
 		appendStringInfoString(&buffer, column_type_name);
 
-		#if PG_VERSION_NUM >= 140000
+#if PG_VERSION_NUM >= 140000
 		if (column->attcompression) {
 			elog(ERROR, "Column compression is not supported in DuckDB");
 		}
-		#endif
+#endif
 
 		if (column->attidentity) {
 			elog(ERROR, "Identity columns are not supported in DuckDB");
@@ -962,13 +962,13 @@ pgduckdb_get_alter_tabledef(Oid relation_oid, AlterTableStmt *alter_stmt) {
 
 	List *relation_context = pgduckdb_deparse_context_for(relation_name, relation_oid);
 	ParseState *pstate = make_parsestate(NULL);
-	#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 	RangeTblEntry *nsitem = addRangeTableEntryForRelation(pstate, relation, AccessShareLock, NULL, false, true);
 	addRTEtoQuery(pstate, nsitem, true, true, true);
-	#else
+#else
 	ParseNamespaceItem *nsitem = addRangeTableEntryForRelation(pstate, relation, AccessShareLock, NULL, false, true);
 	addNSItemToQuery(pstate, nsitem, true, true, true);
-	#endif
+#endif
 
 	foreach_node(AlterTableCmd, cmd, alter_stmt->cmds) {
 		/*

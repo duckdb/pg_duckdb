@@ -1059,9 +1059,8 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 
 static void
 #if PG_VERSION_NUM < 130000
-DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, ProcessUtilityContext context,
-                      ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
-                      char *completion_tag) {
+DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, ProcessUtilityContext context, ParamListInfo params,
+                      struct QueryEnvironment *query_env, DestReceiver *dest, char *completion_tag) {
 #else
 DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                       ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
@@ -1074,15 +1073,15 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 			auto res = pgduckdb::DuckDBQueryOrThrow(copy_query);
 			auto chunk = res->Fetch();
 			auto processed = chunk->GetValue(0, 0).GetValue<uint64_t>();
-			#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 			if (completion_tag) {
 				snprintf(completion_tag, COMPLETION_TAG_BUFSIZE, "COPY " UINT64_FORMAT, processed);
 			}
-			#else
+#else
 			if (qc) {
 				SetQueryCompletion(qc, CMDTAG_COPY, processed);
 			}
-			#endif
+#endif
 			return;
 		}
 	}
@@ -1101,11 +1100,11 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	pgduckdb::SetStatementTopLevel(context == PROCESS_UTILITY_TOPLEVEL);
 
 	bool needs_to_run_post = DuckdbHandleDDLPre(pstmt, query_string);
-	#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 	prev_process_utility_hook(pstmt, query_string, context, params, query_env, dest, completion_tag);
-	#else
+#else
 	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
-	#endif
+#endif
 	if (needs_to_run_post) {
 		DuckdbHandleDDLPost(pstmt);
 	}
@@ -1159,26 +1158,26 @@ DuckdbShouldCallDDLHooks(PlannedStmt *pstmt) {
 
 static void
 #if PG_VERSION_NUM < 130000
-DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, ProcessUtilityContext context,
-                  ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, char *completion_tag) {
+DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, ProcessUtilityContext context, ParamListInfo params,
+                  struct QueryEnvironment *query_env, DestReceiver *dest, char *completion_tag) {
 #else
 DuckdbUtilityHook(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                   ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest, QueryCompletion *qc) {
 #endif
 
 	if (!DuckdbShouldCallDDLHooks(pstmt)) {
-		#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 		return prev_process_utility_hook(pstmt, query_string, context, params, query_env, dest, completion_tag);
-		#else
+#else
 		return prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
-		#endif
+#endif
 	}
 
-	#if PG_VERSION_NUM < 130000
+#if PG_VERSION_NUM < 130000
 	InvokeCPPFunc(DuckdbUtilityHook_Cpp, pstmt, query_string, context, params, query_env, dest, completion_tag);
-	#else
+#else
 	InvokeCPPFunc(DuckdbUtilityHook_Cpp, pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
-	#endif
+#endif
 }
 
 void

@@ -13,7 +13,8 @@ void *duckdb_malloc(size_t size);
 
 namespace pgduckdb {
 
-Datum DetoastPostgresDatum(struct varlena *attr, bool *should_free) {
+Datum
+DetoastPostgresDatum(struct varlena *attr, bool *should_free) {
 	if (!VARATT_IS_EXTENDED(attr)) {
 		*should_free = false;
 		return PointerGetDatum(attr);

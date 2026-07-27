@@ -12,19 +12,24 @@ bool doing_motherduck_sync = false;
 char *current_duckdb_database_name = nullptr;
 char *current_motherduck_catalog_version = nullptr;
 
-void InitBackgroundWorkersShmem(void) {
+void
+InitBackgroundWorkersShmem(void) {
 }
 
-void StartBackgroundWorkerIfNeeded(void) {
+void
+StartBackgroundWorkerIfNeeded(void) {
 }
 
-void TriggerActivity(void) {
+void
+TriggerActivity(void) {
 }
 
-void UnclaimBgwSessionHint(int, Datum) {
+void
+UnclaimBgwSessionHint(int, Datum) {
 }
 
-const char *PossiblyReuseBgwSessionHint(void) {
+const char *
+PossiblyReuseBgwSessionHint(void) {
 	return nullptr;
 }
 
