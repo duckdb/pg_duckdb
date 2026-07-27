@@ -44,7 +44,9 @@ extern "C" {
 #include "miscadmin.h"
 #include "pgstat.h"
 #include "postmaster/bgworker.h"
+#if PG_VERSION_NUM >= 130000
 #include "postmaster/interrupt.h"
+#endif
 #include "storage/ipc.h"
 #include "storage/latch.h"
 #include "storage/proc.h"
