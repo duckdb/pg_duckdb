@@ -248,6 +248,23 @@ ExecuteQuery(DuckdbScanState *state) {
 
 	state->query_results = pending->Execute();
 	state->column_count = state->query_results->ColumnCount();
+	EState *estate = state->css.ss.ps.state;
+	// set the amount of rows affected by INSERT / UPDATE / DELETE
+	if (state->query_results && !state->query_results->HasError()) {
+		auto stmt_type = state->query_results->statement_type;
+		bool is_dml = (stmt_type == duckdb::StatementType::INSERT_STATEMENT ||
+		               stmt_type == duckdb::StatementType::UPDATE_STATEMENT ||
+		               stmt_type == duckdb::StatementType::DELETE_STATEMENT);
+		bool is_materialized = state->query_results->type == duckdb::QueryResultType::MATERIALIZED_RESULT;
+		if (is_dml && is_materialized) {
+			auto &mat_res = static_cast<duckdb::MaterializedQueryResult &>(*state->query_results);
+			if (mat_res.RowCount() > 0) {
+				duckdb::Value count_val = mat_res.GetValue(0, 0);
+				int64_t rows_affected = count_val.GetValue<int64_t>();
+				estate->es_processed = rows_affected;
+			}
+		}
+	}
 	state->is_executed = true;
 }
 
