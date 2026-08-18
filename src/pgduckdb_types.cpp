@@ -1,4 +1,7 @@
+#include <limits>
+
 #include "duckdb.hpp"
+#include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/shared_ptr.hpp"
 #include "duckdb/common/extra_type_info.hpp"
 #include "duckdb/common/types/bit.hpp"
@@ -42,7 +45,26 @@ extern "C" {
 
 namespace pgduckdb {
 
+/*
+ * Must not be called for a NUMERIC_IS_SPECIAL() value. Postgres stores NaN and
+ * ±Infinity without any digits, so ConvertDecimal() would read ndigits == 0 and
+ * silently return 0. Postgres itself never converts them to NumericVar form
+ * either, see the comment above NUMERIC_SIGN in vendor/pg_numeric_c.hpp.
+ */
 NumericVar FromNumeric(Numeric num);
+
+static double
+SpecialNumericToDouble(Numeric num) {
+	D_ASSERT(NUMERIC_IS_SPECIAL(num));
+	if (NUMERIC_IS_NAN(num)) {
+		return std::numeric_limits<double>::quiet_NaN();
+	}
+	if (NUMERIC_IS_PINF(num)) {
+		return std::numeric_limits<double>::infinity();
+	}
+	D_ASSERT(NUMERIC_IS_NINF(num));
+	return -std::numeric_limits<double>::infinity();
+}
 
 struct NumericAsDouble : public duckdb::ExtraTypeInfo {
 	// Dummy struct to indicate at conversion that the source is a Numeric
@@ -1917,6 +1939,11 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		if (aux_info && dynamic_cast<NumericAsDouble *>(aux_info.get())) {
 			// This NUMERIC could not be converted to a DECIMAL, convert it as DOUBLE instead
 			auto numeric = DatumGetNumeric(value);
+			if (NUMERIC_IS_SPECIAL(numeric)) {
+				// Unlike a DECIMAL, a DOUBLE can represent NaN and ±Infinity.
+				Append<double>(result, SpecialNumericToDouble(numeric), offset);
+				return;
+			}
 			auto numeric_var = FromNumeric(numeric);
 			auto double_val = ConvertDecimal<double, DecimalConversionDouble>(numeric_var);
 			Append<double>(result, double_val, offset);
@@ -1928,6 +1955,13 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 	case duckdb::LogicalTypeId::DECIMAL: {
 		auto physical_type = type.InternalType();
 		auto numeric = DatumGetNumeric(value);
+		if (NUMERIC_IS_SPECIAL(numeric)) {
+			// Erroring out is the only alternative to returning a wrong number.
+			throw duckdb::ConversionException(
+			    "Cannot convert a NaN or Infinity NUMERIC to a DuckDB DECIMAL, because DECIMAL is a fixed "
+			    "point type that cannot represent those. Run this query in Postgres instead by using "
+			    "'SET duckdb.force_execution = false'.");
+		}
 		auto numeric_var = FromNumeric(numeric);
 		switch (physical_type) {
 		case duckdb::PhysicalType::INT16: {
