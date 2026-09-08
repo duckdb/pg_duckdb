@@ -997,7 +997,6 @@ public:
 		if (dimensions[dimension] == -1) {
 			// This dimension is not set yet
 			dimensions[dimension] = to_append;
-			expected_values *= to_append;
 			if (pg_mul_u64_overflow(expected_values, static_cast<uint64>(to_append), &expected_values)) {
 				throw duckdb::InvalidInputException(
 				    "Multiplying %d expected values by %d new ones at dimension %d would overflow", expected_values,
@@ -1010,7 +1009,7 @@ public:
 		}
 
 		auto &child_type = GetChildType(value.type());
-		if (child_type.id() == duckdb::LogicalTypeId::LIST) {
+		if (IsNestedType(child_type.id())) {
 			for (auto &child_val : values) {
 				if (child_val.IsNull()) {
 					// Postgres arrays can not contains nulls at the array level
@@ -1472,7 +1471,9 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return INT4ARRAYOID;
 	case duckdb::LogicalTypeId::BIGINT:
 		return INT8ARRAYOID;
+	case duckdb::LogicalTypeId::UBIGINT:
 	case duckdb::LogicalTypeId::HUGEINT:
+	case duckdb::LogicalTypeId::UHUGEINT:
 		return NUMERICARRAYOID;
 	case duckdb::LogicalTypeId::UTINYINT:
 		return INT2ARRAYOID;
