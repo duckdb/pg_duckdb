@@ -436,6 +436,11 @@ pgduckdb_append_array_const(Const *constval, StringInfo buf, int showtype) {
 	appendStringInfoChar(buf, ']');
 	if (showtype >= 0) {
 		appendStringInfo(buf, "::%s", format_type_with_typemod(constval->consttype, constval->consttypmod));
+		/* PostgreSQL uses one array type OID for every array dimensionality, but
+		 * DuckDB requires one [] suffix for each nested list dimension. */
+		for (int dimension = 1; dimension < ndim; dimension++) {
+			appendStringInfoString(buf, "[]");
+		}
 	}
 
 	return true;
