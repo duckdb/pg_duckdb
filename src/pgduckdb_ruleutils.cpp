@@ -417,8 +417,17 @@ pgduckdb_append_array_const(Const *constval, StringInfo buf, int showtype) {
 				                    constval->constlen, value, is_null, constval->constbyval);
 			}
 
-			char *deparsed_element = pgduckdb_deparse_expression((Node *)element, NIL, false, false);
-			appendStringInfoString(buf, deparsed_element);
+			if (slice_ndim == 0) {
+				char *deparsed_element = pgduckdb_deparse_expression((Node *)element, NIL, false, false);
+				appendStringInfoString(buf, deparsed_element);
+			} else {
+				/*
+				 * Array slices already form part of the outer list literal. Deparse
+				 * them recursively without a type cast; otherwise DuckDB tries to
+				 * cast each nested list to the scalar element type of the outer list.
+				 */
+				pgduckdb_append_array_const(element, buf, -1);
+			}
 		}
 
 		array_free_iterator(iterator);

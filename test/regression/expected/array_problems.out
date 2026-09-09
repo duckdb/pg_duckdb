@@ -18,70 +18,69 @@ SELECT * FROM t;
 (1 row)
 
 SET duckdb.force_execution TO true;
-
 -- PostgreSQL array constants use '{...}' syntax. They need to be deparsed as
 -- DuckDB list literals when the query is executed by DuckDB (#1040).
 SELECT 'integer[]' AS type, value::text
 FROM (SELECT '{1,2,3}'::integer[] AS value) s;
-   type    |  value  
------------+---------
- integer[] | {1,2,3}
+   type    |   value   
+-----------+-----------
+ integer[] | [1, 2, 3]
 (1 row)
 
 SELECT 'integer[] with NULL' AS type, value::text
 FROM (SELECT '{1,NULL,3}'::integer[] AS value) s;
-        type         |   value    
----------------------+------------
- integer[] with NULL | {1,NULL,3}
+        type         |    value     
+---------------------+--------------
+ integer[] with NULL | [1, NULL, 3]
 (1 row)
 
 SELECT 'bigint[]' AS type, value::text
 FROM (SELECT '{1,2,3}'::bigint[] AS value) s;
-   type   |  value  
-----------+---------
- bigint[] | {1,2,3}
+   type   |   value   
+----------+-----------
+ bigint[] | [1, 2, 3]
 (1 row)
 
 SELECT 'numeric[]' AS type, value::text
 FROM (SELECT '{10.50,20.25}'::numeric[] AS value) s;
-   type    |     value     
------------+---------------
- numeric[] | {10.50,20.25}
+   type    |      value       
+-----------+------------------
+ numeric[] | [10.500, 20.250]
 (1 row)
 
 SELECT 'date[]' AS type, value::text
 FROM (SELECT '{2025-09-01,2026-09-01}'::date[] AS value) s;
-  type  |          value          
---------+-------------------------
- date[] | {2025-09-01,2026-09-01}
+  type  |          value           
+--------+--------------------------
+ date[] | [2025-09-01, 2026-09-01]
 (1 row)
 
 SELECT 'text[]' AS type, value::text
 FROM (SELECT ARRAY['comma,value', 'quote''value']::text[] AS value) s;
-  type  |              value               
---------+----------------------------------
- text[] | {"comma,value",quote'value}
+  type  |              value              
+--------+---------------------------------
+ text[] | ['comma,value', 'quote\'value']
 (1 row)
 
 SELECT 'boolean[]' AS type, value::text
 FROM (SELECT '{t,f}'::boolean[] AS value) s;
-   type    | value 
------------+-------
- boolean[] | {t,f}
+   type    |     value     
+-----------+---------------
+ boolean[] | [true, false]
 (1 row)
 
 SELECT 'empty integer[]' AS type, value::text
 FROM (SELECT '{}'::integer[] AS value) s;
       type       | value 
 -----------------+-------
- empty integer[] | {}
+ empty integer[] | []
 (1 row)
 
 SELECT 'three-dimensional integer[]' AS type, value::text
 FROM (SELECT '{{{1,2},{3,4}},{{5,6},{7,8}}}'::integer[] AS value) s;
-            type             |             value             
------------------------------+-------------------------------
- three-dimensional integer[] | {{{1,2},{3,4}},{{5,6},{7,8}}}
+            type             |                value                 
+-----------------------------+--------------------------------------
+ three-dimensional integer[] | [[[1, 2], [3, 4]], [[5, 6], [7, 8]]]
 (1 row)
 
 SELECT 1 = ANY ('{1,2,3}'::integer[]) AS any_integer;
