@@ -2,3 +2,4 @@ comment = 'DuckDB Embedded in Postgres'
 default_version = '1.2.0'
 module_pathname = '$libdir/pg_duckdb'
 relocatable = false
+schema = pg_catalog
