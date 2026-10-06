@@ -1,0 +1,96 @@
+-- a float4 column compared to a literal: the pushed-down filter must keep
+-- the float4 semantics Postgres applies, so both engines agree
+CREATE TABLE float4_tbl (f1 float4);
+INSERT INTO float4_tbl VALUES ('1004.30   '), ('0.1'), ('-2.5');
+CREATE TABLE float8_tbl (f1 float8);
+INSERT INTO float8_tbl VALUES ('1004.30   ');
+SET duckdb.force_execution = off;
+SELECT * FROM float4_tbl WHERE f1 = '1004.3';
+   f1   
+--------
+ 1004.3
+(1 row)
+
+SELECT * FROM float4_tbl WHERE f1 = 1004.3;
+ f1 
+----
+(0 rows)
+
+SELECT * FROM float4_tbl WHERE f1 = '0.1';
+ f1  
+-----
+ 0.1
+(1 row)
+
+SELECT * FROM float4_tbl WHERE f1 > '0.1' ORDER BY f1;
+   f1   
+--------
+ 1004.3
+(1 row)
+
+SELECT * FROM float4_tbl WHERE f1 <= '0.1' ORDER BY f1;
+  f1  
+------
+ -2.5
+  0.1
+(2 rows)
+
+SELECT * FROM float4_tbl WHERE f1 <> '1004.3' ORDER BY f1;
+  f1  
+------
+ -2.5
+  0.1
+(2 rows)
+
+SELECT * FROM float8_tbl WHERE f1 = 1004.3;
+   f1   
+--------
+ 1004.3
+(1 row)
+
+SET duckdb.force_execution = on;
+SELECT * FROM float4_tbl WHERE f1 = '1004.3';
+   f1   
+--------
+ 1004.3
+(1 row)
+
+SELECT * FROM float4_tbl WHERE f1 = 1004.3;
+ f1 
+----
+(0 rows)
+
+SELECT * FROM float4_tbl WHERE f1 = '0.1';
+ f1  
+-----
+ 0.1
+(1 row)
+
+SELECT * FROM float4_tbl WHERE f1 > '0.1' ORDER BY f1;
+   f1   
+--------
+ 1004.3
+(1 row)
+
+SELECT * FROM float4_tbl WHERE f1 <= '0.1' ORDER BY f1;
+  f1  
+------
+ -2.5
+  0.1
+(2 rows)
+
+SELECT * FROM float4_tbl WHERE f1 <> '1004.3' ORDER BY f1;
+  f1  
+------
+ -2.5
+  0.1
+(2 rows)
+
+SELECT * FROM float8_tbl WHERE f1 = 1004.3;
+   f1   
+--------
+ 1004.3
+(1 row)
+
+DROP TABLE float4_tbl;
+DROP TABLE float8_tbl;

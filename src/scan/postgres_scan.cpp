@@ -277,7 +277,22 @@ int
 PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
                                              duckdb::string &query_filters, bool is_inside_optional_filter) {
 	switch (filter->filter_type) {
-	case duckdb::TableFilterType::CONSTANT_COMPARISON:
+	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = filter->Cast<duckdb::ConstantFilter>();
+		if (constant_filter.constant.type().id() == duckdb::LogicalTypeId::FLOAT) {
+			/*
+			 * A bare float literal is a float8 (or numeric) to Postgres, so a
+			 * float4 column would be compared after widening and 1004.3 would
+			 * not equal the stored 1004.3::float4. Label the constant.
+			 */
+			query_filters += column_name;
+			query_filters += " " + duckdb::ExpressionTypeToOperator(constant_filter.comparison_type) + " ";
+			query_filters += constant_filter.constant.ToSQLString() + "::float4";
+			return 1;
+		}
+		query_filters += filter->ToString(column_name).c_str();
+		return 1;
+	}
 	case duckdb::TableFilterType::IS_NULL:
 	case duckdb::TableFilterType::IS_NOT_NULL:
 	case duckdb::TableFilterType::IN_FILTER: {
