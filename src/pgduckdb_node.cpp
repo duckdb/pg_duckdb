@@ -82,7 +82,7 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 	return (Node *)custom_scan_state;
 }
 
-void
+static void
 Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*eflags*/) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
 
@@ -254,6 +254,9 @@ ExecuteQuery(DuckdbScanState *state) {
 static TupleTableSlot *
 Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
+	ProjectionInfo *projInfo = duckdb_scan_state->css.ss.ps.ps_ProjInfo;
+	ExprContext *econtext = duckdb_scan_state->css.ss.ps.ps_ExprContext;
+
 	try {
 		TupleTableSlot *slot = duckdb_scan_state->css.ss.ss_ScanTupleSlot;
 		MemoryContext old_context;
@@ -307,6 +310,10 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 		}
 
 		ExecStoreVirtualTuple(slot);
+		if (projInfo) {
+			econtext->ecxt_scantuple = slot;
+			return ExecProject(projInfo);
+		}
 		return slot;
 	} catch (std::exception &ex) {
 		/*
@@ -329,7 +336,7 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 	return InvokeCPPFunc(Duckdb_ExecCustomScan_Cpp, node);
 }
 
-void
+static void
 Duckdb_EndCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
@@ -359,7 +366,7 @@ void
 Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 }
 
-void
+static void
 Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 	/*
 	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_format,

@@ -1,6 +1,6 @@
 # Transactions in pg_duckdb
 
-Multi-statement transactions are supported in pg_duckdb. There is one important restriction on this though, which is is currently necessary to ensure the expected ACID guarantees: You cannot write to both a Postgres table and a DuckDB table in the same transaction.
+Multi-statement transactions are supported in pg_duckdb. There is one important restriction on this though, which is currently necessary to ensure the expected ACID guarantees: You cannot write to both a Postgres table and a DuckDB table in the same transaction.
 
 Similarly you are allowed to do DDL (like `CREATE`/`DROP TABLE`) on DuckDB tables inside a transaction, but it's not allowed to combine such statements with DDL involving Postgres objects.
 

@@ -27,7 +27,11 @@ struct PlannedStmt;
 extern char *pgduckdb_pg_get_indexdef_string(Oid indexrelid);
 extern char *pgduckdb_pg_get_indexdef_columns(Oid indexrelid, bool pretty);
 extern char *pgduckdb_pg_get_indexdef_columns_extended(Oid indexrelid,
+#if PG_VERSION_NUM >= 190000
+											  uint16 flags);
+#else
 											  bits16 flags);
+#endif
 extern char *pgduckdb_pg_get_querydef_internal(Query *query, bool pretty);
 
 extern char *pgduckdb_pg_get_partkeydef_columns(Oid relid, bool pretty);

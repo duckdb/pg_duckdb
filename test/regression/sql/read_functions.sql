@@ -285,3 +285,32 @@ SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths
 SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r;
 SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r WHERE r['c'] > 50.4;
 SELECT r['a'], r['b'], r['c'] FROM read_json('../../data/table.json') r WHERE r['c'] > 50.4 AND r['c'] < 51.2;
+
+-- read_vortex
+
+SELECT duckdb.install_extension('vortex');
+
+SELECT count(r['sepal.length']) FROM read_vortex('../../data/iris.vortex') r;
+
+SELECT r['sepal.length'] FROM read_vortex('../../data/iris.vortex') r ORDER BY r['sepal.length']  LIMIT 5;
+
+-- array of paths
+SELECT count(*) FROM read_vortex(ARRAY['../../data/iris.vortex', '../../data/iris.vortex']) r;
+
+-- read_text
+
+SELECT r['size'] FROM read_text('../../data/table.json') r;
+
+SELECT length(r['content']) FROM read_text('../../data/table.json') r;
+
+-- array of paths
+SELECT count(*) FROM read_text(ARRAY['../../data/table.json', '../../data/table.json']) r;
+
+-- read_blob
+
+SELECT r['size'] FROM read_blob('../../data/table.json') r;
+
+SELECT octet_length(r['content']::bytea) FROM read_blob('../../data/table.json') r;
+
+-- array of paths
+SELECT count(*) FROM read_blob(ARRAY['../../data/table.json']) r;

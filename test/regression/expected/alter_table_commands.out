@@ -168,9 +168,9 @@ SELECT * FROM alter_test WHERE id = -1;
 -- SET/RESET table options
 -- Note: DuckDB supports limited table options compared to PostgreSQL
 ALTER TABLE alter_test SET (fillfactor = 90);
-ERROR:  (PGDuckDB/duckdb_alter_table_trigger_cpp) Not implemented Error: No support for that ALTER TABLE option yet!
+ERROR:  (PGDuckDB/duckdb_alter_table_trigger_cpp) Not implemented Error: SET (<options>) is not supported for DuckDB tables
 ALTER TABLE alter_test RESET (fillfactor);
-ERROR:  (PGDuckDB/duckdb_alter_table_trigger_cpp) Not implemented Error: No support for that ALTER TABLE option yet!
+ERROR:  (PGDuckDB/duckdb_alter_table_trigger_cpp) Not implemented Error: RESET (<options>) is not supported for DuckDB tables
 ALTER TABLE alter_test RENAME TO alter_test2;
 SELECT * FROM duckdb.query('DESCRIBE pg_temp.alter_test2');
  column_name | column_type | null | key |       default        | extra 

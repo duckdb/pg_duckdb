@@ -26,7 +26,7 @@ namespace pgduckdb {
 //
 // Technically we should do this under a lock to make sure no other connection
 // process is creating the same server, though this is unlikely to happen.
-std::string
+static std::string
 FindServerName(const char *server_prefix) {
 	auto oid = get_foreign_server_oid(server_prefix, true);
 	if (oid == InvalidOid) {
@@ -50,7 +50,7 @@ FindServerName(const char *server_prefix) {
 
 namespace pg {
 
-std::string
+static std::string
 ReadOptions(FunctionCallInfo fcinfo, int start, const std::vector<std::string> &names) {
 	std::ostringstream oss;
 	int opt_idx = start;

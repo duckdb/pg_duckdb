@@ -271,6 +271,7 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 			// Throw an error for prepare events. We don't support COMMIT PREPARED.
 			throw duckdb::NotImplementedException("Prepared transactions are not implemented in DuckDB.");
 		}
+		break;
 
 	case XACT_EVENT_COMMIT:
 	case XACT_EVENT_PARALLEL_COMMIT:

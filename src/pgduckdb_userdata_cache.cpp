@@ -43,7 +43,11 @@ struct {
 bool callback_is_configured = false;
 
 void
+#if PG_VERSION_NUM >= 190000
+InvalidateCache(Datum, SysCacheIdentifier, uint32) {
+#else
 InvalidateCache(Datum, int, uint32) {
+#endif
 	InvalidateUserDataCache();
 	InvokeCPPFunc(pgduckdb::DuckDBManager::InvalidateDuckDBSecretsIfInitialized);
 }
@@ -63,7 +67,7 @@ InvalidateUserDataCache() {
 	cache.motherduck_user_mapping_oid = InvalidOid;
 }
 
-void
+static void
 LoadMotherDuckCache() {
 	Assert(!cache.valid); // shouldn't be called if the cache is already valid
 

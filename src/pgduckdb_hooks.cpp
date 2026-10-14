@@ -66,14 +66,9 @@ ContainsCatalogTable(List *rtes) {
 }
 
 static bool
-IsDuckdbTable(Oid relid) {
-	return pgduckdb::DuckdbTableAmGetName(relid) != nullptr;
-}
-
-static bool
 ContainsDuckdbTables(List *rte_list) {
 	foreach_node(RangeTblEntry, rte, rte_list) {
-		if (IsDuckdbTable(rte->relid)) {
+		if (pgduckdb::IsDuckdbTable(rte->relid)) {
 			return true;
 		}
 	}
@@ -160,7 +155,7 @@ ContainsPostgresTable(Node *node, void *context) {
 				/* Any tables referenced in the view will also be in the rtable */
 				continue;
 			}
-			if (!::IsDuckdbTable(rte->relid)) {
+			if (!pgduckdb::IsDuckdbTable(rte->relid)) {
 				return true;
 			}
 		}
@@ -229,12 +224,10 @@ IsAllowedStatement(Query *query, bool throw_error) {
 	if (query->commandType != CMD_SELECT) {
 		if (query->rtable != NULL) {
 			RangeTblEntry *resultRte = list_nth_node(RangeTblEntry, query->rtable, query->resultRelation - 1);
-			if (!::IsDuckdbTable(resultRte->relid)) {
-				elog(elevel, "DuckDB does not support modififying Postgres tables");
+			if (!pgduckdb::IsDuckdbTable(resultRte->relid) && !IsAllowedPostgresInsert(query, throw_error)) {
 				return false;
 			}
 		}
-
 		if (pgduckdb::DidDisallowedMixedWrites()) {
 			elog(elevel, "Writing to DuckDB and Postgres tables in the same transaction block is not supported");
 			return false;
@@ -262,7 +255,12 @@ IsAllowedStatement(Query *query, bool throw_error) {
 } // namespace pgduckdb
 
 static PlannedStmt *
+#if PG_VERSION_NUM >= 190000
+DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
+                      ExplainState *es) {
+#else
 DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+#endif
 	if (pgduckdb::IsExtensionRegistered()) {
 		if (pgduckdb::NeedsDuckdbExecution(parse)) {
 			pgduckdb::TriggerActivity();
@@ -292,15 +290,26 @@ DuckdbPlannerHook_Cpp(Query *parse, const char *query_string, int cursor_options
 
 	pgduckdb::MarkStatementNotTopLevel();
 
+#if PG_VERSION_NUM >= 190000
+	return prev_planner_hook(parse, query_string, cursor_options, bound_params, es);
+#else
 	return prev_planner_hook(parse, query_string, cursor_options, bound_params);
+#endif
 }
 
 static PlannedStmt *
+#if PG_VERSION_NUM >= 190000
+DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
+                  ExplainState *es) {
+	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params, es);
+}
+#else
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
 	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params);
 }
+#endif
 
-bool
+static bool
 IsDuckdbPlan(PlannedStmt *stmt) {
 	Plan *plan = stmt->planTree;
 	if (!plan) {
@@ -408,7 +417,7 @@ DuckdbExecutorFinishHook(QueryDesc *queryDesc) {
 	InvokeCPPFunc(DuckdbExecutorFinishHook_Cpp, queryDesc);
 }
 
-void
+static void
 DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, ExplainState *es, const char *queryString,
                           ParamListInfo params, QueryEnvironment *queryEnv) {
 	/*
@@ -444,7 +453,9 @@ static bool
 ContainsDuckdbRowReturningFunction(const char *query_string) {
 	return strstr(query_string, "read_parquet") || strstr(query_string, "read_csv") ||
 	       strstr(query_string, "read_json") || strstr(query_string, "delta_scan") ||
-	       strstr(query_string, "iceberg_scan") || strstr(query_string, "duckdb.query");
+	       strstr(query_string, "iceberg_scan") || strstr(query_string, "read_vortex") ||
+	       strstr(query_string, "read_text") || strstr(query_string, "read_blob") ||
+	       strstr(query_string, "duckdb.query");
 }
 
 static void

@@ -18,7 +18,7 @@ EXPLAIN (COSTS OFF) EXECUTE f(2);
  │        count_star()       │
  └─────────────┬─────────────┘
  ┌─────────────┴─────────────┐
- │  PGDUCKDB_POSTGRES_SCAN   │
+ │   PGDUCKDB_POSTGRES_SCAN  │
  │    ────────────────────   │
  │          Table: t         │
  │        Filters: a=2       │

@@ -128,15 +128,16 @@ char *duckdb_motherduck_session_hint = strdup("");
 char *duckdb_postgres_role = strdup("");
 bool duckdb_force_motherduck_views = false;
 
-int duckdb_maximum_threads = -1;
+int duckdb_threads = -1;
 int duckdb_maximum_memory = 4096; /* 4GB in MB */
 char *duckdb_disabled_filesystems = strdup("");
+char *duckdb_allowed_directories = strdup("");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_community_extensions = false;
 bool duckdb_allow_unsigned_extensions = false;
 bool duckdb_autoinstall_known_extensions = true;
 bool duckdb_autoload_known_extensions = true;
-char *duckdb_temporary_directory = MakeDirName("temp");
+char *duckdb_temp_directory = MakeDirName("temp");
 char *duckdb_extension_directory = MakeDirName("extensions");
 char *duckdb_max_temp_directory_size = strdup("");
 char *duckdb_default_collation = strdup("");
@@ -210,7 +211,7 @@ InitGUC() {
 	DefineCustomDuckDBVariable(
 	    "duckdb.temporary_directory",
 	    "Set the directory to which DuckDB write temp files, alias for duckdb.temporary_directory",
-	    &duckdb_temporary_directory, PGC_SUSET);
+	    &duckdb_temp_directory, PGC_SUSET);
 
 	DefineCustomDuckDBVariable(
 	    "duckdb.max_temp_directory_size",
@@ -224,10 +225,10 @@ InitGUC() {
 	    &duckdb_extension_directory, PGC_SUSET);
 
 	DefineCustomDuckDBVariable("duckdb.threads", "Maximum number of DuckDB threads per Postgres backend.",
-	                           &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
+	                           &duckdb_threads, -1, 1024, PGC_SUSET);
 	DefineCustomDuckDBVariable("duckdb.worker_threads",
 	                           "Maximum number of DuckDB threads per Postgres backend, alias for duckdb.threads",
-	                           &duckdb_maximum_threads, -1, 1024, PGC_SUSET);
+	                           &duckdb_threads, -1, 1024, PGC_SUSET);
 
 	DefineCustomDuckDBVariable("duckdb.default_collation",
 	                           "The default collation to use for DuckDB queries, e.g., 'en_us'",
@@ -239,6 +240,12 @@ InitGUC() {
 	DefineCustomDuckDBVariable("duckdb.disabled_filesystems",
 	                           "Disable specific file systems preventing access (e.g., LocalFileSystem)",
 	                           &duckdb_disabled_filesystems, PGC_SUSET);
+
+	DefineCustomDuckDBVariable("duckdb.allowed_directories",
+	                           "Comma-separated list of directories and URL prefixes that are always "
+	                           "allowed for file access, even when enable_external_access is false "
+	                           "(e.g., '/data/,s3://mybucket/')",
+	                           &duckdb_allowed_directories, PGC_SUSET);
 
 	DefineCustomDuckDBVariable("duckdb.azure_transport_option_type",
 	                           "Set the azure_transport_option_type for DuckDB Azure extension. Can be used to "
@@ -306,7 +313,13 @@ void
 InitGUCHooks() {
 	// timezone
 	{
-		if (auto *tz = (struct config_string *)find_option("TimeZone", false, false, 0); tz != nullptr) {
+		struct config_generic *tz_generic = find_option("TimeZone", false, false, 0);
+		if (tz_generic != nullptr && tz_generic->vartype == PGC_STRING) {
+#if PG_VERSION_NUM < 190000
+			struct config_string *tz = (config_string *)tz_generic;
+#else
+			struct config_string *tz = &tz_generic->_string;
+#endif
 			prev_tz_assign_hook = tz->assign_hook;
 			tz->assign_hook = DuckAssignTimezone;
 		}

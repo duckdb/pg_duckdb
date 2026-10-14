@@ -15,6 +15,9 @@ By default, functions are installed into the `public` schema. You can choose an 
 | [`iceberg_metadata`](#iceberg_metadata) | Read Iceberg metadata |
 | [`iceberg_snapshots`](#iceberg_snapshots) | Read Iceberg snapshot information |
 | [`delta_scan`](#delta_scan) | Read a Delta dataset |
+| [`read_vortex`](#read_vortex) | Read a Vortex file |
+| [`read_text`](#read_text) | Read files as text |
+| [`read_blob`](#read_blob) | Read files as binary blobs |
 
 ## JSON Functions
 
@@ -338,6 +341,80 @@ Further information:
 | Name | Type | Description |
 | :--- | :--- | :---------- |
 | path | text | The path, either to a remote httpfs location or a local location (if enabled) of the delta dataset to read. |
+
+#### <a name="read_vortex"></a>`read_vortex(path TEXT)` -> `SETOF duckdb.row`
+
+Reads a Vortex file or glob of files.
+
+To use `read_vortex`, you must enable the `vortex` extension:
+
+```sql
+SELECT duckdb.install_extension('vortex');
+```
+
+It works similarly to the `read_parquet` function, for example:
+
+```sql
+SELECT * FROM read_vortex('file.vortex');
+SELECT r['id'], r['name'] FROM read_vortex('file.vortex') r WHERE r['age'] > 21;
+SELECT COUNT(*) FROM read_vortex('file.vortex');
+```
+
+Further information:
+
+* [DuckDB Vortex extension documentation](https://duckdb.org/docs/current/core_extensions/vortex)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text | The path, either to a remote httpfs location or a local location (if enabled) of the Vortex file to read. |
+
+#### <a name="read_text"></a>`read_text(path TEXT or TEXT[])` -> `SETOF duckdb.row`
+
+Reads the given files as plain text and returns one row per file with the
+`filename`, `content`, `size` and `last_modified` columns. The path may be a
+single file, a glob, or an array of paths/globs. The content is validated to be
+valid UTF-8.
+
+```sql
+SELECT r['filename'], r['size'] FROM read_text('file.txt') r;
+SELECT r['content'] FROM read_text('directory/*.txt') r;
+SELECT r['content'] FROM read_text(ARRAY['a.txt', 'b.txt']) r;
+```
+
+Further information:
+
+* [DuckDB read_text documentation](https://duckdb.org/docs/sql/functions/utility#read_text)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text or text[] | The path(s), either to a remote httpfs location or a local location (if enabled) of the file(s) to read. |
+
+#### <a name="read_blob"></a>`read_blob(path TEXT or TEXT[])` -> `SETOF duckdb.row`
+
+Reads the given files as raw binary blobs and returns one row per file with the
+`filename`, `content`, `size` and `last_modified` columns. The path may be a
+single file, a glob, or an array of paths/globs. Unlike `read_text`, the content
+is returned as a `BLOB` without any encoding validation.
+
+```sql
+SELECT r['filename'], r['size'] FROM read_blob('file.bin') r;
+SELECT r['content'] FROM read_blob('directory/*') r;
+SELECT r['content'] FROM read_blob(ARRAY['a.bin', 'b.bin']) r;
+```
+
+Further information:
+
+* [DuckDB read_blob documentation](https://duckdb.org/docs/sql/functions/utility#read_blob)
+
+##### Required Arguments
+
+| Name | Type | Description |
+| :--- | :--- | :---------- |
+| path | text or text[] | The path(s), either to a remote httpfs location or a local location (if enabled) of the file(s) to read. |
 
 #### <a name="install_extension"></a>`duckdb.install_extension(extension_name TEXT, repository TEXT DEFAULT 'core')` -> `bool`
 

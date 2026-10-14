@@ -60,6 +60,23 @@ Using `SELECT *` will result in the columns of this row being expanded, so your 
 SELECT * FROM read_parquet('file.parquet');
 ```
 
+#### Casts are required when inserting into a table
+
+When using `INSERT INTO some_table SELECT ...`, any column extracted with the `r['mycol']` syntax needs an explicit cast in the SELECT list. That's because such an expression is of the type [`duckdb.unresolved_type`](#duckdbunresolved_type), whose actual type is only known once DuckDB executes the query, but Postgres needs to know the type when it parses the INSERT statement. So without a cast you'll get an error like:
+
+```
+ERROR:  column "sepal_length" is of type double precision but expression is of type duckdb.unresolved_type
+HINT:  You will need to rewrite or cast the expression.
+```
+
+Which is easily fixed by adding a cast to the column's type:
+
+```sql
+INSERT INTO some_table SELECT r['sepal.length']::float FROM read_csv('iris.csv') r;
+```
+
+This is only necessary in the SELECT list, e.g. comparisons in a `WHERE` clause don't need a cast.
+
 #### Limitations in CTEs and Subqueries returning
 
 Due to limitations in Postgres, there are some limitations when using a function that returns a `duckdb.row` in a CTE or subquery. The main problem is that pg_duckdb cannot automatically assign useful aliases to the selected columns from the row. So while this query without a CTE/subquery returns the `r[company]` column as `company`:

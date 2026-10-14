@@ -53,6 +53,7 @@ extern "C" {
 #include "utils/acl.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 #include "utils/palloc.h"
 #include "utils/snapmgr.h"
@@ -119,14 +120,14 @@ static BackgroundWorkerShmemStruct *BgwShmemStruct;
 MUST be called under a lock
 Get the BGW state for the current database (MyDatabaseId)
 */
-BgwStatePerDB *
+static BgwStatePerDB *
 FindState() {
 	bool found = false;
 	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &MyDatabaseId, HASH_FIND, &found);
 	return found ? state : nullptr;
 }
 
-BgwStatePerDB *
+static BgwStatePerDB *
 GetState() {
 	Assert(is_background_worker);
 	auto state = FindState();
@@ -158,7 +159,7 @@ BackgroundWorkerCheck(duckdb::Connection &connection, int64_t &last_activity_cou
 
 bool CanTakeBgwLockForDatabase(Oid database_oid);
 
-bool
+static bool
 RunOneCheck(int64_t &last_activity_count) {
 	// No need to run if MD is not enabled.
 	if (!IsMotherDuckEnabled()) {
@@ -183,7 +184,7 @@ RunOneCheck(int64_t &last_activity_count) {
 	return false;
 }
 
-void
+static void
 SetBackgroundWorkerState(Oid database_oid) {
 	auto state = (BgwStatePerDB *)hash_search(BgwShmemStruct->statePerDB, &database_oid, HASH_ENTER, NULL);
 	state->latch = MyLatch;
@@ -191,7 +192,7 @@ SetBackgroundWorkerState(Oid database_oid) {
 	state->bgw_session_hint_is_reused = false;
 }
 
-void
+static void
 BgwMainLoop() {
 	elog(LOG, "pg_duckdb background worker: starting");
 
@@ -244,6 +245,8 @@ BgwMainLoop() {
 } // namespace pgduckdb
 
 extern "C" {
+
+PGDLLEXPORT void pgduckdb_background_worker_main(Datum main_arg);
 
 PGDLLEXPORT void
 pgduckdb_background_worker_main(Datum main_arg) {
@@ -309,6 +312,61 @@ force_motherduck_sync(PG_FUNCTION_ARGS) {
 }
 
 namespace pgduckdb {
+#if PG_VERSION_NUM >= 190000
+
+/*
+ * Backend-private handle to the shared hash table. PG19's shmem machinery
+ * stores the pointer here (it requires a stable address at request time, so we
+ * can't point it directly at the not-yet-allocated BgwShmemStruct->statePerDB).
+ * ShmemInit copies it into the shared struct so the rest of the code can keep
+ * reaching the hash table through BgwShmemStruct.
+ */
+static HTAB *bgw_state_per_db = NULL;
+
+/*
+ * PG19 replaced the shmem_request_hook/shmem_startup_hook pair plus the manual
+ * RequestAddinShmemSpace/ShmemInitStruct/ShmemInitHash dance with
+ * RegisterShmemCallbacks(). The big win is that the hash table now gets its own
+ * properly sized contiguous shmem area instead of being carved out of the
+ * anonymous add-in freespace, so we no longer have to over-request space by
+ * hand and hope the hash table fits.
+ */
+static void
+ShmemRequest(void * /*opaque_arg*/) {
+	ShmemStructOpts struct_opts = {
+	    .name = "DuckdbBackgroundWorker Data",
+	    .size = sizeof(BackgroundWorkerShmemStruct),
+	    .ptr = (void **)&BgwShmemStruct,
+	};
+	ShmemRequestStructWithOpts(&struct_opts);
+
+	ShmemHashOpts hash_opts = {
+	    .name = "ProcBgwStatePerDB",
+	    .nelems = max_worker_processes,
+	    .hash_info = {.keysize = sizeof(Oid), .entrysize = sizeof(BgwStatePerDB)},
+	    .hash_flags = HASH_ELEM | HASH_BLOBS,
+	    .ptr = &bgw_state_per_db,
+	};
+	ShmemRequestHashWithOpts(&hash_opts);
+}
+
+static void
+ShmemInit(void * /*opaque_arg*/) {
+	/*
+	 * Runs once, after both shmem areas have been allocated and BgwShmemStruct
+	 * / bgw_state_per_db have been pointed at them. We only need to initialize
+	 * the struct contents; the hash table itself is already created by the
+	 * machinery. statePerDB lives in shared memory (mapped at the same address
+	 * in every backend), so storing the handle here once is enough for all
+	 * backends to find it.
+	 */
+	MemSet(BgwShmemStruct, 0, sizeof(BackgroundWorkerShmemStruct));
+	SpinLockInit(&BgwShmemStruct->lock);
+	BgwShmemStruct->statePerDB = bgw_state_per_db;
+}
+
+#else
+
 #if PG_VERSION_NUM >= 150000
 static shmem_request_hook_type prev_shmem_request_hook = NULL;
 #endif
@@ -367,9 +425,11 @@ ShmemStartup(void) {
 	LWLockRelease(AddinShmemInitLock);
 }
 
+#endif
+
 constexpr const char *PGDUCKDB_SYNC_WORKER_NAME = "pg_duckdb sync worker";
 
-bool
+static bool
 HasBgwRunningForMyDatabase() {
 	const auto num_backends = pgstat_fetch_stat_numbackends();
 	for (int backend_idx = 1; backend_idx <= num_backends; ++backend_idx) {
@@ -444,15 +504,27 @@ UnclaimBgwSessionHint(int /*code*/, Datum /*arg*/) {
 void
 InitBackgroundWorkersShmem(void) {
 	/* Set up the shared memory hooks */
+#if PG_VERSION_NUM >= 190000
+	/*
+	 * RegisterShmemCallbacks stores the pointer we pass (it lappend()s it onto
+	 * a list and calls request_fn later, once this function has already
+	 * returned), so the struct must outlive this call. Hence "static".
+	 */
+	static const ShmemCallbacks callbacks = {
+	    .request_fn = ShmemRequest,
+	    .init_fn = ShmemInit,
+	};
+	RegisterShmemCallbacks(&callbacks);
+#else
 #if PG_VERSION_NUM >= 150000
 	prev_shmem_request_hook = shmem_request_hook;
 	shmem_request_hook = ShmemRequest;
 #else
 	ShmemRequest();
 #endif
-
 	prev_shmem_startup_hook = shmem_startup_hook;
 	shmem_startup_hook = ShmemStartup;
+#endif
 
 	Datum random_uuid = DirectFunctionCall1(gen_random_uuid, 0);
 	Datum uuid_datum = DirectFunctionCall1(uuid_out, random_uuid);
@@ -545,7 +617,7 @@ PossiblyReuseBgwSessionHint(void) {
 bool doing_motherduck_sync;
 char *current_motherduck_catalog_version;
 
-std::string
+static std::string
 PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is_default_db) {
 	if (is_default_db) {
 		/*
@@ -564,7 +636,7 @@ PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is
 	return oss.str();
 }
 
-std::string
+static std::string
 DropPgRelationString(const char *postgres_schema_name, const char *relation_name, char relation_kind,
                      bool with_cascade) {
 	std::ostringstream oss;
@@ -584,7 +656,7 @@ DropPgRelationString(const char *postgres_schema_name, const char *relation_name
 	return oss.str();
 }
 
-std::string
+static std::string
 CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 	std::ostringstream oss;
 
@@ -640,7 +712,7 @@ CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 	return oss.str();
 }
 
-std::string
+static std::string
 CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 	std::ostringstream oss;
 
@@ -702,7 +774,7 @@ CreatePgSchemaString(std::string postgres_schema_name) {
  * See the following thread for details:
  * https://www.postgresql.org/message-id/flat/CAFcNs%2Bp%2BfD5HEXEiZMZC1COnXkJCMnUK0%3Dr4agmZP%3D9Hi%2BYcJA%40mail.gmail.com
  */
-void
+static void
 SPI_commit_that_works_in_bgworker() {
 	if (is_background_worker) {
 		SPI_finish();

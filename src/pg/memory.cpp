@@ -1,4 +1,5 @@
 #include "pgduckdb/pgduckdb_utils.hpp"
+#include "pgduckdb/pg/memory.hpp"
 
 extern "C" {
 #include "postgres.h"
