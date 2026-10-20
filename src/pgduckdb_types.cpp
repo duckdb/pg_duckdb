@@ -1010,7 +1010,10 @@ public:
 		}
 
 		auto &child_type = GetChildType(value.type());
-		if (child_type.id() == duckdb::LogicalTypeId::LIST) {
+		// A fixed-length ARRAY child is just another dimension of the Postgres
+		// multi-dimensional array, exactly like a LIST child, so recurse for it
+		// too. GetChildren/GetChildType already handle the ARRAY physical type.
+		if (IsNestedType(child_type.id())) {
 			for (auto &child_val : values) {
 				if (child_val.IsNull()) {
 					// Postgres arrays can not contains nulls at the array level
