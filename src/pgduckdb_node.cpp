@@ -2,6 +2,7 @@
 #include "duckdb.hpp"
 #include "duckdb/common/exception/conversion_exception.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/query_result_stream.hpp"
 
 #include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
@@ -23,9 +24,7 @@ extern "C" {
 
 bool duckdb_explain_analyze = false;
 bool duckdb_explain_ctas = false;
-duckdb::ExplainFormat duckdb_explain_format = duckdb::ExplainFormat::DEFAULT;
-
-#define NEED_JSON_PLAN(explain_format) (explain_format == duckdb::ExplainFormat::JSON)
+bool duckdb_explain_json = false;
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
@@ -43,6 +42,7 @@ typedef struct DuckdbScanState {
 	bool is_executed;
 	bool fetch_next;
 	duckdb::unique_ptr<duckdb::QueryResult> query_results;
+	duckdb::unique_ptr<duckdb::QueryResultStream<>> query_stream;
 	duckdb::idx_t column_count;
 	duckdb::unique_ptr<duckdb::DataChunk> current_data_chunk;
 	duckdb::idx_t current_row;
@@ -54,6 +54,7 @@ CleanupDuckdbScanState(DuckdbScanState *state) {
 	ExecClearTuple(state->css.ss.ss_ScanTupleSlot);
 
 	state->query_results.reset();
+	state->query_stream.reset();
 	state->current_data_chunk.reset();
 
 	if (state->prepared_statement) {
@@ -93,7 +94,7 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 	if (is_explain_query) {
 		appendStringInfoString(explain_prefix, "EXPLAIN ");
 
-		if (NEED_JSON_PLAN(duckdb_explain_format))
+		if (duckdb_explain_json)
 			appendStringInfoChar(explain_prefix, '(');
 
 		if (duckdb_explain_analyze) {
@@ -101,13 +102,13 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 				throw duckdb::NotImplementedException(
 				    "Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution");
 			}
-			if (NEED_JSON_PLAN(duckdb_explain_format))
+			if (duckdb_explain_json)
 				appendStringInfoString(explain_prefix, "ANALYZE, ");
 			else
 				appendStringInfoString(explain_prefix, "ANALYZE ");
 		}
 
-		if (NEED_JSON_PLAN(duckdb_explain_format)) {
+		if (duckdb_explain_json) {
 			appendStringInfoString(explain_prefix, "FORMAT JSON )");
 		}
 	}
@@ -159,12 +160,24 @@ Duckdb_BeginCustomScan(CustomScanState *cscanstate, EState *estate, int eflags) 
 	InvokeCPPFunc(Duckdb_BeginCustomScan_Cpp, cscanstate, estate, eflags);
 }
 
+static duckdb::unique_ptr<duckdb::DataChunk>
+FetchChunk(DuckdbScanState *state) {
+	if (!state->query_stream) {
+		return state->query_results->Fetch();
+	}
+	auto chunk = state->query_stream->Fetch();
+	if (chunk) {
+		chunk->Flatten();
+	}
+	return chunk;
+}
+
 static void
 ExecuteQuery(DuckdbScanState *state) {
 	auto &prepared = *state->prepared_statement;
 	auto pg_params = state->params;
 	const auto num_params = pg_params ? pg_params->numParams : 0;
-	duckdb::case_insensitive_map_t<duckdb::BoundParameterData> named_values;
+	duckdb::identifier_map_t<duckdb::BoundParameterData> named_values;
 
 	for (int i = 0; i < num_params; i++) {
 		ParamExternData *pg_param;
@@ -178,7 +191,7 @@ ExecuteQuery(DuckdbScanState *state) {
 			pg_param = &pg_params->params[i];
 		}
 
-		if (prepared.named_param_map.count(duckdb::to_string(i + 1)) == 0) {
+		if (prepared.GetNamedParameterMap().count(duckdb::Identifier(duckdb::to_string(i + 1))) == 0) {
 			continue;
 		}
 
@@ -191,7 +204,7 @@ ExecuteQuery(DuckdbScanState *state) {
 			oss << "parameter '" << i << "' has an invalid type (" << pg_param->ptype << ") during query execution";
 			throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, oss.str().c_str());
 		}
-		named_values[duckdb::to_string(i + 1)] = duckdb::BoundParameterData(duckdb_param);
+		named_values[duckdb::Identifier(duckdb::to_string(i + 1))] = duckdb::BoundParameterData(duckdb_param);
 	}
 
 	// Set `allow_stream_result` to false if the query contains a Postgres table to force a fully materialized DuckDB
@@ -199,15 +212,18 @@ ExecuteQuery(DuckdbScanState *state) {
 	// to race conditions on Postgres resources.
 	// Checkout discussion: https://github.com/duckdb/pg_duckdb/discussions/866
 	bool allow_stream_result = !pgduckdb::ContainsPostgresTable((Node *)state->query, NULL);
-	auto pending = prepared.PendingQuery(named_values, allow_stream_result);
+	auto pending = prepared.Submit(named_values);
 	if (pending->HasError()) {
 		return pending->ThrowError();
 	}
+	if (!allow_stream_result) {
+		pending->Materialize();
+	}
 
-	duckdb::PendingExecutionResult execution_result = duckdb::PendingExecutionResult::RESULT_NOT_READY;
+	auto execution_result = duckdb::QueryResultState::NOT_READY;
 	while (true) {
 		execution_result = pending->ExecuteTask();
-		if (duckdb::PendingQueryResult::IsResultReady(execution_result)) {
+		if (allow_stream_result ? duckdb::IsObservable(execution_result) : duckdb::IsTerminal(execution_result)) {
 			break;
 		}
 
@@ -228,9 +244,8 @@ ExecuteQuery(DuckdbScanState *state) {
 				// So to avoid that, we eagerly consume the pending tasks.
 				do {
 					execution_result = pending->ExecuteTask();
-				} while (execution_result != duckdb::PendingExecutionResult::EXECUTION_ERROR &&
-				         execution_result != duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE &&
-				         execution_result != duckdb::PendingExecutionResult::EXECUTION_FINISHED);
+				} while (!duckdb::IsTerminal(execution_result) &&
+				         execution_result != duckdb::QueryResultState::NO_TASKS_AVAILABLE);
 
 				pending->Close();
 			} catch (std::exception &ex) {
@@ -242,12 +257,16 @@ ExecuteQuery(DuckdbScanState *state) {
 		}
 	}
 
-	if (execution_result == duckdb::PendingExecutionResult::EXECUTION_ERROR) {
+	if (execution_result == duckdb::QueryResultState::EXECUTION_ERROR) {
 		return pending->ThrowError();
 	}
 
-	state->query_results = pending->Execute();
-	state->column_count = state->query_results->ColumnCount();
+	state->column_count = pending->ColumnCount();
+	if (allow_stream_result) {
+		state->query_stream = duckdb::make_uniq<duckdb::QueryResultStream<>>(std::move(pending));
+	} else {
+		state->query_results = std::move(pending);
+	}
 	state->is_executed = true;
 }
 
@@ -272,7 +291,7 @@ Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
 		}
 
 		if (duckdb_scan_state->fetch_next) {
-			duckdb_scan_state->current_data_chunk = duckdb_scan_state->query_results->Fetch();
+			duckdb_scan_state->current_data_chunk = FetchChunk(duckdb_scan_state);
 			duckdb_scan_state->current_row = 0;
 			duckdb_scan_state->fetch_next = false;
 			if (!duckdb_scan_state->current_data_chunk || duckdb_scan_state->current_data_chunk->size() == 0) {
@@ -369,7 +388,7 @@ Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 static void
 Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 	/*
-	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_format,
+	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_json,
 	 * is copied from ExplainOneQueryHook. Sadly that hook is not run for
 	 * EXPLAIN EXECUTE ..., and the code here runs too late to actually impact
 	 * the query that we send to DuckDB. However, putting it here as well is a
@@ -379,12 +398,12 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 	 * run, we consider this fine for now.
 	 */
 	duckdb_explain_analyze = pgduckdb::pg::IsExplainAnalyze(es);
-	duckdb_explain_format = pgduckdb::pg::DuckdbExplainFormat(es);
+	duckdb_explain_json = pgduckdb::pg::IsExplainFormatJson(es);
 
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	ExecuteQuery(duckdb_scan_state);
 
-	auto chunk = duckdb_scan_state->query_results->Fetch();
+	auto chunk = FetchChunk(duckdb_scan_state);
 	if (!chunk || chunk->size() == 0) {
 		return;
 	}
@@ -394,12 +413,12 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 
 	/* Fully consume the stream */
 	do {
-		chunk = duckdb_scan_state->query_results->Fetch();
+		chunk = FetchChunk(duckdb_scan_state);
 	} while (chunk && chunk->size() > 0);
 
 	std::ostringstream explain_output;
 	explain_output << "\n\n" << value << "\n";
-	if (NEED_JSON_PLAN(duckdb_explain_format)) {
+	if (duckdb_explain_json) {
 
 		// Formatting, copied formatting in JSON mode
 		if (linitial_int(es->grouping_stack) != 0)

@@ -432,7 +432,7 @@ DuckdbExplainOneQueryHook(Query *query, int cursorOptions, IntoClause *into, Exp
 	 * standard_ExplainOneQuery).
 	 */
 	duckdb_explain_analyze = pgduckdb::pg::IsExplainAnalyze(es);
-	duckdb_explain_format = pgduckdb::pg::DuckdbExplainFormat(es);
+	duckdb_explain_json = pgduckdb::pg::IsExplainFormatJson(es);
 	duckdb_explain_ctas = into != NULL;
 	prev_explain_one_query_hook(query, cursorOptions, into, es, queryString, params, queryEnv);
 }

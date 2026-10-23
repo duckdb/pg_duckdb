@@ -74,7 +74,8 @@ duckdb::optional_ptr<duckdb::CatalogEntry>
 PostgresSchema::LookupEntry(duckdb::CatalogTransaction _catalog_transaction,
                             const duckdb::EntryLookupInfo &lookup_info) {
 	auto &pg_transaction = _catalog_transaction.transaction->Cast<PostgresTransaction>();
-	return pg_transaction.GetCatalogEntry(lookup_info.GetCatalogType(), name, lookup_info.GetEntryName());
+	return pg_transaction.GetCatalogEntry(lookup_info.GetCatalogType(), name.GetIdentifierName(),
+	                                      lookup_info.GetEntryName());
 }
 
 void

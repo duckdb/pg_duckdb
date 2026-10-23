@@ -14,6 +14,8 @@
 #include "duckdb/catalog/catalog_entry/view_catalog_entry.hpp"
 #include "duckdb/storage/table_storage_info.hpp"
 #include "duckdb/main/attached_database.hpp"
+#include "duckdb/main/database_manager.hpp"
+#include "duckdb/catalog/catalog.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -629,9 +631,9 @@ PgSchemaName(const std::string &db_name, const std::string &schema_name, bool is
 	}
 
 	std::ostringstream oss;
-	oss << "ddb$" << duckdb::KeywordHelper::EscapeQuotes(db_name, '$');
+	oss << "ddb$" << duckdb::StringUtil::Replace(db_name, "$", "$$");
 	if (schema_name != "main") {
-		oss << "$" << duckdb::KeywordHelper::EscapeQuotes(schema_name, '$');
+		oss << "$" << duckdb::StringUtil::Replace(schema_name, "$", "$$");
 	}
 	return oss.str();
 }
@@ -646,9 +648,9 @@ DropPgRelationString(const char *postgres_schema_name, const char *relation_name
 	} else {
 		oss << "TABLE ";
 	}
-	oss << duckdb::KeywordHelper::WriteQuoted(postgres_schema_name, '"');
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(postgres_schema_name, '"');
 	oss << ".";
-	oss << duckdb::KeywordHelper::WriteQuoted(relation_name, '"');
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(relation_name, '"');
 	if (with_cascade) {
 		oss << " CASCADE";
 	}
@@ -659,16 +661,20 @@ DropPgRelationString(const char *postgres_schema_name, const char *relation_name
 static std::string
 CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 	std::ostringstream oss;
+	auto &qualified_name = info.GetQualifiedName();
+	const auto &catalog = qualified_name.Catalog().GetIdentifierName();
+	const auto &schema = qualified_name.Schema().GetIdentifierName();
+	const auto &view_name = info.GetViewName().GetIdentifierName();
 
 	oss << "CREATE VIEW ";
-	std::string schema_name = PgSchemaName(info.catalog, info.schema, is_default_db);
-	oss << duckdb::KeywordHelper::WriteQuoted(schema_name, '"');
+	std::string schema_name = PgSchemaName(catalog, schema, is_default_db);
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(schema_name, '"');
 	oss << ".";
-	oss << duckdb::KeywordHelper::WriteQuoted(info.view_name, '"');
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(view_name, '"');
 	if (!info.aliases.empty()) {
 		oss << " (";
-		oss << duckdb::StringUtil::Join(info.aliases, info.aliases.size(), ", ", [](const std::string &name) {
-			return duckdb::KeywordHelper::WriteQuoted(name, '"');
+		oss << duckdb::StringUtil::Join(info.aliases, info.aliases.size(), ", ", [](const duckdb::Identifier &name) {
+			return duckdb::KeywordHelper::WriteQuotedAndEscaped(name.GetIdentifierName(), '"');
 		});
 		oss << ")";
 	}
@@ -682,7 +688,7 @@ CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 		Oid postgres_type = GetPostgresDuckDBType(*it_types);
 		if (postgres_type == InvalidOid) {
 			elog(WARNING, "Skipping column %s in table %s.%s.%s due to unsupported type", it_names->c_str(),
-			     info.catalog.c_str(), info.schema.c_str(), info.view_name.c_str());
+			     catalog.c_str(), schema.c_str(), view_name.c_str());
 			continue;
 		}
 		if (!first) {
@@ -691,23 +697,23 @@ CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 			first = false;
 		}
 
-		oss << "r[" << duckdb::KeywordHelper::WriteQuoted(*it_names, '\'') << "]::";
+		oss << "r[" << duckdb::KeywordHelper::WriteQuotedAndEscaped(it_names->GetIdentifierName(), '\'') << "]::";
 		int32_t typemod = GetPostgresDuckDBTypemod(*it_types);
 		oss << format_type_with_typemod(postgres_type, typemod);
-		oss << " AS " << duckdb::KeywordHelper::WriteQuoted(*it_names, '"');
+		oss << " AS " << duckdb::KeywordHelper::WriteQuotedAndEscaped(it_names->GetIdentifierName(), '"');
 	}
 
 	if (first) {
-		elog(WARNING, "Skipping view %s.%s.%s because none of its columns had supported types", info.catalog.c_str(),
-		     info.schema.c_str(), info.view_name.c_str());
+		elog(WARNING, "Skipping view %s.%s.%s because none of its columns had supported types", catalog.c_str(),
+		     schema.c_str(), view_name.c_str());
 		return "";
 	}
 
 	oss << " FROM duckdb.view(";
-	oss << duckdb::KeywordHelper::WriteQuoted(info.catalog) << ", ";
-	oss << duckdb::KeywordHelper::WriteQuoted(info.schema) << ", ";
-	oss << duckdb::KeywordHelper::WriteQuoted(info.view_name) << ", ";
-	oss << duckdb::KeywordHelper::WriteQuoted(info.query->ToString(), '\'');
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(catalog, '\'') << ", ";
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(schema, '\'') << ", ";
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(view_name, '\'') << ", ";
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(info.query->ToString(), '\'');
 	oss << ") r;";
 	return oss.str();
 }
@@ -715,12 +721,16 @@ CreatePgViewString(duckdb::CreateViewInfo &info, bool is_default_db) {
 static std::string
 CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 	std::ostringstream oss;
+	auto &qualified_name = info.GetQualifiedName();
+	const auto &catalog = qualified_name.Catalog().GetIdentifierName();
+	const auto &schema = qualified_name.Schema().GetIdentifierName();
+	const auto &table_name = info.GetTableName().GetIdentifierName();
 
 	oss << "CREATE TABLE ";
-	std::string schema_name = PgSchemaName(info.catalog, info.schema, is_default_db);
-	oss << duckdb::KeywordHelper::WriteQuoted(schema_name, '"');
+	std::string schema_name = PgSchemaName(catalog, schema, is_default_db);
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(schema_name, '"');
 	oss << ".";
-	oss << duckdb::KeywordHelper::WriteQuoted(info.table, '"');
+	oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(table_name, '"');
 	oss << "(";
 
 	bool first = true;
@@ -737,15 +747,15 @@ CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 			oss << ", ";
 		}
 
-		oss << duckdb::KeywordHelper::WriteQuoted(column.Name(), '"');
+		oss << duckdb::KeywordHelper::WriteQuotedAndEscaped(column.Name().GetIdentifierName(), '"');
 		oss << " ";
 		int32_t typemod = GetPostgresDuckDBTypemod(column.Type());
 		oss << format_type_with_typemod(postgres_type, typemod);
 	}
 
 	if (first) {
-		elog(WARNING, "Skipping table %s.%s.%s because non of its columns had supported types", info.catalog.c_str(),
-		     info.schema.c_str(), info.table.c_str());
+		elog(WARNING, "Skipping table %s.%s.%s because non of its columns had supported types", catalog.c_str(),
+		     schema.c_str(), table_name.c_str());
 		return "";
 	}
 
@@ -755,7 +765,7 @@ CreatePgTableString(duckdb::CreateTableInfo &info, bool is_default_db) {
 
 static std::string
 CreatePgSchemaString(std::string postgres_schema_name) {
-	return "CREATE SCHEMA " + duckdb::KeywordHelper::WriteQuoted(postgres_schema_name, '"') + ";";
+	return "CREATE SCHEMA " + duckdb::KeywordHelper::WriteQuotedAndEscaped(postgres_schema_name, '"') + ";";
 }
 
 /*
@@ -1237,10 +1247,9 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 
 	initial_cache_version = pgduckdb::CacheVersion();
 
-	auto &db_manager = duckdb::DatabaseManager::Get(context);
-	const auto &default_db = db_manager.GetDefaultDatabase(context);
-	auto result =
-	    context.Query("SELECT alias, server_catalog_version::text FROM __md_local_databases_metadata()", false);
+	const auto default_db = duckdb::DatabaseManager::GetDefaultDatabase(context).GetIdentifierName();
+	auto result = context.Query("SELECT alias, server_catalog_version::text FROM __md_local_databases_metadata()",
+	                            duckdb::QueryParameters());
 	if (result->HasError()) {
 		elog(WARNING, "Failed to fetch MotherDuck database metadata: %s", result->GetError().c_str());
 		return;
@@ -1302,7 +1311,8 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 				continue;
 			}
 
-			std::string postgres_schema_name = PgSchemaName(motherduck_db, schema.name, is_default_db);
+			std::string postgres_schema_name =
+			    PgSchemaName(motherduck_db, schema.name.GetIdentifierName(), is_default_db);
 			if (!CreateSchemaIfNotExists(postgres_schema_name.c_str(), is_default_db)) {
 				/* We failed to create the schema, so we skip the tables in it */
 				continue;
@@ -1316,8 +1326,7 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 				auto &table = entry.Cast<duckdb::TableCatalogEntry>();
 
 				auto table_info = duckdb::unique_ptr_cast<duckdb::CreateInfo, duckdb::CreateTableInfo>(table.GetInfo());
-				table_info->schema = table.schema.name;
-				table_info->catalog = motherduck_db;
+				table_info->SetQualification(duckdb::Identifier(motherduck_db), table.schema.name);
 
 				auto create_query = CreatePgTableString(*table_info, is_default_db);
 				if (create_query.empty()) {
@@ -1339,8 +1348,7 @@ SyncMotherDuckCatalogsWithPg_Cpp(bool drop_with_cascade, duckdb::ClientContext &
 				auto &view = entry.Cast<duckdb::ViewCatalogEntry>();
 				auto view_info = duckdb::unique_ptr_cast<duckdb::CreateInfo, duckdb::CreateViewInfo>(view.GetInfo());
 
-				view_info->schema = view.schema.name;
-				view_info->catalog = motherduck_db;
+				view_info->SetQualification(duckdb::Identifier(motherduck_db), view.schema.name);
 
 				auto create_query = CreatePgViewString(*view_info, is_default_db);
 				if (create_query.empty()) {

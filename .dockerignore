@@ -7,3 +7,4 @@
 .deps
 Dockerfile
 third_party/duckdb/build
+third_party/vcpkg

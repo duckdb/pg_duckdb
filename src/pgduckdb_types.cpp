@@ -1,9 +1,10 @@
 #include "duckdb.hpp"
 #include "duckdb/common/shared_ptr.hpp"
-#include "duckdb/common/extra_type_info.hpp"
+#include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/blob.hpp"
 #include "duckdb/common/types/uuid.hpp"
+#include "duckdb/common/vector/list_vector.hpp"
 
 #include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -44,27 +45,27 @@ namespace pgduckdb {
 
 NumericVar FromNumeric(Numeric num);
 
-struct NumericAsDouble : public duckdb::ExtraTypeInfo {
+struct NumericAsDouble : public duckdb::LogicalTypeInfo {
 	// Dummy struct to indicate at conversion that the source is a Numeric
 public:
-	NumericAsDouble() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {
+	NumericAsDouble() : LogicalTypeInfo(duckdb::LogicalTypeInfoType::INVALID_TYPE_INFO) {
 	}
 
-	duckdb::shared_ptr<ExtraTypeInfo>
+	duckdb::unique_ptr<LogicalTypeInfo>
 	Copy() const override {
-		return duckdb::make_shared_ptr<NumericAsDouble>(*this);
+		return duckdb::make_uniq<NumericAsDouble>(*this);
 	}
 };
 
-// FIXME: perhaps we want to just make a generic ExtraTypeInfo that holds the Postgres type OID
-struct IsBpChar : public duckdb::ExtraTypeInfo {
+// FIXME: perhaps we want to just make a generic LogicalTypeInfo that holds the Postgres type OID
+struct IsBpChar : public duckdb::LogicalTypeInfo {
 public:
-	IsBpChar() : ExtraTypeInfo(duckdb::ExtraTypeInfoType::INVALID_TYPE_INFO) {
+	IsBpChar() : LogicalTypeInfo(duckdb::LogicalTypeInfoType::INVALID_TYPE_INFO) {
 	}
 
-	duckdb::shared_ptr<ExtraTypeInfo>
+	duckdb::unique_ptr<LogicalTypeInfo>
 	Copy() const override {
-		return duckdb::make_shared_ptr<IsBpChar>(*this);
+		return duckdb::make_uniq<IsBpChar>(*this);
 	}
 };
 
@@ -297,7 +298,7 @@ ConvertTimeDatum(const duckdb::Value &value) {
 static Datum
 ConvertTimeTzDatum(const duckdb::Value &value) {
 	duckdb::dtime_tz_t dt_tz = value.GetValue<duckdb::dtime_tz_t>();
-	const int64_t micros = dt_tz.time().micros;
+	const int64_t micros = dt_tz.time().value;
 	const int32_t tz_offset = dt_tz.offset();
 
 	TimeTzADT *result = static_cast<TimeTzADT *>(palloc(sizeof(TimeTzADT)));
@@ -361,8 +362,8 @@ ConvertTimestampTzDatum(const duckdb::Value &value) {
 	if (!ValidTimestampOrTimestampTz(rawValue))
 		throw duckdb::OutOfRangeException(
 		    "The TimestampTz value should be between min and max value (%s <-> %s)",
-		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_tz_t>(PGDUCKDB_MIN_TIMESTAMP_VALUE)),
-		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_tz_t>(PGDUCKDB_MAX_TIMESTAMP_VALUE)));
+		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_t>(PGDUCKDB_MIN_TIMESTAMP_VALUE)),
+		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_t>(PGDUCKDB_MAX_TIMESTAMP_VALUE)));
 
 	return TimestampTzGetDatum(rawValue - pgduckdb::PGDUCKDB_DUCK_TIMESTAMP_OFFSET);
 }
@@ -941,12 +942,11 @@ namespace {
 
 static duckdb::LogicalType
 CreateUnsupportedPostgresType(std::string error_message) {
-	duckdb::LogicalType type = duckdb::LogicalType::INVALID;
-	type.SetAlias("UnsupportedPostgresType");
 	auto info = duckdb::make_uniq<duckdb::ExtensionTypeInfo>();
 	info->modifiers.emplace_back(duckdb::Value(error_message));
-	type.SetExtensionInfo(std::move(info));
-	return type;
+	return duckdb::LogicalType(duckdb::LogicalType::INVALID)
+	    .WithAlias("UnsupportedPostgresType")
+	    .WithExtensionInfo(std::move(info));
 }
 
 template <class OP>
@@ -1357,7 +1357,7 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 		 */
 		if (type_modifier == -1 || precision < 1 || precision > 38 || scale < 0 || scale > 38 || scale > precision) {
 			if (duckdb_convert_unsupported_numeric_to_double) {
-				auto extra_type_info = duckdb::make_shared_ptr<NumericAsDouble>();
+				auto extra_type_info = duckdb::make_uniq<NumericAsDouble>();
 				return duckdb::LogicalType(duckdb::LogicalTypeId::DOUBLE, std::move(extra_type_info));
 			}
 
@@ -1647,7 +1647,7 @@ GetPostgresDuckDBTypemod(const duckdb::LogicalType &type) {
 template <class T>
 static void
 Append(duckdb::Vector &result, T value, idx_t offset) {
-	auto data = duckdb::FlatVector::GetData<T>(result);
+	auto data = duckdb::FlatVector::GetDataMutable<T>(result);
 	data[offset] = value;
 }
 
@@ -1659,7 +1659,7 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 	auto len = is_bpchar ? bpchartruelen(VARDATA_ANY(ptr), VARSIZE_ANY_EXHDR(ptr)) : VARSIZE_ANY_EXHDR(ptr);
 	duckdb::string_t str(text, len);
 
-	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
+	auto data = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(result);
 	data[offset] = duckdb::StringVector::AddString(result, str);
 }
 
@@ -1668,7 +1668,7 @@ AppendJsonb(duckdb::Vector &result, Datum value, idx_t offset) {
 	auto jsonb = DatumGetJsonbP(value);
 	StringInfo str = PostgresFunctionGuard(makeStringInfo);
 	auto json_str = PostgresFunctionGuard(JsonbToCString, str, &jsonb->root, VARSIZE(jsonb));
-	auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
+	auto data = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(result);
 	data[offset] = duckdb::StringVector::AddString(result, json_str, str->len);
 }
 
@@ -1730,8 +1730,8 @@ AppendTimestampTz(duckdb::Vector &result, Datum value, idx_t offset) {
 	if (!ValidTimestampOrTimestampTz(timestamp + PGDUCKDB_DUCK_TIMESTAMP_OFFSET))
 		throw duckdb::OutOfRangeException(
 		    "The TimestampTz value should be between min and max value (%s <-> %s)",
-		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_tz_t>(PGDUCKDB_MIN_TIMESTAMP_VALUE)),
-		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_tz_t>(PGDUCKDB_MAX_TIMESTAMP_VALUE)));
+		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_t>(PGDUCKDB_MIN_TIMESTAMP_VALUE)),
+		    duckdb::Timestamp::ToString(static_cast<duckdb::timestamp_t>(PGDUCKDB_MAX_TIMESTAMP_VALUE)));
 
 	Append<duckdb::timestamp_tz_t>(result, duckdb::timestamp_tz_t(timestamp + PGDUCKDB_DUCK_TIMESTAMP_OFFSET), offset);
 }
@@ -1913,8 +1913,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		Append<float>(result, DatumGetFloat4(value), offset);
 		break;
 	case duckdb::LogicalTypeId::DOUBLE: {
-		auto aux_info = type.GetAuxInfoShrPtr();
-		if (aux_info && dynamic_cast<NumericAsDouble *>(aux_info.get())) {
+		if (dynamic_cast<const NumericAsDouble *>(&type.GetTypeInfo())) {
 			// This NUMERIC could not be converted to a DECIMAL, convert it as DOUBLE instead
 			auto numeric = DatumGetNumeric(value);
 			auto numeric_var = FromNumeric(numeric);
@@ -1961,7 +1960,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		const char *bytea_data = VARDATA_ANY(ptr);
 		size_t bytea_length = VARSIZE_ANY_EXHDR(ptr);
 		const duckdb::string_t s(bytea_data, bytea_length);
-		auto data = duckdb::FlatVector::GetData<duckdb::string_t>(result);
+		auto data = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(result);
 		data[offset] = duckdb::StringVector::AddStringOrBlob(result, s);
 		break;
 	}
@@ -1999,7 +1998,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 				    "amount of dimensions specified by the schema");
 			}
 			auto child_offset = duckdb::ListVector::GetListSize(*vec);
-			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
+			auto list_data = duckdb::FlatVector::GetDataMutable<duckdb::list_entry_t>(*vec);
 			for (int entry = 0; entry < previous_dimension; entry++) {
 				list_data[write_offset + entry] = duckdb::list_entry_t(
 				    // All lists in a postgres row are enforced to have the same dimension
@@ -2010,15 +2009,15 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 			duckdb::ListVector::Reserve(*vec, new_child_size);
 			duckdb::ListVector::SetListSize(*vec, new_child_size);
 			write_offset = child_offset;
-			auto &child = duckdb::ListVector::GetEntry(*vec);
+			auto &child = duckdb::ListVector::GetChildMutable(*vec);
 			vec = &child;
 		}
 		if (ndims == 0) {
 			D_ASSERT(nelems == 0);
 			auto child_offset = duckdb::ListVector::GetListSize(*vec);
-			auto list_data = duckdb::FlatVector::GetData<duckdb::list_entry_t>(*vec);
+			auto list_data = duckdb::FlatVector::GetDataMutable<duckdb::list_entry_t>(*vec);
 			list_data[write_offset] = duckdb::list_entry_t(child_offset, 0);
-			vec = &duckdb::ListVector::GetEntry(*vec);
+			vec = &duckdb::ListVector::GetChildMutable(*vec);
 		} else if (vec->GetType().id() == duckdb::LogicalTypeId::LIST) {
 			throw duckdb::InvalidInputException(
 			    "Dimensionality of the schema and the data does not match, data contains fewer dimensions than the "
@@ -2028,7 +2027,7 @@ ConvertPostgresToDuckValue(Oid attr_type, Datum value, duckdb::Vector &result, i
 		for (int i = 0; i < nelems; i++) {
 			idx_t dest_idx = write_offset + i;
 			if (nulls[i]) {
-				auto &array_mask = duckdb::FlatVector::Validity(*vec);
+				auto &array_mask = duckdb::FlatVector::ValidityMutable(*vec);
 				array_mask.SetInvalid(dest_idx);
 				continue;
 			}
@@ -2057,7 +2056,7 @@ InsertTupleIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_loc
 	for (int duckdb_output_index = 0; duckdb_output_index < slot->tts_tupleDescriptor->natts; duckdb_output_index++) {
 		auto &result = output.data[duckdb_output_index];
 		if (slot->tts_isnull[duckdb_output_index]) {
-			auto &array_mask = duckdb::FlatVector::Validity(result);
+			auto &array_mask = duckdb::FlatVector::ValidityMutable(result);
 			array_mask.SetInvalid(scan_local_state.output_vector_size);
 		} else {
 			auto attr = TupleDescAttr(slot->tts_tupleDescriptor, duckdb_output_index);
@@ -2127,7 +2126,7 @@ InsertTuplesIntoChunk(duckdb::DataChunk &output, PostgresScanLocalState &scan_lo
 
 		for (int row = 0; row < num_slots; row++) {
 			if (slots[row]->tts_isnull[duckdb_output_index]) {
-				auto &array_mask = duckdb::FlatVector::Validity(result);
+				auto &array_mask = duckdb::FlatVector::ValidityMutable(result);
 				array_mask.SetInvalid(scan_local_state.output_vector_size + row);
 			} else {
 				if (attr->attlen == -1) {

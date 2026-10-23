@@ -11,17 +11,19 @@ RUN apt-get update -qq && \
     postgresql-server-dev-${POSTGRES_VERSION} \
     build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
     libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev \
-    libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache ninja-build git libcurl4-openssl-dev && \
+    libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache ninja-build git libcurl4-openssl-dev \
+    curl zip unzip tar perl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
 ENV PATH=/usr/lib/ccache:$PATH
 ENV CCACHE_DIR=/ccache
+ENV VCPKG_DEFAULT_BINARY_CACHE=/vcpkg-cache
 
 # permissions so we can run as `postgres` (uid=999,gid=999)
-RUN mkdir /out
-RUN chown -R postgres:postgres . /usr/lib/postgresql /usr/share/postgresql /out
+RUN mkdir /out /vcpkg-cache
+RUN chown -R postgres:postgres . /usr/lib/postgresql /usr/share/postgresql /out /vcpkg-cache
 USER postgres
 
 # Selectively copy the files that we need. Sadly we need separate COPY commands
@@ -38,7 +40,7 @@ COPY --chown=postgres:postgres test test
 RUN make clean-all
 
 # build
-RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 echo "Available CPUs=$(nproc)" && make -j$(nproc)
+RUN --mount=type=cache,target=/ccache/,uid=999,gid=999 --mount=type=cache,target=/vcpkg-cache/,uid=999,gid=999 echo "Available CPUs=$(nproc)" && make -j$(nproc)
 # install into location specified by pg_config for tests
 RUN make install
 # install into /out for packaging

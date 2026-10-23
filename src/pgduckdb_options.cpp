@@ -67,7 +67,7 @@ ReadOptions(FunctionCallInfo fcinfo, int start, const std::vector<std::string> &
 			oss << ", ";
 		}
 
-		oss << name << " " << duckdb::KeywordHelper::WriteQuoted(value);
+		oss << name << " " << duckdb::KeywordHelper::WriteQuotedAndEscaped(value, '\'');
 	}
 	return oss.str();
 }
@@ -111,7 +111,8 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 		if (default_database.empty()) {
 			query += ";";
 		} else {
-			query += " OPTIONS (default_database " + duckdb::KeywordHelper::WriteQuoted(default_database) + ");";
+			query += " OPTIONS (default_database " +
+			         duckdb::KeywordHelper::WriteQuotedAndEscaped(default_database, '\'') + ");";
 		}
 		auto ret = SPI_exec(query.c_str(), 0);
 		if (ret != SPI_OK_UTILITY) {
@@ -125,7 +126,7 @@ DECLARE_PG_FUNCTION(pgduckdb_enable_motherduck) {
 	{
 		// Create mapping for current user
 		auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER motherduck OPTIONS (token " +
-		             duckdb::KeywordHelper::WriteQuoted(token) + ");";
+		             duckdb::KeywordHelper::WriteQuotedAndEscaped(token, '\'') + ");";
 		auto ret = SPI_exec(query.c_str(), 0);
 		if (ret != SPI_OK_UTILITY) {
 			elog(ERROR, "Could not create USER MAPPING for current user: %s", SPI_result_code_string(ret));
@@ -180,11 +181,12 @@ DECLARE_PG_FUNCTION(pgduckdb_create_simple_secret) {
 	{
 		std::ostringstream create_mapping_query;
 		create_mapping_query << "CREATE USER MAPPING FOR CURRENT_USER SERVER " << server_name << " OPTIONS (KEY_ID "
-		                     << duckdb::KeywordHelper::WriteQuoted(key) << ", SECRET "
-		                     << duckdb::KeywordHelper::WriteQuoted(secret);
+		                     << duckdb::KeywordHelper::WriteQuotedAndEscaped(key, '\'') << ", SECRET "
+		                     << duckdb::KeywordHelper::WriteQuotedAndEscaped(secret, '\'');
 
 		if (!session_token.empty()) {
-			create_mapping_query << ", session_token " << duckdb::KeywordHelper::WriteQuoted(session_token);
+			create_mapping_query << ", session_token "
+			                     << duckdb::KeywordHelper::WriteQuotedAndEscaped(session_token, '\'');
 		}
 
 		create_mapping_query << ");";
@@ -221,7 +223,7 @@ DECLARE_PG_FUNCTION(pgduckdb_create_azure_secret) {
 	}
 
 	auto query = "CREATE USER MAPPING FOR CURRENT_USER SERVER " + server_name + " OPTIONS (connection_string " +
-	             duckdb::KeywordHelper::WriteQuoted(connection_string) + ");";
+	             duckdb::KeywordHelper::WriteQuotedAndEscaped(connection_string, '\'') + ");";
 	auto ret = SPI_exec(query.c_str(), 0);
 	if (ret != SPI_OK_UTILITY) {
 		elog(ERROR, "Could not create 'azure' USER MAPPING: %s", SPI_result_code_string(ret));

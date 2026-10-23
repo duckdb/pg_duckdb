@@ -6,7 +6,7 @@ namespace pgduckdb {
 
 duckdb::unique_ptr<duckdb::QueryResult>
 DuckDBQueryOrThrow(duckdb::ClientContext &context, const std::string &query) {
-	auto res = context.Query(query, false);
+	auto res = context.Query(query, duckdb::QueryParameters());
 	if (res->HasError()) {
 		res->ThrowError();
 	}

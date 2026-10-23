@@ -6,22 +6,17 @@ EXPLAIN SELECT count(*) FROM ta;
  Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
    DuckDB Execution Plan: 
  
- ┌───────────────────────────┐
- │    UNGROUPED_AGGREGATE    │
- │    ────────────────────   │
- │        Aggregates:        │
- │        count_star()       │
- └─────────────┬─────────────┘
- ┌─────────────┴─────────────┐
- │   PGDUCKDB_POSTGRES_SCAN  │
- │    ────────────────────   │
- │         Table: ta         │
- │                           │
- │        ~2,550 rows        │
- └───────────────────────────┘
+ ╭─ Ungrouped Aggregate ────╮
+ │ Aggregates: count_star() │
+ │ ~1 row                   │
+ ╰─────────────┬────────────╯
+ ╭─ Pgduckdb Postgres Scan ─╮
+ │ Table: ta                │
+ │ ~2,550 rows              │
+ ╰──────────────────────────╯
  
  
-(18 rows)
+(13 rows)
 
 CALL duckdb.recycle_ddb();
 EXPLAIN SELECT count(*) FROM ta;
@@ -30,22 +25,17 @@ EXPLAIN SELECT count(*) FROM ta;
  Custom Scan (DuckDBScan)  (cost=0.00..0.00 rows=0 width=0)
    DuckDB Execution Plan: 
  
- ┌───────────────────────────┐
- │    UNGROUPED_AGGREGATE    │
- │    ────────────────────   │
- │        Aggregates:        │
- │        count_star()       │
- └─────────────┬─────────────┘
- ┌─────────────┴─────────────┐
- │   PGDUCKDB_POSTGRES_SCAN  │
- │    ────────────────────   │
- │         Table: ta         │
- │                           │
- │        ~2,550 rows        │
- └───────────────────────────┘
+ ╭─ Ungrouped Aggregate ────╮
+ │ Aggregates: count_star() │
+ │ ~1 row                   │
+ ╰─────────────┬────────────╯
+ ╭─ Pgduckdb Postgres Scan ─╮
+ │ Table: ta                │
+ │ ~2,550 rows              │
+ ╰──────────────────────────╯
  
  
-(18 rows)
+(13 rows)
 
 -- Not allowed in a transaction
 BEGIN;
