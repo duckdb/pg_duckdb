@@ -25,3 +25,17 @@ set duckdb.threads = 42;
 ERROR:  Cannot set this variable after DuckDB has been initialized. Reconnect to Postgres or use `duckdb.recycle_ddb()` to reset the DuckDB instance.
 set duckdb.autoinstall_known_extensions = false;
 ERROR:  Cannot set this variable after DuckDB has been initialized. Reconnect to Postgres or use `duckdb.recycle_ddb()` to reset the DuckDB instance.
+-- Unknown duckdb.* GUCs must be rejected (prefix is reserved).
+-- On PG14 EmitWarningsOnPlaceholders does not reject later SETs, so the
+-- alternate expected file gucs_1.out accepts success there.
+SET duckdb.totally_bogus_setting = 'oops';
+ERROR:  invalid configuration parameter name "duckdb.totally_bogus_setting"
+DETAIL:  "duckdb" is a reserved prefix.
+-- Known GUCs still work.
+SET duckdb.force_execution = on;
+SHOW duckdb.force_execution;
+ duckdb.force_execution 
+------------------------
+ on
+(1 row)
+

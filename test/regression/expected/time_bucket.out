@@ -1,5 +1,5 @@
 -- All functions should automatically use duckdb
-set duckdb.execution = false;
+set duckdb.force_execution = false;
 SELECT time_bucket('1 day'::interval, '2023-01-15'::date);
  time_bucket 
 -------------
