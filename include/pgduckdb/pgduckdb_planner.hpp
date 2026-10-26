@@ -8,7 +8,7 @@
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 extern bool duckdb_explain_analyze;
-extern bool duckdb_explain_json;
+extern duckdb::ProfilerPrintFormat duckdb_explain_format;
 extern bool duckdb_explain_ctas;
 
 PlannedStmt *DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error);

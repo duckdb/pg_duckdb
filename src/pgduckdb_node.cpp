@@ -24,7 +24,9 @@ extern "C" {
 
 bool duckdb_explain_analyze = false;
 bool duckdb_explain_ctas = false;
-bool duckdb_explain_json = false;
+duckdb::ProfilerPrintFormat duckdb_explain_format = duckdb::ProfilerPrintFormat::Default();
+
+#define NEED_JSON_PLAN(explain_format) (explain_format == duckdb::ProfilerPrintFormat::JSON())
 
 /* global variables */
 CustomScanMethods duckdb_scan_scan_methods;
@@ -94,7 +96,7 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 	if (is_explain_query) {
 		appendStringInfoString(explain_prefix, "EXPLAIN ");
 
-		if (duckdb_explain_json)
+		if (NEED_JSON_PLAN(duckdb_explain_format))
 			appendStringInfoChar(explain_prefix, '(');
 
 		if (duckdb_explain_analyze) {
@@ -102,13 +104,13 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 				throw duckdb::NotImplementedException(
 				    "Cannot use EXPLAIN ANALYZE with CREATE TABLE ... AS when using DuckDB execution");
 			}
-			if (duckdb_explain_json)
+			if (NEED_JSON_PLAN(duckdb_explain_format))
 				appendStringInfoString(explain_prefix, "ANALYZE, ");
 			else
 				appendStringInfoString(explain_prefix, "ANALYZE ");
 		}
 
-		if (duckdb_explain_json) {
+		if (NEED_JSON_PLAN(duckdb_explain_format)) {
 			appendStringInfoString(explain_prefix, "FORMAT JSON )");
 		}
 	}
@@ -388,7 +390,7 @@ Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 static void
 Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 	/*
-	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_json,
+	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_format,
 	 * is copied from ExplainOneQueryHook. Sadly that hook is not run for
 	 * EXPLAIN EXECUTE ..., and the code here runs too late to actually impact
 	 * the query that we send to DuckDB. However, putting it here as well is a
@@ -398,7 +400,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 	 * run, we consider this fine for now.
 	 */
 	duckdb_explain_analyze = pgduckdb::pg::IsExplainAnalyze(es);
-	duckdb_explain_json = pgduckdb::pg::IsExplainFormatJson(es);
+	duckdb_explain_format = pgduckdb::pg::DuckdbExplainFormat(es);
 
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	ExecuteQuery(duckdb_scan_state);
@@ -418,7 +420,7 @@ Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
 
 	std::ostringstream explain_output;
 	explain_output << "\n\n" << value << "\n";
-	if (duckdb_explain_json) {
+	if (NEED_JSON_PLAN(duckdb_explain_format)) {
 
 		// Formatting, copied formatting in JSON mode
 		if (linitial_int(es->grouping_stack) != 0)
