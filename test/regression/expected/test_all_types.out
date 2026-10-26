@@ -153,7 +153,12 @@ null_value |
 null_list  | {NULL}
 
 SELECT * FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS variant, ['x'::VARIANT, 2::VARIANT] AS variant_list $$);
--[ RECORD 1 ]+------------------
-variant      | {"a":1,"b":[1,2]}
-variant_list | {"\"x\"",2}
+-[ RECORD 1 ]+----------------------
+variant      | {'a': 1, 'b': [1, 2]}
+variant_list | {x,2}
+
+SELECT r['v']['a'] AS a, r['v']['b'][1] AS b1 FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS v $$) r;
+-[ RECORD 1 ]
+a  | 1
+b1 | 1
 

@@ -314,6 +314,14 @@ DECLARE_PG_FUNCTION(duckdb_map_out) {
 	return textout(fcinfo);
 }
 
+DECLARE_PG_FUNCTION(duckdb_variant_in) {
+	elog(ERROR, "Creating the duckdb.variant type is not supported");
+}
+
+DECLARE_PG_FUNCTION(duckdb_variant_out) {
+	return textout(fcinfo);
+}
+
 DECLARE_PG_FUNCTION(pgduckdb_test_escape_uri) {
 	auto input = pgduckdb::pg::GetArgString(fcinfo, 0);
 	std::ostringstream oss;

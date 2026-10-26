@@ -205,9 +205,7 @@ ValidTimestampOrTimestampTz(int64_t timestamp) {
 
 static Datum
 ConvertToStringDatum(const duckdb::Value &value) {
-	auto str = value.type().id() == duckdb::LogicalTypeId::VARIANT
-	               ? value.DefaultCastAs(duckdb::LogicalType::JSON()).ToString()
-	               : value.ToString();
+	auto str = value.ToString();
 	auto varchar = str.c_str();
 	auto varchar_len = str.size();
 
@@ -537,6 +535,12 @@ ConvertUnionDatum(const duckdb::Value &value) {
 static Datum
 ConvertMapDatum(const duckdb::Value &value) {
 	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::MAP);
+	return ConvertToStringDatum(value);
+}
+
+static Datum
+ConvertVariantDatum(const duckdb::Value &value) {
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::VARIANT);
 	return ConvertToStringDatum(value);
 }
 
@@ -915,6 +919,20 @@ public:
 	}
 };
 
+struct VariantArray {
+public:
+	static ArrayType *
+	ConstructArray(Datum *datums, bool *nulls, int ndims, int *dims, int *lower_bound) {
+		return construct_md_array(datums, nulls, ndims, dims, lower_bound, pgduckdb::DuckdbVariantOid(), -1, false,
+		                          'i');
+	}
+
+	static Datum
+	ConvertToPostgres(const duckdb::Value &val) {
+		return ConvertVariantDatum(val);
+	}
+};
+
 static bool
 IsNestedType(const duckdb::LogicalTypeId type_id) {
 	/* TODO: Add more nested type*/
@@ -1263,6 +1281,9 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 		} else if (oid == pgduckdb::DuckdbMapOid()) {
 			slot->tts_values[col] = ConvertMapDatum(value);
 			return true;
+		} else if (oid == pgduckdb::DuckdbVariantOid()) {
+			slot->tts_values[col] = ConvertVariantDatum(value);
+			return true;
 		} else if (oid == pgduckdb::DuckdbStructArrayOid()) {
 			ConvertDuckToPostgresArray<StructArray>(slot, value, col);
 			return true;
@@ -1271,6 +1292,9 @@ ConvertDuckToPostgresValue(TupleTableSlot *slot, duckdb::Value &value, idx_t col
 			return true;
 		} else if (oid == pgduckdb::DuckdbMapArrayOid()) {
 			ConvertDuckToPostgresArray<MapArray>(slot, value, col);
+			return true;
+		} else if (oid == pgduckdb::DuckdbVariantArrayOid()) {
+			ConvertDuckToPostgresArray<VariantArray>(slot, value, col);
 			return true;
 		}
 		elog(WARNING, "(PGDuckDB/ConvertDuckToPostgresValue) Unsuported pgduckdb type: %d", oid);
@@ -1411,12 +1435,16 @@ ConvertPostgresToBaseDuckColumnType(Form_pg_attribute &attribute) {
 			return duckdb::LogicalTypeId::STRUCT;
 		} else if (typoid == pgduckdb::DuckdbMapOid()) {
 			return duckdb::LogicalTypeId::MAP;
+		} else if (typoid == pgduckdb::DuckdbVariantOid()) {
+			return duckdb::LogicalTypeId::VARIANT;
 		} else if (typoid == pgduckdb::DuckdbUnionArrayOid()) {
 			return duckdb::LogicalTypeId::UNION;
 		} else if (typoid == pgduckdb::DuckdbStructArrayOid()) {
 			return duckdb::LogicalTypeId::STRUCT;
 		} else if (typoid == pgduckdb::DuckdbMapArrayOid()) {
 			return duckdb::LogicalTypeId::MAP;
+		} else if (typoid == pgduckdb::DuckdbVariantArrayOid()) {
+			return duckdb::LogicalTypeId::VARIANT;
 		}
 		return CreateUnsupportedPostgresType("Oid=" + std::to_string(attribute->atttypid));
 	}
@@ -1519,8 +1547,6 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return NUMERICARRAYOID;
 	case duckdb::LogicalTypeId::SQLNULL:
 		return INT4ARRAYOID;
-	case duckdb::LogicalTypeId::VARIANT:
-		return JSONARRAYOID;
 	case duckdb::LogicalTypeId::STRUCT:
 	case duckdb::LogicalTypeId::TUPLE:
 		return pgduckdb::DuckdbStructArrayOid();
@@ -1528,6 +1554,12 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbUnionArrayOid();
 	case duckdb::LogicalTypeId::MAP:
 		return pgduckdb::DuckdbMapArrayOid();
+	case duckdb::LogicalTypeId::VARIANT:
+		// duckdb.variant only exists after ALTER EXTENSION pg_duckdb UPDATE
+		if (pgduckdb::DuckdbVariantArrayOid() != InvalidOid) {
+			return pgduckdb::DuckdbVariantArrayOid();
+		}
+		[[fallthrough]];
 	default: {
 		if (throw_error) {
 			throw duckdb::NotImplementedException("Unsupported DuckDB `LIST` subtype: " + type.ToString());
@@ -1636,7 +1668,11 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 	case duckdb::LogicalTypeId::SQLNULL:
 		return INT4OID;
 	case duckdb::LogicalTypeId::VARIANT:
-		return JSONOID;
+		// duckdb.variant only exists after ALTER EXTENSION pg_duckdb UPDATE
+		if (pgduckdb::DuckdbVariantOid() != InvalidOid) {
+			return pgduckdb::DuckdbVariantOid();
+		}
+		[[fallthrough]];
 	default: {
 		if (throw_error) {
 			throw duckdb::NotImplementedException("Could not convert DuckDB type: " + type.ToString() +

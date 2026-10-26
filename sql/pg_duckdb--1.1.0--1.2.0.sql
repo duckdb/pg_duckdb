@@ -40,6 +40,17 @@ SET search_path = pg_catalog, pg_temp
 AS 'MODULE_PATHNAME', 'duckdb_only_function'
 LANGUAGE C;
 
+CREATE TYPE duckdb.variant;
+CREATE FUNCTION duckdb.variant_in(cstring) RETURNS duckdb.variant AS 'MODULE_PATHNAME', 'duckdb_variant_in' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.variant_out(duckdb.variant) RETURNS cstring AS 'MODULE_PATHNAME', 'duckdb_variant_out' LANGUAGE C IMMUTABLE STRICT;
+CREATE FUNCTION duckdb.variant_subscript(internal) RETURNS internal AS 'MODULE_PATHNAME', 'duckdb_variant_subscript' LANGUAGE C IMMUTABLE STRICT;
+CREATE TYPE duckdb.variant(
+    INTERNALLENGTH = VARIABLE,
+    INPUT = duckdb.variant_in,
+    OUTPUT = duckdb.variant_out,
+    SUBSCRIPT = duckdb.variant_subscript
+);
+
 -- iceberg_snapshots returns parent_id, operation and summary since DuckDB v2.0
 DROP FUNCTION @extschema@.iceberg_snapshots(path text, metadata_compression_codec TEXT, skip_schema_inference BOOLEAN,
                                             version TEXT, version_name_format TEXT);

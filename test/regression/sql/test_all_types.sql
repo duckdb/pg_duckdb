@@ -29,3 +29,4 @@ $$);
 -- DuckDB types without a direct Postgres equivalent
 SELECT * FROM duckdb.query($$ SELECT NULL AS null_value, [NULL] AS null_list $$);
 SELECT * FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS variant, ['x'::VARIANT, 2::VARIANT] AS variant_list $$);
+SELECT r['v']['a'] AS a, r['v']['b'][1] AS b1 FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS v $$) r;
