@@ -16,10 +16,6 @@ OBJS += $(subst .c,.o, $(C_SRCS))
 DUCKDB_GEN ?= ninja
 # used to know what version of extensions to download
 DUCKDB_VERSION = v2.0.0
-# vcpkg provides openssl/curl for httpfs; pinned to the commit DuckDB uses
-VCPKG_COMMIT = cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3
-VCPKG_ROOT ?= $(CURDIR)/third_party/vcpkg
-VCPKG_TOOLCHAIN_PATH ?= $(VCPKG_ROOT)/scripts/buildsystems/vcpkg.cmake
 # duckdb build tweaks
 DUCKDB_CMAKE_VARS = -DCXX_EXTRA=-fvisibility=default -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0 -DOVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION)
 # set to 1 to disable asserts in DuckDB. This is particularly useful in combinition with MotherDuck.
@@ -134,17 +130,12 @@ duckdb: $(FULL_DUCKDB_LIB)
 .git/modules/third_party/duckdb/HEAD:
 	git submodule update --init --recursive
 
-$(VCPKG_TOOLCHAIN_PATH):
-	git clone https://github.com/microsoft/vcpkg.git $(VCPKG_ROOT)
-	git -C $(VCPKG_ROOT) checkout $(VCPKG_COMMIT)
-	$(VCPKG_ROOT)/bootstrap-vcpkg.sh -disableMetrics
-
-$(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_extensions.cmake | $(VCPKG_TOOLCHAIN_PATH)
+$(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_extensions.cmake
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	mkdir -p third_party/duckdb/build/release/vcpkg_installed
 endif
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
-	VCPKG_TOOLCHAIN_PATH=$(VCPKG_TOOLCHAIN_PATH) \
+	DUCKDB_NEW_EXTENSION_BUILD=0 \
 	DUCKDB_CAPABILITIES="httplib;loadable_extensions" \
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \

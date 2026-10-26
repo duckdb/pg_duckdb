@@ -14,5 +14,3 @@ compile_commands.json
 *.pyc
 
 env/
-
-third_party/vcpkg/

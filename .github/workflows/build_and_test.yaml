@@ -130,13 +130,6 @@ jobs:
           path: duckdb/third_party/duckdb/build/
           key: duckdb-build-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}-ninja
 
-      - name: Setup vcpkg binary cache
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/vcpkg/archives
-          key: vcpkg-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}
-          restore-keys: vcpkg-ubuntu-24.04-
-
       - name: Install pytest and other test requirements
         run: python3 -m pip install -r duckdb/requirements.txt
 
