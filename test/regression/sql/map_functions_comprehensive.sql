@@ -30,7 +30,7 @@ SELECT map_contains(r['map_col'], 1) as contains_numeric_key FROM duckdb.query($
 
 -- Edge cases
 SELECT cardinality(r['map_col']) as cardinality_empty FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
-SELECT map_keys(r['map_col']) as keys_empty FROM duckdb.query($$ SELECT MAP([]::VARCHAR[], []::INTEGER[]) as map_col $$) r;
-SELECT map_values(r['map_col']) as values_empty FROM duckdb.query($$ SELECT MAP([]::VARCHAR[], []::INTEGER[]) as map_col $$) r;
+SELECT map_keys(r['map_col']) as keys_empty FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
+SELECT map_values(r['map_col']) as values_empty FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
 SELECT map_extract(r['map_col'], 'non_existent') as extract_non_existent FROM duckdb.query($$ SELECT MAP(['key1'], ['value1']) as map_col $$) r;
 SELECT map_contains(r['map_col'], 'non_existent') as contains_non_existent FROM duckdb.query($$ SELECT MAP(['key1'], ['value1']) as map_col $$) r;

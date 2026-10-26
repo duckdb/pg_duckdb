@@ -22,9 +22,10 @@ SELECT * exclude(
     timestamp_ms, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
     timestamp_ns, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
     timestamp_tz, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
-    time_ns, -- TIME_NS is not supported in Postgres
-    timestamp_tz_ns, -- TIMESTAMP_TZ_NS is not supported yet
-    empty_struct,
-    tuple -- TUPLE is not supported yet
+    time_ns -- TIME_NS is not supported in Postgres
 )
-$$)
+$$);
+
+-- DuckDB types without a direct Postgres equivalent
+SELECT * FROM duckdb.query($$ SELECT NULL AS null_value, [NULL] AS null_list $$);
+SELECT * FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS variant, ['x'::VARIANT, 2::VARIANT] AS variant_list $$);

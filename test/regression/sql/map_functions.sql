@@ -8,11 +8,11 @@ SELECT map_extract(r['map_col'], 'key1') as string_value FROM duckdb.query($$ SE
 
 -- Test map_keys function
 SELECT map_keys(r['map_col']) as keys FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
-SELECT map_keys(r['map_col']) as empty_keys FROM duckdb.query($$ SELECT MAP([]::VARCHAR[], []::INTEGER[]) as map_col $$) r;
+SELECT map_keys(r['map_col']) as empty_keys FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
 
 -- Test map_values function
 SELECT map_values(r['map_col']) as values FROM duckdb.query($$ SELECT MAP(['a', 'b', 'c'], [1, 2, 3]) as map_col $$) r;
-SELECT map_values(r['map_col']) as empty_values FROM duckdb.query($$ SELECT MAP([]::VARCHAR[], []::INTEGER[]) as map_col $$) r;
+SELECT map_values(r['map_col']) as empty_values FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
 
 -- Test with unresolved_type for flexibility
 SELECT map_extract(r['map_col']::duckdb.unresolved_type, 'x') as flexible_extract FROM duckdb.query($$ SELECT MAP(['x', 'y'], [10, 20]) as map_col $$) r;

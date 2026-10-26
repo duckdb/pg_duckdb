@@ -22,12 +22,9 @@ SELECT * exclude(
     timestamp_ms, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
     timestamp_ns, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
     timestamp_tz, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
-    time_ns, -- TIME_NS is not supported in Postgres
-    timestamp_tz_ns, -- TIMESTAMP_TZ_NS is not supported yet
-    empty_struct,
-    tuple -- TUPLE is not supported yet
+    time_ns -- TIME_NS is not supported in Postgres
 )
-$$)
+$$);
 -[ RECORD 1 ]-------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool                | f
 tinyint             | -128
@@ -43,6 +40,7 @@ ubigint             | 0
 bignum              | -179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368
 time                | 00:00:00
 time_tz             | 00:00:00+15:59:59
+timestamp_tz_ns     | Tue Sep 21 16:07:02 1677 LMT
 float               | -3.4028235e+38
 double              | -1.7976931348623157e+308
 dec_4_1             | -999.9
@@ -60,11 +58,13 @@ date_array          | {}
 timestamp_array     | {}
 timestamptz_array   | {}
 varchar_array       | {}
+empty_struct        | {}
 map                 | {}
 union               | Frank
 fixed_int_array     | {NULL,2,3}
 fixed_varchar_array | {a,NULL,c}
 geometry            | POINT EMPTY
+tuple               | (NULL, NULL)
 -[ RECORD 2 ]-------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool                | t
 tinyint             | 127
@@ -80,6 +80,7 @@ ubigint             | 18446744073709551615
 bignum              | 179769313486231570814527423731704356798070567525844996598917476803157260780028538760589558632766878171540458953514382464234321326889464182768467546703537516986049910576551282076245490090389328944075868508455133942304583236903222948165808559332123348274797826204144723168738177180919299881250404026184124858368
 time                | 24:00:00
 time_tz             | 24:00:00-15:59:59
+timestamp_tz_ns     | Fri Apr 11 16:47:16.854775 2262 PDT
 float               | 3.4028235e+38
 double              | 1.7976931348623157e+308
 dec_4_1             | 999.9
@@ -97,11 +98,13 @@ date_array          | {01-01-1970,infinity,-infinity,NULL,05-12-2022}
 timestamp_array     | {"Thu Jan 01 00:00:00 1970",infinity,-infinity,NULL,"Thu May 12 16:23:45 2022"}
 timestamptz_array   | {"Wed Dec 31 16:00:00 1969 PST",infinity,-infinity,NULL,"Thu May 12 16:23:45 2022 PDT"}
 varchar_array       | {🦆🦆🦆🦆🦆🦆,goose,NULL,""}
+empty_struct        | {}
 map                 | {key1=🦆🦆🦆🦆🦆🦆, key2=goose}
 union               | 5
 fixed_int_array     | {4,5,6}
 fixed_varchar_array | {d,e,f}
 geometry            | GEOMETRYCOLLECTION (POINT (1 2), POINT EMPTY, LINESTRING (0 0, 1 1), LINESTRING EMPTY, POLYGON ((0 0, 0 1, 1 1, 1 0, 0 0)), POLYGON EMPTY, MULTIPOINT (5 6, EMPTY), MULTILINESTRING ((0 0, 1 1), EMPTY, (2 2, 3 3), EMPTY), MULTILINESTRING EMPTY, MULTIPOLYGON (((0 0, 0 1, 1 1, 1 0, 0 0)), EMPTY, ((0 0, 0 2, 2 2, 2 0, 0 0)), EMPTY), MULTIPOLYGON EMPTY, GEOMETRYCOLLECTION (POINT (5 6)), GEOMETRYCOLLECTION EMPTY)
+tuple               | (42, 🦆🦆🦆🦆🦆🦆)
 -[ RECORD 3 ]-------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 bool                | 
 tinyint             | 
@@ -117,6 +120,7 @@ ubigint             |
 bignum              | 
 time                | 
 time_tz             | 
+timestamp_tz_ns     | 
 float               | 
 double              | 
 dec_4_1             | 
@@ -134,9 +138,22 @@ date_array          |
 timestamp_array     | 
 timestamptz_array   | 
 varchar_array       | 
+empty_struct        | 
 map                 | 
 union               | 
 fixed_int_array     | 
 fixed_varchar_array | 
 geometry            | 
+tuple               | 
+
+-- DuckDB types without a direct Postgres equivalent
+SELECT * FROM duckdb.query($$ SELECT NULL AS null_value, [NULL] AS null_list $$);
+-[ RECORD 1 ]------
+null_value | 
+null_list  | {NULL}
+
+SELECT * FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS variant, ['x'::VARIANT, 2::VARIANT] AS variant_list $$);
+-[ RECORD 1 ]+------------------
+variant      | {"a":1,"b":[1,2]}
+variant_list | {"\"x\"",2}
 

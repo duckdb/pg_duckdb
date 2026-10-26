@@ -26,7 +26,7 @@ SELECT map_keys(r['map_col']) as keys FROM duckdb.query($$ SELECT MAP(['a', 'b',
  {a,b,c}
 (1 row)
 
-SELECT map_keys(r['map_col']) as empty_keys FROM duckdb.query($$ SELECT MAP([]::VARCHAR[], []::INTEGER[]) as map_col $$) r;
+SELECT map_keys(r['map_col']) as empty_keys FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
  empty_keys 
 ------------
  {}
@@ -39,7 +39,7 @@ SELECT map_values(r['map_col']) as values FROM duckdb.query($$ SELECT MAP(['a', 
  {1,2,3}
 (1 row)
 
-SELECT map_values(r['map_col']) as empty_values FROM duckdb.query($$ SELECT MAP([]::VARCHAR[], []::INTEGER[]) as map_col $$) r;
+SELECT map_values(r['map_col']) as empty_values FROM duckdb.query($$ SELECT MAP([], []) as map_col $$) r;
  empty_values 
 --------------
  {}

@@ -205,7 +205,9 @@ ValidTimestampOrTimestampTz(int64_t timestamp) {
 
 static Datum
 ConvertToStringDatum(const duckdb::Value &value) {
-	auto str = value.ToString();
+	auto str = value.type().id() == duckdb::LogicalTypeId::VARIANT
+	               ? value.DefaultCastAs(duckdb::LogicalType::JSON()).ToString()
+	               : value.ToString();
 	auto varchar = str.c_str();
 	auto varchar_len = str.size();
 
@@ -350,14 +352,18 @@ ConvertTimestampDatum(const duckdb::Value &value) {
 
 inline Datum
 ConvertTimestampTzDatum(const duckdb::Value &value) {
-	duckdb::timestamp_tz_t timestamp = value.GetValue<duckdb::timestamp_tz_t>();
-	int64_t rawValue = timestamp.value;
+	int64_t rawValue = value.GetValue<int64_t>();
 
 	// Early Return for +/-Inf
 	if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::ninfinity()))
 		return TimestampTzGetDatum(DT_NOBEGIN);
 	else if (rawValue == static_cast<int64_t>(duckdb::timestamp_t::infinity()))
 		return TimestampTzGetDatum(DT_NOEND);
+
+	if (value.type().id() == duckdb::LogicalTypeId::TIMESTAMP_TZ_NS) {
+		// 1 ns = 10^-3 micro-sec
+		rawValue /= 1000;
+	}
 
 	if (!ValidTimestampOrTimestampTz(rawValue))
 		throw duckdb::OutOfRangeException(
@@ -518,7 +524,7 @@ ConvertUUIDDatum(const duckdb::Value &value) {
 
 inline Datum
 ConvertDuckStructDatum(const duckdb::Value &value) {
-	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::STRUCT);
+	D_ASSERT(value.type().id() == duckdb::LogicalTypeId::STRUCT || value.type().id() == duckdb::LogicalTypeId::TUPLE);
 	return ConvertToStringDatum(value);
 }
 
@@ -1489,6 +1495,7 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 	case duckdb::LogicalTypeId::TIMESTAMP:
 		return TIMESTAMPARRAYOID;
 	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS:
 		return TIMESTAMPTZARRAYOID;
 	case duckdb::LogicalTypeId::INTERVAL:
 		return INTERVALARRAYOID;
@@ -1510,7 +1517,12 @@ GetPostgresArrayDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return BYTEAARRAYOID;
 	case duckdb::LogicalTypeId::BIGNUM:
 		return NUMERICARRAYOID;
+	case duckdb::LogicalTypeId::SQLNULL:
+		return INT4ARRAYOID;
+	case duckdb::LogicalTypeId::VARIANT:
+		return JSONARRAYOID;
 	case duckdb::LogicalTypeId::STRUCT:
+	case duckdb::LogicalTypeId::TUPLE:
 		return pgduckdb::DuckdbStructArrayOid();
 	case duckdb::LogicalTypeId::UNION:
 		return pgduckdb::DuckdbUnionArrayOid();
@@ -1581,6 +1593,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 	case duckdb::LogicalTypeId::TIMESTAMP_NS:
 		return TIMESTAMPOID;
 	case duckdb::LogicalTypeId::TIMESTAMP_TZ:
+	case duckdb::LogicalTypeId::TIMESTAMP_TZ_NS:
 		return TIMESTAMPTZOID;
 	case duckdb::LogicalTypeId::INTERVAL:
 		return INTERVALOID;
@@ -1601,6 +1614,7 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 	case duckdb::LogicalTypeId::BIGNUM:
 		return NUMERICOID;
 	case duckdb::LogicalTypeId::STRUCT:
+	case duckdb::LogicalTypeId::TUPLE:
 		return pgduckdb::DuckdbStructOid();
 	case duckdb::LogicalTypeId::LIST:
 	case duckdb::LogicalTypeId::ARRAY: {
@@ -1619,6 +1633,10 @@ GetPostgresDuckDBType(const duckdb::LogicalType &type, bool throw_error) {
 		return pgduckdb::DuckdbMapOid();
 	case duckdb::LogicalTypeId::ENUM:
 		return VARCHAROID;
+	case duckdb::LogicalTypeId::SQLNULL:
+		return INT4OID;
+	case duckdb::LogicalTypeId::VARIANT:
+		return JSONOID;
 	default: {
 		if (throw_error) {
 			throw duckdb::NotImplementedException("Could not convert DuckDB type: " + type.ToString() +
