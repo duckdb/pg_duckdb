@@ -33,7 +33,7 @@ ifeq ($(DUCKDB_BUILD), Debug)
 else ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	DUCKDB_BUILD_CXX_FLAGS =
 	DUCKDB_BUILD_TYPE = release
-	DUCKDB_MAKE_TARGET = bundle-library
+	DUCKDB_MAKE_TARGET = release
 else
 	DUCKDB_BUILD_CXX_FLAGS =
 	DUCKDB_BUILD_TYPE = release
@@ -43,8 +43,12 @@ endif
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
 ifeq ($(DUCKDB_BUILD), ReleaseStatic)
-	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/libduckdb_bundle.a
-	PG_DUCKDB_LINK_FLAGS = $(FULL_DUCKDB_LIB) -lcurl
+	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb_static.a
+	# registers the statically linked extensions when pg_duckdb is loaded
+	DUCKDB_STATIC_LOADER = $(addprefix $(DUCKDB_BUILD_DIR)/src/CMakeFiles/duckdb.dir/,duckdb_static_extension_loader.c.o __/extension/loader/static_extension_autoregister.cpp.o)
+	PG_DUCKDB_LINK_FLAGS = $(DUCKDB_STATIC_LOADER) $(wildcard $(DUCKDB_BUILD_DIR)/extension/*/lib*_extension.a) \
+		$(DUCKDB_BUILD_DIR)/src/main/http/libduckdb_httplib.a $(DUCKDB_BUILD_DIR)/src/main/extension/libduckdb_loadable_extensions.a \
+		$(FULL_DUCKDB_LIB) -lssl -lcrypto -lcurl
 else
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb$(DLSUFFIX)
 	PG_DUCKDB_LINK_FLAGS = -lduckdb
@@ -131,9 +135,6 @@ duckdb: $(FULL_DUCKDB_LIB)
 	git submodule update --init --recursive
 
 $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_extensions.cmake
-ifeq ($(DUCKDB_BUILD), ReleaseStatic)
-	mkdir -p third_party/duckdb/build/release/vcpkg_installed
-endif
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
 	DUCKDB_NEW_EXTENSION_BUILD=0 \
 	DUCKDB_CAPABILITIES="httplib;loadable_extensions" \
