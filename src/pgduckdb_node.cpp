@@ -20,6 +20,7 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
+#include "pgduckdb/utility/signal_guard.hpp"
 
 bool duckdb_explain_analyze = false;
 bool duckdb_explain_ctas = false;
@@ -209,6 +210,13 @@ ExecuteQuery(DuckdbScanState *state) {
 		execution_result = pending->ExecuteTask();
 		if (duckdb::PendingQueryResult::IsResultReady(execution_result)) {
 			break;
+		}
+
+		if (execution_result == duckdb::PendingExecutionResult::NO_TASKS_AVAILABLE) {
+			// The remaining tasks run on DuckDB threads, which can be waiting for signals that only the main thread
+			// handles (e.g. the ones notifying about finished parallel workers). Make sure Postgres code that ran on
+			// a DuckDB thread did not leave all signals blocked on the main thread.
+			pgduckdb::ThreadSignalUnblockGuard::UnblockMainThread();
 		}
 
 		if (QueryCancelPending) {
