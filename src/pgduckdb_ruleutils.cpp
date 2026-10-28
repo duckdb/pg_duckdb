@@ -1249,17 +1249,46 @@ struct PGDuckDBGetOperExprContext {
 	const char *escape_pattern;
 	bool is_likeish_op;
 	bool is_negated;
+	bool is_regex_op;
+	bool is_case_insensitive;
 };
 
+/*
+ * Postgres' ~, !~, ~* and !~* are partial regex matches on strings. DuckDB
+ * parses ~ as regexp_full_match, which anchors the pattern to the whole
+ * string, so these operators are written out as regexp_matches() calls
+ * instead. The same operator names exist for geometric types, where we keep
+ * the Postgres spelling.
+ */
+static bool
+IsStringRegexOperand(Node *arg) {
+	switch (exprType(arg)) {
+	case TEXTOID:
+	case VARCHAROID:
+	case BPCHAROID:
+	case NAMEOID:
+		return true;
+	default:
+		return false;
+	}
+}
+
 void *
-pg_duckdb_get_oper_expr_make_ctx(const char *op_name, Node **, Node **arg2) {
+pg_duckdb_get_oper_expr_make_ctx(const char *op_name, Node **arg1, Node **arg2) {
 	auto ctx = (PGDuckDBGetOperExprContext *)palloc0(sizeof(PGDuckDBGetOperExprContext));
 	ctx->pg_op_name = op_name;
 	ctx->is_likeish_op = false;
 	ctx->is_negated = false;
+	ctx->is_regex_op = false;
+	ctx->is_case_insensitive = false;
 	ctx->escape_pattern = "'\\'";
 
-	if (AreStringEqual(op_name, "~~")) {
+	if (IsStringRegexOperand(*arg1) && (AreStringEqual(op_name, "~") || AreStringEqual(op_name, "!~") ||
+	                                    AreStringEqual(op_name, "~*") || AreStringEqual(op_name, "!~*"))) {
+		ctx->is_regex_op = true;
+		ctx->is_negated = op_name[0] == '!';
+		ctx->is_case_insensitive = op_name[strlen(op_name) - 1] == '*';
+	} else if (AreStringEqual(op_name, "~~")) {
 		ctx->duckdb_op_name = "LIKE";
 		ctx->is_likeish_op = true;
 		ctx->is_negated = false;
@@ -1294,6 +1323,10 @@ pg_duckdb_get_oper_expr_make_ctx(const char *op_name, Node **, Node **arg2) {
 void
 pg_duckdb_get_oper_expr_prefix(StringInfo buf, void *vctx) {
 	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_regex_op) {
+		appendStringInfo(buf, "%sregexp_matches(", ctx->is_negated ? "NOT " : "");
+		return;
+	}
 	if (ctx->is_likeish_op && ctx->is_negated) {
 		appendStringInfo(buf, "NOT (");
 	}
@@ -1302,6 +1335,10 @@ pg_duckdb_get_oper_expr_prefix(StringInfo buf, void *vctx) {
 void
 pg_duckdb_get_oper_expr_middle(StringInfo buf, void *vctx) {
 	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_regex_op) {
+		appendStringInfo(buf, ", ");
+		return;
+	}
 	auto op = ctx->duckdb_op_name ? ctx->duckdb_op_name : ctx->pg_op_name;
 	appendStringInfo(buf, " %s ", op);
 }
@@ -1309,6 +1346,10 @@ pg_duckdb_get_oper_expr_middle(StringInfo buf, void *vctx) {
 void
 pg_duckdb_get_oper_expr_suffix(StringInfo buf, void *vctx) {
 	auto ctx = static_cast<PGDuckDBGetOperExprContext *>(vctx);
+	if (ctx->is_regex_op) {
+		appendStringInfo(buf, "%s)", ctx->is_case_insensitive ? ", 'i'" : "");
+		return;
+	}
 	if (ctx->is_likeish_op) {
 		appendStringInfo(buf, " ESCAPE %s", ctx->escape_pattern);
 
