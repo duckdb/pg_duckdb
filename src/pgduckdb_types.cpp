@@ -377,28 +377,57 @@ ConvertDoubleDatum(const duckdb::Value &value) {
 	return Float8GetDatum(value.GetValue<double>());
 }
 
+/*
+ * The magnitude of a signed value as the matching unsigned type. Negating the
+ * minimum of a signed type overflows, so the magnitude is computed from
+ * -(value + 1) + 1, which stays in range.
+ */
+template <class T>
+struct UnsignedMagnitude {
+	using type = typename duckdb::MakeUnsigned<T>::type;
+
+	static type
+	Of(T value) {
+		if (value < 0) {
+			return type(-(value + T(1))) + type(1);
+		}
+		return type(value);
+	}
+};
+
+template <>
+struct UnsignedMagnitude<hugeint_t> {
+	using type = uhugeint_t;
+
+	static type
+	Of(hugeint_t value) {
+		if (value < 0) {
+			value = -(value + hugeint_t(1));
+			return uhugeint_t(static_cast<uint64_t>(value.upper), value.lower) + uhugeint_t(1);
+		}
+		return uhugeint_t(static_cast<uint64_t>(value.upper), value.lower);
+	}
+};
+
 template <class T, class OP = DecimalConversionInteger>
 void
 ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) {
 	result.dscale = scale;
 
-	T value = ddb_value.GetValueUnsafe<T>();
-	if (value < 0) {
-		value = -value;
-		result.sign = NUMERIC_NEG;
-	} else {
-		result.sign = NUMERIC_POS;
-	}
+	T signed_value = ddb_value.GetValueUnsafe<T>();
+	result.sign = signed_value < 0 ? NUMERIC_NEG : NUMERIC_POS;
+	using UT = typename UnsignedMagnitude<T>::type;
+	UT value = UnsignedMagnitude<T>::Of(signed_value);
 
 	// divide the decimal into the integer part (before the decimal point) and fractional part (after the point)
-	T integer_part;
-	T fractional_part;
+	UT integer_part;
+	UT fractional_part;
 	if (scale == 0) {
 		integer_part = value;
 		fractional_part = 0;
 	} else {
-		integer_part = value / T(OP::GetPowerOfTen(scale));
-		fractional_part = value % T(OP::GetPowerOfTen(scale));
+		integer_part = value / UT(OP::GetPowerOfTen(scale));
+		fractional_part = value % UT(OP::GetPowerOfTen(scale));
 	}
 
 	constexpr idx_t MAX_DIGITS = sizeof(T) * 4;
@@ -409,8 +438,8 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 	// split the integral part into parts of up to NBASE (4 digits => 0..9999)
 	integral_ndigits = 0;
 	while (integer_part > 0) {
-		integral_digits[integral_ndigits++] = uint16_t(integer_part % T(NBASE));
-		integer_part /= T(NBASE);
+		integral_digits[integral_ndigits++] = uint16_t(integer_part % UT(NBASE));
+		integer_part /= UT(NBASE);
 	}
 
 	result.weight = integral_ndigits - 1;
@@ -424,7 +453,7 @@ ConvertNumeric(const duckdb::Value &ddb_value, idx_t scale, NumericVar &result) 
 	// this means we need to "correct" the number 12 by multiplying by 100 in this case
 	// this correction factor is the "number of digits to the next full number"
 	int32_t correction = fractional_ndigits * DEC_DIGITS - scale;
-	fractional_part *= T(OP::GetPowerOfTen(correction));
+	fractional_part *= UT(OP::GetPowerOfTen(correction));
 	for (idx_t i = 0; i < fractional_ndigits; i++) {
 		fractional_digits[i] = uint16_t(fractional_part % NBASE);
 		fractional_part /= NBASE;
