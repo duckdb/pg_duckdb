@@ -15,6 +15,7 @@ extern "C" {
 #include "catalog/pg_collation.h"
 #include "commands/dbcommands.h"
 #include "commands/tablecmds.h"
+#include "nodes/makefuncs.h"
 #include "nodes/nodeFuncs.h"
 #include "nodes/parsenodes.h"
 #include "lib/stringinfo.h"
@@ -23,6 +24,7 @@ extern "C" {
 #include "parser/parse_collate.h"
 #include "parser/parse_expr.h"
 #include "parser/parse_relation.h"
+#include "utils/array.h"
 #include "utils/builtins.h"
 #include "utils/guc.h"
 #include "utils/lsyscache.h"
@@ -367,6 +369,81 @@ pgduckdb_show_type(Const *constval, int original_showtype) {
 		return -1;
 	}
 	return original_showtype;
+}
+
+/*
+ * PostgreSQL's array output syntax uses braces, while DuckDB list literals use
+ * square brackets. Deconstruct array Consts and deparse their elements so the
+ * generated query can be parsed by DuckDB.
+ */
+bool
+pgduckdb_append_array_const(Const *constval, StringInfo buf, int showtype) {
+	if (!constval || constval->constisnull) {
+		return false;
+	}
+
+	Oid element_type = get_element_type(getBaseType(constval->consttype));
+	if (!OidIsValid(element_type)) {
+		return false;
+	}
+
+	ArrayType *array = DatumGetArrayTypeP(constval->constvalue);
+	int ndim = ARR_NDIM(array);
+	appendStringInfoChar(buf, '[');
+
+	if (ndim > 0) {
+		int slice_ndim = ndim > 1 ? ndim - 1 : 0;
+		int16 element_len;
+		bool element_byval;
+		char element_align;
+		get_typlenbyvalalign(element_type, &element_len, &element_byval, &element_align);
+
+		ArrayIterator iterator = array_create_iterator(array, slice_ndim, NULL);
+		Datum value;
+		bool is_null;
+		bool first = true;
+		while (array_iterate(iterator, &value, &is_null)) {
+			if (!first) {
+				appendStringInfoString(buf, ", ");
+			}
+			first = false;
+
+			Const *element;
+			if (slice_ndim == 0) {
+				element = makeConst(element_type, constval->consttypmod, constval->constcollid, element_len, value,
+				                    is_null, element_byval);
+			} else {
+				element = makeConst(constval->consttype, constval->consttypmod, constval->constcollid,
+				                    constval->constlen, value, is_null, constval->constbyval);
+			}
+
+			if (slice_ndim == 0) {
+				char *deparsed_element = pgduckdb_deparse_expression((Node *)element, NIL, false, false);
+				appendStringInfoString(buf, deparsed_element);
+			} else {
+				/*
+				 * Array slices already form part of the outer list literal. Deparse
+				 * them recursively without a type cast; otherwise DuckDB tries to
+				 * cast each nested list to the scalar element type of the outer list.
+				 */
+				pgduckdb_append_array_const(element, buf, -1);
+			}
+		}
+
+		array_free_iterator(iterator);
+	}
+
+	appendStringInfoChar(buf, ']');
+	if (showtype >= 0) {
+		appendStringInfo(buf, "::%s", format_type_with_typemod(constval->consttype, constval->consttypmod));
+		/* PostgreSQL uses one array type OID for every array dimensionality, but
+		 * DuckDB requires one [] suffix for each nested list dimension. */
+		for (int dimension = 1; dimension < ndim; dimension++) {
+			appendStringInfoString(buf, "[]");
+		}
+	}
+
+	return true;
 }
 
 bool
