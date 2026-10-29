@@ -40,7 +40,7 @@ __CPPFunctionGuard__(const char *func_name, const char *file_name, int line, Fun
 	// to be closed in the missed `PG_CATCH`
 	//
 	// For developers trying to fix this:
-	// you need to make sure that `func` can never throw a C++ excepction
+	// you need to make sure that `func` can never throw a C++ exception
 	// from within a `PG_TRY` block.
 
 	// Example of problematic code:
