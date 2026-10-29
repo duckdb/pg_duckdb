@@ -1,0 +1,77 @@
+-- Postgres stores NaN and +/-Infinity as "special" NUMERICs, which have no
+-- digits. Converting those to a DuckDB DECIMAL used to silently produce 0,
+-- which corrupted the result of any query touching such a row.
+CREATE TABLE special_numerics (
+    id       int,
+    dec      numeric(10,2),          -- becomes a DuckDB DECIMAL
+    unbound  numeric,                -- unsupported by DuckDB unless converted to DOUBLE
+    f4       real,
+    f8       double precision
+);
+-- Note that a constrained NUMERIC can hold NaN, but not +/-Infinity.
+INSERT INTO special_numerics VALUES
+    (1, 'NaN', 'NaN',       'NaN',       'NaN'),
+    (2, 10.00, 10,          10,          10),
+    (3, NULL,  'Infinity',  'Infinity',  'Infinity'),
+    (4, NULL,  '-Infinity', '-Infinity', '-Infinity');
+-- The floating point types round-trip through DuckDB unchanged.
+SET duckdb.force_execution = true;
+SELECT id, f4, f8 FROM special_numerics ORDER BY id;
+ id |    f4     |    f8     
+----+-----------+-----------
+  1 |       NaN |       NaN
+  2 |        10 |        10
+  3 |  Infinity |  Infinity
+  4 | -Infinity | -Infinity
+(4 rows)
+
+-- A DuckDB DECIMAL is a fixed point integer and cannot represent NaN, so we
+-- error out instead of returning a wrong number.
+SELECT id, dec FROM special_numerics ORDER BY id;
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Conversion Error: Cannot convert a NaN or Infinity NUMERIC to a DuckDB DECIMAL, because DECIMAL is a fixed point type that cannot represent those. Run this query in Postgres instead by using 'SET duckdb.force_execution = false'.
+SELECT sum(dec), avg(dec), min(dec), max(dec) FROM special_numerics;
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Conversion Error: Cannot convert a NaN or Infinity NUMERIC to a DuckDB DECIMAL, because DECIMAL is a fixed point type that cannot represent those. Run this query in Postgres instead by using 'SET duckdb.force_execution = false'.
+-- Rows without a special value are unaffected.
+SELECT sum(dec), min(dec) FROM special_numerics WHERE id = 2;
+  sum  |  min  
+-------+-------
+ 10.00 | 10.00
+(1 row)
+
+-- Postgres itself has no trouble with them.
+SET duckdb.force_execution = false;
+SELECT id, dec FROM special_numerics ORDER BY id;
+ id |  dec  
+----+-------
+  1 |   NaN
+  2 | 10.00
+  3 |      
+  4 |      
+(4 rows)
+
+SELECT sum(dec), avg(dec), min(dec), max(dec) FROM special_numerics;
+ sum | avg |  min  | max 
+-----+-----+-------+-----
+ NaN | NaN | 10.00 | NaN
+(1 row)
+
+-- A DOUBLE can represent all three special values, so converting an
+-- unconstrained NUMERIC to one is lossless.
+SET duckdb.force_execution = true;
+SET duckdb.convert_unsupported_numeric_to_double = true;
+SELECT id, unbound FROM special_numerics ORDER BY id;
+ id |  unbound  
+----+-----------
+  1 |       NaN
+  2 |        10
+  3 |  Infinity
+  4 | -Infinity
+(4 rows)
+
+SELECT id, unbound = 'NaN'::float8 AS is_nan FROM special_numerics WHERE id = 1;
+ id | is_nan 
+----+--------
+  1 | t
+(1 row)
+
+DROP TABLE special_numerics;
