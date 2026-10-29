@@ -7,6 +7,7 @@
 
 #include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
@@ -39,6 +40,13 @@ extern "C" {
 
 #include "pgduckdb/pgduckdb_detoast.hpp"
 #include "pgduckdb/pgduckdb_process_lock.hpp"
+
+#if PG_VERSION_NUM < 130000
+static inline bool
+pg_mul_u64_overflow(uint64 a, uint64 b, uint64 *result) {
+	return __builtin_mul_overflow(a, b, result);
+}
+#endif
 
 namespace pgduckdb {
 
