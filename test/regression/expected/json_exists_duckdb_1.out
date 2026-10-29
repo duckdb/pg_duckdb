@@ -39,5 +39,5 @@ ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Catalog Error: T
 Did you mean "blob"?
 
 LINE 1: SELECT system.main."json_exists"(('{"a": {"b": 1}}'::jsonb), '$.a.c'::character varying) AS "json_exists"
-                                                             ^
+                                                             ^^^^^
 -- </JSON_EXISTS>

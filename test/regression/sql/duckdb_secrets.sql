@@ -66,9 +66,9 @@ SELECT * FROM duckdb.query($$
             list_transform( -- split 'key=value' strings to have an array of [key, value]
             list_transform( -- split the secret string by `;` to have 'key=value' strings
                 regexp_split_to_array(secret_string, ';'),
-                x -> regexp_split_to_array(x, '=')
+                lambda x: regexp_split_to_array(x, '=')
             ),
-            x -> struct_pack(k := x[1], v := x[2])
+            lambda x: struct_pack(k := x[1], v := x[2])
             )
         ).provider as provider
     FROM duckdb_secrets();
@@ -97,9 +97,9 @@ SELECT * FROM duckdb.query($$
             list_transform( -- split 'key=value' strings to have an array of [key, value]
             list_transform( -- split the secret string by `;` to have 'key=value' strings
                 regexp_split_to_array(secret_string, ';'),
-                x -> regexp_split_to_array(x, '=')
+                lambda x: regexp_split_to_array(x, '=')
             ),
-            x -> struct_pack(k := x[1], v := x[2])
+            lambda x: struct_pack(k := x[1], v := x[2])
             )
         ) as secrets
         FROM duckdb_secrets()
@@ -200,9 +200,9 @@ SELECT * FROM duckdb.query($$
             list_transform( -- split 'key=value' strings to have an array of [key, value]
             list_transform( -- split the secret string by `;` to have 'key=value' strings
                 regexp_split_to_array(secret_string, ';'),
-                x -> regexp_split_to_array(x, '=')
+                lambda x: regexp_split_to_array(x, '=')
             ),
-            x -> struct_pack(k := x[1], v := x[2])
+            lambda x: struct_pack(k := x[1], v := x[2])
             )
         ) as secrets
         FROM duckdb_secrets()

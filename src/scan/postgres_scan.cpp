@@ -1,10 +1,10 @@
 #include <duckdb/common/types.hpp>
-#include <duckdb/planner/filter/optional_filter.hpp>
 #include <duckdb/planner/filter/expression_filter.hpp>
 #include <duckdb/planner/expression/bound_comparison_expression.hpp>
 #include <duckdb/planner/expression/bound_constant_expression.hpp>
 #include <duckdb/planner/expression/bound_function_expression.hpp>
 #include <duckdb/planner/expression/bound_between_expression.hpp>
+#include <duckdb/planner/table_filter_set.hpp>
 #include <duckdb/planner/expression/bound_conjunction_expression.hpp>
 #include <duckdb/planner/expression/bound_operator_expression.hpp>
 
@@ -48,14 +48,14 @@ FilterJoin(duckdb::vector<duckdb::string> &filters, duckdb::string &&delimiter) 
 
 std::optional<duckdb::string>
 FuncArgToLikeString(const duckdb::string &func_name, const duckdb::Expression &expr) {
-	if (expr.type != duckdb::ExpressionType::VALUE_CONSTANT) {
+	if (expr.GetExpressionType() != duckdb::ExpressionType::VALUE_CONSTANT) {
 		// We only support literal VARCHARs for the needle argument, because we
 		// need to append the '%' wildcard for postgres to understand it as a
 		// LIKE pattern.
 		return std::nullopt;
 	}
 
-	auto &value = expr.Cast<duckdb::BoundConstantExpression>().value;
+	auto &value = expr.Cast<duckdb::BoundConstantExpression>().GetValue();
 	if (value.IsNull()) {
 		return "NULL";
 	} else if (value.type().id() != duckdb::LogicalTypeId::VARCHAR) {
@@ -80,14 +80,15 @@ FuncArgToLikeString(const duckdb::string &func_name, const duckdb::Expression &e
 std::optional<duckdb::string>
 FuncToLikeString(const duckdb::string &func_name, const duckdb::BoundFunctionExpression &func_expr,
                  const duckdb::string &column_name) {
-	if (func_expr.children.size() < 2 || func_expr.children.size() > 3) {
+	auto &children = func_expr.GetChildren();
+	if (children.size() < 2 || children.size() > 3) {
 		return UnsupportedExpression("function arg count", func_expr);
 	}
 
-	auto &haystack = *func_expr.children[0];
-	auto &needle = *func_expr.children[1];
+	auto &haystack = *children[0];
+	auto &needle = *children[1];
 
-	if (haystack.return_type != duckdb::LogicalTypeId::VARCHAR) {
+	if (haystack.GetReturnType() != duckdb::LogicalTypeId::VARCHAR) {
 		return UnsupportedExpression("type for haystack", haystack);
 	}
 
@@ -113,9 +114,9 @@ FuncToLikeString(const duckdb::string &func_name, const duckdb::BoundFunctionExp
 
 	oss << *needle_str;
 
-	if (func_expr.children.size() == 3) {
+	if (children.size() == 3) {
 		// If there's a third argument, it should be the escape character
-		auto &escape_char = *func_expr.children[2];
+		auto &escape_char = *children[2];
 		auto escape_str = ExpressionToString(escape_char, column_name);
 		if (!escape_str) {
 			return UnsupportedExpression("escape character expression", escape_char);
@@ -128,10 +129,10 @@ FuncToLikeString(const duckdb::string &func_name, const duckdb::BoundFunctionExp
 
 std::optional<duckdb::string>
 ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_name) {
-	switch (expr.type) {
+	switch (expr.GetExpressionType()) {
 	case duckdb::ExpressionType::OPERATOR_NOT: {
 		auto &not_expr = expr.Cast<duckdb::BoundOperatorExpression>();
-		auto arg_str = ExpressionToString(*not_expr.children[0], column_name);
+		auto arg_str = ExpressionToString(*not_expr.GetChildren()[0], column_name);
 		if (!arg_str) {
 			return UnsupportedExpression("child expression in", expr);
 		}
@@ -141,12 +142,32 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 	case duckdb::ExpressionType::OPERATOR_IS_NULL:
 	case duckdb::ExpressionType::OPERATOR_IS_NOT_NULL: {
 		auto &is_null_expr = expr.Cast<duckdb::BoundOperatorExpression>();
-		auto arg_str = ExpressionToString(*is_null_expr.children[0], column_name);
+		auto arg_str = ExpressionToString(*is_null_expr.GetChildren()[0], column_name);
 		if (!arg_str) {
 			return UnsupportedExpression("child expression in", expr);
 		}
-		auto operator_str = (expr.type == duckdb::ExpressionType::OPERATOR_IS_NULL ? "IS NULL" : "IS NOT NULL");
+		auto operator_str =
+		    (expr.GetExpressionType() == duckdb::ExpressionType::OPERATOR_IS_NULL ? "IS NULL" : "IS NOT NULL");
 		return "(" + *arg_str + ") " + operator_str;
+	}
+
+	case duckdb::ExpressionType::COMPARE_IN:
+	case duckdb::ExpressionType::COMPARE_NOT_IN: {
+		auto &children = expr.Cast<duckdb::BoundOperatorExpression>().GetChildren();
+		auto arg_str = ExpressionToString(*children[0], column_name);
+		if (!arg_str) {
+			return UnsupportedExpression("child expression in", expr);
+		}
+		duckdb::vector<duckdb::string> values;
+		for (idx_t i = 1; i < children.size(); i++) {
+			auto value_str = ExpressionToString(*children[i], column_name);
+			if (!value_str) {
+				return UnsupportedExpression("child expression in", expr);
+			}
+			values.emplace_back(*value_str);
+		}
+		auto operator_str = expr.GetExpressionType() == duckdb::ExpressionType::COMPARE_IN ? " IN (" : " NOT IN (";
+		return *arg_str + operator_str + FilterJoin(values, ", ") + ")";
 	}
 
 	case duckdb::ExpressionType::COMPARE_EQUAL:
@@ -157,57 +178,44 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 	case duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO:
 	case duckdb::ExpressionType::COMPARE_DISTINCT_FROM:
 	case duckdb::ExpressionType::COMPARE_NOT_DISTINCT_FROM: {
-		auto &comp_expr = expr.Cast<duckdb::BoundComparisonExpression>();
-		auto arg0_str = ExpressionToString(*comp_expr.left, column_name);
-		auto arg1_str = ExpressionToString(*comp_expr.right, column_name);
+		auto &comp_expr = expr.Cast<duckdb::BoundFunctionExpression>();
+		auto arg0_str = ExpressionToString(duckdb::BoundComparisonExpression::Left(comp_expr), column_name);
+		auto arg1_str = ExpressionToString(duckdb::BoundComparisonExpression::Right(comp_expr), column_name);
 		if (!arg0_str || !arg1_str) {
 			return UnsupportedExpression("child expression in", expr);
 		}
-		return "(" + *arg0_str + " " + duckdb::ExpressionTypeToOperator(expr.type) + " " + *arg1_str + ")";
+		return "(" + *arg0_str + " " + duckdb::ExpressionTypeToOperator(expr.GetExpressionType()) + " " + *arg1_str +
+		       ")";
 	}
 
 	case duckdb::ExpressionType::COMPARE_BETWEEN: {
-		auto &between_expr = expr.Cast<duckdb::BoundBetweenExpression>();
-		auto input_str = ExpressionToString(*between_expr.input, column_name);
-		auto lower_str = ExpressionToString(*between_expr.lower, column_name);
-		auto upper_str = ExpressionToString(*between_expr.upper, column_name);
+		auto &between_expr = expr.Cast<duckdb::BoundFunctionExpression>();
+		auto input_str = ExpressionToString(duckdb::BoundBetweenExpression::Input(between_expr), column_name);
+		auto lower_str = ExpressionToString(duckdb::BoundBetweenExpression::LowerBound(between_expr), column_name);
+		auto upper_str = ExpressionToString(duckdb::BoundBetweenExpression::UpperBound(between_expr), column_name);
 		if (!input_str || !lower_str || !upper_str) {
 			return UnsupportedExpression("child expression in", expr);
 		}
 
-		/*
-		 * Would be nice to use the existing on BoundBetweenExpression for
-		 * this, but those are not const. Once following PR is marged and
-		 * released, feel free to use it:
-		 * https://github.com/duckdb/duckdb/pull/17773
-		 */
-		auto lower_comp = between_expr.lower_inclusive ? duckdb::ExpressionType::COMPARE_GREATERTHANOREQUALTO
-		                                               : duckdb::ExpressionType::COMPARE_GREATERTHAN;
-		auto upper_comp = between_expr.upper_inclusive ? duckdb::ExpressionType::COMPARE_LESSTHANOREQUALTO
-		                                               : duckdb::ExpressionType::COMPARE_LESSTHAN;
+		auto lower_comp = duckdb::BoundBetweenExpression::LowerComparisonType(between_expr);
+		auto upper_comp = duckdb::BoundBetweenExpression::UpperComparisonType(between_expr);
 
 		return "((" + *input_str + " " + duckdb::ExpressionTypeToOperator(lower_comp) + " " + *lower_str + ") AND (" +
 		       *input_str + " " + duckdb::ExpressionTypeToOperator(upper_comp) + " " + *upper_str + "))";
 	}
-
-		// XXX: IN and NOT IN are not listed here on purpose. DuckDB transforms a 2
-		// element in IN query to a hash join. Once we find a query that actually
-		// keeps the IN expression, we can implement IN/NOT IN support here. Maybe
-		// that happens when we start adding postgres indexes to the duckdb
-		// metadata.
 
 	case duckdb::ExpressionType::CONJUNCTION_AND:
 	case duckdb::ExpressionType::CONJUNCTION_OR: {
 		auto &comp_expr = expr.Cast<duckdb::BoundConjunctionExpression>();
 		std::string query_filters;
 
-		for (auto &child : comp_expr.children) {
+		for (auto &child : comp_expr.GetChildren()) {
 			auto child_str = ExpressionToString(*child, column_name);
 			if (!child_str) {
 				return UnsupportedExpression("child expression in", expr);
 			}
 			if (!query_filters.empty()) {
-				query_filters += " " + duckdb::ExpressionTypeToOperator(expr.type) + " ";
+				query_filters += " " + duckdb::ExpressionTypeToOperator(expr.GetExpressionType()) + " ";
 			}
 			query_filters += *child_str;
 		}
@@ -216,7 +224,8 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 
 	case duckdb::ExpressionType::BOUND_FUNCTION: {
 		auto &func_expr = expr.Cast<duckdb::BoundFunctionExpression>();
-		const auto &func_name = func_expr.function.name;
+		const auto &func_name = func_expr.Function().GetName().GetIdentifierName();
+		auto &children = func_expr.GetChildren();
 		if (func_name == "contains" || func_name == "suffix" || func_name == "prefix" || func_name == "like_escape" ||
 		    func_name == "ilike_escape") {
 			return FuncToLikeString(func_name, func_expr, column_name);
@@ -225,20 +234,20 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 		if (func_name == "lower" || func_name == "upper") {
 			// For lower and upper functions, we can just return the column name
 			// with the function applied, as Postgres will handle it correctly.
-			auto child_str = ExpressionToString(*func_expr.children[0], column_name);
+			auto child_str = ExpressionToString(*children[0], column_name);
 			if (!child_str) {
 				return UnsupportedExpression("child expression in", expr);
 			}
 			return func_name + "(" + *child_str + ")";
 		}
 
-		if ((func_name == "~~" || func_name == "!~~") && func_expr.children.size() == 2 && func_expr.is_operator) {
-			auto &haystack = *func_expr.children[0];
-			if (haystack.return_type != duckdb::LogicalTypeId::VARCHAR) {
+		if ((func_name == "~~" || func_name == "!~~") && children.size() == 2 && func_expr.IsOperator()) {
+			auto &haystack = *children[0];
+			if (haystack.GetReturnType() != duckdb::LogicalTypeId::VARCHAR) {
 				return UnsupportedExpression("type for haystack", expr);
 			}
-			auto child_str0 = ExpressionToString(*func_expr.children[0], column_name);
-			auto child_str1 = ExpressionToString(*func_expr.children[1], column_name);
+			auto child_str0 = ExpressionToString(*children[0], column_name);
+			auto child_str1 = ExpressionToString(*children[1], column_name);
 			if (!child_str0 || !child_str1) {
 				return UnsupportedExpression("child expression in", expr);
 			}
@@ -253,18 +262,11 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 		return column_name;
 
 	case duckdb::ExpressionType::VALUE_CONSTANT: {
-		auto &value = expr.Cast<duckdb::BoundConstantExpression>().value;
+		auto &value = expr.Cast<duckdb::BoundConstantExpression>().GetValue();
 		if (value.IsNull()) {
 			return "NULL";
-		} else if (value.type().id() == duckdb::LogicalTypeId::VARCHAR) {
-			return value.ToSQLString();
-		} else {
-			// For now we only support VARCHAR constants, we could probably
-			// easily support more types. Currently we only to push down LIKE
-			// expressions and lower/upper calls though. So there's no need to
-			// complicate things for now.
-			return UnsupportedExpression("constant expression", expr);
 		}
+		return value.ToSQLString();
 	}
 
 	default:
@@ -274,66 +276,34 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 
 } // namespace
 
-int
-PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
-                                             duckdb::string &query_filters, bool is_inside_optional_filter) {
-	switch (filter->filter_type) {
-	case duckdb::TableFilterType::CONSTANT_COMPARISON:
-	case duckdb::TableFilterType::IS_NULL:
-	case duckdb::TableFilterType::IS_NOT_NULL:
-	case duckdb::TableFilterType::IN_FILTER: {
-		query_filters += filter->ToString(column_name).c_str();
-		return 1;
+std::optional<duckdb::string>
+PostgresScanGlobalState::ExtractQueryFilters(const duckdb::Expression &expr, const char *column_name,
+                                             bool is_inside_optional_filter) {
+	is_inside_optional_filter |= duckdb::ExpressionFilter::IsOptionalExpression(expr);
+
+	if (duckdb::ExpressionFilter::IsRootOptionalExpression(expr)) {
+		auto child = duckdb::ExpressionFilter::GetOptionalFilterChild(expr);
+		return child ? ExtractQueryFilters(*child, column_name, true) : std::nullopt;
 	}
-	case duckdb::TableFilterType::CONJUNCTION_OR:
-	case duckdb::TableFilterType::CONJUNCTION_AND: {
-		auto conjuction_filter = reinterpret_cast<duckdb::ConjunctionFilter *>(filter);
-		bool is_or = filter->filter_type == duckdb::TableFilterType::CONJUNCTION_OR;
-		duckdb::vector<std::string> conjuction_child_filters;
-		for (idx_t i = 0; i < conjuction_filter->child_filters.size(); i++) {
-			std::string child_filter;
-			if (ExtractQueryFilters(conjuction_filter->child_filters[i].get(), column_name, child_filter,
-			                        is_inside_optional_filter)) {
-				conjuction_child_filters.emplace_back(child_filter);
-			} else if (is_or) {
-				/* Dropping a child of an OR makes it more restrictive.
-				 * Drop the entire OR instead. */
-				pd_log(DEBUG1, "(DuckDB/ExtractQueryFilters) Dropping OR filter: %s",
-				       filter->ToString(column_name).c_str());
-				return 0;
+
+	if (expr.GetExpressionType() == duckdb::ExpressionType::CONJUNCTION_AND) {
+		duckdb::vector<duckdb::string> child_filters;
+		for (auto &child : expr.Cast<duckdb::BoundConjunctionExpression>().GetChildren()) {
+			if (auto child_filter = ExtractQueryFilters(*child, column_name, is_inside_optional_filter)) {
+				child_filters.emplace_back(*child_filter);
 			}
 		}
-		duckdb::string conjuction_delimiter = is_or ? " OR " : " AND ";
-		if (conjuction_child_filters.size()) {
-			query_filters += "(" + FilterJoin(conjuction_child_filters, std::move(conjuction_delimiter)) + ")";
+		if (child_filters.empty()) {
+			return std::nullopt;
 		}
-		return conjuction_child_filters.size();
+		return "(" + FilterJoin(child_filters, " AND ") + ")";
 	}
-	case duckdb::TableFilterType::OPTIONAL_FILTER: {
-		auto optional_filter = reinterpret_cast<duckdb::OptionalFilter *>(filter);
-		return ExtractQueryFilters(optional_filter->child_filter.get(), column_name, query_filters, true);
+
+	auto filter = ExpressionToString(expr, column_name);
+	if (!filter && !is_inside_optional_filter) {
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, "Invalid Filter: " + expr.ToString());
 	}
-	case duckdb::TableFilterType::EXPRESSION_FILTER: {
-		auto &expression_filter = filter->Cast<duckdb::ExpressionFilter>();
-		query_filters += *ExpressionToString(*expression_filter.expr, column_name);
-		return 1;
-	}
-	/* DYNAMIC_FILTER is push down filter from topN execution. STRUCT_EXTRACT is
-	 * only received if struct_extract function is used. Default will catch all
-	 * filter that could be added in future in DuckDB.
-	 */
-	case duckdb::TableFilterType::DYNAMIC_FILTER:
-	case duckdb::TableFilterType::STRUCT_EXTRACT:
-	default: {
-		if (is_inside_optional_filter) {
-			pd_log(DEBUG1, "(DuckDB/ExtractQueryFilters) Unsupported optional filter: %s",
-			       filter->ToString(column_name).c_str());
-			return 0;
-		}
-		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR,
-		                        "Invalid Filter Type: " + filter->ToString(column_name));
-	}
-	}
+	return filter;
 }
 
 void
@@ -360,7 +330,7 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 	auto table_filters = input.filters.get();
 
 	std::vector<duckdb::pair<AttrNumber, duckdb::idx_t>> columns_to_scan;
-	std::vector<duckdb::TableFilter *> column_filters(input.column_ids.size(), 0);
+	std::vector<const duckdb::TableFilter *> column_filters(input.column_ids.size(), nullptr);
 
 	for (auto const &[att_num, duckdb_scanned_index] : pg_column_order) {
 		columns_to_scan.emplace_back(att_num, duckdb_scanned_index);
@@ -369,9 +339,9 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 			continue;
 		}
 
-		auto column_filter_it = table_filters->filters.find(duckdb_scanned_index);
-		if (column_filter_it != table_filters->filters.end()) {
-			column_filters[duckdb_scanned_index] = column_filter_it->second.get();
+		auto column_filter = table_filters->TryGetFilterByColumnIndex(duckdb::ProjectionIndex(duckdb_scanned_index));
+		if (column_filter) {
+			column_filters[duckdb_scanned_index] = column_filter.get();
 		}
 	}
 
@@ -411,11 +381,11 @@ PostgresScanGlobalState::ConstructTableScanQuery(const duckdb::TableFunctionInit
 		if (!filter) {
 			continue;
 		}
-		duckdb::string column_query_filters;
 		auto attr = GetAttr(table_tuple_desc, attr_num - 1);
 		auto col = pgduckdb::QuoteIdentifier(GetAttName(attr));
-		if (ExtractQueryFilters(filter, col, column_query_filters, false)) {
-			query_filters.emplace_back(column_query_filters);
+		auto &expr = duckdb::ExpressionFilter::GetExpressionFilter(*filter, "PostgresScan").expr;
+		if (auto column_query_filters = ExtractQueryFilters(*expr, col, false)) {
+			query_filters.emplace_back(*column_query_filters);
 		}
 	}
 
@@ -519,9 +489,6 @@ PostgresScanPushdownExpression(duckdb::ClientContext &, const duckdb::LogicalGet
 PostgresScanTableFunction::PostgresScanTableFunction()
     : TableFunction("pgduckdb_postgres_scan", {}, PostgresScanFunction, nullptr, PostgresScanInitGlobal,
                     PostgresScanInitLocal) {
-	named_parameters["cardinality"] = duckdb::LogicalType::UBIGINT;
-	named_parameters["relid"] = duckdb::LogicalType::UINTEGER;
-	named_parameters["snapshot"] = duckdb::LogicalType::POINTER;
 	projection_pushdown = true;
 	filter_pushdown = true;
 	filter_prune = true;
@@ -554,7 +521,7 @@ static void
 SetOutputCardinality(duckdb::DataChunk &output, PostgresScanLocalState &local_state) {
 	idx_t output_cardinality =
 	    local_state.output_vector_size <= STANDARD_VECTOR_SIZE ? local_state.output_vector_size : STANDARD_VECTOR_SIZE;
-	output.SetCardinality(output_cardinality);
+	output.SetChildCardinality(output_cardinality);
 	local_state.output_vector_size -= output_cardinality;
 }
 

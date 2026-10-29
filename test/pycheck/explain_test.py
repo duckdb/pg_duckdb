@@ -16,21 +16,21 @@ def test_explain(cur: Cursor):
     cur.sql("CREATE TABLE test_table (id int, name text)")
     result = cur.sql("EXPLAIN SELECT count(*) FROM test_table")
     plan = "\n".join(result)
-    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Ungrouped Aggregate" in plan
     assert "Total Time:" not in plan
     assert "Output:" not in plan
 
     result = cur.sql("EXPLAIN ANALYZE SELECT count(*) FROM test_table")
     plan = "\n".join(result)
-    assert "Query Profiling Information" in plan
-    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Explain Analyze" in plan
+    assert "Ungrouped Aggregate" in plan
     assert "Total Time:" in plan
     assert "Output:" not in plan
 
     result = cur.sql("EXPLAIN SELECT count(*) FROM test_table where id = %s", (1,))
     plan = "\n".join(result)
-    assert "UNGROUPED_AGGREGATE" in plan
-    assert "id=1" in plan
+    assert "Ungrouped Aggregate" in plan
+    assert "id = 1" in plan
     assert "Total Time:" not in plan
     assert "Output:" not in plan
 
@@ -38,21 +38,21 @@ def test_explain(cur: Cursor):
         "EXPLAIN ANALYZE SELECT count(*) FROM test_table where id = %s", (1,)
     )
     plan = "\n".join(result)
-    assert "UNGROUPED_AGGREGATE" in plan
-    assert "id=1" in plan
+    assert "Ungrouped Aggregate" in plan
+    assert "id = 1" in plan
     assert "Total Time:" in plan
     assert "Output:" not in plan
 
     result = cur.sql("EXPLAIN VERBOSE SELECT count(*) FROM test_table")
     plan = "\n".join(result)
-    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Ungrouped Aggregate" in plan
     assert "Total Time:" not in plan
     assert "Output:" in plan
 
     result = cur.sql("EXPLAIN (VERBOSE, ANALYZE) SELECT count(*) FROM test_table")
     plan = "\n".join(result)
-    assert "Query Profiling Information" in plan
-    assert "UNGROUPED_AGGREGATE" in plan
+    assert "Explain Analyze" in plan
+    assert "Ungrouped Aggregate" in plan
     assert "Total Time:" in plan
     assert "Output:" in plan
 
@@ -77,9 +77,8 @@ def test_explain(cur: Cursor):
     )
     assert len(result) == 1
     assert type(result[0]) is dict
-    assert (
-        result[0]["Plan"]["DuckDB Execution Plan"]["children"][0]["operator_name"]
-        == "EXPLAIN_ANALYZE"
+    assert '"type": "EXPLAIN_ANALYZE"' in json.dumps(
+        result[0]["Plan"]["DuckDB Execution Plan"]
     )
     assert type(result[0]["Plan"]["Output"]) is list
     assert "Planning Time" in (result[0]).keys()
@@ -146,7 +145,7 @@ def test_explain_ctas(cur: Cursor):
     cur.sql("CREATE TEMP TABLE heap1(id) AS SELECT 1")
     result = cur.sql("EXPLAIN CREATE TEMP TABLE heap2(id) AS SELECT * from heap1")
     plan = "\n".join(result)
-    assert "POSTGRES_SCAN" in plan
+    assert "Pgduckdb Postgres Scan" in plan
     assert "Total Time:" not in plan
 
     # EXPLAIN ANALYZE of a CTAS doesn't work if we use DuckDB execution
@@ -165,7 +164,7 @@ def test_explain_ctas(cur: Cursor):
         "EXPLAIN CREATE TEMP TABLE duckdb1(id) USING duckdb AS SELECT * from heap1"
     )
     plan = "\n".join(result)
-    assert "POSTGRES_SCAN" in plan
+    assert "Pgduckdb Postgres Scan" in plan
     assert "Total Time:" not in plan
 
     # EXPLAIN ANALYZE is not supported for DuckDB CTAS (yet)

@@ -22,4 +22,4 @@ def test_repeated_parallel_postgres_scan(cur: Cursor):
     for _ in range(50):
         assert cur.sql(
             "SELECT approx_count_distinct(a), approx_count_distinct(b) FROM t"
-        ) == (5, 9)
+        ) == (5, 8)

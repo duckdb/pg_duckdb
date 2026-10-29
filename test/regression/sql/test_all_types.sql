@@ -24,4 +24,9 @@ SELECT * exclude(
     timestamp_tz, -- the min/max values of timestamps overflow in Postgres so selecting these would throw an error
     time_ns -- TIME_NS is not supported in Postgres
 )
-$$)
+$$);
+
+-- DuckDB types without a direct Postgres equivalent
+SELECT * FROM duckdb.query($$ SELECT NULL AS null_value, [NULL] AS null_list $$);
+SELECT * FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS variant, ['x'::VARIANT, 2::VARIANT] AS variant_list $$);
+SELECT r['v']['a'] AS a, r['v']['b'][1] AS b1 FROM duckdb.query($$ SELECT {'a': 1, 'b': [1, 2]}::VARIANT AS v $$) r;

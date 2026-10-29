@@ -3,6 +3,7 @@
 
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/planner/logical_operator.hpp"
+#include "duckdb/planner/operator/logical_get.hpp"
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/extension_type_info.hpp"
 
@@ -24,8 +25,23 @@ UnsupportedTypeOptimizer::VisitExpression(duckdb::unique_ptr<duckdb::Expression>
 }
 
 void
+UnsupportedTypeOptimizer::VisitOperator(duckdb::LogicalOperator &op) {
+	// Filters on a column can be pushed into the scan, leaving no expression that references it
+	if (op.type == duckdb::LogicalOperatorType::LOGICAL_GET) {
+		auto &get = op.Cast<duckdb::LogicalGet>();
+		for (auto &column_id : get.GetColumnIds()) {
+			if (!column_id.IsVirtualColumn()) {
+				CheckForUnsupportedPostgresType(get.returned_types[column_id.GetPrimaryIndex()]);
+			}
+		}
+	}
+
+	LogicalOperatorVisitor::VisitOperator(op);
+}
+
+void
 UnsupportedTypeOptimizer::CheckExpressionForUnsupportedTypes(duckdb::Expression &expr) {
-	CheckForUnsupportedPostgresType(expr.return_type);
+	CheckForUnsupportedPostgresType(expr.GetReturnType());
 }
 
 void
