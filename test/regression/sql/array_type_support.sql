@@ -184,6 +184,28 @@ SET duckdb.convert_unsupported_numeric_to_double = true;
 SELECT * FROM numeric_array_1d;
 RESET duckdb.convert_unsupported_numeric_to_double;
 
+-- DuckDB unsigned integer lists map to PostgreSQL NUMERIC arrays
+SELECT * FROM duckdb.query($$
+SELECT
+    [0::UBIGINT, NULL, 18446744073709551615::UBIGINT] AS ubigints,
+    [0::UHUGEINT, NULL, 340282366920938463463374607431768211455::UHUGEINT] AS uhugeints
+$$);
+
+-- Materializing a larger list verifies both the PostgreSQL type and array-size calculation
+SET duckdb.force_execution = false;
+CREATE TEMP TABLE large_unsigned_list AS
+SELECT * FROM duckdb.query($$ SELECT range(12000)::UBIGINT[] AS ubigints $$);
+SELECT pg_typeof(ubigints), cardinality(ubigints), ubigints[1], ubigints[12000]
+FROM large_unsigned_list;
+DROP TABLE large_unsigned_list;
+SET duckdb.force_execution = true;
+
+-- Fixed-size DuckDB ARRAYs use the same conversion path as LISTs
+SELECT * FROM duckdb.query($$
+SELECT [[0::UBIGINT, 1::UBIGINT],
+        [18446744073709551615::UBIGINT, NULL::UBIGINT]]::UBIGINT[2][2] AS ubigints
+$$);
+
 -- UUID (single dimension)
 CREATE TABLE uuid_array_1d(a UUID[]);
 INSERT INTO uuid_array_1d SELECT CAST(a as UUID[]) FROM (VALUES
