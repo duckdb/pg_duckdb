@@ -1,5 +1,6 @@
 #include <duckdb/common/types.hpp>
 #include <duckdb/planner/filter/optional_filter.hpp>
+#include <duckdb/planner/filter/constant_filter.hpp>
 #include <duckdb/planner/filter/expression_filter.hpp>
 #include <duckdb/planner/expression/bound_comparison_expression.hpp>
 #include <duckdb/planner/expression/bound_constant_expression.hpp>
@@ -278,7 +279,17 @@ int
 PostgresScanGlobalState::ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name,
                                              duckdb::string &query_filters, bool is_inside_optional_filter) {
 	switch (filter->filter_type) {
-	case duckdb::TableFilterType::CONSTANT_COMPARISON:
+	case duckdb::TableFilterType::CONSTANT_COMPARISON: {
+		auto &constant_filter = filter->Cast<duckdb::ConstantFilter>();
+		if (is_inside_optional_filter && constant_filter.constant.type().id() == duckdb::LogicalTypeId::VARCHAR) {
+			// DuckDB's optional join bounds use byte ordering. The column's Postgres
+			// collation can order them differently and discard matching rows.
+			query_filters += filter->ToString(duckdb::string(column_name) + " COLLATE \"C\"");
+		} else {
+			query_filters += filter->ToString(column_name);
+		}
+		return 1;
+	}
 	case duckdb::TableFilterType::IS_NULL:
 	case duckdb::TableFilterType::IS_NOT_NULL:
 	case duckdb::TableFilterType::IN_FILTER: {
