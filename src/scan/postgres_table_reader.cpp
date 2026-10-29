@@ -2,6 +2,7 @@
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/utility/signal_guard.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -16,7 +17,6 @@ extern "C" {
 #include "executor/executor.h"
 #include "executor/execParallel.h"
 #include "executor/tqueue.h"
-#include "libpq/pqsignal.h"
 #include "optimizer/planmain.h"
 #include "optimizer/planner.h"
 #include "tcop/tcopprot.h"
@@ -33,25 +33,8 @@ extern "C" {
 #include "pgduckdb/vendor/pg_list.hpp"
 
 #include <cmath>
-#include <pthread.h>
 
 namespace pgduckdb {
-
-namespace {
-
-// On macOS sigprocmask applies to all threads, so Postgres calling it on a DuckDB
-// thread (e.g. when creating parallel DSM) would leave the main thread with all signals blocked.
-struct MainThreadSignalMaskGuard {
-	~MainThreadSignalMaskGuard() {
-#ifdef __APPLE__
-		if (!pthread_main_np()) {
-			sigprocmask(SIG_SETMASK, &UnBlockSig, nullptr);
-		}
-#endif
-	}
-};
-
-} // namespace
 
 PostgresTableReader::PostgresTableReader()
     : table_scan_query_desc(nullptr), table_scan_planstate(nullptr), parallel_executor_info(nullptr),
@@ -62,8 +45,9 @@ PostgresTableReader::PostgresTableReader()
 void
 PostgresTableReader::Init(const char *table_scan_query, bool count_tuples_only) {
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+	// Setting up a parallel scan creates DSM segments, which saves and restores the signal mask
+	ThreadSignalUnblockGuard signal_mask_guard;
 	PostgresScopedStackReset scoped_stack_reset;
-	MainThreadSignalMaskGuard signal_mask_guard;
 	PostgresMemberGuard(PostgresTableReader::InitUnsafe, table_scan_query, count_tuples_only);
 }
 
@@ -189,6 +173,7 @@ void
 PostgresTableReader::Cleanup() {
 	D_ASSERT(!cleaned_up);
 	cleaned_up = true;
+	ThreadSignalUnblockGuard signal_mask_guard;
 	PostgresScopedStackReset scoped_stack_reset;
 	PostgresMemberGuard(PostgresTableReader::CleanupUnsafe);
 }

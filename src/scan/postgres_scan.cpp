@@ -19,6 +19,7 @@
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/logger.hpp"
+#include "pgduckdb/utility/signal_guard.hpp"
 
 #include <numeric> // std::accumulate
 #include <optional>
@@ -574,6 +575,7 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 		size_t valid_slots = 0;
 		{
 			std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+			ThreadSignalUnblockGuard signal_mask_guard;
 			for (size_t i = 0; i < batch_size; i++) {
 				bool ret = is_parallel_scan
 				               ? local_state.global_state->table_reader_global_state->GetNextMinimalWorkerTuple(
