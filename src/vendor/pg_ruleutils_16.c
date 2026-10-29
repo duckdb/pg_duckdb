@@ -8313,7 +8313,7 @@ get_parameter(Param *param, deparse_context *context)
 	/*
 	 * Not PARAM_EXEC, or couldn't find referent: just print $N.
 	 */
-	appendStringInfo(context->buf, "$%d", param->paramid);
+	pgduckdb_get_param(context->buf, param);
 }
 
 /*

@@ -8919,7 +8919,7 @@ get_parameter(Param *param, deparse_context *context)
 	 */
 	Assert(param->paramkind == PARAM_EXTERN);
 
-	appendStringInfo(context->buf, "$%d", param->paramid);
+	pgduckdb_get_param(context->buf, param);
 }
 
 /*
