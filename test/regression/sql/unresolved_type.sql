@@ -1,5 +1,5 @@
 -- All functions should automatically use duckdb
-set duckdb.execution = false;
+set duckdb.force_execution = false;
 select r['a'] ~ 'a.*' from duckdb.query($$ SELECT 'abc' a $$) r;
 select r['a'] !~ 'x.*' from duckdb.query($$ SELECT 'abc' a $$) r;
 select r['a'] LIKE '%b%' from duckdb.query($$ SELECT 'abc' a $$) r;
