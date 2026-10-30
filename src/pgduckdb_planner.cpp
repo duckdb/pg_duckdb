@@ -547,6 +547,10 @@ DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 		PlannedStmt *postgres_plan = standard_planner(copied_query, NULL, cursor_options, NULL);
 #endif
 		Assert(IsA(postgres_plan->planTree, ModifyTable));
+
+		// Set duckb_plan's node id different to postgres_plan's id
+		// (they may be same because they were planned separately)
+		duckdb_plan->plan_node_id = postgres_plan->planTree->plan_node_id + 1;
 		outerPlan(postgres_plan->planTree) = duckdb_plan;
 
 		/* Put a DuckDB RTE at the end of the rtable */
