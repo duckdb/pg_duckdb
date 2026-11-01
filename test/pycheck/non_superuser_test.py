@@ -6,6 +6,9 @@ from .utils import Postgres
 
 
 def test_community_extensions(pg: Postgres):
+    # The tests allow unsigned extensions for the httpfs of the DuckDB build,
+    # this test needs the signature checks and not httpfs
+    pg.sql("DELETE FROM duckdb.extensions WHERE name = 'httpfs'")
     pg.create_user("user1", psycopg.sql.SQL("IN ROLE duckdb_group"))
     # Raw extension installation should not be possible non-superusers, because
     # that would allow installing extensions from community repos.
@@ -29,6 +32,7 @@ def test_community_extensions(pg: Postgres):
 
     with pg.cur() as cur:
         cur.sql("SET duckdb.allow_community_extensions = false")
+        cur.sql("SET duckdb.allow_unsigned_extensions = false")
         cur.sql("SET duckdb.force_execution = false")
         with pytest.raises(
             Exception,
@@ -39,6 +43,7 @@ def test_community_extensions(pg: Postgres):
     # But it should be possible to load them after changing that setting.
     with pg.cur() as cur:
         cur.sql("SET duckdb.allow_community_extensions = true")
+        cur.sql("SET duckdb.allow_unsigned_extensions = false")
         cur.sql("SET duckdb.force_execution = false")
         cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD h3; $$)")
 

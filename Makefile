@@ -24,32 +24,63 @@ DUCKDB_CMAKE_VARS = -DCXX_EXTRA=-fvisibility=default -DBUILD_SHELL=0 -DBUILD_PYT
 # DuckDB agains the release build of MotherDuck.
 DUCKDB_DISABLE_ASSERTIONS ?= 0
 
+# DUCKDB_BUILD selects how DuckDB is built and linked, and where httpfs gets openssl and curl from:
+#   Release (default)   - dynamically linked, system openssl and curl
+#   Debug               - same as Release, with a debug build of DuckDB
+#   ReleaseStatic       - statically linked, openssl and curl built by vcpkg and linked statically
+#   ReleaseStaticSystem - statically linked, system openssl and curl
 DUCKDB_BUILD_CXX_FLAGS=
-DUCKDB_BUILD_TYPE=
+DUCKDB_BUILD_TYPE = release
+DUCKDB_MAKE_TARGET = release
+DUCKDB_STATIC =
+DUCKDB_VCPKG =
 ifeq ($(DUCKDB_BUILD), Debug)
 	DUCKDB_BUILD_CXX_FLAGS = -g -O0 -D_GLIBCXX_ASSERTIONS
 	DUCKDB_BUILD_TYPE = debug
 	DUCKDB_MAKE_TARGET = debug
 else ifeq ($(DUCKDB_BUILD), ReleaseStatic)
-	DUCKDB_BUILD_CXX_FLAGS =
-	DUCKDB_BUILD_TYPE = release
-	DUCKDB_MAKE_TARGET = release
-else
-	DUCKDB_BUILD_CXX_FLAGS =
-	DUCKDB_BUILD_TYPE = release
-	DUCKDB_MAKE_TARGET = release
+	DUCKDB_STATIC = 1
+	DUCKDB_VCPKG = 1
+else ifeq ($(DUCKDB_BUILD), ReleaseStaticSystem)
+	DUCKDB_STATIC = 1
 endif
 
 DUCKDB_BUILD_DIR = third_party/duckdb/build/$(DUCKDB_BUILD_TYPE)
 
-ifeq ($(DUCKDB_BUILD), ReleaseStatic)
+ifdef DUCKDB_VCPKG
+	# Uses an installed vcpkg; the package versions are pinned by the builtin-baseline of DuckDB's vcpkg manifest
+	ifeq ($(VCPKG_TOOLCHAIN_PATH),)
+$(error DUCKDB_BUILD=$(DUCKDB_BUILD) requires VCPKG_TOOLCHAIN_PATH to point at the vcpkg.cmake of an installed vcpkg)
+	endif
+	DUCKDB_DEPS_ENV = DUCKDB_NEW_EXTENSION_BUILD=1 VCPKG_TOOLCHAIN_PATH=$(VCPKG_TOOLCHAIN_PATH) \
+		VCPKG_TARGET_TRIPLET=$(VCPKG_TARGET_TRIPLET)
+	# vcpkg installs the libraries into the build directory while DuckDB is built, so look them up lazily. The static
+	# curl needs more libraries (zlib, frameworks on macOS), which its pkg-config file lists. Link the ones vcpkg built
+	# by path, so that -L flags of the Postgres build cannot make the linker pick up system versions of them.
+	VCPKG_LIB_DIR = $(patsubst %/libcurl.a,%,$(firstword $(wildcard $(DUCKDB_BUILD_DIR)/vcpkg_installed/$(or $(VCPKG_TARGET_TRIPLET),*)/lib/libcurl.a)))
+	VCPKG_CURL_LIBS = $(shell PKG_CONFIG_LIBDIR=$(VCPKG_LIB_DIR)/pkgconfig pkg-config --static --libs libcurl)
+	DUCKDB_DEPS_LINK_FLAGS = $(foreach flag,$(filter-out -L%,$(VCPKG_CURL_LIBS)),$(or $(wildcard $(patsubst -l%,$(VCPKG_LIB_DIR)/lib%.a,$(filter -l%,$(flag)))),$(flag)))
+else
+	# DuckDB's new extension build requires vcpkg for the dependencies of httpfs, the legacy one finds them on the
+	# system. Clear the vcpkg variables so that a vcpkg set up in the environment is not picked up halfway.
+	DUCKDB_DEPS_ENV = DUCKDB_NEW_EXTENSION_BUILD=0 VCPKG_TOOLCHAIN_PATH= VCPKG_TARGET_TRIPLET=
+	DUCKDB_DEPS_LINK_FLAGS = -lssl -lcrypto -lcurl
+	ifeq ($(shell uname -s), Darwin)
+		# httpfs loads the system certificates through these
+		DUCKDB_DEPS_LINK_FLAGS += -framework CoreFoundation -framework Security
+	endif
+endif
+
+ifdef DUCKDB_STATIC
+	DUCKDB_CMAKE_VARS += -DPG_DUCKDB_STATIC_HTTPFS=ON
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb_static.a
 	# registers the statically linked extensions when pg_duckdb is loaded
 	DUCKDB_STATIC_LOADER = $(addprefix $(DUCKDB_BUILD_DIR)/src/CMakeFiles/duckdb.dir/,duckdb_static_extension_loader.c.o __/extension/loader/static_extension_autoregister.cpp.o)
 	PG_DUCKDB_LINK_FLAGS = $(DUCKDB_STATIC_LOADER) $(wildcard $(DUCKDB_BUILD_DIR)/extension/*/lib*_extension.a) \
 		$(DUCKDB_BUILD_DIR)/src/main/http/libduckdb_httplib.a $(DUCKDB_BUILD_DIR)/src/main/extension/libduckdb_loadable_extensions.a \
-		$(FULL_DUCKDB_LIB) -lssl -lcrypto -lcurl
+		$(FULL_DUCKDB_LIB) $(DUCKDB_DEPS_LINK_FLAGS)
 else
+	DUCKDB_CMAKE_VARS += -DPG_DUCKDB_STATIC_HTTPFS=OFF
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb$(DLSUFFIX)
 	PG_DUCKDB_LINK_FLAGS = -lduckdb
 endif
@@ -117,12 +148,16 @@ check-regression-duckdb:
 clean-regression:
 	$(MAKE) -C test/regression clean-regression
 
+# The tests install httpfs from the extension repository of the DuckDB build, instead of downloading it
+DUCKDB_EXTENSION_REPOSITORY = $(abspath $(DUCKDB_BUILD_DIR)/repository)
+
 # Specify AWS_REGION to make sure test output the same thing regardless of where they are run
 installcheck: all install
-	AWS_REGION=us-east-1 $(MAKE) check-regression-duckdb
+	AWS_REGION=us-east-1 PG_DUCKDB_EXTENSION_REPOSITORY=$(DUCKDB_EXTENSION_REPOSITORY) $(MAKE) check-regression-duckdb
 
 pycheck: all install
-	LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH} pytest -n $(PYTEST_CONCURRENCY)
+	LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH} PG_DUCKDB_EXTENSION_REPOSITORY=$(DUCKDB_EXTENSION_REPOSITORY) \
+		pytest -n $(PYTEST_CONCURRENCY)
 
 check: installcheck pycheck schedulecheck
 
@@ -136,7 +171,7 @@ duckdb: $(FULL_DUCKDB_LIB)
 
 $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_extensions.cmake
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
-	DUCKDB_NEW_EXTENSION_BUILD=0 \
+	$(DUCKDB_DEPS_ENV) \
 	DUCKDB_CAPABILITIES="httplib;loadable_extensions" \
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \
@@ -145,8 +180,10 @@ $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_e
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake" \
 	$(MAKE) -C third_party/duckdb \
 	$(DUCKDB_MAKE_TARGET)
+	# DuckDB's build leaves the library untouched when it is up to date, which would make this rule run every time
+	touch $@
 
-ifeq ($(DUCKDB_BUILD), ReleaseStatic)
+ifdef DUCKDB_STATIC
 install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
 else
 install-duckdb: $(FULL_DUCKDB_LIB) $(shlib)
