@@ -52,6 +52,7 @@ test: time_bucket
 test: timescale_conflict
 test: timestamp_timestamptz
 test: timestamp_with_interval
+test: toast_compression
 test: transaction_errors
 test: transaction_isolation
 test: transactions

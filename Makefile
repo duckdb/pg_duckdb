@@ -41,6 +41,7 @@ ifeq ($(DUCKDB_BUILD), Debug)
 else ifeq ($(DUCKDB_BUILD), ReleaseStatic)
 	DUCKDB_STATIC = 1
 	DUCKDB_VCPKG = 1
+	DUCKDB_BUNDLED_LZ4 = 1
 else ifeq ($(DUCKDB_BUILD), ReleaseStaticSystem)
 	DUCKDB_STATIC = 1
 endif
@@ -86,7 +87,15 @@ else
 endif
 
 
-PG_DUCKDB_LINK_FLAGS += -Wl,-rpath,$(PG_LIB)/ -L$(DUCKDB_BUILD_DIR)/src -L$(PG_LIB) -lstdc++ -llz4
+# ReleaseStatic decompresses lz4 TOAST values with the lz4 that DuckDB bundles (in the duckdb_lz4 namespace), the
+# others with the system liblz4
+ifdef DUCKDB_BUNDLED_LZ4
+	PG_DUCKDB_LZ4_LINK_FLAGS =
+else
+	PG_DUCKDB_LZ4_LINK_FLAGS = -llz4
+endif
+
+PG_DUCKDB_LINK_FLAGS += -Wl,-rpath,$(PG_LIB)/ -L$(DUCKDB_BUILD_DIR)/src -L$(PG_LIB) -lstdc++ $(PG_DUCKDB_LZ4_LINK_FLAGS)
 
 # Ensure -lstdc++fs is included for GCC 8 builds
 CXX ?= c++
@@ -124,6 +133,11 @@ include Makefile.global
 # Only pass the version define to the one file that needs it, so that ccache
 # doesn't invalidate everything on every commit.
 src/pgduckdb.o: PG_CPPFLAGS += -DPG_DUCKDB_VERSION="\"$(PG_DUCKDB_VERSION)\""
+
+ifdef DUCKDB_BUNDLED_LZ4
+# PGXS has already copied PG_CPPFLAGS into CPPFLAGS here, so add to CPPFLAGS directly
+src/pgduckdb_detoast.o: override CPPFLAGS += -DPGDUCKDB_BUNDLED_LZ4 -isystem third_party/duckdb/third_party/lz4
+endif
 
 # We need the DuckDB header files to build our own .o files. We depend on the
 # duckdb submodule HEAD, because that target pulls in the submodule which

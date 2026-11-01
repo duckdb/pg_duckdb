@@ -37,6 +37,8 @@ The `httpfs` DuckDB extension, which is built into pg_duckdb, needs OpenSSL and 
 - `Release` (default), `Debug` and `ReleaseStaticSystem` link the OpenSSL and curl development libraries installed on the system.
 - `ReleaseStatic` builds them from source with [vcpkg](https://vcpkg.io) and links them statically, so the build does not depend on the system versions. This needs an installed vcpkg: set `VCPKG_TOOLCHAIN_PATH=/path/to/vcpkg/scripts/buildsystems/vcpkg.cmake`. DuckDB pins the package versions it builds. Set `VCPKG_TARGET_TRIPLET` to pick a triplet other than the host default.
 
+`ReleaseStatic` also uses the lz4 that DuckDB bundles, to decompress lz4-compressed TOAST values, so that it does not depend on the system `liblz4` either. The other builds link the system `liblz4`.
+
 `ReleaseStatic` and `ReleaseStaticSystem` link `httpfs` into pg_duckdb. `Release` and `Debug` build it as a loadable extension instead, which DuckDB installs and loads when a query first needs it (see [`duckdb.autoinstall_known_extensions`](settings.md#duckdbautoinstall_known_extensions)). The tests install the `httpfs` from the extension repository of the DuckDB build, `third_party/duckdb/build/<release|debug>/repository`, so that they test this build instead of a downloaded one.
 
 `Release`, `ReleaseStatic` and `ReleaseStaticSystem` share a DuckDB build directory, so switching between them requires a clean rebuild: run `make clean-all` first.
