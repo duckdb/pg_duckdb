@@ -1,8 +1,9 @@
 name: Release
 on:
   push:
-    branches: ["main"]
-    tags: ["v*"]
+    # TODO: uncomment me
+    #branches: ["main"]
+    #tags: ["v*"]
   workflow_dispatch:
 
 # Cancel in-progress jobs if a new commit is pushed to the same branch (except for main)
