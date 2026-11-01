@@ -10,7 +10,7 @@ extern "C" {
 #include "varatt.h"
 #endif
 
-#ifdef USE_LZ4
+#if defined(USE_LZ4) && !defined(PGDUCKDB_BUNDLED_LZ4)
 #include <lz4.h>
 #endif
 
@@ -21,6 +21,12 @@ extern "C" {
 #include "common/pg_lzcompress.h"
 #include "utils/expandeddatum.h"
 }
+
+#if defined(USE_LZ4) && defined(PGDUCKDB_BUNDLED_LZ4)
+// The lz4 that DuckDB bundles, so that static builds do not depend on the system liblz4
+#include "lz4.hpp"
+using duckdb_lz4::LZ4_decompress_safe;
+#endif
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_detoast.hpp"
