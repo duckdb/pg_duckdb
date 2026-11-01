@@ -4,6 +4,7 @@ on:
     branches: ["main"]
     tags: ["v*"]
   pull_request:
+  workflow_dispatch:
 
 # Cancel in-progress jobs if a new commit is pushed to the same branch (except for main)
 concurrency:
@@ -12,20 +13,17 @@ concurrency:
 
 jobs:
   format:
-    runs-on: ubuntu-24.04
     name: "Linting and formatting"
-
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-24.04' }}
     steps:
       - name: Checkout pg_duckdb extension code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       - name: Fetch main branch
         run: git fetch --depth=1 origin +main:refs/remotes/origin/main
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Install clang-format and ruff
-        run: python3 -m pip install -r dev_requirements.txt
+        run: python -m pip install --user --break-system-packages -r dev_requirements.txt
+      - name: Add user pip to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Run clang-format
         run: find src include -iname '*.hpp' -o -iname '*.h' -o -iname '*.cpp' -o -iname '*.c' | xargs git clang-format --diff origin/main
       - name: Run ruff check
@@ -46,18 +44,13 @@ jobs:
         - version: REL_16_STABLE
           type: Release
         - version: REL_17_STABLE
-          type: Release
-        # For PG18 we build DuckDB as a static library. There's nothing special
-        # about the static library, nor PG18. This is only done so that we have
-        # CI coverage for our logic to build a static library version.
+          type: Debug
         - version: REL_18_STABLE
           type: ReleaseStatic
-        - version: REL_18_STABLE
-          type: Debug
         - version: REL_19_STABLE
-          type: Release
+          type: ReleaseStaticSystem
 
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
 
     steps:
       - name: Test details
@@ -75,11 +68,11 @@ jobs:
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ubuntu-24.04-${{ matrix.version }}
+          key: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ matrix.version }}
           create-symlink: true
 
       - name: Checkout pg_duckdb extension code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           submodules: "recursive"
           path: duckdb
@@ -115,10 +108,10 @@ jobs:
 
       - name: Setup PG build cache
         id: cache-pg-build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: postgres/inst
-          key: pg-build-ubuntu-24.04-${{ steps.versions.outputs.postgres_sha }}
+          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
@@ -127,19 +120,18 @@ jobs:
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml --with-lz4
           make -j8 install
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
       - name: Setup DuckDB build cache
         id: cache-duckdb-build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: duckdb/third_party/duckdb/build/
-          key: duckdb-build-ubuntu-24.04-${{ steps.versions.outputs.duckdb_sha }}-${{ matrix.type }}-ninja
+          key: duckdb-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.duckdb_sha }}-${{ matrix.type }}-ninja
 
       - name: Install pytest and other test requirements
-        run: python3 -m pip install -r duckdb/requirements.txt
+        run: python -m pip install --user --break-system-packages -r duckdb/requirements.txt
+
+      - name: Add user pip to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Build pg_duckdb extension
         id: build

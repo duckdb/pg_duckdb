@@ -1,0 +1,265 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+    branches-ignore: ["**"]
+  workflow_dispatch:
+
+# Cancel in-progress jobs if a new commit is pushed to the same branch (except for main)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !contains(github.ref, 'main') }}
+
+jobs:
+  release-static:
+    name: "pg${{ matrix.pg }} ${{ matrix.arch }}"
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: [14, 15, 16, 17, 18]
+        arch: [x86_64, aarch64]
+        include:
+        - arch: x86_64
+          runner: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
+        - arch: aarch64
+          runner: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-arm64' || 'ubuntu-24.04-arm' }}
+
+    runs-on: ${{ matrix.runner }}
+
+    env:
+      # manylinux_2_28 is AlmaLinux 8 (glibc 2.28), the same baseline DuckDB uses for its Linux builds
+      DOCKER_IMAGE: quay.io/pypa/manylinux_2_28_${{ matrix.arch }}
+      CONTAINER: pg_duckdb_build
+      PG_MAJOR: ${{ matrix.pg }}
+      PACKAGE_NAME: pg_duckdb-pg${{ matrix.pg }}-linux-${{ matrix.arch }}
+
+    steps:
+      - name: Build details
+        run: echo Build pg_duckdb for PostgreSQL ${{ matrix.pg }} on ${{ matrix.arch }} in $DOCKER_IMAGE
+
+      - name: Checkout pg_duckdb extension code
+        uses: actions/checkout@v7
+        with:
+          submodules: "recursive"
+
+      # The DuckDB build does not depend on the Postgres version, and includes the libraries vcpkg built. The
+      # Makefile sets the DuckDB version, the extensions config the extensions that are built.
+      - name: Restore DuckDB build cache
+        id: duckdb-cache
+        uses: actions/cache/restore@v6
+        with:
+          path: third_party/duckdb/build/
+          key: release-static-duckdb-build-${{ matrix.arch }}-${{ hashFiles('Makefile', 'third_party/pg_duckdb_extensions.cmake') }}-ninja
+
+      - name: Restore ccache cache
+        uses: actions/cache/restore@v6
+        with:
+          path: .ccache/
+          key: release-static-ccache-${{ matrix.arch }}-pg${{ matrix.pg }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            release-static-ccache-${{ matrix.arch }}-pg${{ matrix.pg }}-
+            release-static-ccache-${{ matrix.arch }}-
+
+      - name: Start build container
+        run: |
+          for attempt in 1 2 3; do
+            docker pull "$DOCKER_IMAGE" && break
+            [ "$attempt" = 3 ] && exit 1
+            sleep 30
+          done
+          docker run --detach --name "$CONTAINER" \
+            -v "$PWD":/pg_duckdb                 \
+            -w /pg_duckdb                        \
+            -e PG_MAJOR                          \
+            -e PACKAGE_NAME                      \
+            -e CC='ccache gcc'                   \
+            -e CXX='ccache g++'                  \
+            -e CCACHE_DIR=/pg_duckdb/.ccache     \
+            -e CCACHE_MAXSIZE=2G                 \
+            "$DOCKER_IMAGE" sleep infinity
+
+      - name: Install build deps
+        run: |
+          docker exec -i "$CONTAINER" bash -s <<'EOF'
+          set -euxo pipefail
+          cat /etc/os-release
+          # The checkout is owned by the runner user, not root
+          git config --global --add safe.directory '*'
+
+          dnf install -y epel-release dnf-plugins-core
+          dnf config-manager --set-enabled powertools
+          dnf install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm"
+          dnf -qy module disable postgresql
+
+          dnf install -y "postgresql${PG_MAJOR}-server" "postgresql${PG_MAJOR}-devel"
+
+          # PGDG's compiler flags use the Red Hat compiler specs, which load the annobin plugin of the compiler, the
+          # gcc-toolset-14 of the manylinux_2_28 image
+          dnf install -y redhat-rpm-config gcc-toolset-14-annobin-plugin-gcc ccache ninja-build perl zip unzip tar curl pkgconfig
+
+          # openssl and curl are built by vcpkg, its package versions are pinned by DuckDB's vcpkg manifest
+          git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
+          git -C /opt/vcpkg checkout cd61e1e26a038e82d6550a3ebbe0fbbfe7da78e3 # Release 2026.06.24, as in build_and_test.yaml
+          /opt/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+          EOF
+
+      - name: Build pg_duckdb extension
+        id: build
+        run: |
+          docker exec -i "$CONTAINER" bash -s <<'EOF'
+          set -euxo pipefail
+          export PATH="/usr/pgsql-${PG_MAJOR}/bin:$PATH"
+          # with_llvm=no skips the LLVM bitcode for JIT inlining, which would need clang. PGXS sets CC and CXX in its
+          # makefiles, so the ccache wrapped compilers are passed on the command line (DuckDB's build gets them too).
+          ccache --zero-stats
+          make -j"$(nproc)" install DUCKDB_BUILD=ReleaseStatic with_llvm=no CC="$CC" CXX="$CXX" \
+            VCPKG_TOOLCHAIN_PATH=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
+          ccache --show-stats
+          EOF
+
+      # Saved right after the build, so that a rerun after a failing later step is fast. The ccache is also saved
+      # when the build fails, the DuckDB build directory only when it is complete.
+      - name: Save ccache cache
+        if: always() && steps.build.outcome != 'skipped'
+        uses: actions/cache/save@v6
+        with:
+          path: .ccache/
+          key: release-static-ccache-${{ matrix.arch }}-pg${{ matrix.pg }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Save DuckDB build cache
+        if: steps.build.outcome == 'success' && steps.duckdb-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: third_party/duckdb/build/
+          key: release-static-duckdb-build-${{ matrix.arch }}-${{ hashFiles('Makefile', 'third_party/pg_duckdb_extensions.cmake') }}-ninja
+
+      - name: Check binary dependencies
+        run: |
+          docker exec -i "$CONTAINER" bash -s <<'EOF'
+          set -euo pipefail
+          SO="$(/usr/pgsql-${PG_MAJOR}/bin/pg_config --pkglibdir)/pg_duckdb.so"
+          ldd "$SO"
+          echo "Highest required versions:"
+          objdump -T "$SO" | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -1
+          objdump -T "$SO" | grep -oE 'GLIBCXX_[0-9.]+' | sort -uV | tail -1
+          # DuckDB, openssl, curl and lz4 are linked in statically
+          if ldd "$SO" | grep -E 'libduckdb|libssl|libcrypto|libcurl|liblz4'; then
+            echo "pg_duckdb.so has unexpected dynamic dependencies"
+            exit 1
+          fi
+          EOF
+
+      - name: Run smoke test
+        run: |
+          docker exec -i "$CONTAINER" bash -s <<'EOF'
+          set -euxo pipefail
+          PGBIN="/usr/pgsql-${PG_MAJOR}/bin"
+          # Show the server log next to whatever failed
+          trap 'echo "=== postgres.log"; cat /home/pgtest/postgres.log || true' ERR
+          useradd --create-home pgtest
+          runuser -u pgtest -- "$PGBIN/initdb" -D /home/pgtest/data -A trust -E UTF8 --no-locale
+          cat >> /home/pgtest/data/postgresql.conf <<'CONF'
+          # PGDG's default socket directory /var/run/postgresql is created by systemd, which the container does not run
+          unix_socket_directories = '/tmp'
+          listen_addresses = ''
+          shared_preload_libraries = 'pg_duckdb'
+          # Fail instead of downloading DuckDB extensions, the smoke test only uses what is built in
+          duckdb.autoinstall_known_extensions = false
+          CONF
+          runuser -u pgtest -- "$PGBIN/pg_ctl" -D /home/pgtest/data -l /home/pgtest/postgres.log -w start
+
+          runuser -u pgtest -- "$PGBIN/psql" -X -q -At -v ON_ERROR_STOP=1 -h /tmp -d postgres > /tmp/smoke.out <<'SQL'
+          CREATE EXTENSION pg_duckdb;
+          CREATE TABLE t AS SELECT g AS id, md5(g::text) AS v FROM generate_series(1, 1000) g;
+          CREATE TABLE toast_lz4 (v text COMPRESSION lz4);
+          INSERT INTO toast_lz4 VALUES (repeat('abc', 100000));
+          SET duckdb.force_execution = true;
+          -- A Postgres table scanned by DuckDB
+          SELECT count(*), sum(id) FROM t;
+          -- An lz4 compressed TOAST value, decompressed with the lz4 that DuckDB bundles
+          SELECT length(v) FROM toast_lz4;
+          -- A local file, read by the built-in parquet extension
+          SELECT count(*) FROM read_parquet('/pg_duckdb/test/regression/data/iris.parquet');
+          -- httpfs is linked in, not installed
+          SELECT * FROM duckdb.query($$ SELECT install_mode FROM duckdb_extensions() WHERE extension_name = 'httpfs' $$);
+          SQL
+
+          diff -u - /tmp/smoke.out <<'EXPECTED'
+          1000|500500
+          300000
+          150
+          STATICALLY_LINKED
+          EXPECTED
+
+          runuser -u pgtest -- "$PGBIN/pg_ctl" -D /home/pgtest/data -w stop
+          EOF
+
+      - name: Package pg_duckdb extension
+        run: |
+          docker exec -i "$CONTAINER" bash -s <<'EOF'
+          set -euxo pipefail
+          export PATH="/usr/pgsql-${PG_MAJOR}/bin:$PATH"
+          make install DUCKDB_BUILD=ReleaseStatic with_llvm=no CC="$CC" CXX="$CXX" DESTDIR=/tmp/stage \
+            VCPKG_TOOLCHAIN_PATH=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
+          PACKAGE_DIR="/pg_duckdb/package/${PACKAGE_NAME}"
+          mkdir -p "$PACKAGE_DIR/lib" "$PACKAGE_DIR/extension"
+          cp "/tmp/stage$(pg_config --pkglibdir)/pg_duckdb.so" "$PACKAGE_DIR/lib/"
+          cp "/tmp/stage$(pg_config --sharedir)"/extension/pg_duckdb* "$PACKAGE_DIR/extension/"
+          tar -C /pg_duckdb/package -czf "/pg_duckdb/package/${PACKAGE_NAME}.tar.gz" "$PACKAGE_NAME"
+          EOF
+
+      - name: Upload package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.PACKAGE_NAME }}
+          path: package/${{ env.PACKAGE_NAME }}.tar.gz
+
+      - name: Stop build container
+        if: always()
+        run: docker rm -f "$CONTAINER" || true
+
+  # A separate job after all the builds, so that a single draft gets all the packages. Draft releases are not tied to
+  # their tag until published, so builds creating the draft in parallel could create several.
+  release:
+    name: "Create release draft"
+    needs: release-static
+    if: github.repository_owner == 'duckdb' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-24.04' }}
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ github.ref_name }}
+
+    steps:
+      - name: Check release tag
+        id: tag
+        run: |
+          if [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$TAG is not a vX.Y.Z tag, not creating a release"
+          fi
+
+      - name: Download packages
+        if: steps.tag.outputs.release == 'true'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: pg_duckdb-pg*-linux-*
+          path: package
+          merge-multiple: true
+
+      - name: Release draft
+        if: steps.tag.outputs.release == 'true'
+        working-directory: package
+        run: |
+          ls -l
+          sha256sum pg_duckdb-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+          # A rerun adds the packages to the draft that the first run created
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" pg_duckdb-*.tar.gz SHA256SUMS --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$TAG" pg_duckdb-*.tar.gz SHA256SUMS --repo "$GITHUB_REPOSITORY" \
+              --draft --verify-tag --title "pg_duckdb $TAG" --generate-notes
+          fi
