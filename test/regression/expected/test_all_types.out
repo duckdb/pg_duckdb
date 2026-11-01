@@ -31,7 +31,7 @@ tinyint             | -128
 smallint            | -32768
 int                 | -2147483648
 bigint              | -9223372036854775808
-hugeint             | 0
+hugeint             | -170141183460469231731687303715884105728
 uhugeint            | 0
 utinyint            | 0
 usmallint           | 0
