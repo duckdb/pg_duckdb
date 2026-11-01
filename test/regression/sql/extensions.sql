@@ -4,7 +4,7 @@ CREATE EXTENSION pg_duckdb;
 SET duckdb.force_execution TO false;
 SET duckdb.allow_community_extensions = true;
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 
@@ -16,7 +16,7 @@ SELECT duckdb.install_extension('icu');
 -- the trigger fires for both INSERT and UPDATE internally.
 SELECT last_value FROM duckdb.extensions_table_seq;
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
 -- Check that we can rerun this without issues
 SELECT duckdb.install_extension('icu');
@@ -25,14 +25,14 @@ SELECT duckdb.install_extension('icu');
 -- the trigger fires for both INSERT and UPDATE internally.
 SELECT last_value FROM duckdb.extensions_table_seq;
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
 
 SELECT duckdb.install_extension('aws');
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
 -- autoload_extension and load_extension function should work as expected
 SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'aws' $$);
@@ -55,17 +55,17 @@ DELETE FROM duckdb.extensions WHERE name = 'aws';
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
 -- Reconnecting should cause the extension not to be loaded anymore
 CALL duckdb.recycle_ddb();
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
 SELECT duckdb.install_extension('h3', 'community');
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
 -- cleanup
 TRUNCATE duckdb.extensions;

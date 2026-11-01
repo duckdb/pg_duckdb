@@ -2,16 +2,15 @@ DROP EXTENSION pg_duckdb CASCADE;
 CREATE EXTENSION pg_duckdb;
 SET duckdb.force_execution TO false;
 SET duckdb.allow_community_extensions = true;
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
- httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
-(6 rows)
+(5 rows)
 
 SELECT last_value FROM duckdb.extensions_table_seq;
  last_value 
@@ -34,16 +33,15 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           3
 (1 row)
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
- httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
-(6 rows)
+(5 rows)
 
 -- Check that we can rerun this without issues
 SELECT duckdb.install_extension('icu');
@@ -60,16 +58,15 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           5
 (1 row)
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
- httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
-(6 rows)
+(5 rows)
 
 SELECT duckdb.install_extension('aws');
  install_extension 
@@ -83,17 +80,16 @@ SELECT last_value FROM duckdb.extensions_table_seq;
           7
 (1 row)
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  aws            | t      | t         | core
  core_functions | t      | t         | 
- httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
-(7 rows)
+(6 rows)
 
 -- autoload_extension and load_extension function should work as expected
 SELECT * FROM duckdb.query($$ FROM duckdb_extensions() SELECT installed, loaded WHERE extension_name = 'aws' $$);
@@ -152,30 +148,28 @@ SELECT last_value FROM duckdb.extensions_table_seq;
          11
 (1 row)
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  aws            | t      | t         | core
  core_functions | t      | t         | 
- httpfs         | t      | t         | 
- icu            | t      | t         | 
- json           | t      | t         | 
- parquet        | t      | t         | 
- pgduckdb       | t      | f         | 
-(7 rows)
-
--- Reconnecting should cause the extension not to be loaded anymore
-CALL duckdb.recycle_ddb();
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
- extension_name | loaded | installed | installed_from 
-----------------+--------+-----------+----------------
- core_functions | t      | t         | 
- httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
 (6 rows)
+
+-- Reconnecting should cause the extension not to be loaded anymore
+CALL duckdb.recycle_ddb();
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
+ extension_name | loaded | installed | installed_from 
+----------------+--------+-----------+----------------
+ core_functions | t      | t         | 
+ icu            | t      | t         | 
+ json           | t      | t         | 
+ parquet        | t      | t         | 
+ pgduckdb       | t      | f         | 
+(5 rows)
 
 SELECT duckdb.install_extension('h3', 'community');
  install_extension 
@@ -189,17 +183,16 @@ SELECT last_value FROM duckdb.extensions_table_seq;
          13
 (1 row)
 
-SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name != 'jemalloc' $$);
+SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
  extension_name | loaded | installed | installed_from 
 ----------------+--------+-----------+----------------
  core_functions | t      | t         | 
  h3             | t      | t         | community
- httpfs         | t      | t         | 
  icu            | t      | t         | 
  json           | t      | t         | 
  parquet        | t      | t         | 
  pgduckdb       | t      | f         | 
-(7 rows)
+(6 rows)
 
 -- cleanup
 TRUNCATE duckdb.extensions;

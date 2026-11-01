@@ -1,3 +1,4 @@
+test: setup
 test: alter_table_commands
 test: altered_tables
 test: approx_count_distinct
