@@ -23,6 +23,10 @@ DUCKDB_CMAKE_VARS = -DCXX_EXTRA=-fvisibility=default -DBUILD_SHELL=0 -DBUILD_PYT
 # those asserts. By disabling asserts it's possible to run a debug build of
 # DuckDB agains the release build of MotherDuck.
 DUCKDB_DISABLE_ASSERTIONS ?= 0
+# Compilers for building DuckDB, when they should differ from the ones PGXS builds pg_duckdb with. Setting CC and CXX
+# in the environment does not work for this, because make passes the PGXS values on to the DuckDB build.
+DUCKDB_CC ?=
+DUCKDB_CXX ?=
 
 # DUCKDB_BUILD selects how DuckDB is built and linked, and where httpfs gets openssl and curl from:
 #   Release (default)   - dynamically linked, system openssl and curl
@@ -186,6 +190,7 @@ duckdb: $(FULL_DUCKDB_LIB)
 $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_extensions.cmake
 	OVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION) \
 	$(DUCKDB_DEPS_ENV) \
+	$(if $(DUCKDB_CC),CC="$(DUCKDB_CC)") $(if $(DUCKDB_CXX),CXX="$(DUCKDB_CXX)") \
 	DUCKDB_CAPABILITIES="httplib;loadable_extensions" \
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \
