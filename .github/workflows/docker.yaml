@@ -18,11 +18,16 @@ on:
 
 jobs:
   docker_build:
-    name: Build Docker image for Postgres ${{ matrix.postgres }} on ${{ matrix.runner }}
+    name: Build Docker image for Postgres ${{ matrix.postgres }} on ${{ matrix.platform }}
     strategy:
       matrix:
         postgres: ["14", "15", "16", "17", "18"]
-        runner: ["ubuntu-24.04", "ubuntu-24.04-arm"]
+        platform: ["amd64", "arm64"]
+        include:
+        - platform: amd64
+          runner: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
+        - platform: arm64
+          runner: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-arm64' || 'ubuntu-24.04-arm' }}
 
     runs-on: ${{ matrix.runner }}
 
@@ -55,12 +60,7 @@ jobs:
               | cut -c 1-112 | tr '[:upper:]' '[:lower:]' \
               | sed -e 's/-*$//')
 
-          # Set platform depending on which runner we're using
-          if [ "${{ matrix.runner }}" = "ubuntu-24.04" ]; then
-            PLATFORM=amd64
-          else
-            PLATFORM=arm64
-          fi
+          PLATFORM=${{ matrix.platform }}
 
           # If main or tag, then push to `pgduckdb/pgduckdb`
           git fetch --tags --force
@@ -105,7 +105,7 @@ jobs:
       matrix:
         postgres: ["14", "15", "16", "17", "18"]
 
-    runs-on: ubuntu-24.04
+    runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-24.04' }}
     needs: docker_build
     steps:
       - name: Login to Docker Hub
