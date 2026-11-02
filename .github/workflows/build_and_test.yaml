@@ -47,8 +47,10 @@ jobs:
           type: Release
         - version: REL_18_STABLE
           type: Debug
-        - version: REL_19_STABLE
+        - version: REL_18_STABLE
           type: ReleaseStatic
+        - version: REL_19_STABLE
+          type: ReleaseStaticSystem
 
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
 
