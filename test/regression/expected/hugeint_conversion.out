@@ -13,3 +13,40 @@ select sum(a) result from hugeint_sum;
 (1 row)
 
 drop table hugeint_sum;
+-- the minimum hugeint cannot be negated as a signed value, the conversion must not overflow
+select * from duckdb.query($$ select '-170141183460469231731687303715884105728'::hugeint as result $$);
+                  result                  
+------------------------------------------
+ -170141183460469231731687303715884105728
+(1 row)
+
+select * from duckdb.query($$ select '-170141183460469231731687303715884105727'::hugeint as result $$);
+                  result                  
+------------------------------------------
+ -170141183460469231731687303715884105727
+(1 row)
+
+select * from duckdb.query($$ select '170141183460469231731687303715884105727'::hugeint as result $$);
+                 result                  
+-----------------------------------------
+ 170141183460469231731687303715884105727
+(1 row)
+
+select * from duckdb.query($$ select '-170141183460469231731687303715884105.28'::decimal(38,2) as result $$);
+                  result                  
+------------------------------------------
+ -170141183460469231731687303715884105.28
+(1 row)
+
+select * from duckdb.query($$ select '-3276.8'::decimal(5,1) as result $$);
+ result  
+---------
+ -3276.8
+(1 row)
+
+select * from duckdb.query($$ select '-9223372036854775808'::bigint as result $$);
+        result        
+----------------------
+ -9223372036854775808
+(1 row)
+
