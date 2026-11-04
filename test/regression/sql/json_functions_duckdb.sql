@@ -67,8 +67,6 @@ SELECT public.json_array_length('[1, 2, 3, 4, 5]', '$') AS array_length; -- Expe
 -- Test with a JSON object that doesn't contain an array at the path
 SELECT public.json_array_length('{"not_an_array": {"key": "value"}}', '$.not_an_array') AS array_length; -- Expected: 0 (this  is expected DuckDB behaviour)
 
--- BUG: This fails due to not being able to convert the UBIGINT array to a
--- postgres type yet.
 SELECT public.json_array_length('{"a": [1, 2, 3, 4, 5], "b": [1]}', ARRAY['$.a', 'b']) AS array_length;
 
 -- </JSON_ARRAY_LENGTH>
