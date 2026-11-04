@@ -154,3 +154,159 @@ SELECT * FROM mv_csv;
 
 DROP MATERIALIZED VIEW mv_csv;
 DROP TABLE t_csv;
+-- Materialized view over NUMERIC columns without a precision. DuckDB reads
+-- those as DOUBLE, and the materialized view columns must get that type too.
+-- Otherwise float8 datums end up in numeric columns, which corrupts the heap
+-- and crashes later reads such as count(fees) or ANALYZE.
+-- See https://github.com/duckdb/pg_duckdb/issues/1059
+CREATE TABLE t_numeric(id int, grp text, amount numeric, fees numeric, currency text);
+INSERT INTO t_numeric
+SELECT g, 'grp-' || (g % 50), (g % 10000)::numeric / 100, (g % 100)::numeric / 100,
+    CASE WHEN g % 2 = 0 THEN 'USD' ELSE 'EUR' END
+FROM generate_series(1, 5000) g;
+-- Without the GUC DuckDB refuses NUMERICs without a precision
+CREATE MATERIALIZED VIEW mv_numeric_unsupported AS
+SELECT DISTINCT ON (grp) grp, id, amount, fees, currency FROM t_numeric ORDER BY grp, id DESC;
+ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: Not implemented Error: Unsupported PostgreSQL type found in query: DuckDB requires the precision of a NUMERIC to be set. You can choose to convert these NUMERICs to a DOUBLE by using 'SET duckdb.convert_unsupported_numeric_to_double = true'
+SET duckdb.convert_unsupported_numeric_to_double = true;
+-- DISTINCT ON is executed by DuckDB using arg_min/arg_max
+CREATE MATERIALIZED VIEW mv_numeric AS
+SELECT DISTINCT ON (grp) grp, id, amount, fees, currency FROM t_numeric ORDER BY grp, id DESC;
+SELECT attname, atttypid::regtype FROM pg_attribute
+WHERE attrelid = 'mv_numeric'::regclass AND attnum > 0 ORDER BY attnum;
+ attname  |     atttypid     
+----------+------------------
+ grp      | text
+ id       | integer
+ amount   | double precision
+ fees     | double precision
+ currency | text
+(5 rows)
+
+SELECT count(*), count(amount), count(fees), count(currency), round(sum(amount)::numeric, 2), round(sum(fees)::numeric, 2) FROM mv_numeric;
+ count | count | count | count |  round  | round 
+-------+-------+-------+-------+---------+-------
+    50 |    50 |    50 |    50 | 2487.75 | 36.75
+(1 row)
+
+SELECT * FROM mv_numeric ORDER BY grp LIMIT 3;
+  grp   |  id  | amount | fees | currency 
+--------+------+--------+------+----------
+ grp-0  | 5000 |     50 |    0 | USD
+ grp-1  | 4951 |  49.51 | 0.51 | EUR
+ grp-10 | 4960 |   49.6 |  0.6 | USD
+(3 rows)
+
+ANALYZE mv_numeric;
+SELECT attname, null_frac, n_distinct FROM pg_stats
+WHERE schemaname = 'public' AND tablename = 'mv_numeric' AND attname IN ('amount', 'fees') ORDER BY attname;
+ attname | null_frac | n_distinct 
+---------+-----------+------------
+ amount  |         0 |         -1
+ fees    |         0 |         -1
+(2 rows)
+
+INSERT INTO t_numeric VALUES (6000, 'grp-0', 123.45, 0.5, 'USD');
+REFRESH MATERIALIZED VIEW mv_numeric;
+SELECT * FROM mv_numeric WHERE grp = 'grp-0';
+  grp  |  id  | amount | fees | currency 
+-------+------+--------+------+----------
+ grp-0 | 6000 | 123.45 |  0.5 | USD
+(1 row)
+
+SET duckdb.force_execution = false;
+REFRESH MATERIALIZED VIEW mv_numeric;
+SELECT count(*), count(amount), count(fees), count(currency), round(sum(amount)::numeric, 2), round(sum(fees)::numeric, 2) FROM mv_numeric;
+ count | count | count | count |  round  | round 
+-------+-------+-------+-------+---------+-------
+    50 |    50 |    50 |    50 | 2561.20 | 37.25
+(1 row)
+
+SET duckdb.force_execution = true;
+ANALYZE mv_numeric;
+-- WITH NO DATA defines the columns without planning the query, and the
+-- REFRESH then fills them. This is also how CREATE MATERIALIZED VIEW loads
+-- its data since PG17.
+CREATE MATERIALIZED VIEW mv_numeric_no_data AS
+SELECT DISTINCT ON (grp) grp, id, amount, fees, currency FROM t_numeric ORDER BY grp, id DESC
+WITH NO DATA;
+SELECT attname, atttypid::regtype FROM pg_attribute
+WHERE attrelid = 'mv_numeric_no_data'::regclass AND attname IN ('amount', 'fees') ORDER BY attnum;
+ attname |     atttypid     
+---------+------------------
+ amount  | double precision
+ fees    | double precision
+(2 rows)
+
+REFRESH MATERIALIZED VIEW mv_numeric_no_data;
+SELECT count(*), count(amount), count(fees), count(currency), round(sum(amount)::numeric, 2), round(sum(fees)::numeric, 2) FROM mv_numeric_no_data;
+ count | count | count | count |  round  | round 
+-------+-------+-------+-------+---------+-------
+    50 |    50 |    50 |    50 | 2561.20 | 37.25
+(1 row)
+
+ANALYZE mv_numeric_no_data;
+-- Materialized view created with Postgres execution, so it has numeric
+-- columns. A REFRESH must keep using Postgres execution, even when
+-- duckdb.force_execution is enabled.
+SET duckdb.force_execution = false;
+CREATE MATERIALIZED VIEW mv_numeric_pg AS
+SELECT DISTINCT ON (grp) grp, id, amount, fees, currency FROM t_numeric ORDER BY grp, id DESC;
+SET duckdb.force_execution = true;
+SELECT attname, atttypid::regtype FROM pg_attribute
+WHERE attrelid = 'mv_numeric_pg'::regclass AND attname IN ('amount', 'fees') ORDER BY attnum;
+ attname | atttypid 
+---------+----------
+ amount  | numeric
+ fees    | numeric
+(2 rows)
+
+REFRESH MATERIALIZED VIEW mv_numeric_pg;
+SELECT count(*), count(amount), count(fees), count(currency), round(sum(amount)::numeric, 2), round(sum(fees)::numeric, 2) FROM mv_numeric_pg;
+ count | count | count | count | round  | round 
+-------+-------+-------+-------+--------+-------
+    50 |    50 |    50 |    50 | 2561.2 | 37.25
+(1 row)
+
+ANALYZE mv_numeric_pg;
+-- Same for CREATE TABLE AS
+CREATE TABLE ctas_numeric AS
+SELECT DISTINCT ON (grp) grp, id, amount, fees, currency FROM t_numeric ORDER BY grp, id DESC;
+SELECT attname, atttypid::regtype FROM pg_attribute
+WHERE attrelid = 'ctas_numeric'::regclass AND attnum > 0 ORDER BY attnum;
+ attname  |     atttypid     
+----------+------------------
+ grp      | text
+ id       | integer
+ amount   | double precision
+ fees     | double precision
+ currency | text
+(5 rows)
+
+SELECT count(*), count(amount), count(fees), count(currency), round(sum(amount)::numeric, 2), round(sum(fees)::numeric, 2) FROM ctas_numeric;
+ count | count | count | count |  round  | round 
+-------+-------+-------+-------+---------+-------
+    50 |    50 |    50 |    50 | 2561.20 | 37.25
+(1 row)
+
+ANALYZE ctas_numeric;
+-- And INSERT ... SELECT into a numeric column
+CREATE TABLE insert_numeric(grp text, id int, amount numeric, fees numeric, currency text);
+INSERT INTO insert_numeric
+SELECT DISTINCT ON (grp) grp, id, amount, fees, currency FROM t_numeric ORDER BY grp, id DESC;
+SELECT count(*), count(amount), count(fees), count(currency), round(sum(amount)::numeric, 2), round(sum(fees)::numeric, 2) FROM insert_numeric;
+ count | count | count | count | round  | round 
+-------+-------+-------+-------+--------+-------
+    50 |    50 |    50 |    50 | 2561.2 | 37.25
+(1 row)
+
+ANALYZE insert_numeric;
+RESET duckdb.convert_unsupported_numeric_to_double;
+DROP TABLE insert_numeric;
+DROP TABLE ctas_numeric;
+DROP MATERIALIZED VIEW mv_numeric_pg;
+DROP MATERIALIZED VIEW mv_numeric_no_data;
+DROP MATERIALIZED VIEW mv_numeric;
+DROP MATERIALIZED VIEW IF EXISTS mv_numeric_unsupported;
+NOTICE:  materialized view "mv_numeric_unsupported" does not exist, skipping
+DROP TABLE t_numeric;
