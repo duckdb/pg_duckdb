@@ -24,6 +24,7 @@ extern "C" {
 #include "utils/lsyscache.h"
 #include "utils/rel.h"
 #include "utils/rls.h"
+#include "utils/ruleutils.h"
 
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_ruleutils.h"
@@ -387,10 +388,12 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 			 */
 			Relation rel = table_openrv(copy_stmt->relation, AccessShareLock);
 			bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
+			Oid relid = RelationGetRelid(rel);
 			table_close(rel, NoLock);
 			if (is_duckdb_table) {
-				char *select_query;
-				select_query = psprintf("SELECT * FROM %s", quote_identifier(get_rel_name(RelationGetRelid(rel))));
+				char *select_query = psprintf(
+				    "SELECT * FROM %s", quote_qualified_identifier(get_namespace_name_or_temp(get_rel_namespace(relid)),
+				                                                   get_rel_name(relid)));
 				RawStmt *raw_stmt = linitial_node(RawStmt, raw_parser(select_query, RAW_PARSE_DEFAULT));
 				copy_stmt->query = raw_stmt->stmt;
 				copy_stmt->relation = nullptr;

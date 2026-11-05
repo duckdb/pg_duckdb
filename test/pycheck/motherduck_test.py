@@ -65,6 +65,23 @@ def test_md_create_table(md_cur: Cursor, ddb):
         md_cur.sql("CREATE TABLE t4(a int) USING heap")
 
 
+def test_md_copy_to_stdout_empty_search_path(md_cur: Cursor):
+    # COPY rewrites DuckDB tables to SELECT *; permanent (MotherDuck) tables
+    # require a schema-qualified rewrite when search_path is empty.
+    md_cur.sql(
+        "CREATE TABLE public.copy_search_path_repro (id INT, name TEXT) USING duckdb"
+    )
+    md_cur.sql(
+        "INSERT INTO public.copy_search_path_repro VALUES (1, 'Alice'), (2, 'Bob')"
+    )
+    md_cur.sql("SET search_path = ''")
+    with md_cur.copy("COPY public.copy_search_path_repro TO STDOUT") as copy:
+        rows = list(copy.rows())
+        assert rows == [("1", "Alice"), ("2", "Bob")]
+    md_cur.sql("RESET search_path")
+    md_cur.sql("DROP TABLE public.copy_search_path_repro")
+
+
 def test_md_table_dropped_when_disabled(md_cur: Cursor, ddb):
     ddb.sql("CREATE TABLE t1(a int, b varchar)")
     ddb.sql("INSERT INTO t1 VALUES (1, 'abc')")
