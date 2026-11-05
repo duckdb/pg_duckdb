@@ -326,8 +326,8 @@ bool
 PostgresTableReader::GetNextMinimalWorkerTuple(std::vector<uint8_t> &minimal_tuple_buffer) {
 	MinimalTuple worker_minmal_tuple = GetNextWorkerTuple();
 	if (HeapTupleIsValid(worker_minmal_tuple)) {
-		// deep copy worker_minmal_tuple to destination buffer
-		Size tuple_size = worker_minmal_tuple->t_len + MINIMAL_TUPLE_DATA_OFFSET;
+		// deep copy worker_minmal_tuple to destination buffer, a queue message is exactly t_len bytes long
+		Size tuple_size = worker_minmal_tuple->t_len;
 		minimal_tuple_buffer.resize(tuple_size);
 		memcpy(minimal_tuple_buffer.data(), worker_minmal_tuple, tuple_size);
 		return true;
