@@ -5,7 +5,6 @@
 #include "pgduckdb/catalog/pgduckdb_transaction.hpp"
 #include "pgduckdb/scan/postgres_scan.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
-#include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
 
 extern "C" {
@@ -33,7 +32,6 @@ extern "C" {
 #include "parser/parse_relation.h"
 #include "utils/acl.h"
 #include "utils/lsyscache.h"
-#include "utils/rel.h"
 
 #include "pgduckdb/pgduckdb_ruleutils.h"
 #include "utils/builtins.h"
@@ -48,7 +46,6 @@ extern "C" {
 #include "pgduckdb/pgduckdb_node.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
-#include "pgduckdb/pgduckdb_types.hpp"
 
 static bool
 ContainValueRTE(Query *query) {
