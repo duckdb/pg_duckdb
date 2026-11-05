@@ -1,6 +1,6 @@
 -- Don't force duckdb execution, all these functions should automatically
 -- trigger duckdb execution.
-set duckdb.force_duckdb_execution = false;
+set duckdb.force_execution = false;
 -- NOTE: In PG17 some of these functions, like JSON_EXISTS and JSON_VALUE, were
 -- introduced into Postgres as keywords. This means that to reference those
 -- DuckDB functions from Postgres we need specify their "public" schema. We do

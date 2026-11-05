@@ -254,6 +254,18 @@ InitGUC() {
 
 	DefineCustomDuckDBVariable("duckdb.custom_user_agent", "Additional user agent string to append to 'pg_duckdb'",
 	                           &duckdb_custom_user_agent, PGC_SUSET);
+
+	/*
+	 * Reject unknown duckdb.* GUCs (PG15+). MarkGUCPrefixReserved reserves the
+	 * prefix so later SET duckdb.<unknown> fails. On PG14 only
+	 * EmitWarningsOnPlaceholders exists; it warns about existing placeholders
+	 * at call time but does not reserve the prefix for future SETs.
+	 */
+#if PG_VERSION_NUM >= 150000
+	MarkGUCPrefixReserved("duckdb");
+#else
+	EmitWarningsOnPlaceholders("duckdb");
+#endif
 }
 
 #if PG_VERSION_NUM < 160000
