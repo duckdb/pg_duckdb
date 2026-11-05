@@ -191,6 +191,147 @@ make install
 
 *See [compilation guide](docs/compilation.md) for detailed instructions.*
 
+## PostgreSQL 12.12 compatibility
+
+This fork contains a compatibility layer for PostgreSQL 12.12. The upstream
+project targets PostgreSQL 14 and newer, so the PostgreSQL 12.12 build uses a
+separate extension version, `1.0.0-pg12`, and intentionally disables the parts
+that depend on PostgreSQL APIs introduced after PostgreSQL 12.
+
+### Build and install on PostgreSQL 12.12
+
+Use the PostgreSQL 12.12 `pg_config` when building:
+
+```bash
+cd /workspace/pg_duckdb
+PG_CONFIG=/usr/local/pgsql-12.12/bin/pg_config make -j2
+PG_CONFIG=/usr/local/pgsql-12.12/bin/pg_config make install
+```
+
+For PostgreSQL 12.12, `make install` installs the PG12-specific control file
+from `sql/pg12/pg_duckdb.control`, whose default version is `1.0.0-pg12`.
+
+Initialize a PostgreSQL 12.12 test data directory if you do not already have
+one:
+
+```bash
+mkdir -p /tmp/pg12_pgduckdb_test_data
+chown postgres:postgres /tmp/pg12_pgduckdb_test_data
+su postgres -c "/usr/local/pgsql-12.12/bin/initdb \
+  -D /tmp/pg12_pgduckdb_test_data \
+  --no-locale -E UTF8"
+```
+
+Start PostgreSQL with `pg_duckdb` preloaded, then create the extension:
+
+```bash
+su postgres -c "/usr/local/pgsql-12.12/bin/pg_ctl \
+  -D /tmp/pg12_pgduckdb_test_data \
+  -o '-p 55432 -k /tmp -c shared_preload_libraries=pg_duckdb' \
+  -l /tmp/pg12_pgduckdb_test.log start"
+
+/usr/local/pgsql-12.12/bin/psql -U postgres -h /tmp -p 55432 -d postgres
+```
+
+```sql
+CREATE EXTENSION pg_duckdb;
+
+SELECT extversion
+FROM pg_extension
+WHERE extname = 'pg_duckdb';
+```
+
+The expected extension version is:
+
+```text
+1.0.0-pg12
+```
+
+### PostgreSQL 12.12 smoke test
+
+```sql
+CREATE TEMP TABLE duck_t(a int, b text) USING duckdb;
+INSERT INTO duck_t VALUES (10, 'ten'), (20, 'twenty');
+SELECT * FROM duck_t ORDER BY a;
+
+CREATE TABLE orders(
+    order_date date,
+    product_name text,
+    amount numeric(10, 2)
+);
+
+INSERT INTO orders VALUES
+    (DATE '2024-01-01', 'book', 10),
+    (DATE '2024-01-01', 'pen', 5),
+    (DATE '2024-01-02', 'book', 7);
+
+SET duckdb.force_execution = true;
+SELECT
+    order_date,
+    COUNT(*) AS number_of_orders,
+    SUM(amount) AS total_revenue
+FROM orders
+GROUP BY order_date
+ORDER BY order_date;
+
+SET duckdb.force_execution = false;
+COPY (SELECT 42::int AS xyz) TO '/tmp/pgduckdb_pg12_copy.csv' CSV HEADER;
+SELECT * FROM read_csv('/tmp/pgduckdb_pg12_copy.csv') AS t;
+```
+
+### What the PostgreSQL 12.12 compatibility layer changes
+
+- Lowers the build-time PostgreSQL version gate to allow PostgreSQL 12.12.
+- Adds PostgreSQL 12 versions of the vendored `ruleutils` integration.
+- Adds compatibility branches for planner hooks, utility hooks, table access
+  methods, FDW helpers, COPY handling, EXPLAIN planning, role constants,
+  tuple queue readers, list iteration, error reporting, and detoasting.
+- Adds PostgreSQL 12-specific extension SQL in
+  `sql/pg_duckdb--1.0.0-pg12.sql`.
+- Excludes PostgreSQL 14+ custom subscripting code from PostgreSQL 12 builds.
+- Excludes the current MotherDuck background worker implementation from
+  PostgreSQL 12 builds and replaces `force_motherduck_sync` with a clear
+  unsupported error.
+
+### Supported on PostgreSQL 12.12
+
+- `CREATE EXTENSION pg_duckdb`
+- Regular PostgreSQL table analytical queries through
+  `SET duckdb.force_execution = true`
+- Temporary DuckDB tables created with `CREATE TEMP TABLE ... USING duckdb`
+- Inserts into and reads from DuckDB temporary tables
+- Simple `COPY` and `read_csv` workflows
+- Large toasted PostgreSQL values read through DuckDB execution
+- DuckDB extension installation entry points such as
+  `duckdb.install_extension('iceberg')` and `duckdb.install_extension('delta')`
+
+### Not supported on PostgreSQL 12.12
+
+- `duckdb.row` custom subscripting, for example:
+
+  ```sql
+  SELECT r['product_name']
+  FROM read_parquet('s3://your-bucket/reviews.parquet') r;
+  ```
+
+  PostgreSQL 12 does not provide the custom subscripting API used by the
+  upstream implementation. The PG12 build reports a clear PostgreSQL error:
+
+  ```text
+  ERROR: cannot subscript type duckdb."row" because it is not an array
+  ```
+
+- README examples that depend on `r['col']`, including the data lake examples
+  and joins between PostgreSQL tables and external `read_parquet(...)` rows.
+- `CREATE TABLE ... USING duckdb AS SELECT ...` paths that internally rely on
+  `duckdb.row` unpacking.
+- MotherDuck background catalog sync on PostgreSQL 12. Calling the sync
+  procedure returns:
+
+  ```text
+  ERROR: force_motherduck_sync is not supported on PostgreSQL 12
+  ```
+
 ## Configuration
 
 See [settings documentation](docs/settings.md) for complete configuration options.
@@ -239,7 +380,8 @@ We welcome contributions! Please see:
 
 ## Requirements
 
-- **PostgreSQL**: 14, 15, 16, 17, 18
+- **PostgreSQL**: 14, 15, 16, 17, 18. This fork also contains an experimental
+  PostgreSQL 12.12 compatibility build as described above.
 - **Operating Systems**: Ubuntu 22.04-24.04, macOS
 
 ## License

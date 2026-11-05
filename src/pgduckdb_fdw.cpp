@@ -286,7 +286,11 @@ pgduckdb_fdw_validator(PG_FUNCTION_ARGS) {
 	using namespace pgduckdb::pg;
 	Oid catalog = PG_GETARG_OID(1);
 
-	if (catalog == ForeignTableRelationId || catalog == ForeignTableRelidIndexId) {
+	if (catalog == ForeignTableRelationId
+#if PG_VERSION_NUM >= 130000
+	    || catalog == ForeignTableRelidIndexId
+#endif
+	) {
 		elog(ERROR, "pgduckdb FDW only support 'SERVER' and 'USER MAPPING' objects.");
 	}
 

@@ -71,6 +71,14 @@
  * different types.  The outer loop only iterates once, so we expect optimizing
  * compilers will unroll it, thereby optimizing it away.
  */
+#if PG_VERSION_NUM < 170000
+#define foreach_internal(type, pointer, var, lst, func) \
+	for (type pointer var = 0, pointer var##__outerloop = (type pointer) 1; \
+		 var##__outerloop; var##__outerloop = 0) \
+	for (ListCell *var##__cell = list_head(lst); \
+		 var##__cell != NULL && ((var = (type pointer) func(var##__cell)), true); \
+		 var##__cell = lnext(var##__cell))
+#else
 #define foreach_internal(type, pointer, var, lst, func) \
 	for (type pointer var = 0, pointer var##__outerloop = (type pointer) 1; \
 		 var##__outerloop; \
@@ -80,12 +88,21 @@
 			  var##__state.i < var##__state.l->length && \
 			 (var = (type pointer) func(&var##__state.l->elements[var##__state.i]), true)); \
 			 var##__state.i++)
+#endif
 
 /*
  * foreach_node -
  *	  The same as foreach_ptr, but asserts that the element is of the specified
  *	  node type.
  */
+#if PG_VERSION_NUM < 170000
+#define foreach_node(type, var, lst) \
+	for (type *var = 0, *var##__outerloop = (type *)1; \
+		 var##__outerloop; var##__outerloop = 0) \
+	for (ListCell *var##__cell = list_head(lst); \
+		 var##__cell != NULL && ((var = lfirst_node(type, var##__cell)), true); \
+		 var##__cell = lnext(var##__cell))
+#else
 #define foreach_node(type, var, lst) \
 	for (type * var = 0, *var##__outerloop = (type *) 1; \
 		 var##__outerloop; \
@@ -95,4 +112,5 @@
 			  var##__state.i < var##__state.l->length && \
 			 (var = lfirst_node(type, &var##__state.l->elements[var##__state.i]), true)); \
 			 var##__state.i++)
+#endif
 // clang-format on

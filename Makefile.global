@@ -1,6 +1,6 @@
 PG_CONFIG ?= pg_config
 
-PG_MIN_VER = 14
+PG_MIN_VER = 12
 PG_VER = $(shell $(PG_CONFIG) --version | sed "s/^[^ ]* \([0-9]*\).*$$/\1/" 2>/dev/null)
 ifeq ($(shell expr "$(PG_MIN_VER)" \<=  "$(PG_VER)"), 0)
 $(error Minimum version of PostgreSQL required is $(PG_MIN_VER) (but have $(PG_VER)))

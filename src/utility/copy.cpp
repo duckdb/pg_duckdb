@@ -38,6 +38,10 @@ AppendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *co
 	/* Open and lock the relation, using the appropriate lock type. */
 	Relation rel = table_openrv(copy_stmt->relation, AccessShareLock);
 	Oid relid = RelationGetRelid(rel);
+#if PG_VERSION_NUM < 130000
+	RangeTblEntry *rte = addRangeTableEntryForRelation(pstate, rel, AccessShareLock, NULL, false, false);
+	rte->requiredPerms = ACL_SELECT;
+#else
 	ParseNamespaceItem *nsitem = addRangeTableEntryForRelation(pstate, rel, AccessShareLock, NULL, false, false);
 
 #if PG_VERSION_NUM >= 160000
@@ -46,6 +50,7 @@ AppendCreateRelationCopyString(StringInfo info, ParseState *pstate, CopyStmt *co
 #else
 	RangeTblEntry *rte = nsitem->p_rte;
 	rte->requiredPerms = ACL_SELECT;
+#endif
 #endif
 
 #if PG_VERSION_NUM >= 160000
@@ -92,6 +97,8 @@ CheckQueryPermissions(Query *query, const char *query_string) {
 	/* First we let postgres plan the query */
 #if PG_VERSION_NUM >= 190000
 	PlannedStmt *postgres_plan = pg_plan_query(copied_query, query_string, CURSOR_OPT_PARALLEL_OK, NULL, NULL);
+#elif PG_VERSION_NUM < 130000
+	PlannedStmt *postgres_plan = pg_plan_query(copied_query, CURSOR_OPT_PARALLEL_OK, NULL);
 #else
 	PlannedStmt *postgres_plan = pg_plan_query(copied_query, query_string, CURSOR_OPT_PARALLEL_OK, NULL);
 #endif
@@ -391,7 +398,11 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 			if (is_duckdb_table) {
 				char *select_query;
 				select_query = psprintf("SELECT * FROM %s", quote_identifier(get_rel_name(RelationGetRelid(rel))));
+#if PG_VERSION_NUM < 130000
+				RawStmt *raw_stmt = linitial_node(RawStmt, raw_parser(select_query));
+#else
 				RawStmt *raw_stmt = linitial_node(RawStmt, raw_parser(select_query, RAW_PARSE_DEFAULT));
+#endif
 				copy_stmt->query = raw_stmt->stmt;
 				copy_stmt->relation = nullptr;
 			}
