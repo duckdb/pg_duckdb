@@ -10671,6 +10671,8 @@ get_const_expr(Const *constval, deparse_context *context, int showtype)
 	bool		needlabel = false;
 
 	showtype = pgduckdb_show_type(constval, showtype);
+	if (pgduckdb_append_array_const(constval, buf, showtype))
+		return;
 
 	if (constval->constisnull)
 	{
