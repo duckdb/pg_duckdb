@@ -1,5 +1,8 @@
 #pragma once
 
+#include <type_traits>
+#include <utility>
+
 #include <duckdb/common/error_data.hpp>
 
 extern "C" {
@@ -9,12 +12,12 @@ extern "C" {
 namespace pgduckdb {
 
 template <typename Func, Func func, typename... FuncArgs>
-typename std::invoke_result<Func, FuncArgs &...>::type
-__CPPFunctionGuard__(const char *func_name, const char *file_name, int line, FuncArgs &...args) {
+typename std::invoke_result<Func, FuncArgs &&...>::type
+__CPPFunctionGuard__(const char *func_name, const char *file_name, int line, FuncArgs &&...args) {
 	const char *error_message = nullptr;
 	auto pg_es_start = PG_exception_stack;
 	try {
-		return func(args...);
+		return func(std::forward<FuncArgs>(args)...);
 	} catch (duckdb::Exception &ex) {
 		duckdb::ErrorData edata(ex.what());
 		error_message = pstrdup(edata.Message().c_str());
