@@ -18,6 +18,7 @@ And then you can follow the instructions for your operating system below
 - **PostgreSQL**: 14, 15, 16, 17, or 18
 - **Operating Systems**: Ubuntu 22.04-24.04, macOS, or other UNIX-like systems
 - **Build Tools**: Standard PostgreSQL extension build tools
+- **C++ Compiler**: C++17 support required (GCC 8+ / Clang 5+). `pg_duckdb` builds with `-std=c++17` and uses `std::filesystem`, so a C++11 toolchain (as DuckDB's build docs suggest) is insufficient.
 - **DuckDB Dependencies**: [DuckDB build requirements](https://duckdb.org/docs/stable/dev/building/overview.html)
 
 For full dependency details, see our [GitHub Actions workflow](../.github/workflows/build_and_test.yaml).
