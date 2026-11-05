@@ -309,6 +309,26 @@ static SubscriptRoutines duckdb_map_subscript_routines = {
     .store_leakproof = true,
 };
 
+static void
+DuckdbVariantSubscriptTransform(SubscriptingRef *sbsref, List *indirection, struct ParseState *pstate, bool is_slice,
+                                bool is_assignment) {
+	DuckdbSubscriptTransform(sbsref, indirection, pstate, is_slice, is_assignment, "duckdb.variant");
+}
+
+static void
+DuckdbVariantSubscriptExecSetup(const SubscriptingRef *sbsref, SubscriptingRefState *sbsrefstate,
+                                SubscriptExecSteps *methods) {
+	DuckdbSubscriptExecSetup(sbsref, sbsrefstate, methods, "duckdb.variant");
+}
+
+static SubscriptRoutines duckdb_variant_subscript_routines = {
+    .transform = DuckdbVariantSubscriptTransform,
+    .exec_setup = DuckdbVariantSubscriptExecSetup,
+    .fetch_strict = false,
+    .fetch_leakproof = true,
+    .store_leakproof = true,
+};
+
 } // namespace pg
 
 } // namespace pgduckdb
@@ -329,5 +349,9 @@ DECLARE_PG_FUNCTION(duckdb_struct_subscript) {
 
 DECLARE_PG_FUNCTION(duckdb_map_subscript) {
 	PG_RETURN_POINTER(&pgduckdb::pg::duckdb_map_subscript_routines);
+}
+
+DECLARE_PG_FUNCTION(duckdb_variant_subscript) {
+	PG_RETURN_POINTER(&pgduckdb::pg::duckdb_variant_subscript_routines);
 }
 }

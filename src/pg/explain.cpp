@@ -18,12 +18,12 @@ ExplainPropertyText(const char *qlabel, const char *value, ExplainState *es) {
 	PostgresFunctionGuard(::ExplainPropertyText, qlabel, value, es);
 }
 
-duckdb::ExplainFormat
+duckdb::ProfilerPrintFormat
 DuckdbExplainFormat(ExplainState *es) {
 	if (es->format == EXPLAIN_FORMAT_JSON)
-		return duckdb::ExplainFormat::JSON;
+		return duckdb::ProfilerPrintFormat::JSON();
 
-	return duckdb::ExplainFormat::DEFAULT;
+	return duckdb::ProfilerPrintFormat::Default();
 }
 
 bool

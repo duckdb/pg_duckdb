@@ -47,7 +47,7 @@ SchemaItems::GetTable(const duckdb::string &entry_name) {
 	Relation rel = PostgresTable::OpenRelation(rel_oid);
 
 	duckdb::CreateTableInfo info;
-	info.table = entry_name;
+	info.SetTableName(duckdb::Identifier(entry_name));
 	PostgresTable::SetTableInfo(info, rel);
 
 	auto cardinality = EstimateRelSize(rel);
@@ -71,7 +71,7 @@ PostgresTransaction::GetSchema(const duckdb::string &name) {
 	}
 
 	duckdb::CreateSchemaInfo create_schema;
-	create_schema.schema = name;
+	create_schema.SetQualifiedName(duckdb::QualifiedName({duckdb::Identifier(name)}, duckdb::Identifier()));
 	auto pg_schema = duckdb::make_uniq<PostgresSchema>(catalog, create_schema, snapshot);
 	schemas->emplace(std::make_pair(name, SchemaItems(std::move(pg_schema), name)));
 	return schemas->at(name).GetSchema();

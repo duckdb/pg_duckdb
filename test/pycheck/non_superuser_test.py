@@ -6,6 +6,9 @@ from .utils import Postgres
 
 
 def test_community_extensions(pg: Postgres):
+    # The tests allow unsigned extensions for the httpfs of the DuckDB build,
+    # this test needs the signature checks and not httpfs
+    pg.sql("DELETE FROM duckdb.extensions WHERE name = 'httpfs'")
     pg.create_user("user1", psycopg.sql.SQL("IN ROLE duckdb_group"))
     # Raw extension installation should not be possible non-superusers, because
     # that would allow installing extensions from community repos.
@@ -17,9 +20,7 @@ def test_community_extensions(pg: Postgres):
             psycopg.errors.InternalError,
             match="Permission Error: File system LocalFileSystem has been disabled by configuration",
         ):
-            cur.sql(
-                "SELECT * FROM duckdb.raw_query($$ INSTALL chaos FROM community; $$)"
-            )
+            cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL h3 FROM community; $$)")
 
     # Even if such community extensions somehow get installed, it's not possible
     # to load them without changing allow_community_extensions. Not even for a
@@ -27,22 +28,24 @@ def test_community_extensions(pg: Postgres):
     with pg.cur() as cur:
         cur.sql("SET duckdb.force_execution = false")
         cur.sql("SET duckdb.allow_community_extensions = true")
-        cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL chaos FROM community; $$)")
+        cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL h3 FROM community; $$)")
 
     with pg.cur() as cur:
         cur.sql("SET duckdb.allow_community_extensions = false")
+        cur.sql("SET duckdb.allow_unsigned_extensions = false")
         cur.sql("SET duckdb.force_execution = false")
         with pytest.raises(
             Exception,
             match="IO Error: Extension .* could not be loaded because its signature is either missing or invalid and unsigned extensions are disabled by configuration",
         ):
-            cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD chaos; $$)")
+            cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD h3; $$)")
 
     # But it should be possible to load them after changing that setting.
     with pg.cur() as cur:
         cur.sql("SET duckdb.allow_community_extensions = true")
+        cur.sql("SET duckdb.allow_unsigned_extensions = false")
         cur.sql("SET duckdb.force_execution = false")
-        cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD chaos; $$)")
+        cur.sql("SELECT * FROM duckdb.raw_query($$ LOAD h3; $$)")
 
     # And that setting is only changeable by superusers
     with pg.cur() as cur:

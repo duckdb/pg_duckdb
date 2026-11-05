@@ -11,6 +11,8 @@ class UnsupportedTypeOptimizer : public duckdb::LogicalOperatorVisitor {
 public:
 	//! Override VisitExpression to check for unsupported types
 	void VisitExpression(duckdb::unique_ptr<duckdb::Expression> *expression) override;
+	//! Override VisitOperator to check the columns read by table scans
+	void VisitOperator(duckdb::LogicalOperator &op) override;
 
 	//! Get the optimizer extension to register with DuckDB
 	static duckdb::OptimizerExtension GetOptimizerExtension();

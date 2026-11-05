@@ -2,6 +2,8 @@
 
 #include <inttypes.h>
 
+#include "pg_config.h"
+
 /*
 This file contains a few Postgres declarations.
 
@@ -23,7 +25,11 @@ typedef struct BufferAccessStrategyData *BufferAccessStrategy;
 
 typedef double Cardinality;
 
+#if PG_VERSION_NUM >= 190000
+typedef uint64_t Datum;
+#else
 typedef uintptr_t Datum;
+#endif
 
 struct MemoryContextData;
 typedef MemoryContextData *MemoryContext;

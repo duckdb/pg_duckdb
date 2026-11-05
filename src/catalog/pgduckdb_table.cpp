@@ -16,7 +16,13 @@ namespace pgduckdb {
 PostgresTable::PostgresTable(duckdb::Catalog &_catalog, duckdb::SchemaCatalogEntry &_schema,
                              duckdb::CreateTableInfo &_info, Relation _rel, Cardinality _cardinality,
                              Snapshot _snapshot)
-    : duckdb::TableCatalogEntry(_catalog, _schema, _info), rel(_rel), cardinality(_cardinality), snapshot(_snapshot) {
+    : duckdb::TableCatalogEntry(_catalog, _schema, _info), columns(_info.columns.Copy()), rel(_rel),
+      cardinality(_cardinality), snapshot(_snapshot) {
+}
+
+const duckdb::ColumnList &
+PostgresTable::GetColumns() const {
+	return columns;
 }
 
 PostgresTable::~PostgresTable() {
@@ -39,7 +45,7 @@ PostgresTable::SetTableInfo(duckdb::CreateTableInfo &info, Relation rel) {
 		Form_pg_attribute attr = GetAttr(tupleDesc, i);
 		auto col_name = duckdb::string(GetAttName(attr));
 		auto duck_type = ConvertPostgresToDuckColumnType(attr);
-		info.columns.AddColumn(duckdb::ColumnDefinition(col_name, duck_type));
+		info.columns.AddColumn(duckdb::ColumnDefinition(duckdb::Identifier(col_name), duck_type));
 		/* Log column name and type */
 		pd_log(DEBUG2, "(DuckDB/SetTableInfo) Column name: '%s', Type: %s", col_name.c_str(),
 		       duck_type.ToString().c_str());

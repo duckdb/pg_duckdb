@@ -4,9 +4,11 @@
 
 #include "duckdb.hpp"
 #include "duckdb/common/exception.hpp"
+#include "duckdb/main/database_manager.hpp"
 #include "duckdb/main/extension/extension_loader.hpp"
 #include "duckdb/optimizer/optimizer_extension.hpp"
 #include "duckdb/storage/storage_extension.hpp"
+#include "duckdb/transaction/meta_transaction.hpp"
 
 #include "pgduckdb/catalog/pgduckdb_storage.hpp"
 #include "pgduckdb/pg/guc.hpp"
@@ -125,7 +127,7 @@ DuckDBManager::Initialize() {
 		// memory_unit_conversion_table in guc.c) to a string with the "MiB" suffix, as required by DuckDB's memory
 		// parser. This ensures the value is interpreted correctly by DuckDB.
 		std::string memory_limit = std::to_string(duckdb_maximum_memory) + "MiB";
-		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(memory_limit);
+		config.options.maximum_memory = duckdb::DBConfig::ParseMemoryLimit(memory_limit).GetIndex();
 		elog(DEBUG2, "[PGDuckDB] Set DuckDB option: 'maximum_memory'=%dMB", duckdb_maximum_memory);
 	}
 	if (duckdb_max_temp_directory_size != NULL && strlen(duckdb_max_temp_directory_size) != 0) {
@@ -191,7 +193,7 @@ DuckDBManager::Initialize() {
 
 	// Register pgduckdb as a loaded extension so it appears in duckdb_extensions()
 	auto &extension_manager = database->instance->GetExtensionManager();
-	auto extension_active_load = extension_manager.BeginLoad("pgduckdb");
+	auto extension_active_load = extension_manager.BeginLoad(duckdb::ExtensionLoadOptions("pgduckdb"));
 	D_ASSERT(extension_active_load);
 	duckdb::ExtensionInstallInfo extension_install_info;
 	extension_active_load->FinishLoad(extension_install_info);
@@ -200,11 +202,11 @@ DuckDBManager::Initialize() {
 
 	auto &context = *connection->context;
 
-	auto &db_manager = duckdb::DatabaseManager::Get(context);
-	default_dbname = db_manager.GetDefaultDatabase(context);
-	pgduckdb::DuckDBQueryOrThrow(context, "SET TimeZone =" + duckdb::KeywordHelper::WriteQuoted(pg_time_zone));
-	pgduckdb::DuckDBQueryOrThrow(context, "SET default_collation =" +
-	                                          duckdb::KeywordHelper::WriteQuoted(duckdb_default_collation));
+	default_dbname = duckdb::DatabaseManager::GetDefaultDatabase(context).GetIdentifierName();
+	pgduckdb::DuckDBQueryOrThrow(context,
+	                             "SET TimeZone =" + duckdb::KeywordHelper::WriteQuotedAndEscaped(pg_time_zone, '\''));
+	pgduckdb::DuckDBQueryOrThrow(context, "SET default_collation =" + duckdb::KeywordHelper::WriteQuotedAndEscaped(
+	                                                                      duckdb_default_collation, '\''));
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE 'pgduckdb' (TYPE pgduckdb)");
 	pgduckdb::DuckDBQueryOrThrow(context, "ATTACH DATABASE ':memory:' AS pg_temp;");
 
@@ -214,7 +216,7 @@ DuckDBManager::Initialize() {
 	if (pgduckdb::IsMotherDuckEnabled()) {
 		auto timeout = FindMotherDuckBackgroundCatalogRefreshInactivityTimeout();
 		if (timeout != nullptr) {
-			auto quoted_timeout = duckdb::KeywordHelper::WriteQuoted(timeout);
+			auto quoted_timeout = duckdb::KeywordHelper::WriteQuotedAndEscaped(timeout, '\'');
 			pgduckdb::DuckDBQueryOrThrow(context, "SET motherduck_background_catalog_refresh_inactivity_timeout=" +
 			                                          quoted_timeout);
 		}
@@ -239,7 +241,7 @@ DuckDBManager::Initialize() {
 		for (auto &dir : duckdb::StringUtil::Split(duckdb_allowed_directories, ',')) {
 			duckdb::StringUtil::Trim(dir);
 			if (!dir.empty()) {
-				dirs.push_back(duckdb::KeywordHelper::WriteQuoted(dir));
+				dirs.push_back(duckdb::KeywordHelper::WriteQuotedAndEscaped(dir, '\''));
 			}
 		}
 		if (!dirs.empty()) {
@@ -343,14 +345,15 @@ DuckDBManager::RefreshConnectionState(duckdb::ClientContext &context) {
 		 * connection will inherit these same filesystem restrictions.
 		 * This shouldn't be a problem in practice.
 		 */
-		pgduckdb::DuckDBQueryOrThrow(context, "SET disabled_filesystems=" +
-		                                          duckdb::KeywordHelper::WriteQuoted(disabled_filesystems));
+		pgduckdb::DuckDBQueryOrThrow(context,
+		                             "SET disabled_filesystems=" +
+		                                 duckdb::KeywordHelper::WriteQuotedAndEscaped(disabled_filesystems, '\''));
 	}
 
 	if (strlen(duckdb_azure_transport_option_type) > 0) {
-		pgduckdb::DuckDBQueryOrThrow(context,
-		                             "SET azure_transport_option_type=" +
-		                                 duckdb::KeywordHelper::WriteQuoted(duckdb_azure_transport_option_type));
+		pgduckdb::DuckDBQueryOrThrow(
+		    context, "SET azure_transport_option_type=" +
+		                 duckdb::KeywordHelper::WriteQuotedAndEscaped(duckdb_azure_transport_option_type, '\''));
 	}
 
 	const auto extensions_table_last_seq = GetSeqLastValue("extensions_table_seq");

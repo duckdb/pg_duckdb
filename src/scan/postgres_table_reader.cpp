@@ -2,6 +2,7 @@
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/utility/signal_guard.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -44,6 +45,8 @@ PostgresTableReader::PostgresTableReader()
 void
 PostgresTableReader::Init(const char *table_scan_query, bool count_tuples_only) {
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+	// Setting up a parallel scan creates DSM segments, which saves and restores the signal mask
+	ThreadSignalUnblockGuard signal_mask_guard;
 	PostgresScopedStackReset scoped_stack_reset;
 	PostgresMemberGuard(PostgresTableReader::InitUnsafe, table_scan_query, count_tuples_only);
 }
@@ -170,6 +173,7 @@ void
 PostgresTableReader::Cleanup() {
 	D_ASSERT(!cleaned_up);
 	cleaned_up = true;
+	ThreadSignalUnblockGuard signal_mask_guard;
 	PostgresScopedStackReset scoped_stack_reset;
 	PostgresMemberGuard(PostgresTableReader::CleanupUnsafe);
 }

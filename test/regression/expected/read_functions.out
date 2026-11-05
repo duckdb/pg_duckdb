@@ -359,7 +359,7 @@ SELECT * FROM read_csv('../../non-existing-file.csv');
 ERROR:  (PGDuckDB/CreatePlan) Prepared query returned an error: IO Error: No files found that match the pattern "../../non-existing-file.csv"
 
 LINE 1: SELECT read_csv.* FROM system.main.read_csv('../../non-existing-file.csv'::text...
-                               ^
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 -- We override Postgres its default column name for subscript expressions. In
 -- the following example the column would normally be named "r", which is
 -- pretty non-descriptive especially when selecting multiple columns from the
@@ -483,19 +483,14 @@ LIMIT 1;
 (1 row)
 
 SELECT * FROM iceberg_snapshots('../../data/lineitem_iceberg') ORDER BY sequence_number;
- sequence_number |     snapshot_id     |         timestamp_ms         |                                         manifest_list                                          
------------------+---------------------+------------------------------+------------------------------------------------------------------------------------------------
-               1 | 3776207205136740581 | Wed Feb 15 15:07:54.504 2023 | lineitem_iceberg/metadata/snap-3776207205136740581-1-cf3d0be5-cf70-453d-ad8f-48fdc412e608.avro
-               2 | 7635660646343998149 | Wed Feb 15 15:08:14.73 2023  | lineitem_iceberg/metadata/snap-7635660646343998149-1-10eaca8a-1e1c-421e-ad6d-b232e5ee23d3.avro
+ sequence_number |     snapshot_id     |      parent_id      |         timestamp_ms         |                                         manifest_list                                          | operation |                                                                                                                                                                        summary                                                                                                                                                                         
+-----------------+---------------------+---------------------+------------------------------+------------------------------------------------------------------------------------------------+-----------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+               1 | 3776207205136740581 |                     | Wed Feb 15 15:07:54.504 2023 | lineitem_iceberg/metadata/snap-3776207205136740581-1-cf3d0be5-cf70-453d-ad8f-48fdc412e608.avro | append    | {added-data-files=1, added-files-size=1390176, added-records=60175, changed-partition-count=1, spark.app.id=local-1676472783435, total-data-files=1, total-delete-files=0, total-equality-deletes=0, total-files-size=1390176, total-position-deletes=0, total-records=60175}
+               2 | 7635660646343998149 | 3776207205136740581 | Wed Feb 15 15:08:14.73 2023  | lineitem_iceberg/metadata/snap-7635660646343998149-1-10eaca8a-1e1c-421e-ad6d-b232e5ee23d3.avro | overwrite | {added-data-files=1, added-files-size=1208539, added-records=51793, changed-partition-count=1, deleted-data-files=1, deleted-records=60175, removed-files-size=1390176, spark.app.id=local-1676472783435, total-data-files=1, total-delete-files=0, total-equality-deletes=0, total-files-size=1208539, total-position-deletes=0, total-records=51793}
 (2 rows)
 
 SELECT * FROM iceberg_metadata('../../data/lineitem_iceberg',  allow_moved_paths => true);
-                             manifest_path                              | manifest_sequence_number | manifest_content | status  | content  |                                     file_path                                      
-------------------------------------------------------------------------+--------------------------+------------------+---------+----------+------------------------------------------------------------------------------------
- lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m1.avro |                        2 | DATA             | ADDED   | EXISTING | lineitem_iceberg/data/00041-414-f3c73457-bbd6-4b92-9c15-17b241171b16-00001.parquet
- lineitem_iceberg/metadata/10eaca8a-1e1c-421e-ad6d-b232e5ee23d3-m0.avro |                        2 | DATA             | DELETED | EXISTING | lineitem_iceberg/data/00000-411-0792dcfe-4e25-4ca3-8ada-175286069a47-00001.parquet
-(2 rows)
-
+ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Invalid Configuration Error: 'manifest_entry.sequence_number' is only allowed to be NULL for ADDED entries
 -- read_json
 SELECT COUNT(r['a']) FROM read_json('../../data/table.json') r;
  count 

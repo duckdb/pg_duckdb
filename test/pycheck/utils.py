@@ -23,6 +23,12 @@ from psycopg import sql
 TEST_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
 os.chdir(TEST_DIR)
 
+# The extension repository of the DuckDB build, set by "make pycheck"
+DUCKDB_EXTENSION_REPOSITORY = os.environ.get(
+    "PG_DUCKDB_EXTENSION_REPOSITORY",
+    str(TEST_DIR.parents[1] / "third_party/duckdb/build/release/repository"),
+)
+
 PGDATA = TEST_DIR / "pgdata"
 PGHOST = "127.0.0.1"
 
@@ -753,6 +759,8 @@ class Postgres(OutputSilencer):
             pgconf.write("shared_preload_libraries = pg_duckdb\n")
             pgconf.write("duckdb.force_execution = 'true'\n")
             pgconf.write("duckdb.postgres_role = 'duckdb_group'\n")
+            # The tests install httpfs from the DuckDB build, which is not signed
+            pgconf.write("duckdb.allow_unsigned_extensions = 'true'\n")
 
     def pgctl(self, command, **kwargs):
         pg_ctl = pg_bin("pg_ctl")
@@ -789,6 +797,13 @@ class Postgres(OutputSilencer):
         self.stop()
         self.start()
 
+    def install_httpfs(self):
+        """Installs httpfs from the DuckDB build, so that tests do not download one"""
+        self.sql(
+            "SELECT duckdb.install_extension('httpfs', %s)",
+            (DUCKDB_EXTENSION_REPOSITORY,),
+        )
+
     def reset(self):
         os.truncate(self.pgdata / "postgresql.auto.conf", 0)
         try:
@@ -796,6 +811,8 @@ class Postgres(OutputSilencer):
         except psycopg.errors.InvalidSchemaName:
             # pg_duckdb is not installed, so no need to reset the extensions
             pass
+        else:
+            self.install_httpfs()
 
         # If a previous test restarted postgres, it was probably because of some
         # config that could only be changed across restarts. To reset those, we'll

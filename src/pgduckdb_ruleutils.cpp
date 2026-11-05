@@ -116,6 +116,10 @@ pgduckdb_is_duckdb_subscript_type(Oid type_oid) {
 		return true;
 	}
 
+	if (pgduckdb::DuckdbVariantOid() == type_oid) {
+		return true;
+	}
+
 	return false;
 }
 

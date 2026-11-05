@@ -206,7 +206,7 @@ GetQueryError(const char *query, List *server_options) {
 	std::vector<std::string> restricted_options_in_server;
 	for (const auto &k : kv_secret->redact_keys) {
 		if (FindOption(server_options, k.c_str()) != NULL) {
-			restricted_options_in_server.push_back(k);
+			restricted_options_in_server.push_back(k.GetIdentifierName());
 		}
 	}
 

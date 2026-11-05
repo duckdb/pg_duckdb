@@ -6,28 +6,23 @@ CREATE TABLE t (a INT);
 PREPARE f (INT) AS SELECT count(*) FROM t WHERE a = $1;
 SET plan_cache_mode TO force_generic_plan;
 EXPLAIN (COSTS OFF) EXECUTE f(2);
-          QUERY PLAN           
--------------------------------
+          QUERY PLAN          
+------------------------------
  Custom Scan (DuckDBScan)
    DuckDB Execution Plan: 
  
- ┌───────────────────────────┐
- │    UNGROUPED_AGGREGATE    │
- │    ────────────────────   │
- │        Aggregates:        │
- │        count_star()       │
- └─────────────┬─────────────┘
- ┌─────────────┴─────────────┐
- │   PGDUCKDB_POSTGRES_SCAN  │
- │    ────────────────────   │
- │          Table: t         │
- │        Filters: a=2       │
- │                           │
- │         ~510 rows         │
- └───────────────────────────┘
+ ╭─ Ungrouped Aggregate ────╮
+ │ Aggregates: count_star() │
+ │ ~1 row                   │
+ ╰─────────────┬────────────╯
+ ╭─ Pgduckdb Postgres Scan ─╮
+ │ Table: t                 │
+ │ Filters: a = 2           │
+ │ ~510 rows                │
+ ╰──────────────────────────╯
  
  
-(19 rows)
+(14 rows)
 
 EXECUTE f(1); -- crash
  count 

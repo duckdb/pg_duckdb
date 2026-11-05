@@ -21,11 +21,13 @@ public:
 	duckdb::TableFunction GetScanFunction(duckdb::ClientContext &context,
 	                                      duckdb::unique_ptr<duckdb::FunctionData> &bind_data) override;
 	duckdb::TableStorageInfo GetStorageInfo(duckdb::ClientContext &context) override;
+	const duckdb::ColumnList &GetColumns() const override;
 
 	static Relation OpenRelation(Oid relid);
 	static void SetTableInfo(duckdb::CreateTableInfo &info, Relation rel);
 
 protected:
+	duckdb::ColumnList columns;
 	Relation rel;
 	Cardinality cardinality;
 	Snapshot snapshot;

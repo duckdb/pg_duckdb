@@ -11,13 +11,17 @@ RUN apt-get update -qq && \
     postgresql-server-dev-${POSTGRES_VERSION} \
     build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
     libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev \
-    libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache ninja-build git libcurl4-openssl-dev && \
+    libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache ninja-build git libcurl4-openssl-dev clang-14 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
 ENV PATH=/usr/lib/ccache:$PATH
 ENV CCACHE_DIR=/ccache
+# Build DuckDB and its extensions with clang: the httpfs extension does not compile with bookworm's GCC 12 in C++17
+# mode (it returns a unique_ptr of a derived type, which needs the implicit move rules of GCC 13+ or clang).
+# pg_duckdb itself is still built with GCC, like Postgres.
+ENV DUCKDB_CC=/usr/bin/clang-14 DUCKDB_CXX=/usr/bin/clang++-14
 
 # permissions so we can run as `postgres` (uid=999,gid=999)
 RUN mkdir /out

@@ -77,12 +77,16 @@ struct {
 	Oid union_oid;
 	/* The OID of the duckdb.map type */
 	Oid map_oid;
+	/* The OID of the duckdb.variant type */
+	Oid variant_oid;
 	/* The OID of the duckdb._struct type  */
 	Oid struct_array_oid;
 	/* The OID of the duckdb._union type */
 	Oid union_array_oid;
 	/* The OID of the duckdb._map type */
 	Oid map_array_oid;
+	/* The OID of the duckdb._variant type */
+	Oid variant_array_oid;
 	/* The OID of the duckdb.json */
 	Oid json_oid;
 	/* The OID of the duckdb Table Access Method */
@@ -330,12 +334,16 @@ IsExtensionRegistered() {
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("unresolved_type"), cache.schema_oid);
 		cache.union_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("union"), cache.schema_oid);
 		cache.map_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("map"), cache.schema_oid);
+		cache.variant_oid =
+		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("variant"), cache.schema_oid);
 
 		cache.struct_array_oid =
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("_struct"), cache.schema_oid);
 		cache.union_array_oid =
 		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("_union"), cache.schema_oid);
 		cache.map_array_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("_map"), cache.schema_oid);
+		cache.variant_array_oid =
+		    GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("_variant"), cache.schema_oid);
 
 		cache.json_oid = GetSysCacheOid2(TYPENAMENSP, Anum_pg_type_oid, CStringGetDatum("json"), cache.schema_oid);
 
@@ -447,6 +455,18 @@ Oid
 DuckdbMapArrayOid() {
 	Assert(cache.valid);
 	return cache.map_array_oid;
+}
+
+Oid
+DuckdbVariantOid() {
+	Assert(cache.valid);
+	return cache.variant_oid;
+}
+
+Oid
+DuckdbVariantArrayOid() {
+	Assert(cache.valid);
+	return cache.variant_array_oid;
 }
 
 Oid

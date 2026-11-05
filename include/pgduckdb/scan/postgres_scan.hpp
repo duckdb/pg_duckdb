@@ -2,6 +2,8 @@
 
 #include "duckdb.hpp"
 
+#include <optional>
+
 #include "pgduckdb/pg/declarations.hpp"
 #include "pgduckdb/utility/allocator.hpp"
 
@@ -25,8 +27,8 @@ struct PostgresScanGlobalState : public duckdb::GlobalTableFunctionState {
 	void UnregisterLocalState();
 
 private:
-	int ExtractQueryFilters(duckdb::TableFilter *filter, const char *column_name, duckdb::string &filters,
-	                        bool is_optional_filter_parent);
+	std::optional<duckdb::string> ExtractQueryFilters(const duckdb::Expression &expr, const char *column_name,
+	                                                  bool is_inside_optional_filter);
 	PostgresScanGlobalState(const PostgresScanGlobalState &) = delete;
 	PostgresScanGlobalState &operator=(const PostgresScanGlobalState &) = delete;
 

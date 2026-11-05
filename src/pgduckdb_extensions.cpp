@@ -21,18 +21,19 @@ namespace ddb {
 
 std::string
 LoadExtensionQuery(const std::string &extension_name) {
-	return "LOAD " + duckdb::KeywordHelper::WriteQuoted(extension_name);
+	return "LOAD " + duckdb::KeywordHelper::WriteQuotedAndEscaped(extension_name, '\'');
 }
 
 std::string
 InstallExtensionQuery(const std::string &extension_name, const std::string &repository) {
-	auto install_extension_command = "INSTALL " + duckdb::KeywordHelper::WriteQuoted(extension_name) + " FROM ";
+	auto install_extension_command =
+	    "INSTALL " + duckdb::KeywordHelper::WriteQuotedAndEscaped(extension_name, '\'') + " FROM ";
 
 	if (repository == "core" || repository == "core_nightly" || repository == "community" ||
 	    repository == "local_build_debug" || repository == "local_build_release") {
 		install_extension_command += repository;
 	} else {
-		install_extension_command += duckdb::KeywordHelper::WriteQuoted(repository);
+		install_extension_command += duckdb::KeywordHelper::WriteQuotedAndEscaped(repository, '\'');
 	}
 
 	return install_extension_command;

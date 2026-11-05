@@ -1,3 +1,48 @@
+# 1.2.0 (2026-11-02)
+
+## Added
+
+- Add support for PostgreSQL 19. ([#983], [#1106])
+- Add `read_vortex` function to read [Vortex](https://vortex.dev) files, also from an array of paths. ([#1038])
+- Add `read_text` and `read_blob` functions to read files as text or binary blobs. ([#1054])
+- Add `duckdb.allowed_directories` setting, a list of directories and URL prefixes that stay accessible when `duckdb.enable_external_access` is disabled. ([#1024])
+- Support `INSERT INTO ... SELECT ...` into Postgres tables where the `SELECT` is executed by DuckDB, e.g. to load data from `read_parquet` into a regular table. Columns selected with the `r['col']` syntax need an explicit cast to the column type. ([#688])
+- Add `duckdb.variant` type for DuckDB `VARIANT` values, and support the DuckDB v2 types `TIMESTAMP_TZ_NS` (as `timestamptz`), `TUPLE` (as `duckdb.struct`) and `NULL`. ([#1103])
+- Allow installing pg_duckdb in a schema other than `public` with `CREATE EXTENSION pg_duckdb SCHEMA ...`. The default is still `public`. ([#1023])
+- Publish prebuilt, statically linked Linux binaries for PostgreSQL 14 to 18 on x86_64 and aarch64 with each release. ([#1113])
+
+## Changed
+
+- Update to DuckDB v2.0.0. ([#1025], [#1103])
+- `iceberg_snapshots()` returns the additional columns `parent_id`, `operation` and `summary`. ([#1103])
+- `ALTER TABLE ... ADD COLUMN` with `NOT NULL` or `UNIQUE` is now supported for DuckDB tables. ([#1103])
+- The `httpfs` DuckDB extension is no longer built into the default (dynamically linked) build. DuckDB installs and loads it when a query first needs it, like other extensions. The statically linked builds still include it. ([#1111])
+- `DUCKDB_BUILD=ReleaseStatic` builds OpenSSL and curl with vcpkg and links them statically, together with the lz4 that DuckDB bundles, so the binary does not depend on the system versions. The new `DUCKDB_BUILD=ReleaseStaticSystem` links DuckDB statically but uses the system libraries. ([#1111], [#1112])
+
+## Fixed
+
+- Fix queries that scan Postgres tables with parallel workers hanging on macOS. ([#1105])
+- Fix creating the pg_duckdb extension inside a transaction, which could leave pg_duckdb's internal caches in an inconsistent state, so that e.g. `ALTER SEQUENCE` was handled as a DuckDB table command. ([#1058])
+- Fix queries on views over non-Postgres data, such as Parquet files, being treated as queries that read Postgres tables. ([#1001])
+- Fix the top level statement state being lost when DuckDB secrets are loaded. ([#1030])
+
+[#983]: https://github.com/duckdb/pg_duckdb/pull/983
+[#1106]: https://github.com/duckdb/pg_duckdb/pull/1106
+[#1038]: https://github.com/duckdb/pg_duckdb/pull/1038
+[#1054]: https://github.com/duckdb/pg_duckdb/pull/1054
+[#1024]: https://github.com/duckdb/pg_duckdb/pull/1024
+[#688]: https://github.com/duckdb/pg_duckdb/pull/688
+[#1103]: https://github.com/duckdb/pg_duckdb/pull/1103
+[#1023]: https://github.com/duckdb/pg_duckdb/pull/1023
+[#1113]: https://github.com/duckdb/pg_duckdb/pull/1113
+[#1025]: https://github.com/duckdb/pg_duckdb/pull/1025
+[#1111]: https://github.com/duckdb/pg_duckdb/pull/1111
+[#1112]: https://github.com/duckdb/pg_duckdb/pull/1112
+[#1105]: https://github.com/duckdb/pg_duckdb/pull/1105
+[#1058]: https://github.com/duckdb/pg_duckdb/pull/1058
+[#1001]: https://github.com/duckdb/pg_duckdb/pull/1001
+[#1030]: https://github.com/duckdb/pg_duckdb/pull/1030
+
 # 1.1.1 (2025-12-16)
 
 ## Changed
