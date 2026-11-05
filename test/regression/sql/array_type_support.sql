@@ -373,6 +373,15 @@ SELECT * FROM regclass_array_2d;
 
 -- Complex DuckDB array types testing
 
+-- Nested fixed-length ARRAY (issue #602): a fixed-length array whose child is
+-- itself a fixed-length array must round-trip as a multi-dimensional Postgres
+-- array, exercising the ARRAY recursion in AppendValueAtDimension.
+SELECT * FROM duckdb.query($$
+SELECT
+    CAST([[1, 2, 3], [4, 5, 6]] AS INT[3][2]) as fixed_nested_int,
+    CAST([['a', 'b'], ['c', 'd']] AS VARCHAR[2][2]) as fixed_nested_varchar
+$$);
+
 -- STRUCT arrays
 SELECT * FROM duckdb.query($$
 SELECT
