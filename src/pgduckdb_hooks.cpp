@@ -35,6 +35,7 @@ extern "C" {
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/vendor/pg_list.hpp"
 #include "pgduckdb/pgduckdb_node.hpp"
+#include "pgduckdb/pgduckdb_secret_redact.hpp"
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
@@ -463,6 +464,8 @@ DuckdbEmitLogHook(ErrorData *edata) {
 	if (prev_emit_log_hook) {
 		prev_emit_log_hook(edata);
 	}
+
+	pgduckdb::RedactSecretsInLogMessage(edata);
 
 	if (edata->elevel == ERROR && edata->sqlerrcode == ERRCODE_UNDEFINED_COLUMN && pgduckdb::IsExtensionRegistered()) {
 		if (ContainsDuckdbRowReturningFunction(debug_query_string)) {

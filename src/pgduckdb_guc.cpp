@@ -134,6 +134,7 @@ char *duckdb_disabled_filesystems = strdup("");
 char *duckdb_allowed_directories = strdup("");
 bool duckdb_enable_external_access = true;
 bool duckdb_allow_community_extensions = false;
+bool duckdb_allow_unredacted_secrets = false;
 bool duckdb_allow_unsigned_extensions = false;
 bool duckdb_autoinstall_known_extensions = true;
 bool duckdb_autoload_known_extensions = true;
@@ -186,6 +187,10 @@ InitGUC() {
 
 	DefineCustomDuckDBVariable("duckdb.allow_community_extensions", "Disable installing community extensions",
 	                           &duckdb_allow_community_extensions, PGC_SUSET);
+
+	DefineCustomDuckDBVariable("duckdb.allow_unredacted_secrets",
+	                           "Allow DuckDB to show unredacted secrets, and write secrets unmasked to the server log",
+	                           &duckdb_allow_unredacted_secrets, PGC_SUSET);
 
 	DefineCustomDuckDBVariable("duckdb.allow_unsigned_extensions",
 	                           "Allow DuckDB to load extensions with invalid or missing signatures",
