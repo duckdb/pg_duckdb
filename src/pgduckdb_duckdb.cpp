@@ -117,6 +117,7 @@ DuckDBManager::Initialize() {
 
 	SET_DUCKDB_OPTION(allow_unsigned_extensions);
 	SET_DUCKDB_OPTION(allow_community_extensions);
+	SET_DUCKDB_OPTION(allow_unredacted_secrets);
 	SET_DUCKDB_OPTION(autoinstall_known_extensions);
 	SET_DUCKDB_OPTION(autoload_known_extensions);
 	SET_DUCKDB_OPTION(temp_directory);

@@ -57,6 +57,18 @@ Determines whether community extensions can be installed.
 - **Default**: `false`
 - **Access**: Superuser-only
 
+### `duckdb.allow_unredacted_secrets`
+
+Allows showing unredacted secrets, and is passed to DuckDB's setting of the same name. When enabled:
+
+- DuckDB allows `duckdb_secrets(redact := false)`, which shows the secret values.
+- pg_duckdb writes statements to the server log as is. By default it redacts statements that may contain secrets, see [Secrets in logs and query statistics](secrets.md#secrets-in-logs-and-query-statistics).
+
+Like other settings that are passed to DuckDB, it cannot be changed after DuckDB has been initialized in the session.
+
+- **Default**: `false`
+- **Access**: Superuser-only
+
 ### `duckdb.unsafe_allow_execution_inside_functions`
 
 Allows DuckDB execution inside PostgreSQL functions. This feature can cause crashes in rare cases and is disabled by default. Use with caution.
