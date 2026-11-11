@@ -23,6 +23,7 @@ extern "C" {
 #include "utils/lsyscache.h"
 #include "optimizer/optimizer.h"
 #include "optimizer/planner.h"
+#include "parser/analyze.h"
 }
 
 #include "pgduckdb/pgduckdb.h"
@@ -43,6 +44,7 @@ static ExecutorStart_hook_type prev_executor_start_hook = NULL;
 static ExecutorFinish_hook_type prev_executor_finish_hook = NULL;
 static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
 static emit_log_hook_type prev_emit_log_hook = NULL;
+static post_parse_analyze_hook_type prev_post_parse_analyze_hook = NULL;
 
 static bool
 ContainsCatalogTable(List *rtes) {
@@ -506,6 +508,29 @@ DuckdbEmitLogHook(ErrorData *edata) {
 	}
 }
 
+#if PG_VERSION_NUM >= 190000
+typedef const JumbleState *JumbleStateArg;
+#else
+typedef JumbleState *JumbleStateArg;
+#endif
+
+static void
+DuckdbPostParseAnalyzeHook(ParseState *pstate, Query *query, JumbleStateArg jstate) {
+	if (prev_post_parse_analyze_hook) {
+		prev_post_parse_analyze_hook(pstate, query, jstate);
+	}
+
+	/*
+	 * pg_stat_statements stores the text of utility statements as is, so it
+	 * would store the secrets of a USER MAPPING. It skips statements without
+	 * a query id. Like the log redaction, this can be disabled with
+	 * duckdb.allow_unredacted_secrets.
+	 */
+	if (!pgduckdb::duckdb_allow_unredacted_secrets && pgduckdb::IsSecretUtilityStatement(query)) {
+		query->queryId = 0;
+	}
+}
+
 void
 DuckdbInitHooks(void) {
 	prev_planner_hook = planner_hook ? planner_hook : standard_planner;
@@ -522,6 +547,9 @@ DuckdbInitHooks(void) {
 
 	prev_emit_log_hook = emit_log_hook ? emit_log_hook : NULL;
 	emit_log_hook = DuckdbEmitLogHook;
+
+	prev_post_parse_analyze_hook = post_parse_analyze_hook;
+	post_parse_analyze_hook = DuckdbPostParseAnalyzeHook;
 
 	DuckdbInitUtilityHook();
 }

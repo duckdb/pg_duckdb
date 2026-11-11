@@ -63,6 +63,7 @@ Allows showing unredacted secrets, and is passed to DuckDB's setting of the same
 
 - DuckDB allows `duckdb_secrets(redact := false)`, which shows the secret values.
 - pg_duckdb writes statements to the server log as is. By default it redacts statements that may contain secrets, see [Secrets in logs and query statistics](secrets.md#secrets-in-logs-and-query-statistics).
+- pg_duckdb no longer hides `CREATE/ALTER USER MAPPING` statements for `duckdb` servers and `CALL duckdb.enable_motherduck(...)` from `pg_stat_statements`, so it records them with their secrets.
 
 Like other settings that are passed to DuckDB, it cannot be changed after DuckDB has been initialized in the session.
 

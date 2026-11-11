@@ -73,6 +73,17 @@ def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
 
+def print_to_console(message):
+    """Prints to the terminal, even while pytest captures the output (also in
+    pytest-xdist workers). Without a terminal, e.g. in CI, it prints to stdout,
+    which pytest shows for failed tests."""
+    try:
+        with open("/dev/tty", "w") as tty:
+            tty.write(message + "\n")
+    except OSError:
+        print(message)
+
+
 def run(command, *args, check=True, shell=None, silent=False, **kwargs):
     """run runs the given command and prints it to stderr"""
 
@@ -387,6 +398,7 @@ class Postgres(OutputSilencer):
     def __init__(self, pgdata):
         self.pgdata = pgdata
         self.log_path = self.pgdata / "pg.log"
+        print_to_console(f"\nServer log: {self.log_path}")
         self.restarted = False
         self.reloaded = False
 
