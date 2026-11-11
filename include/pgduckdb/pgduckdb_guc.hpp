@@ -15,6 +15,7 @@ extern char *duckdb_disabled_filesystems;
 extern char *duckdb_allowed_directories;
 extern bool duckdb_enable_external_access;
 extern bool duckdb_allow_community_extensions;
+extern bool duckdb_allow_unredacted_secrets;
 extern bool duckdb_allow_unsigned_extensions;
 extern bool duckdb_autoinstall_known_extensions;
 extern bool duckdb_autoload_known_extensions;
