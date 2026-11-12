@@ -30,6 +30,8 @@ jobs:
         run: ruff check --output-format=github .
       - name: Run ruff format
         run: ruff format --diff
+      - name: Check regression test schedule
+        run: ./scripts/schedule-check.sh
 
   build-and-test:
     name: "Build and test"
