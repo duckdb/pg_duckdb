@@ -301,6 +301,9 @@ PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
  */
 TupleTableSlot *
 PostgresTableReader::GetNextTuple() {
+	// Must be outside of the guarded function: a Postgres error longjmps out of it without running destructors, which
+	// would leave the stack base pointing to the stack of this (possibly DuckDB) thread.
+	PostgresScopedStackReset scoped_stack_reset;
 	return PostgresMemberGuard(PostgresTableReader::GetNextTupleUnsafe);
 }
 
@@ -314,7 +317,6 @@ PostgresTableReader::GetNextTupleUnsafe() {
 		}
 	}
 
-	PostgresScopedStackReset scoped_stack_reset;
 	table_scan_query_desc->estate->es_query_dsa = parallel_executor_info ? parallel_executor_info->area : NULL;
 	TupleTableSlot *thread_scan_slot = ExecProcNode(table_scan_planstate);
 	table_scan_query_desc->estate->es_query_dsa = NULL;

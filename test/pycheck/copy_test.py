@@ -247,6 +247,7 @@ def test_copy_to_cancelled_foreign_table(pg: Postgres, cur: Cursor, tmp_path: Pa
 
     schema = cur.sql("SELECT current_schema()")
     dbname = cur.sql("SELECT current_database()")
+    user = cur.sql("SELECT current_user")
     cur.sql("CREATE EXTENSION postgres_fdw")
     try:
         cur.sql(f"""
@@ -254,7 +255,11 @@ def test_copy_to_cancelled_foreign_table(pg: Postgres, cur: Cursor, tmp_path: Pa
             OPTIONS (host '{pg.host}', port '{pg.port}', dbname '{dbname}',
                      options '-c duckdb.force_execution=false')
         """)
-        cur.sql("CREATE USER MAPPING FOR CURRENT_USER SERVER loopback")
+        # Without an explicit user libpq connects as the OS user, which does not
+        # exist as a role in the test cluster.
+        cur.sql(
+            f"CREATE USER MAPPING FOR CURRENT_USER SERVER loopback OPTIONS (user '{user}')"
+        )
         cur.sql("CREATE TABLE remote_src AS SELECT i FROM generate_series(1, 20) i")
         # Every row takes a while to produce on the remote side, so the COPY
         # is cancelled while the foreign scan waits for the remote fetch.
