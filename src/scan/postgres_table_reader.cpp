@@ -166,7 +166,15 @@ PostgresTableReader::~PostgresTableReader() {
 		return;
 	}
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	Cleanup();
+	// An exception escaping a destructor terminates the process. Cleanup can raise a Postgres error, e.g. when the
+	// scan is torn down after a cancelled query and a postgres_fdw connection is still busy with the aborted fetch.
+	// Whatever is left behind is released by the transaction abort that follows the failed query.
+	try {
+		Cleanup();
+	} catch (std::exception &ex) {
+		pd_log(WARNING, "(PGDuckDB/~PostgresTableReader) Failed to clean up Postgres scan: %s",
+		       duckdb::ErrorData(ex).RawMessage().c_str());
+	}
 }
 
 void

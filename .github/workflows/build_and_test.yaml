@@ -115,7 +115,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: postgres/inst
-          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}
+          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
@@ -123,6 +123,7 @@ jobs:
         run: |
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml --with-lz4
           make -j8 install
+          make -C contrib/postgres_fdw install
 
       - name: Setup DuckDB build cache
         id: cache-duckdb-build
