@@ -23,3 +23,8 @@ SELECT * from duckdb_view;
 SELECT * from postgres_view;
 SELECT * from duckdb.query($$ FROM pgduckdb.public.duckdb_view $$);
 SELECT * from duckdb.query($$ FROM pgduckdb.public.postgres_view $$);
+
+RESET ROLE;
+DROP VIEW duckdb_view, postgres_view;
+DROP OWNED BY duckdb_view_admin, duckdb_view_user1;
+DROP USER duckdb_view_admin, duckdb_view_user1;
