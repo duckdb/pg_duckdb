@@ -398,7 +398,7 @@ class Postgres(OutputSilencer):
     def __init__(self, pgdata):
         self.pgdata = pgdata
         self.log_path = self.pgdata / "pg.log"
-        print_to_console(f"\nServer log: {self.log_path}")
+        #print_to_console(f"\nServer log: {self.log_path}")
         self.restarted = False
         self.reloaded = False
 

@@ -270,6 +270,13 @@ def test_copy_to_cancelled_foreign_table(pg: Postgres, cur: Cursor, tmp_path: Pa
             OPTIONS (schema_name '{schema}', table_name 'remote_src')
         """)
 
+        # Open the connection to the foreign server with Postgres execution, so
+        # that the COPY below reuses it and the timeout can only hit during the
+        # remote fetch. Connection errors also keep their details this way.
+        cur.sql("SET duckdb.force_execution = false")
+        assert cur.sql("SELECT count(*) FROM fast_ft") == 20
+        cur.sql("RESET duckdb.force_execution")
+
         cur.sql("SET statement_timeout = '1s'")
         with pytest.raises(
             psycopg.errors.InternalError,
@@ -279,8 +286,10 @@ def test_copy_to_cancelled_foreign_table(pg: Postgres, cur: Cursor, tmp_path: Pa
         cur.sql("RESET statement_timeout")
 
         # The backend and its connection to the foreign server are still usable
+        cur.sql("SET duckdb.force_execution = false")
         assert cur.sql("SELECT count(*) FROM fast_ft") == 20
     finally:
         cur.sql("RESET statement_timeout")
+        cur.sql("RESET duckdb.force_execution")
         cur.sql("DROP SERVER IF EXISTS loopback CASCADE")
         cur.sql("DROP EXTENSION postgres_fdw")
