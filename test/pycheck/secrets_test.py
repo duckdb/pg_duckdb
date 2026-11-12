@@ -9,7 +9,7 @@ import pytest
 from .utils import Postgres, wait_until
 
 # Every fake secret value contains this marker, so we can check that none of
-# them ends up in the log.
+# them ends up in the log or in pg_stat_statements.
 SECRET_MARKER = "FAKE_SECRET_VALUE"
 REDACTED = " <redacted by pg_duckdb because it may contain secrets, see duckdb.allow_unredacted_secrets option>"
 
@@ -326,3 +326,51 @@ def test_code_in_strings_is_redacted(pg: Postgres):
     assert "SET http_proxy_password" + REDACTED in logs
     assert "ATTACH 'host=localhost password" + REDACTED in logs
     assert "statement: SELECT $$my secret$$" in logs
+
+
+@pytest.mark.parametrize(
+    "preload_libraries",
+    ["pg_duckdb,pg_stat_statements", "pg_stat_statements,pg_duckdb"],
+)
+def test_secrets_not_in_pg_stat_statements(pg: Postgres, preload_libraries):
+    if not pg.sql(
+        "SELECT count(*) FROM pg_available_extensions WHERE name = 'pg_stat_statements'"
+    ):
+        pytest.skip("pg_stat_statements is not installed")
+
+    pg.configure(
+        f"shared_preload_libraries = '{preload_libraries}'\n"
+        # Also track the USER MAPPING statements that the helpers run with SPI
+        "pg_stat_statements.track = 'all'\n"
+    )
+    pg.restart()
+    pg.sql("CREATE EXTENSION IF NOT EXISTS pg_stat_statements")
+    try:
+        pg.sql("SELECT pg_stat_statements_reset()")
+        pg.sql(f"""
+            SELECT duckdb.create_simple_secret(
+                type := 'S3', key_id := 'key_{SECRET_MARKER}_1', secret := 'secret_{SECRET_MARKER}_1')
+        """)
+        pg.sql(
+            f"ALTER USER MAPPING FOR CURRENT_USER SERVER simple_s3_secret OPTIONS (SET key_id 'key_{SECRET_MARKER}_2')"
+        )
+        pg.sql("CREATE SERVER simple_gcs_secret TYPE 'gcs' FOREIGN DATA WRAPPER duckdb")
+        pg.sql(
+            f"CREATE USER MAPPING FOR CURRENT_USER SERVER simple_gcs_secret OPTIONS (secret 'secret_{SECRET_MARKER}_3')"
+        )
+        # With duckdb.allow_unredacted_secrets the statements are tracked as is
+        with pg.cur() as cur:
+            cur.sql("SET duckdb.allow_unredacted_secrets = true")
+            cur.sql(
+                "ALTER USER MAPPING FOR CURRENT_USER SERVER simple_gcs_secret OPTIONS (SET secret 'UNREDACTED_VALUE')"
+            )
+
+        queries = pg.sql("SELECT string_agg(query, E'\\n') FROM pg_stat_statements")
+        assert_no_secrets(queries)
+        assert "OPTIONS (SET secret 'UNREDACTED_VALUE')" in queries
+        # Other utility statements are still tracked
+        assert "CREATE SERVER simple_gcs_secret" in queries
+        assert "create_simple_secret" in queries
+    finally:
+        drop_secret_servers(pg)
+        pg.sql("DROP EXTENSION pg_stat_statements")

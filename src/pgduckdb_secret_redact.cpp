@@ -6,12 +6,16 @@
 extern "C" {
 #include "postgres.h"
 
+#include "foreign/foreign.h"
+#include "nodes/parsenodes.h"
 #include "tcop/tcopprot.h"
 #include "utils/elog.h"
+#include "utils/lsyscache.h"
 #include "utils/memutils.h"
 }
 
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/pgduckdb_metadata_cache.hpp"
 
 namespace pgduckdb {
 
@@ -233,6 +237,45 @@ RedactSecretsInLogMessage(ErrorData *edata) {
 	if (edata->hide_stmt && edata->detail) {
 		edata->detail = pstrdup(REDACTED + 1);
 	}
+}
+
+bool
+IsSecretUtilityStatement(Query *query) {
+	Node *stmt = query->utilityStmt;
+	if (stmt == nullptr) {
+		return false;
+	}
+
+	const char *server_name = nullptr;
+	List *options = NIL;
+	if (IsA(stmt, CreateUserMappingStmt)) {
+		auto create_stmt = castNode(CreateUserMappingStmt, stmt);
+		server_name = create_stmt->servername;
+		options = create_stmt->options;
+	} else if (IsA(stmt, AlterUserMappingStmt)) {
+		auto alter_stmt = castNode(AlterUserMappingStmt, stmt);
+		server_name = alter_stmt->servername;
+		options = alter_stmt->options;
+	} else if (IsA(stmt, CallStmt)) {
+		auto call_stmt = castNode(CallStmt, stmt);
+		if (call_stmt->funcexpr == nullptr || !IsExtensionRegistered()) {
+			return false;
+		}
+		Oid func_oid = call_stmt->funcexpr->funcid;
+		const char *func_name = get_func_name(func_oid);
+		const char *schema_name = get_namespace_name(get_func_namespace(func_oid));
+		return func_name && schema_name && strcmp(schema_name, "duckdb") == 0 &&
+		       strcmp(func_name, "enable_motherduck") == 0;
+	} else {
+		return false;
+	}
+
+	if (options == NIL || !IsExtensionRegistered()) {
+		return false;
+	}
+
+	auto server = GetForeignServerByName(server_name, true);
+	return server && server->fdwid == get_foreign_data_wrapper_oid("duckdb", true);
 }
 
 } // namespace pgduckdb
