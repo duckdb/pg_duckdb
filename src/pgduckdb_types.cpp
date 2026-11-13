@@ -1714,6 +1714,16 @@ AppendString(duckdb::Vector &result, Datum value, idx_t offset, bool is_bpchar) 
 	const char *text = VARDATA_ANY(ptr);
 	/* Remove the padding of a BPCHAR type. DuckDB expects unpadded value. */
 	auto len = is_bpchar ? bpchartruelen(VARDATA_ANY(ptr), VARSIZE_ANY_EXHDR(ptr)) : VARSIZE_ANY_EXHDR(ptr);
+	/*
+	 * Postgres validates the encoding of text input, but C functions can still
+	 * create invalid text. DuckDB requires its strings to be valid UTF-8, and
+	 * its string functions can fail fatally on invalid ones, after which the
+	 * DuckDB instance can't be used anymore (#1028).
+	 */
+	if (!duckdb::Value::StringIsValid(text, len)) {
+		throw duckdb::InvalidInputException("(PGDuckDB/AppendString) Invalid byte sequence for encoding \"UTF8\" in "
+		                                    "a text value read from Postgres");
+	}
 	duckdb::string_t str(text, len);
 
 	auto data = duckdb::FlatVector::GetDataMutable<duckdb::string_t>(result);
