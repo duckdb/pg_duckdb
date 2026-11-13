@@ -204,3 +204,30 @@ SELECT name, statement, parameter_types FROM pg_prepared_statements
 (0 rows)
 
 DROP TABLE copy_database, ta, tb;
+-- Prepared statements can't return columns whose type is only known when
+-- DuckDB executes the query (#1018)
+PREPARE duckdb_columns AS SELECT r['upper'], r['LOWER'] FROM read_parquet('../../data/uppercase.parquet') r;
+ERROR:  (PGDuckDB/PREPARE) Prepared statements cannot return column "r" of type duckdb.unresolved_type
+DETAIL:  The actual type of such a column is only known when DuckDB executes the query.
+HINT:  Cast the column to its actual type, e.g. r['column']::int, and list the columns of a DuckDB row instead of using *.
+PREPARE duckdb_star AS SELECT * FROM read_parquet('../../data/uppercase.parquet');
+ERROR:  (PGDuckDB/PREPARE) Prepared statements cannot return column "read_parquet" of type duckdb."row"
+DETAIL:  The actual type of such a column is only known when DuckDB executes the query.
+HINT:  Cast the column to its actual type, e.g. r['column']::int, and list the columns of a DuckDB row instead of using *.
+-- The prepared statements were not kept
+EXECUTE duckdb_columns;
+ERROR:  prepared statement "duckdb_columns" does not exist
+SELECT name FROM pg_prepared_statements;
+ name 
+------
+(0 rows)
+
+-- Casting the columns works
+PREPARE duckdb_cast AS SELECT r['upper']::int AS up, r['LOWER']::int AS low FROM read_parquet('../../data/uppercase.parquet') r;
+EXECUTE duckdb_cast;
+ up | low 
+----+-----
+  1 |   2
+(1 row)
+
+DEALLOCATE ALL;
