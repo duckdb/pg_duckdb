@@ -21,7 +21,7 @@ INSERT INTO query_filter_float VALUES (0.9), (1.0), (1.1);
 SELECT COUNT(*) FROM query_filter_float WHERE a < 1.0;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_float WHERE (a < 1.0)
+QUERY: SELECT a FROM public.query_filter_float WHERE (a < '1.0'::pg_catalog.float8)
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_float
@@ -35,7 +35,7 @@ Parallel Seq Scan on query_filter_float
 SELECT COUNT(*) FROM query_filter_float WHERE a <= 1.0;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_float WHERE (a <= 1.0)
+QUERY: SELECT a FROM public.query_filter_float WHERE (a <= '1.0'::pg_catalog.float8)
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_float
@@ -49,7 +49,7 @@ Parallel Seq Scan on query_filter_float
 SELECT COUNT(*) FROM query_filter_float WHERE a < 1.1;
 NOTICE:  (PGDuckDB/PostgresTableReader)
 
-QUERY: SELECT a FROM public.query_filter_float WHERE (a < 1.1)
+QUERY: SELECT a FROM public.query_filter_float WHERE (a < '1.1'::pg_catalog.float8)
 RUNNING: ON 1 PARALLEL WORKER(S).
 EXECUTING: 
 Parallel Seq Scan on query_filter_float
@@ -60,7 +60,111 @@ Parallel Seq Scan on query_filter_float
      2
 (1 row)
 
+-- Special floating point values are pushed down in Postgres syntax
+INSERT INTO query_filter_float VALUES ('-0'), ('NaN'), ('Infinity'), ('-Infinity');
+SELECT COUNT(*) FROM query_filter_float WHERE a = 'NaN';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_float WHERE (a = 'nan'::pg_catalog.float8)
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_float
+  Filter: (a = 'NaN'::double precision)
+
+ count 
+-------
+     1
+(1 row)
+
+SELECT COUNT(*) FROM query_filter_float WHERE a < 'Infinity';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_float WHERE (a < 'inf'::pg_catalog.float8)
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_float
+  Filter: (a < 'Infinity'::double precision)
+
+ count 
+-------
+     5
+(1 row)
+
+SELECT COUNT(*) FROM query_filter_float WHERE a > '-Infinity';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_float WHERE (a > '-inf'::pg_catalog.float8)
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_float
+  Filter: (a > '-Infinity'::double precision)
+
+ count 
+-------
+     6
+(1 row)
+
+SELECT COUNT(*) FROM query_filter_float WHERE a = '-0';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_float WHERE (a = '-0.0'::pg_catalog.float8)
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_float
+  Filter: (a = '-0'::double precision)
+
+ count 
+-------
+     1
+(1 row)
+
 DROP TABLE query_filter_float;
+CREATE TABLE query_filter_float4(a FLOAT4);
+INSERT INTO query_filter_float4 VALUES (0.9), (1.1), ('NaN'), ('Infinity');
+-- A FLOAT4 constant has to be compared as FLOAT4, not as NUMERIC
+SELECT COUNT(*) FROM query_filter_float4 WHERE a = 1.1::float4;
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_float4 WHERE (a = '1.1'::pg_catalog.float4)
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_float4
+  Filter: (a = '1.1'::real)
+
+ count 
+-------
+     1
+(1 row)
+
+SELECT COUNT(*) FROM query_filter_float4 WHERE a = 'NaN';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_float4 WHERE (a = 'nan'::pg_catalog.float4)
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_float4
+  Filter: (a = 'NaN'::real)
+
+ count 
+-------
+     1
+(1 row)
+
+SELECT COUNT(*) FROM query_filter_float4 WHERE a < 'Infinity';
+NOTICE:  (PGDuckDB/PostgresTableReader)
+
+QUERY: SELECT a FROM public.query_filter_float4 WHERE (a < 'inf'::pg_catalog.float4)
+RUNNING: ON 1 PARALLEL WORKER(S).
+EXECUTING: 
+Parallel Seq Scan on query_filter_float4
+  Filter: (a < 'Infinity'::real)
+
+ count 
+-------
+     2
+(1 row)
+
+DROP TABLE query_filter_float4;
 CREATE TABLE query_filter_varchar(a VARCHAR, b VARCHAR);
 INSERT INTO query_filter_varchar VALUES ('t1', 't%'), ('t2', '%%'), ('t1', '');
 SELECT COUNT(*)FROM query_filter_varchar WHERE a = 't1';
