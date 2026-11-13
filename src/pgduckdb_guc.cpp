@@ -22,12 +22,21 @@ static GucStringAssignHook prev_tz_assign_hook = nullptr;
 namespace pgduckdb {
 
 namespace {
+/*
+ * The result is used as the boot value of a GUC, which Postgres does not copy,
+ * so it must stay valid for the lifetime of the process. This runs when the
+ * library is loaded, which with shared_preload_libraries happens in the
+ * postmaster, whose memory contexts are deleted in its child processes. So
+ * this can't be palloc'd.
+ */
 char *
 MakeDirName(const char *name) {
 	StringInfoData buf;
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "%s/pg_duckdb/%s", DataDir, name);
-	return buf.data;
+	char *dir_name = strdup(buf.data);
+	pfree(buf.data);
+	return dir_name;
 }
 
 template <typename T>
