@@ -166,7 +166,15 @@ PostgresTableReader::~PostgresTableReader() {
 		return;
 	}
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
-	Cleanup();
+	// An exception escaping a destructor terminates the process. Cleanup can raise a Postgres error, e.g. when the
+	// scan is torn down after a cancelled query and a postgres_fdw connection is still busy with the aborted fetch.
+	// Whatever is left behind is released by the transaction abort that follows the failed query.
+	try {
+		Cleanup();
+	} catch (std::exception &ex) {
+		pd_log(WARNING, "(PGDuckDB/~PostgresTableReader) Failed to clean up Postgres scan: %s",
+		       duckdb::ErrorData(ex).RawMessage().c_str());
+	}
 }
 
 void
@@ -293,6 +301,9 @@ PostgresTableReader::MarkPlanParallelAware(Plan *plan) {
  */
 TupleTableSlot *
 PostgresTableReader::GetNextTuple() {
+	// Must be outside of the guarded function: a Postgres error longjmps out of it without running destructors, which
+	// would leave the stack base pointing to the stack of this (possibly DuckDB) thread.
+	PostgresScopedStackReset scoped_stack_reset;
 	return PostgresMemberGuard(PostgresTableReader::GetNextTupleUnsafe);
 }
 
@@ -306,7 +317,6 @@ PostgresTableReader::GetNextTupleUnsafe() {
 		}
 	}
 
-	PostgresScopedStackReset scoped_stack_reset;
 	table_scan_query_desc->estate->es_query_dsa = parallel_executor_info ? parallel_executor_info->area : NULL;
 	TupleTableSlot *thread_scan_slot = ExecProcNode(table_scan_planstate);
 	table_scan_query_desc->estate->es_query_dsa = NULL;

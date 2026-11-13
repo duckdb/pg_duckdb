@@ -4,7 +4,7 @@ from pathlib import Path
 import psycopg.errors
 import pytest
 
-from .utils import Cursor
+from .utils import Cursor, Postgres
 
 
 def test_copy_to_local(cur: Cursor, tmp_path: Path):
@@ -236,3 +236,65 @@ def test_copy_from_local(cur: Cursor, tmp_path: Path):
         cur.sql(
             f"COPY (INSERT INTO duck_table VALUES (1) RETURNING (id)) TO '{parquet_path}'"
         )
+
+
+def test_copy_to_cancelled_foreign_table(pg: Postgres, cur: Cursor, tmp_path: Path):
+    """Cancelling a COPY ... TO that reads from a postgres_fdw table used to crash the backend (#974)"""
+    if not cur.sql(
+        "SELECT count(*) FROM pg_available_extensions WHERE name = 'postgres_fdw'"
+    ):
+        pytest.skip("postgres_fdw is not installed")
+
+    schema = cur.sql("SELECT current_schema()")
+    dbname = cur.sql("SELECT current_database()")
+    user = cur.sql("SELECT current_user")
+    cur.sql("CREATE EXTENSION postgres_fdw")
+    try:
+        cur.sql(f"""
+            CREATE SERVER loopback FOREIGN DATA WRAPPER postgres_fdw
+            OPTIONS (host '{pg.host}', port '{pg.port}', dbname '{dbname}',
+                     options '-c duckdb.force_execution=false')
+        """)
+        # Without an explicit user libpq connects as the OS user, which does not
+        # exist as a role in the test cluster.
+        cur.sql(
+            f"CREATE USER MAPPING FOR CURRENT_USER SERVER loopback OPTIONS (user '{user}')"
+        )
+        cur.sql("CREATE TABLE remote_src AS SELECT i FROM generate_series(1, 20) i")
+        # Every row takes a while to produce on the remote side, so the COPY
+        # is cancelled while the foreign scan waits for the remote fetch.
+        cur.sql(
+            "CREATE VIEW slow_remote AS SELECT i FROM remote_src WHERE pg_sleep(0.25) IS NOT NULL"
+        )
+        cur.sql(f"""
+            CREATE FOREIGN TABLE slow_ft (i int) SERVER loopback
+            OPTIONS (schema_name '{schema}', table_name 'slow_remote')
+        """)
+        cur.sql(f"""
+            CREATE FOREIGN TABLE fast_ft (i int) SERVER loopback
+            OPTIONS (schema_name '{schema}', table_name 'remote_src')
+        """)
+
+        # Open the connection to the foreign server with Postgres execution, so
+        # that the COPY below reuses it and the timeout can only hit during the
+        # remote fetch. Connection errors also keep their details this way.
+        cur.sql("SET duckdb.force_execution = false")
+        assert cur.sql("SELECT count(*) FROM fast_ft") == 20
+        cur.sql("RESET duckdb.force_execution")
+
+        cur.sql("SET statement_timeout = '1s'")
+        with pytest.raises(
+            psycopg.errors.InternalError,
+            match="canceling statement due to statement timeout",
+        ):
+            cur.sql(f"COPY slow_ft TO '{tmp_path / 'slow_ft.parquet'}'")
+        cur.sql("RESET statement_timeout")
+
+        # The backend and its connection to the foreign server are still usable
+        cur.sql("SET duckdb.force_execution = false")
+        assert cur.sql("SELECT count(*) FROM fast_ft") == 20
+    finally:
+        cur.sql("RESET statement_timeout")
+        cur.sql("RESET duckdb.force_execution")
+        cur.sql("DROP SERVER IF EXISTS loopback CASCADE")
+        cur.sql("DROP EXTENSION postgres_fdw")
