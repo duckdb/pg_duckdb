@@ -112,3 +112,15 @@ RESET duckdb.convert_unsupported_numeric_to_double;
 
 DEALLOCATE ALL;
 DROP TABLE prepare_float, prepare_numeric;
+
+-- Prepared statements can't return columns whose type is only known when
+-- DuckDB executes the query (#1018)
+PREPARE duckdb_columns AS SELECT r['upper'], r['LOWER'] FROM read_parquet('../../data/uppercase.parquet') r;
+PREPARE duckdb_star AS SELECT * FROM read_parquet('../../data/uppercase.parquet');
+-- The prepared statements were not kept
+EXECUTE duckdb_columns;
+SELECT name FROM pg_prepared_statements;
+-- Casting the columns works
+PREPARE duckdb_cast AS SELECT r['upper']::int AS up, r['LOWER']::int AS low FROM read_parquet('../../data/uppercase.parquet') r;
+EXECUTE duckdb_cast;
+DEALLOCATE ALL;

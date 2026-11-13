@@ -13,6 +13,7 @@ extern "C" {
 #include "access/relation.h"
 #include "catalog/pg_type.h"
 #include "commands/event_trigger.h"
+#include "commands/prepare.h"
 #include "fmgr.h"
 #include "catalog/pg_authid_d.h"
 #include "catalog/namespace.h"
@@ -1057,6 +1058,42 @@ DuckdbHandleViewStmtPost(Node *parsetree) {
 	pgduckdb::ClaimCurrentCommandId(true);
 }
 
+/*
+ * The result columns of a query that reads DuckDB rows have placeholder types
+ * (duckdb.unresolved_type or duckdb.row) until DuckDB plans the query, which
+ * returns the actual types, possibly even a different number of columns. A
+ * prepared statement describes its result with the placeholder types though,
+ * so EXECUTE can never work: Postgres errors out because the result does not
+ * match, and older Postgres versions crash because they don't check this
+ * (#1018). So we reject such prepared statements right away with a hint.
+ */
+static void
+CheckPreparedStatementResultTypes(const char *name) {
+	PreparedStatement *prepared = FetchPreparedStatement(name, true);
+	TupleDesc result_desc = prepared->plansource->resultDesc;
+	if (!result_desc) {
+		return;
+	}
+
+	for (int i = 0; i < result_desc->natts; i++) {
+		Form_pg_attribute attr = TupleDescAttr(result_desc, i);
+		if (!pgduckdb_is_unresolved_type(attr->atttypid) && !pgduckdb_is_duckdb_row(attr->atttypid)) {
+			continue;
+		}
+
+		char *column_name = pstrdup(NameStr(attr->attname));
+		char *type_name = format_type_be(attr->atttypid);
+		/* Prepared statements are not transactional, so it would stay around */
+		DropPreparedStatement(name, false);
+		ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+		                errmsg("(PGDuckDB/PREPARE) Prepared statements cannot return column \"%s\" of type %s",
+		                       column_name, type_name),
+		                errdetail("The actual type of such a column is only known when DuckDB executes the query."),
+		                errhint("Cast the column to its actual type, e.g. r['column']::int, and list the columns of a "
+		                        "DuckDB row instead of using *.")));
+	}
+}
+
 static void
 DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_only_tree, ProcessUtilityContext context,
                       ParamListInfo params, struct QueryEnvironment *query_env, DestReceiver *dest,
@@ -1092,6 +1129,10 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
 	prev_process_utility_hook(pstmt, query_string, read_only_tree, context, params, query_env, dest, qc);
 	if (needs_to_run_post) {
 		DuckdbHandleDDLPost(pstmt);
+	}
+
+	if (IsA(parsetree, PrepareStmt)) {
+		CheckPreparedStatementResultTypes(castNode(PrepareStmt, parsetree)->name);
 	}
 
 	pgduckdb::SetStatementTopLevel(prev_top_level_ddl);
