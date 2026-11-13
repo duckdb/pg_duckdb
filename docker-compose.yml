@@ -5,7 +5,8 @@ services:
       - ${PORT:-5432}:5432
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${PASSWORD:-duckdb}
+      # Set the PASSWORD env var before running: export PASSWORD=<your-secret>
+      POSTGRES_PASSWORD: ${PASSWORD:?Set PASSWORD env var before running}
     volumes:
       - pgduckdb_data:/var/lib/postgresql/data
       - ./docker/postgresql.conf:/etc/postgresql/postgresql.conf
