@@ -413,7 +413,10 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
 	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
 	// Dedicated Postgres memory context for temporary allocations during type conversion in scans.
-	duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
+	{
+		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
+		duckdb_scan_memory_ctx = pg::MemoryContextCreate(CurrentMemoryContext, "DuckdbScanContext");
+	}
 
 	// Parallelism in scanning has two layers:
 	//   1. The Postgres table_reader may launch parallel worker processes to scan the table.
