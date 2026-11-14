@@ -9,7 +9,21 @@ INSERT INTO query_filter_float VALUES (0.9), (1.0), (1.1);
 SELECT COUNT(*) FROM query_filter_float WHERE a < 1.0;
 SELECT COUNT(*) FROM query_filter_float WHERE a <= 1.0;
 SELECT COUNT(*) FROM query_filter_float WHERE a < 1.1;
+-- Special floating point values are pushed down in Postgres syntax
+INSERT INTO query_filter_float VALUES ('-0'), ('NaN'), ('Infinity'), ('-Infinity');
+SELECT COUNT(*) FROM query_filter_float WHERE a = 'NaN';
+SELECT COUNT(*) FROM query_filter_float WHERE a < 'Infinity';
+SELECT COUNT(*) FROM query_filter_float WHERE a > '-Infinity';
+SELECT COUNT(*) FROM query_filter_float WHERE a = '-0';
 DROP TABLE query_filter_float;
+
+CREATE TABLE query_filter_float4(a FLOAT4);
+INSERT INTO query_filter_float4 VALUES (0.9), (1.1), ('NaN'), ('Infinity');
+-- A FLOAT4 constant has to be compared as FLOAT4, not as NUMERIC
+SELECT COUNT(*) FROM query_filter_float4 WHERE a = 1.1::float4;
+SELECT COUNT(*) FROM query_filter_float4 WHERE a = 'NaN';
+SELECT COUNT(*) FROM query_filter_float4 WHERE a < 'Infinity';
+DROP TABLE query_filter_float4;
 
 CREATE TABLE query_filter_varchar(a VARCHAR, b VARCHAR);
 INSERT INTO query_filter_varchar VALUES ('t1', 't%'), ('t2', '%%'), ('t1', '');

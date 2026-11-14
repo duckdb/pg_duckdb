@@ -266,6 +266,15 @@ ExpressionToString(const duckdb::Expression &expr, const duckdb::string &column_
 		if (value.IsNull()) {
 			return "NULL";
 		}
+		// DuckDB writes special floating point values in its own syntax (e.g. 'nan'::DOUBLE or 1e1000), and finite
+		// ones as numbers that Postgres reads as NUMERIC, which doesn't match a float4 exactly. ToString returns the
+		// shortest representation that converts back to the same value, which the Postgres float types accept.
+		if (value.type().id() == duckdb::LogicalTypeId::FLOAT) {
+			return "'" + value.ToString() + "'::pg_catalog.float4";
+		}
+		if (value.type().id() == duckdb::LogicalTypeId::DOUBLE) {
+			return "'" + value.ToString() + "'::pg_catalog.float8";
+		}
 		return value.ToSQLString();
 	}
 
