@@ -3,6 +3,7 @@
 #include "duckdb/common/extension_type_info.hpp"
 #include "duckdb/common/types/bit.hpp"
 #include "duckdb/common/types/blob.hpp"
+#include "duckdb/common/types/decimal.hpp"
 #include "duckdb/common/types/uuid.hpp"
 #include "duckdb/common/vector/list_vector.hpp"
 
@@ -1856,6 +1857,46 @@ ConvertDecimal(const NumericVar &numeric) {
 }
 
 /*
+ * Parameters don't have a typmod, so a NUMERIC parameter is converted to a
+ * DECIMAL with the precision and scale of the value itself, which is exact.
+ * Values that don't fit in a DuckDB DECIMAL are handled like NUMERIC columns
+ * that cannot be converted to a DECIMAL.
+ */
+static duckdb::Value
+ConvertNumericParameter(Datum value) {
+	Numeric numeric = DatumGetNumeric(value);
+	if (!NUMERIC_IS_SPECIAL(numeric)) {
+		auto numeric_var = FromNumeric(numeric);
+		int integral_digits = 0;
+		if (numeric_var.ndigits > 0 && numeric_var.weight >= 0) {
+			integral_digits = numeric_var.weight * DEC_DIGITS;
+			for (NumericDigit digit = numeric_var.digits[0]; digit > 0; digit /= 10) {
+				integral_digits++;
+			}
+		}
+
+		int scale = numeric_var.dscale;
+		int width = std::max(integral_digits + scale, 1);
+		if (width <= duckdb::Decimal::MAX_WIDTH_INT64) {
+			return duckdb::Value::DECIMAL(ConvertDecimal<int64_t>(numeric_var), width, scale);
+		}
+		if (width <= duckdb::Decimal::MAX_WIDTH_INT128) {
+			return duckdb::Value::DECIMAL(ConvertDecimal<hugeint_t, DecimalConversionHugeint>(numeric_var), width,
+			                              scale);
+		}
+	}
+
+	if (!duckdb_convert_unsupported_numeric_to_double) {
+		elog(ERROR,
+		     "DuckDB only supports NUMERIC parameters with up to 38 digits that are not NaN or Infinity. You can "
+		     "choose to convert these NUMERICs to a DOUBLE by using 'SET "
+		     "duckdb.convert_unsupported_numeric_to_double = true'");
+	}
+
+	return duckdb::Value::DOUBLE(DatumGetFloat8(DirectFunctionCall1(numeric_float8, value)));
+}
+
+/*
  * Convert a Postgres Datum to a DuckDB Value. This is meant to be used to
  * covert query parameters in a prepared statement to its DuckDB equivalent.
  * Passing it a Datum that is stored on disk results in undefined behavior,
@@ -1901,6 +1942,8 @@ ConvertPostgresParameterToDuckValue(Datum value, Oid postgres_type) {
 		return duckdb::Value::FLOAT(DatumGetFloat4(value));
 	case FLOAT8OID:
 		return duckdb::Value::DOUBLE(DatumGetFloat8(value));
+	case NUMERICOID:
+		return ConvertNumericParameter(value);
 	case UUIDOID:
 		return duckdb::Value::UUID(DatumGetUUID(value));
 	default:

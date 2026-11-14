@@ -79,3 +79,36 @@ SELECT name, statement, parameter_types FROM pg_prepared_statements
     ORDER BY name;
 
 DROP TABLE copy_database, ta, tb;
+
+-- NUMERIC parameters (#891)
+CREATE TABLE prepare_float(a float8);
+INSERT INTO prepare_float VALUES (0.9), (1.0), (1.1);
+PREPARE numeric_float(numeric) AS SELECT COUNT(*) FROM prepare_float WHERE a < $1;
+EXECUTE numeric_float(1.1);
+
+CREATE TABLE prepare_numeric(d numeric(10, 2));
+INSERT INTO prepare_numeric VALUES (-1.5), (0), (0.10), (1.10), (123.45);
+PREPARE numeric_eq(numeric) AS SELECT d FROM prepare_numeric WHERE d = $1;
+EXECUTE numeric_eq(-1.5);
+EXECUTE numeric_eq(0);
+EXECUTE numeric_eq(0.1);
+EXECUTE numeric_eq(1.1000);
+EXECUTE numeric_eq(123.45);
+EXECUTE numeric_eq(123.4);
+
+-- The precision and scale of the value are kept, also beyond 18 digits
+PREPARE numeric_count(numeric) AS SELECT COUNT(*) FROM prepare_numeric WHERE d < $1;
+EXECUTE numeric_count(0.0001);
+EXECUTE numeric_count(-1.4999999);
+EXECUTE numeric_count(12345678901234567890.5);
+
+-- Values that don't fit, need convert_unsupported_numeric_to_double
+EXECUTE numeric_count(999999999999999999999999999999999999999);
+EXECUTE numeric_count('NaN');
+SET duckdb.convert_unsupported_numeric_to_double = true;
+EXECUTE numeric_count(999999999999999999999999999999999999999);
+EXECUTE numeric_count('-Infinity');
+RESET duckdb.convert_unsupported_numeric_to_double;
+
+DEALLOCATE ALL;
+DROP TABLE prepare_float, prepare_numeric;
