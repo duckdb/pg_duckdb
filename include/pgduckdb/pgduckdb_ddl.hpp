@@ -9,6 +9,7 @@ extern DDLType top_level_duckdb_ddl_type;
 bool IsMotherDuckView(Form_pg_class relation);
 bool IsMotherDuckView(Relation relation);
 FuncExpr *GetDuckdbViewExprFromQuery(Query *query);
+void TruncateDuckdbTable(Oid relation_oid);
 } // namespace pgduckdb
 
 void DuckdbTruncateTable(Oid relation_oid);

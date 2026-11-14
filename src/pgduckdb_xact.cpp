@@ -1,3 +1,5 @@
+#include <unordered_map>
+
 #include "duckdb/common/exception.hpp"
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_duckdb.hpp"
@@ -184,18 +186,28 @@ AutocommitSingleStatementQueries() {
  * To make sure that we restore the state of this set preserves transactional
  * semantics, we keep two sets. One for the current transaction and one that it
  * was at the start of the transaction (which we restore in case of rollback).
+ *
+ * The value stored for each oid is true if the table was created with ON
+ * COMMIT DELETE ROWS. Postgres does not store this in its catalogs, so we need
+ * to track it ourselves.
  */
 static bool modified_temporary_duckdb_tables = false;
-static std::unordered_set<Oid> temporary_duckdb_tables;
-static std::unordered_set<Oid> temporary_duckdb_tables_old;
+static std::unordered_map<Oid, bool> temporary_duckdb_tables;
+static std::unordered_map<Oid, bool> temporary_duckdb_tables_old;
+
+/*
+ * Set to true once we've truncated the ON COMMIT DELETE ROWS tables in our
+ * PRE_COMMIT callback. Reset for every other transaction event.
+ */
+static bool on_commit_delete_rows_done = false;
 
 void
-RegisterDuckdbTempTable(Oid relid) {
+RegisterDuckdbTempTable(Oid relid, bool on_commit_delete_rows) {
 	if (!modified_temporary_duckdb_tables) {
 		modified_temporary_duckdb_tables = true;
 		temporary_duckdb_tables_old = temporary_duckdb_tables;
 	}
-	temporary_duckdb_tables.insert(relid);
+	temporary_duckdb_tables[relid] = on_commit_delete_rows;
 }
 
 void
@@ -212,6 +224,49 @@ IsDuckdbTempTable(Oid relid) {
 	return temporary_duckdb_tables.count(relid) > 0;
 }
 
+/*
+ * Returns true if the ON COMMIT DELETE ROWS tables were already truncated for
+ * the transaction that is currently committing. In that case the truncate
+ * that Postgres requests through our Table AM during PreCommit_on_commit_actions
+ * should be skipped.
+ */
+bool
+OnCommitDeleteRowsDone() {
+	return on_commit_delete_rows_done;
+}
+
+/*
+ * Truncates DuckDB temp tables that were created with ON COMMIT DELETE ROWS.
+ *
+ * Postgres does this in PreCommit_on_commit_actions, but that runs after the
+ * PRE_COMMIT callback in which we commit the DuckDB transaction. So doing it
+ * there would run the truncate in a separate DuckDB transaction, and a failure
+ * would abort the Postgres transaction after the DuckDB one already committed.
+ * Instead we do it here, as part of the DuckDB transaction that we're about to
+ * commit. Like Postgres, we only do this if the transaction accessed any
+ * temporary relations.
+ */
+static void
+TruncateOnCommitDeleteRowsTables() {
+	if (!pg::AccessedTempNamespace()) {
+		return;
+	}
+
+	bool started = false;
+	for (auto &entry : temporary_duckdb_tables) {
+		if (!entry.second) {
+			continue;
+		}
+
+		if (!started) {
+			/* Make sure all truncates are part of the same transaction */
+			DuckDBManager::GetConnection(true);
+			started = true;
+		}
+		TruncateDuckdbTable(entry.first);
+	}
+}
+
 static void
 DuckdbXactCallback_Cpp(XactEvent event) {
 	/*
@@ -221,6 +276,7 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 	top_level_statement = true;
 	top_level_duckdb_ddl_type = DDLType::NONE;
 	executor_nest_level = 0;
+	on_commit_delete_rows_done = false;
 
 	/* If DuckDB is not initialized there's no need to do anything */
 	if (!DuckDBManager::IsInitialized()) {
@@ -234,6 +290,14 @@ DuckdbXactCallback_Cpp(XactEvent event) {
 	case XACT_EVENT_PRE_COMMIT:
 	case XACT_EVENT_PARALLEL_PRE_COMMIT:
 		CheckForDisallowedMixedWrites();
+
+		if (event == XACT_EVENT_PRE_COMMIT) {
+			/* Needs to happen before we forget the temporary tables at the
+			 * start of the transaction, so that a failure can still restore
+			 * them on abort. */
+			TruncateOnCommitDeleteRowsTables();
+			on_commit_delete_rows_done = true;
+		}
 
 		next_expected_command_id = FirstCommandId;
 		pg::force_allow_writes = false;

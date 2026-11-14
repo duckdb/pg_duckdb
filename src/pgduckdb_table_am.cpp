@@ -15,6 +15,7 @@
 
 #include "pgduckdb/pgduckdb_ddl.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -312,6 +313,11 @@ duckdb_relation_set_new_filenode(Relation rel, const RelFileNode * /*newrnode*/,
 
 static void
 duckdb_relation_nontransactional_truncate(Relation rel) {
+	if (pgduckdb::OnCommitDeleteRowsDone()) {
+		/* Called from PreCommit_on_commit_actions, but we already truncated
+		 * the ON COMMIT DELETE ROWS tables in our PRE_COMMIT callback. */
+		return;
+	}
 	DuckdbTruncateTable(rel->rd_id);
 }
 
