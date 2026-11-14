@@ -20,6 +20,7 @@ typedef struct MemoryContextData *MemoryContext;
 typedef char *pg_stack_base_t;
 
 extern sigjmp_buf *PG_exception_stack;
+extern volatile uint32_t QueryCancelHoldoffCount;
 extern MemoryContext CurrentMemoryContext;
 extern ErrorContextCallback *error_context_stack;
 extern ErrorData *CopyErrorData();
@@ -29,6 +30,28 @@ extern void restore_stack_base(pg_stack_base_t base);
 }
 
 namespace pgduckdb {
+
+/*
+ * errfinish resets the interrupt holdoff counts before it jumps to the error
+ * handler, because Postgres expects the handler to abort the transaction. We
+ * turn the error into an exception and continue instead, so the counts have to
+ * be restored to their values from before the call. Otherwise e.g. the cancel
+ * interrupts held during DuckDB execution would no longer be held.
+ */
+struct PgInterruptHoldoffState {
+	PgInterruptHoldoffState()
+	    : interrupt_holdoff_count(InterruptHoldoffCount), query_cancel_holdoff_count(QueryCancelHoldoffCount) {
+	}
+
+	void
+	Restore() const {
+		InterruptHoldoffCount = interrupt_holdoff_count;
+		QueryCancelHoldoffCount = query_cancel_holdoff_count;
+	}
+
+	uint32_t interrupt_holdoff_count;
+	uint32_t query_cancel_holdoff_count;
+};
 
 struct PgExceptionGuard {
 	PgExceptionGuard() : _save_exception_stack(PG_exception_stack), _save_context_stack(error_context_stack) {
@@ -86,6 +109,7 @@ typename std::invoke_result<Func, FuncArgs...>::type
 __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 	std::lock_guard<std::recursive_mutex> lock(pgduckdb::GlobalProcessLock::GetLock());
 	MemoryContext ctx = CurrentMemoryContext;
+	PgInterruptHoldoffState holdoff_state;
 
 	{ // PG_TRY
 		PgExceptionGuard g;
@@ -97,6 +121,7 @@ __PostgresFunctionGuard__(const char *func_name, FuncArgs... args) {
 	}
 
 	CurrentMemoryContext = ctx;
+	holdoff_state.Restore();
 
 	ErrorData *edata = nullptr;
 	{ // PG_CATCH
@@ -125,6 +150,7 @@ template <typename T, typename ReturnType, typename... FuncArgs>
 ReturnType
 __PostgresMemberGuard__(ReturnType (T::*func)(FuncArgs... args), T *instance, const char *func_name, FuncArgs... args) {
 	MemoryContext ctx = CurrentMemoryContext;
+	PgInterruptHoldoffState holdoff_state;
 
 	{ // Scope for PG_END_TRY
 		PgExceptionGuard g;
@@ -136,6 +162,7 @@ __PostgresMemberGuard__(ReturnType (T::*func)(FuncArgs... args), T *instance, co
 	} // PG_END_TRY();
 
 	CurrentMemoryContext = ctx;
+	holdoff_state.Restore();
 
 	ErrorData *edata = nullptr;
 

@@ -168,11 +168,12 @@ PostgresTableReader::~PostgresTableReader() {
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	// An exception escaping a destructor terminates the process. Cleanup can raise a Postgres error, e.g. when the
 	// scan is torn down after a cancelled query and a postgres_fdw connection is still busy with the aborted fetch.
-	// Whatever is left behind is released by the transaction abort that follows the failed query.
+	// Whatever is left behind is released by the transaction abort that follows the failed query. That query
+	// reports its own error, and a failed query can fail the cleanup of each of its scans, so only log this.
 	try {
 		Cleanup();
 	} catch (std::exception &ex) {
-		pd_log(WARNING, "(PGDuckDB/~PostgresTableReader) Failed to clean up Postgres scan: %s",
+		pd_log(LOG, "(PGDuckDB/~PostgresTableReader) Failed to clean up Postgres scan: %s",
 		       duckdb::ErrorData(ex).RawMessage().c_str());
 	}
 }
@@ -183,20 +184,65 @@ PostgresTableReader::Cleanup() {
 	cleaned_up = true;
 	ThreadSignalUnblockGuard signal_mask_guard;
 	PostgresScopedStackReset scoped_stack_reset;
-	PostgresMemberGuard(PostgresTableReader::CleanupUnsafe);
+	try {
+		PostgresMemberGuard(PostgresTableReader::CleanupUnsafe);
+	} catch (...) {
+		// Postgres would abort the transaction now, but the query can still succeed, e.g. when the error comes from a
+		// parallel worker after DuckDB got all rows it needs for a LIMIT. So finish the cleanup like an aborted
+		// transaction does. This also releases our parallel context, which Postgres otherwise keeps in its list of
+		// active contexts: processing its messages would raise "lost connection to parallel worker" again and again
+		// and make the cleanup of every other scan fail too.
+		try {
+			PostgresMemberGuard(PostgresTableReader::CleanupAfterErrorUnsafe);
+		} catch (std::exception &ex) {
+			pd_log(LOG, "(PGDuckDB/Cleanup) Failed to finish the cleanup of a Postgres scan: %s",
+			       duckdb::ErrorData(ex).RawMessage().c_str());
+		}
+		throw;
+	}
 }
 
+/*
+ * Every cleanup step clears its member before it starts, so that a step that
+ * failed is not retried after the error. Whatever it left behind is released
+ * by the transaction abort.
+ */
 void
 PostgresTableReader::CleanupUnsafe() {
 	if (table_scan_planstate) {
-		ExecEndNode(table_scan_planstate);
+		PlanState *planstate = table_scan_planstate;
 		table_scan_planstate = nullptr;
+		ExecEndNode(planstate);
 	}
 
 	if (parallel_executor_info != NULL) {
+		// ExecParallelFinish waits until our workers report that they are done, and only reads their messages when
+		// ParallelMessagePending is set. That flag can be consumed without our messages being read: a Postgres error
+		// raised while processing the messages of another scan's workers, or a cancel error raised before them,
+		// stops processing early. Postgres would then abort the transaction, but we catch such errors and continue
+		// with the other scans. Without the flag the wait would never end, so make sure our messages are read.
+		ParallelMessagePending = true;
+		InterruptPending = true;
 		ExecParallelFinish(parallel_executor_info);
-		ExecParallelCleanup(parallel_executor_info);
+	}
+
+	FinishCleanupUnsafe();
+}
+
+/*
+ * The part of the cleanup that does not wait for the parallel workers to finish.
+ */
+void
+PostgresTableReader::FinishCleanupUnsafe() {
+	if (parallel_executor_info != NULL) {
+		ParallelExecutorInfo *pei = parallel_executor_info;
 		parallel_executor_info = nullptr;
+		// If this fails, our parallel context can still be active, so we have to stay in parallel mode
+		bool exit_parallel_mode = entered_parallel_mode;
+		entered_parallel_mode = false;
+		// Terminates the workers if they are still running
+		ExecParallelCleanup(pei);
+		entered_parallel_mode = exit_parallel_mode;
 	}
 
 	if (parallel_worker_readers) {
@@ -205,16 +251,25 @@ PostgresTableReader::CleanupUnsafe() {
 	}
 
 	if (table_scan_query_desc) {
-		ExecutorFinish(table_scan_query_desc);
-		ExecutorEnd(table_scan_query_desc);
-		FreeQueryDesc(table_scan_query_desc);
+		QueryDesc *query_desc = table_scan_query_desc;
 		table_scan_query_desc = nullptr;
+		ExecutorFinish(query_desc);
+		ExecutorEnd(query_desc);
+		FreeQueryDesc(query_desc);
 	}
 
 	if (entered_parallel_mode) {
-		ExitParallelMode();
 		entered_parallel_mode = false;
+		ExitParallelMode();
 	}
+}
+
+void
+PostgresTableReader::CleanupAfterErrorUnsafe() {
+	// Do not process interrupts: pending parallel messages would raise the same errors again
+	HOLD_INTERRUPTS();
+	FinishCleanupUnsafe();
+	RESUME_INTERRUPTS();
 }
 
 /*

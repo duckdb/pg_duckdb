@@ -29,6 +29,8 @@ private:
 	void InitUnsafe(const char *table_scan_query, bool count_tuples_only);
 	void InitRunWithParallelScan(PlannedStmt *, bool);
 	void CleanupUnsafe();
+	void FinishCleanupUnsafe();
+	void CleanupAfterErrorUnsafe();
 
 	TupleTableSlot *GetNextTupleUnsafe();
 	MinimalTuple GetNextWorkerTuple();
