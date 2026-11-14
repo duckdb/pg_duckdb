@@ -14,6 +14,7 @@ extern "C" {
 #include "access/htup_details.h"
 #include "access/xact.h"
 #include "access/table.h"
+#include "catalog/pg_namespace.h"
 #include "catalog/pg_type.h"
 #include "nodes/makefuncs.h"
 #include "nodes/nodes.h"
@@ -348,6 +349,78 @@ ReconstructTargetListForInsert(TupleDesc pg_tupdesc, Query *query, List *duckdb_
 	return target_list;
 }
 
+/*
+ * Walker that returns true if the FROM clause of the query, or one of its
+ * subqueries, calls the pg_catalog function whose name is passed as context.
+ */
+static bool
+CallsCatalogTableFunction(Node *node, void *context) {
+	if (node == NULL)
+		return false;
+
+	if (IsA(node, Query)) {
+		Query *query = (Query *)node;
+		const char *function_name = (const char *)context;
+		foreach_node(RangeTblEntry, rte, query->rtable) {
+			if (rte->rtekind != RTE_FUNCTION) {
+				continue;
+			}
+
+			foreach_node(RangeTblFunction, rtfunc, rte->functions) {
+				if (!IsA(rtfunc->funcexpr, FuncExpr)) {
+					continue;
+				}
+
+				Oid funcid = castNode(FuncExpr, rtfunc->funcexpr)->funcid;
+				if (get_func_namespace(funcid) != PG_CATALOG_NAMESPACE) {
+					continue;
+				}
+
+				char *name = get_func_name(funcid);
+				if (name && pg_strcasecmp(name, function_name) == 0) {
+					return true;
+				}
+			}
+		}
+#if PG_VERSION_NUM >= 160000
+		return query_tree_walker(query, CallsCatalogTableFunction, context, 0);
+#else
+		return query_tree_walker(query, (bool (*)())((void *)CallsCatalogTableFunction), context, 0);
+#endif
+	}
+
+#if PG_VERSION_NUM >= 160000
+	return expression_tree_walker(node, CallsCatalogTableFunction, context);
+#else
+	return expression_tree_walker(node, (bool (*)())((void *)CallsCatalogTableFunction), context);
+#endif
+}
+
+/*
+ * Returns true if preparing the query failed because DuckDB does not have a
+ * Postgres catalog function that the query calls in its FROM clause, e.g.
+ * pg_event_trigger_ddl_commands() in an event trigger (#881). When
+ * duckdb.force_execution makes us try such a query in DuckDB, falling back to
+ * Postgres is expected, so it's not worth a warning.
+ */
+static bool
+IsMissingCatalogTableFunctionError(Query *query, duckdb::ErrorData &error) {
+	if (error.Type() != duckdb::ExceptionType::CATALOG) {
+		return false;
+	}
+
+	auto &extra_info = error.ExtraInfo();
+	auto subtype = extra_info.find("error_subtype");
+	auto type = extra_info.find("type");
+	auto name = extra_info.find("name");
+	if (subtype == extra_info.end() || subtype->second != "MISSING_ENTRY" || type == extra_info.end() ||
+	    type->second != "Table Function" || name == extra_info.end()) {
+		return false;
+	}
+
+	return CallsCatalogTableFunction((Node *)query, (void *)name->second.c_str());
+}
+
 static Plan *
 CreatePlan(Query *query, bool throw_error) {
 	int elevel = throw_error ? ERROR : WARNING;
@@ -358,6 +431,9 @@ CreatePlan(Query *query, bool throw_error) {
 	duckdb::unique_ptr<duckdb::PreparedStatement> prepared_query = DuckdbPrepare(query);
 
 	if (prepared_query->HasError()) {
+		if (!throw_error && IsMissingCatalogTableFunctionError(query, prepared_query->GetErrorObject())) {
+			elevel = DEBUG1;
+		}
 		elog(elevel, "(PGDuckDB/CreatePlan) Prepared query returned an error: %s", prepared_query->GetError().c_str());
 		return nullptr;
 	}
