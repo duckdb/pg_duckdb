@@ -4,6 +4,7 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/main/query_result_stream.hpp"
 
+#include "pgduckdb/logger.hpp"
 #include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
@@ -49,13 +50,16 @@ typedef struct DuckdbScanState {
 	duckdb::idx_t column_count;
 	duckdb::unique_ptr<duckdb::DataChunk> current_data_chunk;
 	duckdb::idx_t current_row;
+	MemoryContextCallback release_callback;
 } DuckdbScanState;
 
+/*
+ * Destroys the DuckDB objects of the scan. An open DuckDB result blocks the
+ * connection for any later query, so this must always happen, also when the
+ * scan doesn't finish.
+ */
 static void
-CleanupDuckdbScanState(DuckdbScanState *state) {
-	MemoryContextReset(state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
-	ExecClearTuple(state->css.ss.ss_ScanTupleSlot);
-
+ReleaseDuckdbResources(DuckdbScanState *state) {
 	state->query_results.reset();
 	state->query_stream.reset();
 	state->current_data_chunk.reset();
@@ -63,6 +67,31 @@ CleanupDuckdbScanState(DuckdbScanState *state) {
 	if (state->prepared_statement) {
 		delete state->prepared_statement;
 		state->prepared_statement = nullptr;
+	}
+}
+
+static void
+CleanupDuckdbScanState(DuckdbScanState *state) {
+	MemoryContextReset(state->css.ss.ps.ps_ExprContext->ecxt_per_tuple_memory);
+	ExecClearTuple(state->css.ss.ss_ScanTupleSlot);
+	ReleaseDuckdbResources(state);
+}
+
+/*
+ * When a transaction (or the statement) aborts, Postgres does not shut down
+ * the executor, so EndCustomScan is not called. It only deletes the
+ * executor's memory, which is where we release our DuckDB objects instead.
+ * Otherwise the open result of e.g. an unfinished cursor would make every
+ * later DuckDB query in the session fail. Nothing remains to be done here
+ * after a normal EndCustomScan.
+ */
+static void
+ReleaseDuckdbResourcesCallback(void *arg) {
+	try {
+		ReleaseDuckdbResources((DuckdbScanState *)arg);
+	} catch (std::exception &ex) {
+		pd_log(LOG, "(PGDuckDB/ReleaseDuckdbResourcesCallback) Failed to release DuckDB resources: %s",
+		       duckdb::ErrorData(ex).RawMessage().c_str());
 	}
 }
 
@@ -89,6 +118,10 @@ Duckdb_CreateCustomScanState(CustomScan *cscan) {
 static void
 Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*eflags*/) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)cscanstate;
+
+	duckdb_scan_state->release_callback.func = ReleaseDuckdbResourcesCallback;
+	duckdb_scan_state->release_callback.arg = duckdb_scan_state;
+	MemoryContextRegisterResetCallback(estate->es_query_cxt, &duckdb_scan_state->release_callback);
 
 	StringInfo explain_prefix = makeStringInfo();
 

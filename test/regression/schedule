@@ -52,6 +52,7 @@ test: scan_postgres_tables
 test: search_path
 test: simple_functions
 test: standard_conforming_strings
+test: streaming_result_abort
 test: tablesample
 test: temporary_tables
 test: test_all_types
