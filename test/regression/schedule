@@ -35,6 +35,7 @@ test: issue_881
 test: issue_975
 test: issue_976
 test: issue_1028
+test: issue_1099
 test: json_exists_duckdb
 test: json_functions_duckdb
 test: materialized_view
