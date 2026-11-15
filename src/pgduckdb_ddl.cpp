@@ -487,6 +487,18 @@ DuckdbHandleDDLPre(PlannedStmt *pstmt, const char *query_string) {
 		char *access_method = stmt->into->accessMethod ? stmt->into->accessMethod : default_table_access_method;
 		bool is_duckdb_table = strcmp(access_method, "duckdb") == 0;
 		if (is_duckdb_table) {
+			/*
+			 * CREATE TABLE ... AS EXECUTE wraps the ExecuteStmt in a utility
+			 * Query. We need the actual SELECT query to create the table in
+			 * DuckDB (and to fill it), so this is not supported.
+			 */
+			Query *ctas_query = castNode(Query, stmt->query);
+			if (ctas_query->commandType == CMD_UTILITY && IsA(ctas_query->utilityStmt, ExecuteStmt)) {
+				ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				                errmsg("CREATE TABLE ... AS EXECUTE is not supported for DuckDB tables"),
+				                errhint("Use CREATE TABLE ... AS SELECT instead.")));
+			}
+
 			if (pgduckdb::top_level_duckdb_ddl_type != pgduckdb::DDLType::NONE) {
 				ereport(ERROR, (errcode(ERRCODE_INVALID_TABLE_DEFINITION),
 				                errmsg("Only one DuckDB table can be created in a single statement")));
