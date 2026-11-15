@@ -1,0 +1,55 @@
+-- Issue #1102: INSERT ... SELECT into a Postgres table should be able to
+-- process interrupts while inserting the rows returned by DuckDB.
+SET duckdb.force_execution = true;
+CREATE TABLE spgist_text_tbl(id int4, t text);
+CREATE INDEX spgist_text_idx ON spgist_text_tbl USING spgist(t);
+INSERT INTO spgist_text_tbl (id, t)
+SELECT g, 'f' || repeat('o', 100) || g FROM generate_series(1, 10000) g
+UNION ALL
+SELECT g, 'baaaaaaaaaaaaaar' || g FROM generate_series(1, 1000) g;
+SELECT count(*) FROM spgist_text_tbl;
+ count 
+-------
+ 11000
+(1 row)
+
+-- Also from a Postgres table, which uses a materialized DuckDB result
+CREATE TABLE spgist_text_tbl2(id int4, t text);
+CREATE INDEX spgist_text_idx2 ON spgist_text_tbl2 USING spgist(t);
+INSERT INTO spgist_text_tbl2 SELECT * FROM spgist_text_tbl;
+SELECT count(*) FROM spgist_text_tbl2;
+ count 
+-------
+ 11000
+(1 row)
+
+-- A cancel (here a statement timeout) is handled while inserting the rows
+CREATE TABLE slow_insert(a int);
+CREATE FUNCTION slow_insert_trigger() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+	PERFORM pg_sleep(0.01);
+	RETURN NEW;
+END $$;
+CREATE TRIGGER slow_insert_trigger BEFORE INSERT ON slow_insert
+	FOR EACH ROW EXECUTE FUNCTION slow_insert_trigger();
+SET statement_timeout = '200ms';
+INSERT INTO slow_insert SELECT * FROM generate_series(1, 1000);
+ERROR:  canceling statement due to statement timeout
+CONTEXT:  SQL statement "SELECT pg_sleep(0.01)"
+PL/pgSQL function slow_insert_trigger() line 3 at PERFORM
+RESET statement_timeout;
+SELECT count(*) FROM slow_insert;
+ count 
+-------
+     0
+(1 row)
+
+-- And the session can still use DuckDB afterwards
+SELECT count(*) FROM spgist_text_tbl;
+ count 
+-------
+ 11000
+(1 row)
+
+DROP TABLE spgist_text_tbl, spgist_text_tbl2, slow_insert;
+DROP FUNCTION slow_insert_trigger;

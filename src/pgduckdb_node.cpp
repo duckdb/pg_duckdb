@@ -155,7 +155,6 @@ Duckdb_BeginCustomScan_Cpp(CustomScanState *cscanstate, EState *estate, int /*ef
 	duckdb_scan_state->is_executed = false;
 	duckdb_scan_state->fetch_next = true;
 	duckdb_scan_state->css.ss.ps.ps_ResultTupleDesc = duckdb_scan_state->css.ss.ss_ScanTupleSlot->tts_tupleDescriptor;
-	HOLD_CANCEL_INTERRUPTS();
 }
 
 void
@@ -280,8 +279,47 @@ ExecuteQuery(DuckdbScanState *state) {
 	state->is_executed = true;
 }
 
+/*
+ * Holds off query cancel interrupts while DuckDB is executing the query, or
+ * while we're converting or cleaning up its results. A cancel request is
+ * instead detected by polling QueryCancelPending in ExecuteQuery, which
+ * interrupts DuckDB and then raises the error.
+ *
+ * This is deliberately scoped to our own CustomScan callbacks and not held
+ * from BeginCustomScan to EndCustomScan. In between, Postgres runs the parent
+ * nodes of our scan (e.g. the ModifyTable node of an INSERT ... SELECT into a
+ * Postgres table). That code needs to be able to process interrupts, and some
+ * of it (e.g. SP-GiST index insertion) asserts that it can.
+ */
+struct CancelInterruptsHoldoffGuard {
+	CancelInterruptsHoldoffGuard() {
+		HOLD_CANCEL_INTERRUPTS();
+	}
+
+	~CancelInterruptsHoldoffGuard() {
+		/*
+		 * A Postgres error that we catch and continue after used to leave
+		 * QueryCancelHoldoffCount at 0, because errfinish resets it. The
+		 * guards now restore it, but in case there's another such path, make
+		 * sure that users without assert builds don't make it negative in
+		 * production.
+		 */
+#ifdef USE_ASSERT_CHECKING
+		RESUME_CANCEL_INTERRUPTS();
+#else
+		if (QueryCancelHoldoffCount > 0) {
+			RESUME_CANCEL_INTERRUPTS();
+		}
+#endif
+	}
+
+	CancelInterruptsHoldoffGuard(const CancelInterruptsHoldoffGuard &) = delete;
+	CancelInterruptsHoldoffGuard &operator=(const CancelInterruptsHoldoffGuard &) = delete;
+};
+
 static TupleTableSlot *
 Duckdb_ExecCustomScan_Cpp(CustomScanState *node) {
+	CancelInterruptsHoldoffGuard cancel_holdoff_guard;
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	ProjectionInfo *projInfo = duckdb_scan_state->css.ss.ps.ps_ProjInfo;
 	ExprContext *econtext = duckdb_scan_state->css.ss.ps.ps_ExprContext;
@@ -367,22 +405,9 @@ Duckdb_ExecCustomScan(CustomScanState *node) {
 
 static void
 Duckdb_EndCustomScan_Cpp(CustomScanState *node) {
+	CancelInterruptsHoldoffGuard cancel_holdoff_guard;
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
-	/*
-	 * A Postgres error that we catch and continue after (e.g. one from a
-	 * parallel worker while cleaning up a scan) used to leave
-	 * QueryCancelHoldoffCount at 0, because errfinish resets it. The guards
-	 * now restore it, but in case there's another such path, make sure that
-	 * users without assert builds don't make it negative in production.
-	 */
-#ifdef USE_ASSERT_CHECKING
-	RESUME_CANCEL_INTERRUPTS();
-#else
-	if (QueryCancelHoldoffCount > 0) {
-		RESUME_CANCEL_INTERRUPTS();
-	}
-#endif
 }
 
 void
@@ -396,6 +421,7 @@ Duckdb_ReScanCustomScan(CustomScanState * /*node*/) {
 
 static void
 Duckdb_ExplainCustomScan_Cpp(CustomScanState *node, ExplainState *es) {
+	CancelInterruptsHoldoffGuard cancel_holdoff_guard;
 	/*
 	 * XXX: The code to set duckdb_explain_analyze and duckdb_explain_format,
 	 * is copied from ExplainOneQueryHook. Sadly that hook is not run for
