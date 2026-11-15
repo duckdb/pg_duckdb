@@ -2,6 +2,8 @@
 
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 
+#include <cstdint>
+
 #include "pgduckdb/utility/cpp_only_file.hpp" // Must be last include.
 
 extern "C" {
@@ -9,6 +11,7 @@ bool errstart(int elevel, const char *domain);
 void errfinish(const char *filename, int lineno, const char *funcname);
 int errmsg_internal(const char *fmt, ...);
 bool message_level_is_interesting(int elevel);
+extern volatile uint32_t InterruptHoldoffCount;
 }
 
 namespace pgduckdb {
@@ -41,14 +44,19 @@ namespace pgduckdb {
 #define pd_prevent_errno_in_scope()
 #endif
 
+// errfinish ends with CHECK_FOR_INTERRUPTS, which can raise a Postgres error (e.g. a cancel or an error from a
+// parallel worker). That would longjmp out of the C++ caller, which can be a destructor or a DuckDB thread, so hold
+// interrupts while logging. They are processed at the next CHECK_FOR_INTERRUPTS.
 #define pd_ereport_domain(elevel, domain, ...)                                                                         \
 	do {                                                                                                               \
 		pd_prevent_errno_in_scope();                                                                                   \
 		static_assert(elevel >= DEBUG5 && elevel <= WARNING_CLIENT_ONLY, "Invalid error level");                       \
 		if (message_level_is_interesting(elevel)) {                                                                    \
 			std::lock_guard<std::recursive_mutex> __pd_log_lock(pgduckdb::GlobalProcessLock::GetLock());               \
+			InterruptHoldoffCount++;                                                                                   \
 			if (errstart(elevel, domain))                                                                              \
 				__VA_ARGS__, errfinish(__FILE__, __LINE__, __func__);                                                  \
+			InterruptHoldoffCount--;                                                                                   \
 		}                                                                                                              \
 	} while (0)
 

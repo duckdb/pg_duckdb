@@ -370,12 +370,11 @@ Duckdb_EndCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
 	/*
-	 * BUG: In rare error casess it's possible that we call this when we are
-	 * currently accepting interupts, in those cases we should not resume them
-	 * yet again otherwise QueryCancelHoldoffCount becomes negative. We should
-	 * fix this, but it's not easy to reproduce this issue. So for now we at
-	 * least make sure that users without assert builds won't hit it in
-	 * production. So check that we are allowed to decrement it.
+	 * A Postgres error that we catch and continue after (e.g. one from a
+	 * parallel worker while cleaning up a scan) used to leave
+	 * QueryCancelHoldoffCount at 0, because errfinish resets it. The guards
+	 * now restore it, but in case there's another such path, make sure that
+	 * users without assert builds don't make it negative in production.
 	 */
 #ifdef USE_ASSERT_CHECKING
 	RESUME_CANCEL_INTERRUPTS();
