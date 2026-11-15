@@ -20,17 +20,21 @@
 struct Plan;					/* avoid including plannodes.h here */
 struct PlannedStmt;
 
-/* Flags for pg_get_indexdef_columns_extended() */
+/* Flags for pg_get_indexdef_columns_extended() (PostgreSQL 14+) */
+#if PG_VERSION_NUM >= 140000
 #define RULE_INDEXDEF_PRETTY		0x01
 #define RULE_INDEXDEF_KEYS_ONLY		0x02	/* ignore included attributes */
+#endif
 
 extern char *pgduckdb_pg_get_indexdef_string(Oid indexrelid);
 extern char *pgduckdb_pg_get_indexdef_columns(Oid indexrelid, bool pretty);
+#if PG_VERSION_NUM >= 140000
 extern char *pgduckdb_pg_get_indexdef_columns_extended(Oid indexrelid,
 #if PG_VERSION_NUM >= 190000
-											  uint16 flags);
+												  uint16 flags);
 #else
-											  bits16 flags);
+												  bits16 flags);
+#endif
 #endif
 extern char *pgduckdb_pg_get_querydef_internal(Query *query, bool pretty);
 

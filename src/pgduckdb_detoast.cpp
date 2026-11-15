@@ -14,7 +14,11 @@ extern "C" {
 #include <lz4.h>
 #endif
 
+#if PG_VERSION_NUM >= 130000
 #include "access/detoast.h"
+#else
+#include "utils/varlena.h"
+#endif
 #include "access/table.h"
 #include "access/tableam.h"
 #include "access/toast_internals.h"

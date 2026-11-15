@@ -1,0 +1,4 @@
+comment = 'DuckDB Embedded in Postgres'
+default_version = '1.0.0-pg12'
+module_pathname = '$libdir/pg_duckdb'
+relocatable = false

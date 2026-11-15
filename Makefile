@@ -7,6 +7,13 @@ EXTENSION = pg_duckdb
 DATA = pg_duckdb.control $(wildcard sql/pg_duckdb--*.sql)
 
 SRCS = $(wildcard src/*.cpp src/*/*.cpp)
+PG_MAJOR := $(shell $(PG_CONFIG) --version | sed "s/^[^ ]* \([0-9]*\).*$$/\1/")
+ifeq ($(PG_MAJOR),12)
+EXTENSION =
+MODULEDIR = extension
+DATA := sql/pg12/pg_duckdb.control $(filter-out pg_duckdb.control,$(DATA))
+SRCS := $(filter-out src/pgduckdb_background_worker.cpp src/pgduckdb_detoast.cpp src/pg/pgduckdb_subscript.cpp,$(SRCS))
+endif
 OBJS = $(subst .cpp,.o, $(SRCS))
 
 C_SRCS = $(wildcard src/*.c src/*/*.c)
