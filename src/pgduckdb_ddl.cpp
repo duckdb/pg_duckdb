@@ -1112,7 +1112,13 @@ DuckdbUtilityHook_Cpp(PlannedStmt *pstmt, const char *query_string, bool read_on
                       QueryCompletion *qc) {
 	Node *parsetree = pstmt->utilityStmt;
 	if (IsA(parsetree, CopyStmt)) {
-		auto copy_query = PostgresFunctionGuard(MakeDuckdbCopyQuery, pstmt, query_string, query_env);
+		/*
+		 * No PostgresFunctionGuard: it would hold the GlobalProcessLock while
+		 * MakeDuckdbCopyQuery plans the query, which also prepares it in
+		 * DuckDB. And there's no need for it, MakeDuckdbCopyQuery is plain C
+		 * and its errors can be raised from here.
+		 */
+		const char *copy_query = MakeDuckdbCopyQuery(pstmt, query_string, query_env);
 		if (copy_query) {
 			auto res = pgduckdb::DuckDBQueryOrThrow(copy_query);
 			auto chunk = res->Fetch();

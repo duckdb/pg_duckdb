@@ -64,11 +64,9 @@ def test_copy_to_local(cur: Cursor, tmp_path: Path):
         (2, "Bob"),
     ]
 
-    # Again relative paths are not allowed for COPY TO, this becomes an
-    # internal error though, due to our failure to propagate error codes
-    # correctly.
+    # Again relative paths are not allowed for COPY TO
     with pytest.raises(
-        psycopg.errors.InternalError, match="relative path not allowed for COPY to file"
+        psycopg.errors.InvalidName, match="relative path not allowed for COPY to file"
     ):
         cur.sql("COPY test_table TO 'test_copy.parquet' WITH (FORMAT PARQUET)")
 
@@ -230,7 +228,7 @@ def test_copy_from_local(cur: Cursor, tmp_path: Path):
         )
 
     with pytest.raises(
-        psycopg.errors.InternalError,
+        psycopg.errors.FeatureNotSupported,
         match="DuckDB COPY only supports SELECT statement",
     ):
         cur.sql(

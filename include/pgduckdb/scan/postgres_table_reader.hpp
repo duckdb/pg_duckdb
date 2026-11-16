@@ -33,6 +33,7 @@ private:
 	void CleanupAfterErrorUnsafe();
 
 	TupleTableSlot *GetNextTupleUnsafe();
+	TupleTableSlot *InitTupleSlotUnsafe();
 	MinimalTuple GetNextWorkerTuple();
 	int ParallelWorkerNumber(Cardinality cardinality);
 	bool CanTableScanRunInParallel(Plan *plan);
