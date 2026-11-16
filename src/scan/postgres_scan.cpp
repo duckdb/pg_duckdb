@@ -608,7 +608,8 @@ PostgresScanTableFunction::PostgresScanFunction(duckdb::ClientContext &, duckdb:
 			}
 		}
 
-		// The follow-up convertion logic is thread-safe.
+		// The follow-up conversion logic is thread-safe, because every local state has its own slots, each with its
+		// own tuple descriptor (see PostgresTableReader::InitTupleSlotUnsafe).
 		D_ASSERT(is_parallel_scan);
 		for (size_t i = 0; i < valid_slots; i++) {
 			MinimalTuple minmal_tuple = reinterpret_cast<MinimalTuple>(local_state.minimal_tuple_buffer[i].data());

@@ -193,11 +193,15 @@ DuckDBManager::Initialize() {
 	duckdb::OptimizerExtension::Register(dbconfig, UnsupportedTypeOptimizer::GetOptimizerExtension());
 
 	// Register pgduckdb as a loaded extension so it appears in duckdb_extensions()
-	auto &extension_manager = database->instance->GetExtensionManager();
-	auto extension_active_load = extension_manager.BeginLoad(duckdb::ExtensionLoadOptions("pgduckdb"));
-	D_ASSERT(extension_active_load);
-	duckdb::ExtensionInstallInfo extension_install_info;
-	extension_active_load->FinishLoad(extension_install_info);
+	{
+		// The active load holds the lock of the extension until it is destroyed, while duckdb_extensions() takes
+		// that lock while holding the lock of the client context. So it must be gone before we run any queries.
+		auto &extension_manager = database->instance->GetExtensionManager();
+		auto extension_active_load = extension_manager.BeginLoad(duckdb::ExtensionLoadOptions("pgduckdb"));
+		D_ASSERT(extension_active_load);
+		duckdb::ExtensionInstallInfo extension_install_info;
+		extension_active_load->FinishLoad(extension_install_info);
+	}
 
 	connection = duckdb::make_uniq<duckdb::Connection>(*database);
 

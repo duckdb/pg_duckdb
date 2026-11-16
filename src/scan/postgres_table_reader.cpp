@@ -157,8 +157,20 @@ PostgresTableReader::InitRunWithParallelScan(PlannedStmt *planned_stmt, bool cou
 TupleTableSlot *
 PostgresTableReader::InitTupleSlot() {
 	D_ASSERT(!cleaned_up);
-	return PostgresFunctionGuard(ExecInitExtraTupleSlot, table_scan_query_desc->estate,
-	                             table_scan_planstate->ps_ResultTupleDesc, &TTSOpsMinimalTuple);
+	return PostgresMemberGuard(PostgresTableReader::InitTupleSlotUnsafe);
+}
+
+/*
+ * The slots are deformed by DuckDB threads without holding the GlobalProcessLock. Deforming a tuple caches the
+ * attribute offsets in the tuple descriptor of the slot, so every slot gets its own copy of the descriptor.
+ */
+TupleTableSlot *
+PostgresTableReader::InitTupleSlotUnsafe() {
+	EState *estate = table_scan_query_desc->estate;
+	MemoryContext old_context = MemoryContextSwitchTo(estate->es_query_cxt);
+	TupleDesc tuple_desc = CreateTupleDescCopy(table_scan_planstate->ps_ResultTupleDesc);
+	MemoryContextSwitchTo(old_context);
+	return ExecInitExtraTupleSlot(estate, tuple_desc, &TTSOpsMinimalTuple);
 }
 
 PostgresTableReader::~PostgresTableReader() {
