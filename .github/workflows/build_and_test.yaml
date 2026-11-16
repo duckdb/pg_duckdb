@@ -279,13 +279,11 @@ jobs:
         working-directory: duckdb
         run: make installcheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
 
-      # Under TSan the tests run with a single xdist worker, which still runs the parallel scans and DuckDB threads
-      # of each test, but not multiple tests at the same time
       - name: Run make pycheck
         id: pycheck
         if: success() || steps.installcheck.outcome == 'failure'
         working-directory: duckdb
-        run: make pycheck DUCKDB_SANITIZER=${{ matrix.sanitizer }} ${{ matrix.sanitizer == 'thread' && 'PYTEST_CONCURRENCY=1' || '' }}
+        run: make pycheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
 
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.installcheck.outcome == 'failure'
