@@ -198,7 +198,7 @@ jobs:
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
           sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
             libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo6 cmake \
-            libstdc++-12-dev ninja-build libcurl4-openssl-dev sqlsmith
+            libstdc++-12-dev ninja-build libcurl4-openssl-dev sqlsmith gdb
           echo "${PWD}/postgres/inst/bin" >> $GITHUB_PATH
           mkdir -p "$SANITIZER_LOG_DIR"
 
@@ -280,12 +280,21 @@ jobs:
         run: make installcheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
 
       # Under TSan the tests run with a single xdist worker, which still runs the parallel scans and DuckDB threads
-      # of each test, but not multiple tests at the same time
+      # of each test, but not multiple tests at the same time. A hang doesn't produce any TSan reports, so the tests
+      # run with a time limit, after which run_with_timeout.py collects the stack traces of the postgres and pytest
+      # processes and the logs of the test servers.
       - name: Run make pycheck
         id: pycheck
         if: success() || steps.installcheck.outcome == 'failure'
         working-directory: duckdb
-        run: make pycheck DUCKDB_SANITIZER=${{ matrix.sanitizer }} ${{ matrix.sanitizer == 'thread' && 'PYTEST_CONCURRENCY=1' || '' }}
+        run: |
+          if [ "${{ matrix.sanitizer }}" = thread ]; then
+            PYTEST_ADDOPTS="--basetemp=$GITHUB_WORKSPACE/pytest-tmp" python3 scripts/run_with_timeout.py --timeout 240 \
+              --output "$GITHUB_WORKSPACE/pycheck-timeout" --logs "$GITHUB_WORKSPACE/pytest-tmp" -- \
+              make pycheck DUCKDB_SANITIZER=thread PYTEST_CONCURRENCY=1
+          else
+            make pycheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
+          fi
 
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.installcheck.outcome == 'failure'
@@ -318,4 +327,12 @@ jobs:
         with:
           name: sanitizer-reports-${{ matrix.sanitizer }}
           path: sanitizer-logs/
+          if-no-files-found: ignore
+
+      - name: Upload pycheck timeout diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: pycheck-timeout-${{ matrix.sanitizer }}
+          path: pycheck-timeout/
           if-no-files-found: ignore
