@@ -27,30 +27,6 @@ DUCKDB_DISABLE_ASSERTIONS ?= 0
 # in the environment does not work for this, because make passes the PGXS values on to the DuckDB build.
 DUCKDB_CC ?=
 DUCKDB_CXX ?=
-# Build DuckDB with a sanitizer: address or thread. Postgres has to be built with the same sanitizer, and pg_duckdb
-# then gets it from the CFLAGS of the Postgres build. Changing this needs a rebuild of DuckDB (make clean-duckdb).
-DUCKDB_SANITIZER ?=
-ifeq ($(DUCKDB_SANITIZER),)
-	DUCKDB_SANITIZER_VARS = DISABLE_SANITIZER=1
-else ifeq ($(DUCKDB_SANITIZER), address)
-	DUCKDB_SANITIZER_VARS = RELEASE_SANITIZER=1 DISABLE_UBSAN=1
-else ifeq ($(DUCKDB_SANITIZER), thread)
-	DUCKDB_SANITIZER_VARS = DISABLE_SANITIZER=1 THREADSAN=1
-else
-$(error DUCKDB_SANITIZER=$(DUCKDB_SANITIZER) is not supported, use address or thread)
-endif
-ifneq ($(DUCKDB_SANITIZER),)
-	# jemalloc hides its allocations from ASan, and its C code is not instrumented for TSan, which then misses its
-	# synchronization and reports false positives.
-	DUCKDB_CMAKE_VARS += -DENABLE_JEMALLOC=0
-	# DuckDB has to use the sanitizer runtime of Postgres, so it has to be built with the same compilers
-	ifeq ($(DUCKDB_CC),)
-		DUCKDB_CC = $(CC)
-	endif
-	ifeq ($(DUCKDB_CXX),)
-		DUCKDB_CXX = $(CXX)
-	endif
-endif
 
 # DUCKDB_BUILD selects how DuckDB is built and linked, and where httpfs gets openssl and curl from:
 #   Release (default)   - dynamically linked, system openssl and curl
@@ -197,14 +173,8 @@ DUCKDB_EXTENSION_REPOSITORY = $(abspath $(DUCKDB_BUILD_DIR)/repository)
 installcheck: all install
 	AWS_REGION=us-east-1 PG_DUCKDB_EXTENSION_REPOSITORY=$(DUCKDB_EXTENSION_REPOSITORY) $(MAKE) check-regression-duckdb
 
-# With a sanitizer, the libpq of the Postgres build is sanitized too. Programs that the tests run without a
-# sanitizer, like Python for psycopg and sqlsmith, can't load it, so they have to use the system libpq.
-ifeq ($(DUCKDB_SANITIZER),)
-PYCHECK_LD_LIBRARY_PATH = LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH}
-endif
-
 pycheck: all install
-	$(PYCHECK_LD_LIBRARY_PATH) PG_DUCKDB_EXTENSION_REPOSITORY=$(DUCKDB_EXTENSION_REPOSITORY) \
+	LD_LIBRARY_PATH=$(PG_LIBDIR):${LD_LIBRARY_PATH} PG_DUCKDB_EXTENSION_REPOSITORY=$(DUCKDB_EXTENSION_REPOSITORY) \
 		pytest -n $(PYTEST_CONCURRENCY)
 
 check: installcheck pycheck schedulecheck
@@ -224,7 +194,7 @@ $(FULL_DUCKDB_LIB): .git/modules/third_party/duckdb/HEAD third_party/pg_duckdb_e
 	DUCKDB_CAPABILITIES="httplib;loadable_extensions" \
 	GEN=$(DUCKDB_GEN) \
 	CMAKE_VARS="$(DUCKDB_CMAKE_VARS)" \
-	$(DUCKDB_SANITIZER_VARS) \
+	DISABLE_SANITIZER=1 \
 	DISABLE_ASSERTIONS=$(DUCKDB_DISABLE_ASSERTIONS) \
 	EXTENSION_CONFIGS="../pg_duckdb_extensions.cmake" \
 	$(MAKE) -C third_party/duckdb \
