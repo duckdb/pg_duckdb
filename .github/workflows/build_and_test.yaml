@@ -208,6 +208,12 @@ jobs:
       - name: Reduce ASLR entropy for the sanitizers
         run: sudo sysctl vm.mmap_rnd_bits=28
 
+      # pg_ctl detaches the test servers, so gdb can't attach to them in run_with_timeout.py with the default
+      # restriction to descendants
+      - name: Allow attaching gdb to the test servers
+        if: matrix.sanitizer == 'thread'
+        run: sudo sysctl kernel.yama.ptrace_scope=0
+
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:

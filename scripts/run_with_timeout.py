@@ -3,6 +3,8 @@
 Runs a command with a time limit. When the limit is reached, it collects
 diagnostics for a hang before it kills the command:
 
+- the state and kernel wait channel of all threads of all postgres processes
+- pg_stat_activity and pg_locks of all postgres servers, using psql
 - the stack traces of all threads of all postgres processes, using gdb
 - the Python tracebacks of all threads of the Python processes started by the
   command, which pytest's faulthandler prints to stderr on SIGABRT
@@ -62,6 +64,53 @@ def can_sudo():
     return subprocess.run(["sudo", "-n", "true"], capture_output=True).returncode == 0
 
 
+def run_to_file(command, path, header, timeout):
+    """Runs a command, appending its output to a file. Returns the output it wrote."""
+    with open(path, "a") as f:
+        f.write(f"# {header}\n")
+        f.flush()
+        try:
+            result = subprocess.run(
+                command,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                timeout=timeout,
+            )
+            output = result.stdout.decode(errors="replace")
+        except subprocess.TimeoutExpired:
+            output = f"{' '.join(command)} did not finish in {timeout} seconds\n"
+        f.write(output + "\n")
+    return output
+
+
+def own_postgres_processes(processes):
+    return [p for p in processes if p[1] == "postgres" and p[4] == os.getuid()]
+
+
+def dump_thread_states(output, processes):
+    """
+    Writes the state and the kernel wait channel of all threads of the postgres
+    processes. Unlike gdb, this doesn't need to attach to the processes.
+    """
+    with open(output / "threads.txt", "w") as f:
+        for pid, _comm, cmdline, _sid, _uid in own_postgres_processes(processes):
+            f.write(f"{pid}: {cmdline}\n")
+            tasks = Path("/proc") / str(pid) / "task"
+            try:
+                tids = sorted(int(t.name) for t in tasks.iterdir())
+            except FileNotFoundError:
+                continue
+            for tid in tids:
+                task = tasks / str(tid)
+                try:
+                    name = (task / "comm").read_text().strip()
+                    state = (task / "stat").read_text().rsplit(")", 1)[1].split()[0]
+                    wchan = (task / "wchan").read_text().strip()
+                except (FileNotFoundError, ProcessLookupError, PermissionError):
+                    continue
+                f.write(f"    {tid} {name}: state={state} wchan={wchan}\n")
+
+
 def dump_postgres_stacks(output, processes):
     """Writes the stack traces of all threads of the postgres processes of this user"""
     if not shutil.which("gdb"):
@@ -70,34 +119,88 @@ def dump_postgres_stacks(output, processes):
         )
         return
 
-    # pg_ctl detaches the servers from the command, so attaching to them can require root
-    prefix = ["sudo", "-n"] if can_sudo() else []
-    postgres = [p for p in processes if p[1] == "postgres" and p[4] == os.getuid()]
+    gdb = [
+        "gdb",
+        "-batch",
+        "-nx",
+        "-ex",
+        "set pagination off",
+        "-ex",
+        "thread apply all bt",
+        "-p",
+    ]
+    sudo = can_sudo()
+    postgres = own_postgres_processes(processes)
     for pid, _comm, cmdline, _sid, _uid in postgres[:MAX_GDB_PROCESSES]:
-        command = prefix + [
-            "gdb",
-            "-p",
-            str(pid),
-            "-batch",
-            "-nx",
-            "-ex",
-            "set pagination off",
-            "-ex",
-            "thread apply all bt",
-        ]
-        with open(output / f"gdb-{pid}.txt", "w") as f:
-            f.write(f"# {cmdline}\n")
-            f.flush()
-            try:
-                subprocess.run(
-                    command, stdout=f, stderr=subprocess.STDOUT, timeout=GDB_TIMEOUT
-                )
-            except subprocess.TimeoutExpired:
-                f.write(f"\n# gdb did not finish in {GDB_TIMEOUT} seconds\n")
+        path = output / f"gdb-{pid}.txt"
+        result = run_to_file(gdb + [str(pid)], path, cmdline, GDB_TIMEOUT)
+        # pg_ctl detaches the servers from the command, so attaching to them can require root
+        if "Could not attach" in result and sudo:
+            run_to_file(
+                ["sudo", "-n"] + gdb + [str(pid)],
+                path,
+                "retrying with sudo",
+                GDB_TIMEOUT,
+            )
     if len(postgres) > MAX_GDB_PROCESSES:
         print(
             f"Only dumped the stack traces of {MAX_GDB_PROCESSES} of {len(postgres)} postgres processes"
         )
+
+
+ACTIVITY_SQL = """
+SELECT pid, backend_type, state, wait_event_type, wait_event, now() - query_start AS running, left(query, 200) AS query
+FROM pg_stat_activity ORDER BY pid;
+SELECT pid, locktype, relation::regclass, mode, granted FROM pg_locks ORDER BY pid;
+"""
+
+
+def dump_postgres_activity(output, processes):
+    """Writes pg_stat_activity and pg_locks of every postgres server"""
+    if not shutil.which("psql"):
+        print(
+            "psql is not on the PATH, can't query the activity of the postgres servers"
+        )
+        return
+
+    for _pid, _comm, cmdline, _sid, _uid in own_postgres_processes(processes):
+        args = cmdline.split()
+        # Only the postmaster still has its original command line
+        if "-D" not in args or "-p" not in args[:-1]:
+            continue
+        port = args[args.index("-p") + 1]
+        # pg_regress servers only listen on the socket directory given with -k
+        hosts = ["127.0.0.1", "/tmp"]
+        if "-k" in args[:-1]:
+            hosts.insert(0, args[args.index("-k") + 1])
+        env = dict(
+            os.environ, PGOPTIONS="-c statement_timeout=10s", PGCONNECT_TIMEOUT="10"
+        )
+        path = output / f"activity-{port}.txt"
+        connected = False
+        for host in hosts:
+            for user in (None, "postgres"):
+                command = ["psql", "-X", "-h", host, "-p", port, "-d", "postgres"]
+                if user:
+                    command += ["-U", user]
+                with open(path, "a") as f:
+                    f.write(f"# {' '.join(command)}\n")
+                    f.flush()
+                    try:
+                        result = subprocess.run(
+                            command + ["-c", ACTIVITY_SQL],
+                            stdout=f,
+                            stderr=subprocess.STDOUT,
+                            env=env,
+                            timeout=30,
+                        )
+                        connected = result.returncode == 0
+                    except subprocess.TimeoutExpired:
+                        f.write("psql did not finish in 30 seconds\n")
+                if connected:
+                    break
+            if connected:
+                break
 
 
 def dump_python_tracebacks(processes, session_id):
@@ -163,6 +266,8 @@ def main():
         for pid, comm, cmdline, session_id, uid in processes:
             f.write(f"{pid} sid={session_id} uid={uid} {comm}: {cmdline}\n")
 
+    dump_thread_states(args.output, processes)
+    dump_postgres_activity(args.output, processes)
     dump_postgres_stacks(args.output, processes)
     dump_python_tracebacks(processes, process.pid)
     copy_logs(args.output, args.logs)
