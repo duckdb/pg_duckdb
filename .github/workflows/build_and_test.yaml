@@ -170,15 +170,25 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        sanitizer: [address, thread]
+        include:
+        - sanitizer: address
+          cc: gcc
+          cxx: g++
+        # The TSan runtime of GCC 13 and 14 defers signal handlers while a thread waits in pthread_mutex_lock (fixed
+        # in LLVM f01377d8eb, GCC 15). The main thread of a backend can then not handle the signal that a parallel
+        # worker exited while waiting for the GlobalProcessLock, and the DuckDB thread holding it waits for that
+        # forever.
+        - sanitizer: thread
+          cc: gcc-15
+          cxx: g++-15
 
     # Only amd64 runners: the TSan runtime of GCC crashes in sigsetjmp on arm64 systems with BTI
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
 
     env:
       PG_VERSION: REL_18_STABLE
-      # Postgres, DuckDB and pg_duckdb are all built with GCC, and all of them link its sanitizer runtime
-      # dynamically, so there is only one runtime in a process.
+      # Postgres, DuckDB and pg_duckdb are all built with the GCC of the matrix entry, and all of them link its
+      # sanitizer runtime dynamically, so there is only one runtime in a process.
       # Every sanitized program writes its reports to a file in this directory, which the last steps
       # print and upload. The options are set for the whole job, because the builds run sanitized programs too
       # (e.g. pg_config and zic). Postgres intentionally doesn't free memory at exit, so LeakSanitizer is
@@ -200,24 +210,26 @@ jobs:
           sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys E298A3A825C0D65DFD57CBB651716619E084DAB9
           sudo apt-get install -y build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
             libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev libtinfo6 cmake \
-            libstdc++-12-dev ninja-build libcurl4-openssl-dev sqlsmith gdb
+            libstdc++-12-dev ninja-build libcurl4-openssl-dev sqlsmith
           echo "${PWD}/postgres/inst/bin" >> $GITHUB_PATH
           mkdir -p "$SANITIZER_LOG_DIR"
+
+      - name: Install GCC 15
+        if: matrix.cc == 'gcc-15'
+        run: |
+          sudo apt-get install -y software-properties-common
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get update -qq
+          sudo apt-get install -y gcc-15 g++-15
 
       # The sanitizer runtimes of GCC 13 can't handle the default ASLR entropy of the Ubuntu 24.04 runners
       - name: Reduce ASLR entropy for the sanitizers
         run: sudo sysctl vm.mmap_rnd_bits=28
 
-      # pg_ctl detaches the test servers, so gdb can't attach to them in run_with_timeout.py with the default
-      # restriction to descendants
-      - name: Allow attaching gdb to the test servers
-        if: matrix.sanitizer == 'thread'
-        run: sudo sysctl kernel.yama.ptrace_scope=0
-
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ env.PG_VERSION }}-${{ matrix.sanitizer }}
+          key: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ env.PG_VERSION }}-${{ matrix.sanitizer }}-${{ matrix.cc }}
           create-symlink: true
 
       - name: Checkout pg_duckdb extension code
@@ -249,7 +261,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: postgres/inst
-          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw-${{ matrix.sanitizer }}
+          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw-${{ matrix.sanitizer }}-${{ matrix.cc }}
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
@@ -257,7 +269,7 @@ jobs:
         run: |
           SANITIZE="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer"
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml --with-lz4 \
-            CFLAGS="-O1 $SANITIZE" CXXFLAGS="-O1 $SANITIZE" LDFLAGS="$SANITIZE"
+            CC=${{ matrix.cc }} CXX=${{ matrix.cxx }} CFLAGS="-O1 $SANITIZE" CXXFLAGS="-O1 $SANITIZE" LDFLAGS="$SANITIZE"
           make -j8 install
           make -C contrib/postgres_fdw install
 
@@ -266,7 +278,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: duckdb/third_party/duckdb/build/
-          key: duckdb-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.duckdb_sha }}-Release-${{ matrix.sanitizer }}-ninja
+          key: duckdb-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.duckdb_sha }}-Release-${{ matrix.sanitizer }}-${{ matrix.cc }}-ninja
 
       - name: Install pytest and other test requirements
         run: python -m pip install --user --break-system-packages -r duckdb/requirements.txt
@@ -282,35 +294,18 @@ jobs:
         working-directory: duckdb
         run: make -j8 install DUCKDB_SANITIZER=${{ matrix.sanitizer }}
 
-      # Under TSan the regression tests run with a time limit too (see the pycheck step). They already run one
-      # test at a time, because the schedule doesn't run any tests in parallel.
       - name: Run make installcheck
         id: installcheck
         working-directory: duckdb
-        run: |
-          if [ "${{ matrix.sanitizer }}" = thread ]; then
-            python3 scripts/run_with_timeout.py --timeout 600 --output "$GITHUB_WORKSPACE/timeout-diagnostics/installcheck" \
-              --logs test/regression/log -- make installcheck DUCKDB_SANITIZER=thread
-          else
-            make installcheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
-          fi
+        run: make installcheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
 
-      # Under TSan the tests run with a single xdist worker, which still runs the parallel scans and DuckDB threads
-      # of each test, but not multiple tests at the same time. A hang doesn't produce any TSan reports, so the tests
-      # run with a time limit, after which run_with_timeout.py collects the stack traces of the postgres and pytest
-      # processes and the logs of the test servers.
+      # The tests of each xdist worker already run parallel scans and DuckDB threads, so more workers would only
+      # compete for the CPUs with them
       - name: Run make pycheck
         id: pycheck
         if: success() || steps.installcheck.outcome == 'failure'
         working-directory: duckdb
-        run: |
-          if [ "${{ matrix.sanitizer }}" = thread ]; then
-            PYTEST_ADDOPTS="--basetemp=$GITHUB_WORKSPACE/pytest-tmp" python3 scripts/run_with_timeout.py --timeout 240 \
-              --output "$GITHUB_WORKSPACE/timeout-diagnostics/pycheck" --logs "$GITHUB_WORKSPACE/pytest-tmp" -- \
-              make pycheck DUCKDB_SANITIZER=thread PYTEST_CONCURRENCY=1
-          else
-            make pycheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
-          fi
+        run: make pycheck DUCKDB_SANITIZER=${{ matrix.sanitizer }} PYTEST_CONCURRENCY=4
 
       - name: Print regression.diffs if regression tests failed
         if: failure() && steps.installcheck.outcome == 'failure'
@@ -343,12 +338,4 @@ jobs:
         with:
           name: sanitizer-reports-${{ matrix.sanitizer }}
           path: sanitizer-logs/
-          if-no-files-found: ignore
-
-      - name: Upload timeout diagnostics
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: timeout-diagnostics-${{ matrix.sanitizer }}
-          path: timeout-diagnostics/
           if-no-files-found: ignore
