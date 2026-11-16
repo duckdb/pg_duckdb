@@ -1199,13 +1199,20 @@ DuckdbInitUtilityHook() {
 	ProcessUtility_hook = DuckdbUtilityHook;
 }
 
+static void
+DuckdbTruncateTable_Cpp(Oid relation_oid) {
+	auto name = PostgresFunctionGuard(pgduckdb_relation_name, relation_oid);
+	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
+}
+
 /*
- * Truncates the given table in DuckDB.
+ * Truncates the given table in DuckDB. This is called from Table AM callbacks
+ * (e.g. during ON COMMIT DELETE ROWS processing), so any C++ exception needs
+ * to be converted to a Postgres error.
  */
 void
 DuckdbTruncateTable(Oid relation_oid) {
-	auto name = PostgresFunctionGuard(pgduckdb_relation_name, relation_oid);
-	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
+	InvokeCPPFunc(DuckdbTruncateTable_Cpp, relation_oid);
 }
 
 /*
@@ -1672,7 +1679,7 @@ DECLARE_PG_FUNCTION(duckdb_drop_trigger) {
 		}
 		char *table_name = SPI_getvalue(tuple, SPI_tuptable->tupdesc, 2);
 		pgduckdb::DuckDBQueryOrThrow(*connection,
-		                             std::string("DROP TABLE pg_temp.main.") + quote_identifier(table_name));
+		                             std::string("DROP TABLE IF EXISTS pg_temp.main.") + quote_identifier(table_name));
 		pgduckdb::UnregisterDuckdbTempTable(relid);
 		deleted_duckdb_relations++;
 	}
