@@ -7,6 +7,7 @@
 #include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_types.hpp"
+#include "pgduckdb/pgduckdb_xact.hpp"
 #include "pgduckdb/vendor/pg_explain.hpp"
 #include "pgduckdb/pg/explain.hpp"
 
@@ -369,6 +370,12 @@ static void
 Duckdb_EndCustomScan_Cpp(CustomScanState *node) {
 	DuckdbScanState *duckdb_scan_state = (DuckdbScanState *)node;
 	CleanupDuckdbScanState(duckdb_scan_state);
+
+	auto err = pgduckdb::FindAndResetPendingError();
+	if (!err.empty() && QueryCancelHoldoffCount == 0) {
+		throw duckdb::Exception(duckdb::ExceptionType::EXECUTOR, err);
+	}
+
 	/*
 	 * A Postgres error that we catch and continue after (e.g. one from a
 	 * parallel worker while cleaning up a scan) used to leave
