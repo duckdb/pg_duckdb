@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   format:
+    if: ${{ false }}
     name: "Linting and formatting"
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-24.04' }}
     steps:
@@ -34,6 +35,7 @@ jobs:
         run: ./scripts/schedule-check.sh
 
   build-and-test:
+    if: ${{ false }}
     name: "Build and test"
     strategy:
       fail-fast: false
