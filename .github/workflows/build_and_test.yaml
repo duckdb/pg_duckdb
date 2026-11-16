@@ -276,10 +276,18 @@ jobs:
         working-directory: duckdb
         run: make -j8 install DUCKDB_SANITIZER=${{ matrix.sanitizer }}
 
+      # Under TSan the regression tests run with a time limit too (see the pycheck step). They already run one
+      # test at a time, because the schedule doesn't run any tests in parallel.
       - name: Run make installcheck
         id: installcheck
         working-directory: duckdb
-        run: make installcheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
+        run: |
+          if [ "${{ matrix.sanitizer }}" = thread ]; then
+            python3 scripts/run_with_timeout.py --timeout 600 --output "$GITHUB_WORKSPACE/timeout-diagnostics/installcheck" \
+              --logs test/regression/log -- make installcheck DUCKDB_SANITIZER=thread
+          else
+            make installcheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
+          fi
 
       # Under TSan the tests run with a single xdist worker, which still runs the parallel scans and DuckDB threads
       # of each test, but not multiple tests at the same time. A hang doesn't produce any TSan reports, so the tests
@@ -292,7 +300,7 @@ jobs:
         run: |
           if [ "${{ matrix.sanitizer }}" = thread ]; then
             PYTEST_ADDOPTS="--basetemp=$GITHUB_WORKSPACE/pytest-tmp" python3 scripts/run_with_timeout.py --timeout 240 \
-              --output "$GITHUB_WORKSPACE/pycheck-timeout" --logs "$GITHUB_WORKSPACE/pytest-tmp" -- \
+              --output "$GITHUB_WORKSPACE/timeout-diagnostics/pycheck" --logs "$GITHUB_WORKSPACE/pytest-tmp" -- \
               make pycheck DUCKDB_SANITIZER=thread PYTEST_CONCURRENCY=1
           else
             make pycheck DUCKDB_SANITIZER=${{ matrix.sanitizer }}
@@ -331,10 +339,10 @@ jobs:
           path: sanitizer-logs/
           if-no-files-found: ignore
 
-      - name: Upload pycheck timeout diagnostics
+      - name: Upload timeout diagnostics
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pycheck-timeout-${{ matrix.sanitizer }}
-          path: pycheck-timeout/
+          name: timeout-diagnostics-${{ matrix.sanitizer }}
+          path: timeout-diagnostics/
           if-no-files-found: ignore
