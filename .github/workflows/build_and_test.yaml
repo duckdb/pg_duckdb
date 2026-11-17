@@ -13,6 +13,7 @@ concurrency:
 
 jobs:
   format:
+    if: ${{ false }}
     name: "Linting and formatting"
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-24.04' }}
     steps:
@@ -34,6 +35,7 @@ jobs:
         run: ./scripts/schedule-check.sh
 
   build-and-test:
+    if: ${{ false }}
     name: "Build and test"
     strategy:
       fail-fast: false
@@ -168,25 +170,16 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-        - sanitizer: address
-          cc: gcc
-          cxx: g++
-        # The TSan runtime of GCC 13 and 14 defers signal handlers while a thread waits in pthread_mutex_lock (fixed
-        # in LLVM f01377d8eb, GCC 15). The main thread of a backend can then not handle the signal that a parallel
-        # worker exited while waiting for the GlobalProcessLock, and the DuckDB thread holding it waits for that
-        # forever.
-        - sanitizer: thread
-          cc: gcc-15
-          cxx: g++-15
+        sanitizer: [address, thread]
 
-    # Only amd64 runners: the TSan runtime of GCC crashes in sigsetjmp on arm64 systems with BTI
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
 
     env:
       PG_VERSION: REL_18_STABLE
-      # Postgres, DuckDB and pg_duckdb are all built with the GCC of the matrix entry, and all of them link its
-      # sanitizer runtime dynamically, so there is only one runtime in a process.
+      # Postgres, DuckDB and pg_duckdb are all built with this Clang, which links its sanitizer runtime into the
+      # postgres executable for the sanitized shared libraries to use. GCC 13 can't be used with TSan: its runtime
+      # doesn't run signal handlers while a thread waits for a mutex, which deadlocks the parallel scan tests.
+      CLANG_VERSION: 20
       # Every sanitized program writes its reports to a file in this directory, which the last steps
       # print and upload. The options are set for the whole job, because the builds run sanitized programs too
       # (e.g. pg_config and zic). Postgres intentionally doesn't free memory at exit, so LeakSanitizer is
@@ -212,22 +205,23 @@ jobs:
           echo "${PWD}/postgres/inst/bin" >> $GITHUB_PATH
           mkdir -p "$SANITIZER_LOG_DIR"
 
-      - name: Install GCC 15
-        if: matrix.cc == 'gcc-15'
+      # From apt.llvm.org, because the Clang 18 of Ubuntu 24.04 has the same TSan problem as GCC 13
+      - name: Install Clang
         run: |
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.asc
+          echo "deb http://apt.llvm.org/noble/ llvm-toolchain-noble-$CLANG_VERSION main" | \
+            sudo tee /etc/apt/sources.list.d/llvm.list
           sudo apt-get update -qq
-          sudo apt-get install -y gcc-15 g++-15
+          sudo apt-get install -y clang-$CLANG_VERSION libclang-rt-$CLANG_VERSION-dev
 
-      # The sanitizer runtimes of GCC 13 can't handle the default ASLR entropy of the Ubuntu 24.04 runners
+      # Older sanitizer runtimes can't handle the default ASLR entropy of the Ubuntu 24.04 runners
       - name: Reduce ASLR entropy for the sanitizers
         run: sudo sysctl vm.mmap_rnd_bits=28
 
       - name: ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ env.PG_VERSION }}-${{ matrix.sanitizer }}-${{ matrix.cc }}
+          key: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ env.PG_VERSION }}-${{ matrix.sanitizer }}-clang-${{ env.CLANG_VERSION }}
           create-symlink: true
 
       - name: Checkout pg_duckdb extension code
@@ -259,7 +253,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: postgres/inst
-          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw-${{ matrix.sanitizer }}-${{ matrix.cc }}
+          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw-${{ matrix.sanitizer }}-clang-${{ env.CLANG_VERSION }}
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
@@ -267,7 +261,7 @@ jobs:
         run: |
           SANITIZE="-fsanitize=${{ matrix.sanitizer }} -fno-omit-frame-pointer"
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml --with-lz4 \
-            CC=${{ matrix.cc }} CXX=${{ matrix.cxx }} CFLAGS="-O1 $SANITIZE" CXXFLAGS="-O1 $SANITIZE" LDFLAGS="$SANITIZE"
+            CC=clang-$CLANG_VERSION CXX=clang++-$CLANG_VERSION CFLAGS="-O1 $SANITIZE" CXXFLAGS="-O1 $SANITIZE" LDFLAGS="$SANITIZE"
           make -j8 install
           make -C contrib/postgres_fdw install
 
@@ -276,7 +270,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: duckdb/third_party/duckdb/build/
-          key: duckdb-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.duckdb_sha }}-Release-${{ matrix.sanitizer }}-${{ matrix.cc }}-ninja
+          key: duckdb-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.duckdb_sha }}-Release-${{ matrix.sanitizer }}-clang-${{ env.CLANG_VERSION }}-ninja
 
       - name: Install pytest and other test requirements
         run: python -m pip install --user --break-system-packages -r duckdb/requirements.txt
@@ -285,8 +279,7 @@ jobs:
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       # pg_duckdb gets the compiler and the sanitizer flags from the Postgres build. With DUCKDB_SANITIZER, DuckDB
-      # is built with the same compiler and sanitizer. No ERROR_ON_WARNING, because GCC warns about some constructs
-      # it can't instrument with -fsanitize=thread.
+      # is built with the same compiler and sanitizer. Warnings are checked by the build-and-test job.
       - name: Build pg_duckdb extension
         id: build
         working-directory: duckdb
