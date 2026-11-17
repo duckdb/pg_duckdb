@@ -1217,11 +1217,16 @@ DuckdbInitUtilityHook() {
 	ProcessUtility_hook = DuckdbUtilityHook;
 }
 
-static void
-DuckdbTruncateTable_Cpp(Oid relation_oid) {
+namespace pgduckdb {
+/*
+ * Truncates the given table in DuckDB, throwing a C++ exception on failure.
+ */
+void
+TruncateDuckdbTable(Oid relation_oid) {
 	auto name = PostgresFunctionGuard(pgduckdb_relation_name, relation_oid);
-	pgduckdb::DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
+	DuckDBQueryOrThrow(std::string("TRUNCATE ") + name);
 }
+} // namespace pgduckdb
 
 /*
  * Truncates the given table in DuckDB. This is called from Table AM callbacks
@@ -1230,7 +1235,7 @@ DuckdbTruncateTable_Cpp(Oid relation_oid) {
  */
 void
 DuckdbTruncateTable(Oid relation_oid) {
-	InvokeCPPFunc(DuckdbTruncateTable_Cpp, relation_oid);
+	InvokeCPPFunc(pgduckdb::TruncateDuckdbTable, relation_oid);
 }
 
 /*
@@ -1344,6 +1349,16 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	Oid relid = DatumGetObjectId(relid_datum);
 	bool is_temporary = DatumGetBool(is_temporary_datum);
 
+	OnCommitAction on_commit;
+	if (IsA(parsetree, CreateStmt)) {
+		on_commit = castNode(CreateStmt, parsetree)->oncommit;
+	} else if (IsA(parsetree, CreateTableAsStmt)) {
+		on_commit = castNode(CreateTableAsStmt, parsetree)->into->onCommit;
+	} else {
+		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(parsetree));
+	}
+	CheckOnCommitSupport(on_commit);
+
 	/*
 	 * We track the table oid in duckdb.tables so we can later check in our
 	 * duckdb_drop_trigger if the table was created using the duckdb access
@@ -1351,7 +1366,7 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	 * temporary_duckdb_tables for more details.
 	 */
 	if (is_temporary) {
-		pgduckdb::RegisterDuckdbTempTable(relid);
+		pgduckdb::RegisterDuckdbTempTable(relid, on_commit == ONCOMMIT_DELETE_ROWS);
 	} else {
 		if (!pgduckdb::IsMotherDuckEnabled()) {
 			elog(ERROR, "Only TEMP tables are supported in DuckDB if MotherDuck support is not enabled");
@@ -1410,16 +1425,6 @@ DECLARE_PG_FUNCTION(duckdb_create_table_trigger) {
 	}
 
 	pgduckdb::ClaimCurrentCommandId(true);
-
-	if (IsA(parsetree, CreateStmt)) {
-		auto stmt = castNode(CreateStmt, parsetree);
-		CheckOnCommitSupport(stmt->oncommit);
-	} else if (IsA(parsetree, CreateTableAsStmt)) {
-		auto stmt = castNode(CreateTableAsStmt, parsetree);
-		CheckOnCommitSupport(stmt->into->onCommit);
-	} else {
-		elog(ERROR, "Unexpected parsetree type: %d", nodeTag(parsetree));
-	}
 
 	/*
 	 * pgduckdb_get_tabledef does a bunch of checks to see if creating the

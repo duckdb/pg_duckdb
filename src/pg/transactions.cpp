@@ -25,6 +25,16 @@ IsInTransactionBlock(bool is_top_level) {
 	return PostgresFunctionGuard(::IsInTransactionBlock, is_top_level);
 }
 
+/*
+ * Returns true if the current transaction accessed any temporary relations.
+ * Postgres uses the same check to decide whether it needs to truncate ON
+ * COMMIT DELETE ROWS tables.
+ */
+bool
+AccessedTempNamespace() {
+	return (MyXactFlags & XACT_FLAGS_ACCESSEDTEMPNAMESPACE) != 0;
+}
+
 void
 PreventInTransactionBlock(bool is_top_level, const char *statement_type) {
 	return PostgresFunctionGuard(::PreventInTransactionBlock, is_top_level, statement_type);

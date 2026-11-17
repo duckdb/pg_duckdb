@@ -44,6 +44,7 @@ namespace pgduckdb::pg {
 void CommandCounterIncrement();
 CommandId GetCurrentCommandId(bool used = false);
 bool IsInTransactionBlock(bool top_level);
+bool AccessedTempNamespace();
 void PreventInTransactionBlock(bool is_top_level, const char *statement_type);
 void RegisterXactCallback(XactCallback callback, void *arg);
 void UnregisterXactCallback(XactCallback callback, void *arg);
