@@ -183,6 +183,9 @@ $(shlib): $(FULL_DUCKDB_LIB) $(OBJS)
 NO_INSTALLCHECK = 1
 
 PYTEST_CONCURRENCY = auto
+# Extra pytest arguments, e.g. PYTEST_ARGS=$PWD/test/pycheck/copy_test.py to only run some tests. Test paths
+# have to be absolute, because the tests change the working directory to test/pycheck.
+PYTEST_ARGS =
 
 check-regression-duckdb:
 	$(MAKE) -C test/regression check-regression-duckdb
@@ -205,7 +208,7 @@ endif
 
 pycheck: all install
 	$(PYCHECK_LD_LIBRARY_PATH) PG_DUCKDB_EXTENSION_REPOSITORY=$(DUCKDB_EXTENSION_REPOSITORY) \
-		pytest -n $(PYTEST_CONCURRENCY)
+		pytest -n $(PYTEST_CONCURRENCY) $(PYTEST_ARGS)
 
 check: installcheck pycheck schedulecheck
 

@@ -7,6 +7,7 @@
 #include "pgduckdb/pgduckdb_types.hpp"
 #include "pgduckdb/pgduckdb_planner.hpp"
 #include "pgduckdb/pgduckdb_table_am.hpp"
+#include "pgduckdb/pgduckdb_hooks.hpp"
 
 extern "C" {
 #include "postgres.h"
@@ -621,19 +622,25 @@ DuckdbPlanNode(Query *parse, int cursor_options, bool throw_error) {
 
 	/*
 	 * For INSERTs into Postgres tables only the SELECT source of the INSERT
-	 * runs in DuckDB. We let standard_planner build the normal INSERT plan,
-	 * so that the ModifyTable node and the result relation metadata are all
-	 * filled in correctly, and then replace the plan that produces the rows
-	 * to insert with our CustomScan node.
+	 * runs in DuckDB. We let Postgres build the normal INSERT plan, so that
+	 * the ModifyTable node and the result relation metadata are all filled in
+	 * correctly, and then replace the plan that produces the rows to insert
+	 * with our CustomScan node.
 	 */
 	if (IsAllowedPostgresInsert(parse, true)) {
 		Query *copied_query = (Query *)copyObjectImpl(parse);
-#if PG_VERSION_NUM >= 190000
-		PlannedStmt *postgres_plan = standard_planner(copied_query, NULL, cursor_options, NULL, NULL);
-#else
-		PlannedStmt *postgres_plan = standard_planner(copied_query, NULL, cursor_options, NULL);
-#endif
-		Assert(IsA(postgres_plan->planTree, ModifyTable));
+		PlannedStmt *postgres_plan = pgduckdb::PlanPostgresQuery(copied_query, NULL, cursor_options, NULL);
+		/*
+		 * Other extensions can plan the INSERT differently, e.g. TimescaleDB
+		 * puts its own node on top of the ModifyTable node for hypertables.
+		 * We can only replace the source of a plain ModifyTable node.
+		 */
+		if (!IsA(postgres_plan->planTree, ModifyTable)) {
+			elog(throw_error ? ERROR : DEBUG4,
+			     "(PGDuckDB/DuckdbPlanNode) DuckDB does not support INSERT into this table, because it is not planned "
+			     "as a plain INSERT");
+			return nullptr;
+		}
 
 		// Set duckb_plan's node id different to postgres_plan's id
 		// (they may be same because they were planned separately)

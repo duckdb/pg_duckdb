@@ -40,6 +40,8 @@ extern "C" {
 #include "pgduckdb/utility/cpp_wrapper.hpp"
 
 static planner_hook_type prev_planner_hook = NULL;
+/* Set while PlanPostgresQuery plans a query, see there */
+static bool planning_postgres_query = false;
 static ExecutorStart_hook_type prev_executor_start_hook = NULL;
 static ExecutorFinish_hook_type prev_executor_finish_hook = NULL;
 static ExplainOneQuery_hook_type prev_explain_one_query_hook = NULL;
@@ -304,13 +306,52 @@ static PlannedStmt *
 #if PG_VERSION_NUM >= 190000
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params,
                   ExplainState *es) {
+	if (planning_postgres_query) {
+		return prev_planner_hook(parse, query_string, cursor_options, bound_params, es);
+	}
 	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params, es);
 }
 #else
 DuckdbPlannerHook(Query *parse, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+	if (planning_postgres_query) {
+		return prev_planner_hook(parse, query_string, cursor_options, bound_params);
+	}
 	return InvokeCPPFunc(DuckdbPlannerHook_Cpp, parse, query_string, cursor_options, bound_params);
 }
 #endif
+
+namespace pgduckdb {
+
+/*
+ * Plans a query that pg_duckdb runs with Postgres itself, e.g. the scan of a
+ * Postgres table for DuckDB. This has to go through the planner hooks of other
+ * extensions, because they can rely on being called for every query that is
+ * planned. TimescaleDB for example crashes otherwise, because its planner hook
+ * sets up the state that its other planner callbacks use (#1056). Our own
+ * planner hook passes such queries on without considering DuckDB execution.
+ */
+PlannedStmt *
+PlanPostgresQuery(Query *query, const char *query_string, int cursor_options, ParamListInfo bound_params) {
+	bool prev_planning_postgres_query = planning_postgres_query;
+	PlannedStmt *planned_stmt = nullptr;
+	planning_postgres_query = true;
+	PG_TRY();
+	{
+#if PG_VERSION_NUM >= 190000
+		planned_stmt = planner(query, query_string, cursor_options, bound_params, nullptr);
+#else
+		planned_stmt = planner(query, query_string, cursor_options, bound_params);
+#endif
+	}
+	PG_FINALLY();
+	{
+		planning_postgres_query = prev_planning_postgres_query;
+	}
+	PG_END_TRY();
+	return planned_stmt;
+}
+
+} // namespace pgduckdb
 
 static bool
 IsDuckdbPlan(PlannedStmt *stmt) {
