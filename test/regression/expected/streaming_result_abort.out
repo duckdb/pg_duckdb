@@ -1,0 +1,69 @@
+-- An aborted transaction or statement should not leave an open DuckDB result
+-- behind, which would make all later DuckDB queries in the session fail.
+-- A cursor over a streamed result, ended by ROLLBACK without closing it
+BEGIN;
+DECLARE c CURSOR FOR SELECT r['utinyint']::int FROM read_parquet('../../data/unsigned_types.parquet') r;
+FETCH 1 FROM c;
+  r  
+-----
+ 255
+(1 row)
+
+ROLLBACK;
+SELECT count(*) FROM read_parquet('../../data/unsigned_types.parquet');
+ count 
+-------
+     1
+(1 row)
+
+-- The same, but the transaction aborts because of an error
+BEGIN;
+DECLARE c CURSOR FOR SELECT r['utinyint']::int FROM read_parquet('../../data/unsigned_types.parquet') r;
+FETCH 1 FROM c;
+  r  
+-----
+ 255
+(1 row)
+
+SELECT 1/0;
+ERROR:  division by zero
+ROLLBACK;
+SELECT count(*) FROM read_parquet('../../data/unsigned_types.parquet');
+ count 
+-------
+     1
+(1 row)
+
+-- An error while a PL/pgSQL loop iterates over a streamed result
+DO $$
+DECLARE
+	r record;
+BEGIN
+	FOR r IN SELECT * FROM duckdb.query($q$ SELECT * FROM range(100000) $q$) LOOP
+		RAISE EXCEPTION 'stop';
+	END LOOP;
+END $$;
+ERROR:  stop
+CONTEXT:  PL/pgSQL function inline_code_block line 6 at RAISE
+SELECT count(*) FROM read_parquet('../../data/unsigned_types.parquet');
+ count 
+-------
+     1
+(1 row)
+
+-- A cursor that is still open at COMMIT
+BEGIN;
+DECLARE c CURSOR FOR SELECT r['utinyint']::int FROM read_parquet('../../data/unsigned_types.parquet') r;
+FETCH 1 FROM c;
+  r  
+-----
+ 255
+(1 row)
+
+COMMIT;
+SELECT count(*) FROM read_parquet('../../data/unsigned_types.parquet');
+ count 
+-------
+     1
+(1 row)
+
