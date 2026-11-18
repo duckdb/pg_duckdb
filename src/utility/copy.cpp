@@ -252,12 +252,28 @@ MatchesURIScheme(const char *str) {
 
 #define StringOneOf(str, compare_to) StringOneOfInternal(str, compare_to, lengthof(compare_to))
 
+/*
+ * Opens the relation of the COPY, or returns nullptr if it does not exist and
+ * missing_ok is set. Other extensions can handle a COPY of names that are not
+ * relations, e.g. Citus uses COPY "1_1" FROM STDIN WITH (format result) for
+ * its intermediate results, so we must not error out for those. If no one
+ * handles it, Postgres reports the missing relation itself.
+ */
+static Relation
+OpenCopyRelation(CopyStmt *stmt, bool missing_ok) {
+	Oid relid = RangeVarGetRelid(stmt->relation, AccessShareLock, missing_ok);
+	return OidIsValid(relid) ? table_open(relid, NoLock) : nullptr;
+}
+
 static bool
 IsAllowedStatement(CopyStmt *stmt, bool throw_error = false) {
 	int elevel = throw_error ? ERROR : DEBUG4;
 
 	if (stmt->relation) {
-		Relation rel = table_openrv(stmt->relation, AccessShareLock);
+		Relation rel = OpenCopyRelation(stmt, !throw_error);
+		if (!rel) {
+			return false;
+		}
 		bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
 		bool is_catalog_table = pgduckdb::IsCatalogTable(rel);
 		table_close(rel, NoLock);
@@ -358,7 +374,10 @@ NeedsDuckdbExecution(CopyStmt *stmt) {
 		 * table. For COPY ... TO this is not the case, because we can use
 		 * Postgres its COPY implementation on duckdb tables.
 		 */
-		Relation rel = table_openrv(stmt->relation, AccessShareLock);
+		Relation rel = OpenCopyRelation(stmt, true);
+		if (!rel) {
+			return false;
+		}
 		bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
 		table_close(rel, NoLock);
 		/* We do support duckdb tables */
@@ -385,9 +404,11 @@ MakeDuckdbCopyQuery(PlannedStmt *pstmt, const char *query_string, struct QueryEn
 			 * creating a SELECT * query on the duckdb table, because COPY from
 			 * a duckdb query works fine.
 			 */
-			Relation rel = table_openrv(copy_stmt->relation, AccessShareLock);
-			bool is_duckdb_table = pgduckdb::IsDuckdbTable(rel);
-			table_close(rel, NoLock);
+			Relation rel = OpenCopyRelation(copy_stmt, true);
+			bool is_duckdb_table = rel && pgduckdb::IsDuckdbTable(rel);
+			if (rel) {
+				table_close(rel, NoLock);
+			}
 			if (is_duckdb_table) {
 				char *select_query;
 				select_query = psprintf("SELECT * FROM %s", quote_identifier(get_rel_name(RelationGetRelid(rel))));

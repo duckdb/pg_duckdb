@@ -2,6 +2,7 @@
 #include "pgduckdb/pgduckdb_process_lock.hpp"
 #include "pgduckdb/pgduckdb_utils.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
+#include "pgduckdb/pgduckdb_hooks.hpp"
 #include "pgduckdb/utility/signal_guard.hpp"
 
 extern "C" {
@@ -71,11 +72,7 @@ PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_
 
 	char persistence = get_rel_persistence(rte->relid);
 
-#if PG_VERSION_NUM >= 190000
-	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr, nullptr);
-#else
-	PlannedStmt *planned_stmt = standard_planner(query, table_scan_query, 0, nullptr);
-#endif
+	PlannedStmt *planned_stmt = PlanPostgresQuery(query, table_scan_query, 0, nullptr);
 
 	table_scan_query_desc = CreateQueryDesc(planned_stmt, table_scan_query, GetActiveSnapshot(), InvalidSnapshot,
 	                                        None_Receiver, nullptr, nullptr, 0);
@@ -322,9 +319,12 @@ PostgresTableReader::CanTableScanRunInParallel(Plan *plan) {
 		}
 		return true;
 	}
-	/* This is special case for COUNT(*) */
+	/*
+	 * This is special case for COUNT(*). Other extensions can plan the scan
+	 * below it differently, e.g. Citus uses its own node for distributed tables.
+	 */
 	case T_Agg:
-		return true;
+		return CanTableScanRunInParallel(outerPlan(plan));
 	default:
 		return false;
 	}

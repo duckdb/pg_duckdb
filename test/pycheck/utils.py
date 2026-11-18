@@ -18,6 +18,7 @@ import filelock
 import psycopg
 import psycopg.conninfo
 import psycopg.sql
+import pytest
 from psycopg import sql
 
 TEST_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
@@ -895,3 +896,19 @@ class Postgres(OutputSilencer):
 
     def cleanup_test_leftovers(self):
         cleanup_test_leftovers(self)
+
+
+def require_extension(pg: Postgres, name: str):
+    """Skips the test if the extension is not installed.
+
+    The CI jobs that install other extensions list them in
+    PG_DUCKDB_REQUIRED_EXTENSIONS, so that their tests fail instead of being
+    skipped if the extension can't be found.
+    """
+    if pg.sql("SELECT count(*) FROM pg_available_extensions WHERE name = %s", (name,)):
+        return
+    if name in os.environ.get("PG_DUCKDB_REQUIRED_EXTENSIONS", "").split(","):
+        pytest.fail(
+            f"{name} is required by PG_DUCKDB_REQUIRED_EXTENSIONS, but not installed"
+        )
+    pytest.skip(f"{name} is not installed")
