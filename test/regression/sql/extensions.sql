@@ -2,7 +2,6 @@ DROP EXTENSION pg_duckdb CASCADE;
 CREATE EXTENSION pg_duckdb;
 
 SET duckdb.force_execution TO false;
-SET duckdb.allow_community_extensions = true;
 
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
@@ -61,11 +60,13 @@ SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installe
 CALL duckdb.recycle_ddb();
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
 
-SELECT duckdb.install_extension('h3', 'community');
+SELECT duckdb.install_extension('excel');
 
 SELECT last_value FROM duckdb.extensions_table_seq;
 
 SELECT * FROM duckdb.query($$ SELECT extension_name, loaded, installed, installed_from FROM duckdb_extensions() WHERE loaded and extension_name NOT IN ('jemalloc', 'httpfs') $$);
+
+SELECT * FROM duckdb.query($$ SELECT excel_text(1_234_567.897, 'h:mm AM/PM') $$);
 
 -- cleanup
 TRUNCATE duckdb.extensions;

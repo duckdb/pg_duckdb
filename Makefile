@@ -15,7 +15,7 @@ OBJS += $(subst .c,.o, $(C_SRCS))
 # set to `make` to disable ninja
 DUCKDB_GEN ?= ninja
 # used to know what version of extensions to download
-DUCKDB_VERSION = v2.0.0
+DUCKDB_VERSION = v2.0.1-alpha56460
 # duckdb build tweaks
 DUCKDB_CMAKE_VARS = -DCXX_EXTRA=-fvisibility=default -DBUILD_SHELL=0 -DBUILD_PYTHON=0 -DBUILD_UNITTESTS=0 -DOVERRIDE_GIT_DESCRIBE=$(DUCKDB_VERSION)
 # set to 1 to disable asserts in DuckDB. This is particularly useful in combinition with MotherDuck.

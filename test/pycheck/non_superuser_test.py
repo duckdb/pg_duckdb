@@ -28,7 +28,14 @@ def test_community_extensions(pg: Postgres):
     with pg.cur() as cur:
         cur.sql("SET duckdb.force_execution = false")
         cur.sql("SET duckdb.allow_community_extensions = true")
-        cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL h3 FROM community; $$)")
+        try:
+            cur.sql("SELECT * FROM duckdb.raw_query($$ INSTALL h3 FROM community; $$)")
+        except psycopg.errors.InternalError as e:
+            # Community extensions are only published for DuckDB releases, not
+            # for the development versions in between
+            if "(HTTP 404)" in str(e):
+                pytest.skip("h3 is not published for this DuckDB version")
+            raise
 
     with pg.cur() as cur:
         cur.sql("SET duckdb.allow_community_extensions = false")
