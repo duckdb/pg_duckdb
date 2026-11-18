@@ -11,7 +11,8 @@ RUN apt-get update -qq && \
     postgresql-server-dev-${POSTGRES_VERSION} \
     build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev libxslt-dev \
     libssl-dev libxml2-utils xsltproc pkg-config libc++-dev libc++abi-dev libglib2.0-dev \
-    libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache ninja-build git libcurl4-openssl-dev clang-14 && \
+    libtinfo5 cmake libstdc++-12-dev liblz4-dev ccache ninja-build git libcurl4-openssl-dev clang-14 \
+    libsnappy-dev liblzma-dev && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -63,7 +64,7 @@ RUN make installcheck
 FROM base AS output
 
 RUN apt-get update -qq && \
-    apt-get install -y ca-certificates libcurl4
+    apt-get install -y ca-certificates libcurl4 libsnappy1v5
 
 # Automatically enable pg_duckdb
 RUN echo "shared_preload_libraries='pg_duckdb'" >> /usr/share/postgresql/postgresql.conf.sample

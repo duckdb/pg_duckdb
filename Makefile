@@ -105,7 +105,10 @@ ifdef DUCKDB_STATIC
 	FULL_DUCKDB_LIB = $(DUCKDB_BUILD_DIR)/src/libduckdb_static.a
 	# registers the statically linked extensions when pg_duckdb is loaded
 	DUCKDB_STATIC_LOADER = $(addprefix $(DUCKDB_BUILD_DIR)/src/CMakeFiles/duckdb.dir/,duckdb_static_extension_loader.c.o __/extension/loader/static_extension_autoregister.cpp.o)
+	# the libraries the linked in extensions need beyond DuckDB, written by third_party/pg_duckdb_extensions.cmake
+	DUCKDB_EXTENSION_LINK_ARGS = $(shell cat $(DUCKDB_BUILD_DIR)/pg_duckdb_static_link_args.txt 2>/dev/null)
 	PG_DUCKDB_LINK_FLAGS = $(DUCKDB_STATIC_LOADER) $(wildcard $(DUCKDB_BUILD_DIR)/extension/*/lib*_extension.a) \
+		$(DUCKDB_EXTENSION_LINK_ARGS) \
 		$(DUCKDB_BUILD_DIR)/src/main/http/libduckdb_httplib.a $(DUCKDB_BUILD_DIR)/src/main/extension/libduckdb_loadable_extensions.a \
 		$(FULL_DUCKDB_LIB) $(DUCKDB_DEPS_LINK_FLAGS)
 else

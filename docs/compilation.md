@@ -44,6 +44,12 @@ The `httpfs` DuckDB extension, which is built into pg_duckdb, needs OpenSSL and 
 
 `Release`, `ReleaseStatic` and `ReleaseStaticSystem` share a DuckDB build directory, so switching between them requires a clean rebuild: run `make clean-all` first.
 
+## Avro
+
+pg_duckdb links in the `avro` DuckDB extension, which the `iceberg` extension uses to read Iceberg manifests, instead of loading it from the extension repository. The avro builds in the repository export the symbols of the jansson library they bundle, and on Linux the `json_object()` function of Postgres takes the place of jansson's, which crashes avro. The build downloads jansson and links it in statically with hidden symbols.
+
+avro needs snappy and lzma, and also uses zlib, zstd and bzip2 if they are found. `ReleaseStatic` builds them with vcpkg and links them statically, the other builds use the system libraries.
+
 ## Static Compilation
 
 pg_duckdb supports statically linking the DuckDB library into the extension. This is mostly useful to ensure that the right DuckDB version is used if you have installed different versions, and/or to avoid installation conflicts with other Postgres extensions that require different versions of DuckDB.
@@ -72,7 +78,7 @@ sudo apt install \
     build-essential libreadline-dev zlib1g-dev flex bison libxml2-dev \
     libxslt-dev libssl-dev libxml2-utils xsltproc pkg-config libc++-dev \
     libc++abi-dev libglib2.0-dev libtinfo6 cmake libstdc++-12-dev \
-    liblz4-dev libcurl4-openssl-dev ninja-build
+    liblz4-dev libcurl4-openssl-dev ninja-build libsnappy-dev liblzma-dev
 ```
 
 ### Build and Install
@@ -140,7 +146,7 @@ postgres=# CREATE EXTENSION pg_duckdb;
 brew install cmake ninja pkg-config
 
 # Install additional dependencies for DuckDB
-brew install lz4
+brew install lz4 snappy xz
 ```
 
 ## Build and Install

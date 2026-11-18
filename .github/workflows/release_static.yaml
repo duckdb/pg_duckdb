@@ -142,8 +142,8 @@ jobs:
           echo "Highest required versions:"
           objdump -T "$SO" | grep -oE 'GLIBC_[0-9.]+' | sort -uV | tail -1
           objdump -T "$SO" | grep -oE 'GLIBCXX_[0-9.]+' | sort -uV | tail -1
-          # DuckDB, openssl, curl and lz4 are linked in statically
-          if ldd "$SO" | grep -E 'libduckdb|libssl|libcrypto|libcurl|liblz4'; then
+          # DuckDB, openssl, curl, lz4 and the compression libraries of avro are linked in statically
+          if ldd "$SO" | grep -E 'libduckdb|libssl|libcrypto|libcurl|liblz4|libsnappy|liblzma|libzstd'; then
             echo "pg_duckdb.so has unexpected dynamic dependencies"
             exit 1
           fi
