@@ -58,13 +58,30 @@ endif()
 # default of GCC 15) no longer accepts
 set(CMAKE_C_STANDARD 17)
 
+# The imported targets of the compression libraries avro-c links are only visible in the avro-c directory otherwise
+set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
+
+# avro-c links the static libzstd when there is one. The system ones are not always built with -fPIC (Ubuntu's on
+# x86_64 is not), which shared libraries like libduckdb.so and pg_duckdb.so need, so link the shared one instead
+# when the system provides both. vcpkg only provides the static one, which it builds with -fPIC.
+function(pg_duckdb_use_shared_zstd)
+    if(NOT TARGET avro-static OR NOT TARGET zstd::libzstd_static OR NOT TARGET zstd::libzstd_shared)
+        return()
+    endif()
+    foreach(prop LINK_LIBRARIES INTERFACE_LINK_LIBRARIES)
+        get_target_property(libs avro-static ${prop})
+        if(libs)
+            string(REPLACE "zstd::libzstd_static" "zstd::libzstd_shared" libs "${libs}")
+            set_target_properties(avro-static PROPERTIES ${prop} "${libs}")
+        endif()
+    endforeach()
+endfunction()
+cmake_language(DEFER CALL pg_duckdb_use_shared_zstd)
+
 # Static builds of pg_duckdb link the avro extension archive, so they also need the libraries it links: avro-c,
 # jansson, the C++ API and the compression libraries, which come from vcpkg or the system. Once all targets exist,
 # write them as linker arguments to a file that the pg_duckdb Makefile adds to its link line.
 if(PG_DUCKDB_STATIC_HTTPFS)
-    # The imported targets of the compression libraries are only visible in the avro-c directory otherwise
-    set(CMAKE_FIND_PACKAGE_TARGETS_GLOBAL ON)
-
     function(pg_duckdb_collect_link_args ITEM VISITED_VAR ARGS_VAR)
         set(visited ${${VISITED_VAR}})
         set(args ${${ARGS_VAR}})
