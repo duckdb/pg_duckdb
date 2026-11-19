@@ -223,7 +223,7 @@ DuckdbPrepare(const Query *query, const char *explain_prefix) {
 		query_string = pgduckdb_get_querydef(copied_query);
 	}
 
-	if (explain_prefix) {
+	if (explain_prefix && explain_prefix[0] != '\0') {
 		query_string = psprintf("%s %s", explain_prefix, query_string);
 	}
 

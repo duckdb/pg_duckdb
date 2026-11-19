@@ -3,7 +3,7 @@ BEGIN; SET duckdb.force_execution = true; SELECT t::integer AS t1 FROM foo; ROLL
 ERROR:  (PGDuckDB/Duckdb_ExecCustomScan_Cpp) Conversion Error: Could not convert string 'bar' to INT32 when casting from source column t
 
 LINE 1: SELECT (t)::integer AS t1 FROM pgduckdb.public.foo
-                   ^^^^^^^^^
+                  ^^^^^^^^^
 SET duckdb.force_execution = true;
 SELECT 1 FROM foo;
  ?column? 
