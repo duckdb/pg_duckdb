@@ -1,3 +1,56 @@
+# 1.2.1 (2026-11-20)
+
+## Added
+
+- Redact suspected secrets in statements written to the server log, and do not track `CREATE/ALTER USER MAPPING` statements in `pg_stat_statements`. The new `duckdb.allow_unredacted_secrets` setting disables this and enables DuckDB's own `allow_unredacted_secrets` option. ([#1121], [#1123])
+- Support nested fixed-length DuckDB `ARRAY` types, e.g. `INT[3][2]`. ([#1091])
+- Support `NUMERIC` query parameters. ([#1128])
+- Postgres queries planned by pg_duckdb now go through the planner hooks of other extensions, making pg_duckdb work together with Citus, Timescale and pgvector. `INSERT`s that are not planned as a plain `ModifyTable` (e.g. into Timescale hypertables) fall back to Postgres. ([#1142])
+
+## Changed
+
+- Update to DuckDB v2.0.1. ([#1144])
+- Falling back from a non-existent DuckDB function to a Postgres function with `duckdb.force_execution` enabled is logged as `DEBUG1` instead of `WARNING`. ([#1126])
+- Show descriptive errors for unsupported `PREPARE`/`EXECUTE` of queries that read DuckDB rows (instead of a crash on unpatched Postgres versions), `CREATE TABLE AS EXECUTE` and `INSERT` into tables with `INSTEAD` rules. ([#1130], [#1135], [#1136])
+
+## Fixed
+
+- Fix every later DuckDB query in a session failing with "connection has an open result" after a transaction or statement abort, e.g. a `ROLLBACK` with an unfinished cursor. ([#1141])
+- Fix `ON COMMIT DELETE ROWS` for DuckDB temp tables running in a separate DuckDB transaction, and a crash when such a table was dropped through `duckdb.raw_query`. ([#1134], [#1140])
+- Fix handling of interrupts, such as statement timeouts, in Postgres parts of a query above a DuckDB scan, e.g. while inserting rows returned by DuckDB. ([#1137])
+- Fix hangs and race conditions in Postgres table scans with parallel workers. ([#1132], [#1133], [#1139])
+- Fix a heap buffer over-read when reading tuples from Postgres parallel workers. ([#1119])
+- Fix duplicate plan node IDs in `INSERT INTO ... SELECT` plans. ([#1108])
+- Fix a crash when cancelling `COPY`. ([#974], [#1125])
+- Fix non-UTF-8 strings reaching DuckDB and causing internal errors. ([#1131])
+- Fix Postgres queries failing with `type "double" is only a shell` when DuckDB type names were pushed down. ([#1129])
+- Fix a use-after-free of the default values of `duckdb.temporary_directory` and `duckdb.extension_directory`, which made `pg_settings` return invalid UTF-8. ([#1127])
+
+[#1121]: https://github.com/duckdb/pg_duckdb/pull/1121
+[#1123]: https://github.com/duckdb/pg_duckdb/pull/1123
+[#1091]: https://github.com/duckdb/pg_duckdb/pull/1091
+[#1128]: https://github.com/duckdb/pg_duckdb/pull/1128
+[#1142]: https://github.com/duckdb/pg_duckdb/pull/1142
+[#1144]: https://github.com/duckdb/pg_duckdb/pull/1144
+[#1126]: https://github.com/duckdb/pg_duckdb/pull/1126
+[#1130]: https://github.com/duckdb/pg_duckdb/pull/1130
+[#1135]: https://github.com/duckdb/pg_duckdb/pull/1135
+[#1136]: https://github.com/duckdb/pg_duckdb/pull/1136
+[#1141]: https://github.com/duckdb/pg_duckdb/pull/1141
+[#1134]: https://github.com/duckdb/pg_duckdb/pull/1134
+[#1140]: https://github.com/duckdb/pg_duckdb/pull/1140
+[#1137]: https://github.com/duckdb/pg_duckdb/pull/1137
+[#1132]: https://github.com/duckdb/pg_duckdb/pull/1132
+[#1133]: https://github.com/duckdb/pg_duckdb/pull/1133
+[#1139]: https://github.com/duckdb/pg_duckdb/pull/1139
+[#1119]: https://github.com/duckdb/pg_duckdb/pull/1119
+[#1108]: https://github.com/duckdb/pg_duckdb/pull/1108
+[#974]: https://github.com/duckdb/pg_duckdb/issues/974
+[#1125]: https://github.com/duckdb/pg_duckdb/pull/1125
+[#1131]: https://github.com/duckdb/pg_duckdb/pull/1131
+[#1129]: https://github.com/duckdb/pg_duckdb/pull/1129
+[#1127]: https://github.com/duckdb/pg_duckdb/pull/1127
+
 # 1.2.0 (2026-11-02)
 
 ## Added
