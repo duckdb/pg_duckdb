@@ -94,7 +94,13 @@ def build_pg_env(username, password):
 
 
 def create_tables(
-    database_name, schema_name, username, password, no_indexes=False, pk_only=False
+    host,
+    database_name,
+    schema_name,
+    username,
+    password,
+    no_indexes=False,
+    pk_only=False,
 ):
     """Create tables using SQL files"""
     pg_env = build_pg_env(username, password)
@@ -105,6 +111,8 @@ def create_tables(
             "psql",
             "-d",
             database_name,
+            "-h",
+            host,
             "-c",
             f'CREATE SCHEMA IF NOT EXISTS "{schema_name}"',
         ],
@@ -130,6 +138,8 @@ def create_tables(
     run(
         [
             "psql",
+            "-h",
+            host,
             "-d",
             database_name,
             "-v",
@@ -567,6 +577,7 @@ def run_benchmark(args, engine, results_suffix="", timeout_seconds=300):
     if engine != "motherduck" and not args.skip_load:
         # Create schema using SQL files
         create_tables(
+            args.host,
             database_name,
             schema_name,
             username,
@@ -582,6 +593,8 @@ def run_benchmark(args, engine, results_suffix="", timeout_seconds=300):
             run(
                 [
                     "psql",
+                    "-h",
+                    args.host,
                     "-d",
                     database_name,
                     "-v",
