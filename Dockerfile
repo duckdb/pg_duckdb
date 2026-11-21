@@ -67,3 +67,13 @@ COPY --chown=postgres:postgres docker/init.d/ /docker-entrypoint-initdb.d/
 
 COPY --from=builder /out /
 USER postgres
+
+###
+### OUTPUT-CNPG
+###
+### this creates a postgres extension image that can be used with CNPG without any tools
+FROM scratch AS output-cnpg
+ARG POSTGRES_VERSION
+
+COPY --from=builder /out/usr/lib/postgresql/${POSTGRES_VERSION}/lib /lib
+COPY --from=builder /out/usr/share/postgresql/${POSTGRES_VERSION}/extension /share/extension
