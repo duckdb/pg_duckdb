@@ -26,6 +26,7 @@ Var *pgduckdb_duckdb_subscript_var(Expr *expr);
 bool pgduckdb_reconstruct_star_step(StarReconstructionContext *ctx, ListCell *tle_cell);
 bool pgduckdb_replace_subquery_with_view(Query *query, StringInfo buf);
 int pgduckdb_show_type(Const *constval, int original_showtype);
+bool pgduckdb_append_array_const(Const *constval, StringInfo buf, int showtype);
 bool pgduckdb_subscript_has_custom_alias(Plan *plan, List *rtable, Var *subscript_var, char *colname);
 SubscriptingRef *pgduckdb_strip_first_subscript(SubscriptingRef *sbsref, StringInfo buf);
 char *pgduckdb_write_row_refname(StringInfo buf, char *refname, bool is_top_level);

@@ -8,6 +8,29 @@ CREATE TABLE t AS TABLE s;
 SELECT * FROM s;
 SELECT * FROM t;
 SET duckdb.force_execution TO true;
+
+-- PostgreSQL array constants use '{...}' syntax. They need to be deparsed as
+-- DuckDB list literals when the query is executed by DuckDB (#1040).
+SELECT 'integer[]' AS type, value::text
+FROM (SELECT '{1,2,3}'::integer[] AS value) s;
+SELECT 'integer[] with NULL' AS type, value::text
+FROM (SELECT '{1,NULL,3}'::integer[] AS value) s;
+SELECT 'bigint[]' AS type, value::text
+FROM (SELECT '{1,2,3}'::bigint[] AS value) s;
+SELECT 'numeric[]' AS type, value::text
+FROM (SELECT '{10.50,20.25}'::numeric[] AS value) s;
+SELECT 'date[]' AS type, value::text
+FROM (SELECT '{2025-09-01,2026-09-01}'::date[] AS value) s;
+SELECT 'text[]' AS type, value::text
+FROM (SELECT ARRAY['comma,value', 'quote''value']::text[] AS value) s;
+SELECT 'boolean[]' AS type, value::text
+FROM (SELECT '{t,f}'::boolean[] AS value) s;
+SELECT 'empty integer[]' AS type, value::text
+FROM (SELECT '{}'::integer[] AS value) s;
+SELECT 'three-dimensional integer[]' AS type, value::text
+FROM (SELECT '{{{1,2},{3,4}},{{5,6},{7,8}}}'::integer[] AS value) s;
+SELECT 1 = ANY ('{1,2,3}'::integer[]) AS any_integer;
+
 SELECT * FROM s;
 SELECT * FROM t;
 
