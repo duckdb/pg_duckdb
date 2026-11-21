@@ -249,12 +249,12 @@ Licensed under the [MIT License](LICENSE).
 ---
 
 <p align="center">
-    <strong>Built with ❤️</strong><br> in collaboration with <a href="https://hydra.so">Hydra</a> and <a href="https://motherduck.com">MotherDuck</a>
+    <strong>Built with ❤️</strong><br> in collaboration with <a href="https://docs.hydra.so/">Hydra</a> and <a href="https://motherduck.com">MotherDuck</a>
 </p>
 
 [milestones]: https://github.com/duckdb/pg_duckdb/milestones
 [discussions]: https://github.com/duckdb/pg_duckdb/discussions
 [issues]: https://github.com/duckdb/pg_duckdb/issues
 [docs]: https://github.com/duckdb/pg_duckdb/tree/main/docs
-[hydra]: https://hydra.so/
+[hydra]: https://docs.hydra.so/
 [motherduck]: https://motherduck.com/
