@@ -66,13 +66,10 @@ private:
 
 	void Initialize();
 
-	void InitializeDatabase();
-
 	void LoadSecrets(duckdb::ClientContext &);
 	void DropSecrets(duckdb::ClientContext &);
 	void LoadExtensions(duckdb::ClientContext &);
 	void InstallExtensions(duckdb::ClientContext &);
-	void LoadFunctions(duckdb::ClientContext &);
 	void RefreshConnectionState(duckdb::ClientContext &);
 
 	inline bool
@@ -90,7 +87,7 @@ private:
 	 * FIXME: Use a unique_ptr instead of a raw pointer. For now this is not
 	 * possible though, as the MotherDuck extension causes an ABORT when the
 	 * DuckDB database its destructor is run at the exit of the process.  This
-	 * then in turn crashes Postgres, which we obviously dont't want. Not
+	 * then in turn crashes Postgres, which we obviously don't want. Not
 	 * running the destructor also doesn't really have any downsides, as the
 	 * process is going to die anyway. It's probably even a tiny bit more
 	 * efficient not to run the destructor at all. But we should still fix
