@@ -1,0 +1,176 @@
+name: Build and Publish Debian Package
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  pull_request:
+    paths:
+      - 'debian/**'
+      - 'Makefile'
+      - 'src/**'
+      - 'include/**'
+      - '.github/workflows/debian-package.yaml'
+
+permissions:
+  contents: write
+
+jobs:
+  build-debian-package:
+    name: Build Debian Package
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y \
+            devscripts \
+            debhelper \
+            postgresql-all-dev \
+            postgresql-server-dev-all \
+            build-essential \
+            libreadline-dev \
+            zlib1g-dev \
+            flex \
+            bison \
+            libxml2-dev \
+            libxslt-dev \
+            libssl-dev \
+            libxml2-utils \
+            xsltproc \
+            pkg-config \
+            libc++-dev \
+            libc++abi-dev \
+            libglib2.0-dev \
+            libtinfo6 \
+            cmake \
+            libstdc++-12-dev \
+            ninja-build \
+            libcurl4-openssl-dev \
+            git \
+            ca-certificates
+
+      - name: Determine version from changelog or git tag
+        id: version
+        run: |
+          if [ -f debian/changelog ]; then
+            VERSION=$(dpkg-parsechangelog -S Version | cut -d- -f1)
+            DEB_VERSION=$(dpkg-parsechangelog -S Version)
+          else
+            # Fallback: try to get version from git tag or control file
+            if git describe --tags --exact-match HEAD 2>/dev/null; then
+              VERSION=$(git describe --tags --exact-match HEAD | sed 's/^v//')
+            elif git describe --tags --abbrev=0 2>/dev/null; then
+              VERSION=$(git describe --tags --abbrev=0 | sed 's/^v//')
+            else
+              VERSION=$(grep default_version pg_duckdb.control | cut -d"'" -f2 || echo "1.1.0")
+            fi
+            DEB_VERSION="${VERSION}-1"
+          fi
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "deb_version=${DEB_VERSION}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}, Debian version: ${DEB_VERSION}"
+
+      - name: Update changelog for main branch
+        if: github.ref == 'refs/heads/main'
+        run: |
+          # Only update changelog if it doesn't already have this version
+          if ! dpkg-parsechangelog -S Version 2>/dev/null | grep -q "${{ steps.version.outputs.version }}"; then
+            export DEBFULLNAME="DuckDB Foundation"
+            export DEBEMAIL="info@duckdb.org"
+            dch --newversion "${{ steps.version.outputs.deb_version }}" \
+                --distribution unstable \
+                --urgency medium \
+                "Automated build from GitHub Actions"
+          fi
+
+      - name: Build Debian package
+        env:
+          DEB_BUILD_OPTIONS: parallel=$(nproc)
+        run: |
+          # Build the package
+          debuild -us -uc -b
+          
+          # List generated packages
+          ls -lh ../*.deb || true
+          ls -lh ../*.changes || true
+
+      - name: Upload Debian package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-packages
+          path: |
+            ../*.deb
+            ../*.changes
+            ../*.dsc
+            ../*.tar.*
+          retention-days: 30
+
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            ../*.build
+            ../*.buildinfo
+          retention-days: 7
+
+  publish-debian-package:
+    name: Publish Debian Package
+    needs: build-debian-package
+    if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Debian package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: debian-packages
+          path: ./artifacts
+
+      - name: List packages
+        run: |
+          echo "Generated packages:"
+          ls -lh ./artifacts/*.deb || true
+          echo ""
+          echo "Package information:"
+          for pkg in ./artifacts/*.deb; do
+            if [ -f "$pkg" ]; then
+              echo "=== $pkg ==="
+              dpkg-deb -I "$pkg" || true
+              echo ""
+            fi
+          done
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./artifacts/*.deb
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to repository (placeholder)
+        run: |
+          echo "Packages built successfully!"
+          echo "To publish to a Debian repository, add steps here to:"
+          echo "  1. Sign the packages with GPG"
+          echo "  2. Upload to your repository (e.g., using dput, reprepro, or aptly)"
+          echo ""
+          echo "For now, packages are available as GitHub artifacts and releases."
+
