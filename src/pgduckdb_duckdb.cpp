@@ -16,6 +16,7 @@
 #include "pgduckdb/pg/string_utils.hpp"
 #include "pgduckdb/pg/transactions.hpp"
 #include "pgduckdb/pgduckdb_background_worker.hpp"
+#include "pgduckdb/pgduckdb_ca_certificate_fs.hpp"
 #include "pgduckdb/pgduckdb_fdw.hpp"
 #include "pgduckdb/pgduckdb_guc.hpp"
 #include "pgduckdb/pgduckdb_metadata_cache.hpp"
@@ -185,6 +186,8 @@ DuckDBManager::Initialize() {
 	std::string pg_time_zone(pg::GetConfigOption("TimeZone"));
 
 	database = new duckdb::DuckDB(connection_string, &config);
+
+	RegisterCACertificateFileSystem(*database->instance);
 
 	auto &dbconfig = duckdb::DBConfig::GetConfig(*database->instance);
 	duckdb::StorageExtension::Register(dbconfig, "pgduckdb", duckdb::make_shared_ptr<PostgresStorageExtension>());
