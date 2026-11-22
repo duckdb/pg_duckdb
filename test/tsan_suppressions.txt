@@ -12,5 +12,10 @@ race:wrapper_handler
 race:delta.duckdb_extension
 race:vortex.duckdb_extension
 race:aws.duckdb_extension
+# The MotherDuck tests load the prebuilt MotherDuck extension, whose gRPC event engine threads (and its bundled
+# OpenSSL) share memory the same way. The version in the name of motherduck_impl changes with each release. These
+# don't match pg_duckdb code that has motherduck in its names.
+race:motherduck.duckdb_extension
+race:motherduck_impl.
 # The AWS SDK doesn't join its event loop cleanup thread before the process exits
 thread:aws.duckdb_extension
