@@ -33,6 +33,8 @@ Specifies the Postgres role that is allowed to use DuckDB execution, manage secr
 
 Disables specific file systems, preventing access for all users, including superusers. For non-superusers who are not members of both the `pg_read_server_files` and `pg_write_server_files` roles, the `LocalFileSystem` is always disabled. If you add `LocalFileSystem` to this setting, superusers will also be unable to access the local file system through DuckDB.
 
+The system CA certificate bundles that `httpfs` uses to verify `https://` and `s3://` connections stay readable when `LocalFileSystem` is disabled: they are served read-only by `PgDuckDBCACertificateFileSystem`, which only handles those exact paths (`/etc/ssl/certs/ca-certificates.crt`, `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`, `/etc/pki/tls/certs/ca-bundle.crt`, `/etc/ssl/ca-bundle.pem` and `/etc/ssl/cert.pem`). Add `PgDuckDBCACertificateFileSystem` to this setting to disable it as well, which makes TLS connections that verify the server certificate fail for those users.
+
 - **Default**: `""`
 - **Access**: Superuser-only
 

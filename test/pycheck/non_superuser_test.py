@@ -89,3 +89,37 @@ def test_install_extension_injection(pg: Postgres):
             match=r"""HTTP Error: Failed to download extension " '; select \* from hacky '' """,
         ):
             cur.sql("SELECT * FROM duckdb.query($$ SELECT 1 $$)")
+
+
+def test_https_without_local_file_system(pg: Postgres):
+    # Since DuckDB 2.0, httpfs reads the system CA certificate bundle through
+    # the DuckDB file system. LocalFileSystem is disabled for roles without
+    # pg_read_server_files, which must not stop them from reading https://
+    # files (issue #1146). Nothing listens on port 1, so the request fails, but
+    # httpfs loads the CA certificate bundle before it connects.
+    pg.create_user("user1", psycopg.sql.SQL("IN ROLE duckdb_group"))
+    url = "https://localhost:1/file.csv"
+    with pg.cur() as cur:
+        cur.sql("SET ROLE user1")
+        with pytest.raises(psycopg.errors.InternalError) as error:
+            cur.sql(f"SELECT * FROM read_csv('{url}')")
+        assert "CA certificate bundle" not in str(error.value)
+        assert "IO Error" in str(error.value) or "HTTP Error" in str(error.value)
+
+        # Other local files stay blocked, also next to the CA certificate bundles
+        for path in ["/etc/passwd", "/etc/ssl/cert.pem/../../passwd", "/etc/ssl/"]:
+            with pytest.raises(
+                psycopg.errors.InternalError,
+                match="File system LocalFileSystem has been disabled by configuration",
+            ):
+                cur.sql(f"SELECT * FROM read_csv('{path}')")
+
+    # The file system for the CA certificate bundles can be disabled too
+    with pg.cur() as cur:
+        cur.sql("SET duckdb.disabled_filesystems = 'PgDuckDBCACertificateFileSystem'")
+        cur.sql("SET ROLE user1")
+        with pytest.raises(
+            psycopg.errors.InternalError,
+            match="Cannot read a CA certificate bundle: file system access is restricted",
+        ):
+            cur.sql(f"SELECT * FROM read_csv('{url}')")
