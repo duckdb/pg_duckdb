@@ -74,6 +74,14 @@ target "pg_duckdb_18" {
   }
 }
 
+target "pg_duckdb_19" {
+  inherits = ["pg_duckdb"]
+
+  args = {
+    POSTGRES_VERSION = "19"
+  }
+}
+
 target "default" {
   inherits = ["pg_duckdb_18"]
 }
