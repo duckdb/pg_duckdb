@@ -1,3 +1,17 @@
+# 1.2.2 (2026-11-23)
+
+## Added
+
+- Docker images (`19-v1.2.2`, `19-main`) and release packages for PostgreSQL 19. PGDG does not provide PostgreSQL 19 for EL 8, so the PostgreSQL 19 release packages are built on AlmaLinux 9 and need glibc 2.34 or newer, while the packages for PostgreSQL 14 to 18 still need glibc 2.28. ([#1148])
+
+## Fixed
+
+- Fix reading files over TLS, e.g. `https://`, `s3://`, `gcs://`, `r2://` and `hf://`, failing with "Cannot read a CA certificate bundle" for roles that are not superusers and not members of both `pg_read_server_files` and `pg_write_server_files`. Since DuckDB 2.0, `httpfs` reads the system CA certificate bundle through DuckDB's file system, which is disabled for these roles. The well-known CA bundle paths are now served read-only by a separate `PgDuckDBCACertificateFileSystem`, while the other local files stay blocked. This was a regression in 1.2.0. ([#1146], [#1147])
+
+[#1148]: https://github.com/duckdb/pg_duckdb/pull/1148
+[#1146]: https://github.com/duckdb/pg_duckdb/issues/1146
+[#1147]: https://github.com/duckdb/pg_duckdb/pull/1147
+
 # 1.2.1 (2026-11-20)
 
 ## Added
