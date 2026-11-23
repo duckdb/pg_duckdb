@@ -14,3 +14,7 @@ compile_commands.json
 *.pyc
 
 env/
+
+/.local
+/AGENTS.md
+/CLAUDE.md
