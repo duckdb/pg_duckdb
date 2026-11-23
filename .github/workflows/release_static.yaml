@@ -16,21 +16,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        pg: [14, 15, 16, 17, 18]
+        pg: [14, 15, 16, 17, 18, 19]
         arch: [x86_64, aarch64]
         include:
         - arch: x86_64
           runner: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}
         - arch: aarch64
           runner: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-arm64' || 'ubuntu-24.04-arm' }}
+        # manylinux_2_28 is AlmaLinux 8 (glibc 2.28), the same baseline DuckDB uses for its Linux builds
+        - manylinux: "2_28"
+          el: 8
+        # PGDG has no PostgreSQL 19 packages for EL 8, so it is built on AlmaLinux 9 (glibc 2.34), like PGDG's own
+        # PostgreSQL 19 packages need
+        - pg: 19
+          manylinux: "2_34"
+          el: 9
 
     runs-on: ${{ matrix.runner }}
 
     env:
-      # manylinux_2_28 is AlmaLinux 8 (glibc 2.28), the same baseline DuckDB uses for its Linux builds
-      DOCKER_IMAGE: quay.io/pypa/manylinux_2_28_${{ matrix.arch }}
+      DOCKER_IMAGE: quay.io/pypa/manylinux_${{ matrix.manylinux }}_${{ matrix.arch }}
       CONTAINER: pg_duckdb_build
       PG_MAJOR: ${{ matrix.pg }}
+      EL_MAJOR: ${{ matrix.el }}
       PACKAGE_NAME: pg_duckdb-pg${{ matrix.pg }}-linux-${{ matrix.arch }}
 
     steps:
@@ -49,16 +57,16 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: third_party/duckdb/build/
-          key: release-static-duckdb-build-${{ matrix.arch }}-${{ hashFiles('Makefile', 'third_party/pg_duckdb_extensions.cmake') }}-ninja
+          key: release-static-duckdb-build-manylinux_${{ matrix.manylinux }}-${{ matrix.arch }}-${{ hashFiles('Makefile', 'third_party/pg_duckdb_extensions.cmake') }}-ninja
 
       - name: Restore ccache cache
         uses: actions/cache/restore@v6
         with:
           path: .ccache/
-          key: release-static-ccache-${{ matrix.arch }}-pg${{ matrix.pg }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: release-static-ccache-manylinux_${{ matrix.manylinux }}-${{ matrix.arch }}-pg${{ matrix.pg }}-${{ github.run_id }}-${{ github.run_attempt }}
           restore-keys: |
-            release-static-ccache-${{ matrix.arch }}-pg${{ matrix.pg }}-
-            release-static-ccache-${{ matrix.arch }}-
+            release-static-ccache-manylinux_${{ matrix.manylinux }}-${{ matrix.arch }}-pg${{ matrix.pg }}-
+            release-static-ccache-manylinux_${{ matrix.manylinux }}-${{ matrix.arch }}-
 
       - name: Start build container
         run: |
@@ -71,6 +79,7 @@ jobs:
             -v "$PWD":/pg_duckdb                 \
             -w /pg_duckdb                        \
             -e PG_MAJOR                          \
+            -e EL_MAJOR                          \
             -e PACKAGE_NAME                      \
             -e CC='ccache gcc'                   \
             -e CXX='ccache g++'                  \
@@ -87,15 +96,21 @@ jobs:
           git config --global --add safe.directory '*'
 
           dnf install -y epel-release dnf-plugins-core
-          dnf config-manager --set-enabled powertools
-          dnf install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm"
+          # The repository with the -devel dependencies of EPEL and PGDG is called crb since EL 9
+          if [ "$EL_MAJOR" = 8 ]; then
+            dnf config-manager --set-enabled powertools
+          else
+            dnf config-manager --set-enabled crb
+          fi
+          dnf install -y "https://download.postgresql.org/pub/repos/yum/reporpms/EL-${EL_MAJOR}-$(uname -m)/pgdg-redhat-repo-latest.noarch.rpm"
           dnf -qy module disable postgresql
 
           dnf install -y "postgresql${PG_MAJOR}-server" "postgresql${PG_MAJOR}-devel"
 
           # PGDG's compiler flags use the Red Hat compiler specs, which load the annobin plugin of the compiler, the
-          # gcc-toolset-14 of the manylinux_2_28 image
-          dnf install -y redhat-rpm-config gcc-toolset-14-annobin-plugin-gcc ccache ninja-build perl zip unzip tar curl pkgconfig
+          # gcc-toolset of the manylinux image
+          GCC_TOOLSET="gcc-toolset-$(gcc -dumpversion | cut -d. -f1)"
+          dnf install -y redhat-rpm-config "${GCC_TOOLSET}-annobin-plugin-gcc" ccache ninja-build perl zip unzip tar curl pkgconfig
 
           # openssl and curl are built by vcpkg, its package versions are pinned by DuckDB's vcpkg manifest
           git clone https://github.com/microsoft/vcpkg.git /opt/vcpkg
@@ -124,14 +139,14 @@ jobs:
         uses: actions/cache/save@v6
         with:
           path: .ccache/
-          key: release-static-ccache-${{ matrix.arch }}-pg${{ matrix.pg }}-${{ github.run_id }}-${{ github.run_attempt }}
+          key: release-static-ccache-manylinux_${{ matrix.manylinux }}-${{ matrix.arch }}-pg${{ matrix.pg }}-${{ github.run_id }}-${{ github.run_attempt }}
 
       - name: Save DuckDB build cache
         if: steps.build.outcome == 'success' && steps.duckdb-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: third_party/duckdb/build/
-          key: release-static-duckdb-build-${{ matrix.arch }}-${{ hashFiles('Makefile', 'third_party/pg_duckdb_extensions.cmake') }}-ninja
+          key: release-static-duckdb-build-manylinux_${{ matrix.manylinux }}-${{ matrix.arch }}-${{ hashFiles('Makefile', 'third_party/pg_duckdb_extensions.cmake') }}-ninja
 
       - name: Check binary dependencies
         run: |

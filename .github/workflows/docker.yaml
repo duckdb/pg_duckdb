@@ -21,7 +21,7 @@ jobs:
     name: Build Docker image for Postgres ${{ matrix.postgres }} on ${{ matrix.platform }}
     strategy:
       matrix:
-        postgres: ["14", "15", "16", "17", "18"]
+        postgres: ["14", "15", "16", "17", "18", "19"]
         platform: ["amd64", "arm64"]
         include:
         - platform: amd64
@@ -102,7 +102,7 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       matrix:
-        postgres: ["14", "15", "16", "17", "18"]
+        postgres: ["14", "15", "16", "17", "18", "19"]
 
     runs-on: ${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-slim' || 'ubuntu-24.04' }}
     needs: docker_build
