@@ -38,30 +38,32 @@ extern "C" {
 namespace pgduckdb {
 
 PostgresTableReader::PostgresTableReader()
-    : table_scan_query_desc(nullptr), table_scan_planstate(nullptr), parallel_executor_info(nullptr),
-      parallel_worker_readers(nullptr), slot(nullptr), nworkers_launched(0), nreaders(0), next_parallel_reader(0),
-      entered_parallel_mode(false), cleaned_up(false) {
+    : table_scan_query(), table_scan_query_desc(nullptr), table_scan_planstate(nullptr),
+      parallel_executor_info(nullptr), parallel_worker_readers(nullptr), slot(nullptr), nworkers_launched(0),
+      nreaders(0), next_parallel_reader(0), entered_parallel_mode(false), cleaned_up(false) {
 }
 
 void
-PostgresTableReader::Init(const char *table_scan_query, bool count_tuples_only) {
+PostgresTableReader::Init(std::string _table_scan_query, bool count_tuples_only) {
+	table_scan_query = std::move(_table_scan_query);
 	std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
 	// Setting up a parallel scan creates DSM segments, which saves and restores the signal mask
 	ThreadSignalUnblockGuard signal_mask_guard;
 	PostgresScopedStackReset scoped_stack_reset;
-	PostgresMemberGuard(PostgresTableReader::InitUnsafe, table_scan_query, count_tuples_only);
+	PostgresMemberGuard(PostgresTableReader::InitUnsafe, count_tuples_only);
 }
 
 void
-PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_only) {
-	List *raw_parsetree_list = pg_parse_query(table_scan_query);
+PostgresTableReader::InitUnsafe(bool count_tuples_only) {
+	const char *query_text = table_scan_query.c_str();
+	List *raw_parsetree_list = pg_parse_query(query_text);
 	Assert(list_length(raw_parsetree_list) == 1);
 	RawStmt *raw_parsetree = linitial_node(RawStmt, raw_parsetree_list);
 
 #if PG_VERSION_NUM >= 150000
-	List *query_list = pg_analyze_and_rewrite_fixedparams(raw_parsetree, table_scan_query, nullptr, 0, nullptr);
+	List *query_list = pg_analyze_and_rewrite_fixedparams(raw_parsetree, query_text, nullptr, 0, nullptr);
 #else
-	List *query_list = pg_analyze_and_rewrite(raw_parsetree, table_scan_query, nullptr, 0, nullptr);
+	List *query_list = pg_analyze_and_rewrite(raw_parsetree, query_text, nullptr, 0, nullptr);
 #endif
 
 	Assert(list_length(query_list) == 1);
@@ -72,9 +74,9 @@ PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_
 
 	char persistence = get_rel_persistence(rte->relid);
 
-	PlannedStmt *planned_stmt = PlanPostgresQuery(query, table_scan_query, 0, nullptr);
+	PlannedStmt *planned_stmt = PlanPostgresQuery(query, query_text, 0, nullptr);
 
-	table_scan_query_desc = CreateQueryDesc(planned_stmt, table_scan_query, GetActiveSnapshot(), InvalidSnapshot,
+	table_scan_query_desc = CreateQueryDesc(planned_stmt, query_text, GetActiveSnapshot(), InvalidSnapshot,
 	                                        None_Receiver, nullptr, nullptr, 0);
 
 	ExecutorStart(table_scan_query_desc, 0);
@@ -94,7 +96,7 @@ PostgresTableReader::InitUnsafe(const char *table_scan_query, bool count_tuples_
 		es->str = makeStringInfo();
 		es->format = EXPLAIN_FORMAT_TEXT;
 		ExplainPrintPlan(es, table_scan_query_desc);
-		elog(NOTICE, "(PGDuckDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", table_scan_query,
+		elog(NOTICE, "(PGDuckDB/PostgresTableReader)\n\nQUERY: %s\nRUNNING: %s.\nEXECUTING: \n%s", query_text,
 		     !nreaders ? "IN PROCESS THREAD" : psprintf("ON %d PARALLEL WORKER(S)", nreaders), es->str->data);
 	}
 
