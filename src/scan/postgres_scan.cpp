@@ -411,7 +411,7 @@ PostgresScanGlobalState::PostgresScanGlobalState(Snapshot _snapshot, Relation _r
       table_reader_global_state(nullptr), duckdb_scan_memory_ctx(nullptr), max_threads(1) {
 	ConstructTableScanQuery(input);
 	table_reader_global_state = duckdb::make_shared_ptr<PostgresTableReader>();
-	table_reader_global_state->Init(scan_query.str().c_str(), count_tuples_only);
+	table_reader_global_state->Init(scan_query.str(), count_tuples_only);
 	// Dedicated Postgres memory context for temporary allocations during type conversion in scans.
 	{
 		std::lock_guard<std::recursive_mutex> lock(GlobalProcessLock::GetLock());
