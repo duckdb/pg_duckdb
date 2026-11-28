@@ -115,7 +115,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: postgres/inst
-          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw
+          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw-auto_explain
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
@@ -124,6 +124,7 @@ jobs:
           ./configure --prefix=$PWD/inst/ --enable-cassert --enable-debug --with-openssl --with-icu --with-libxml --with-lz4
           make -j8 install
           make -C contrib/postgres_fdw install
+          make -C contrib/auto_explain install
 
       - name: Setup DuckDB build cache
         id: cache-duckdb-build
@@ -251,7 +252,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: postgres/inst
-          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw-${{ matrix.sanitizer }}-clang-${{ env.CLANG_VERSION }}
+          key: pg-build-${{ github.repository_owner == 'duckdb' && 'namespace-profile-linux-x64' || 'ubuntu-24.04' }}-${{ steps.versions.outputs.postgres_sha }}-postgres_fdw-auto_explain-${{ matrix.sanitizer }}-clang-${{ env.CLANG_VERSION }}
 
       - name: Build PostgreSQL code
         if: steps.cache-pg-build.outputs.cache-hit != 'true'
@@ -262,6 +263,7 @@ jobs:
             CC=clang-$CLANG_VERSION CXX=clang++-$CLANG_VERSION CFLAGS="-O1 $SANITIZE" CXXFLAGS="-O1 $SANITIZE" LDFLAGS="$SANITIZE"
           make -j8 install
           make -C contrib/postgres_fdw install
+          make -C contrib/auto_explain install
 
       - name: Setup DuckDB build cache
         id: cache-duckdb-build
